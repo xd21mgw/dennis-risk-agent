@@ -1,0 +1,1611 @@
+[
+  {
+    "case_id": "AS-001",
+    "domain": "账号安全",
+    "subdomain": "盗号-token泄露",
+    "difficulty": "hard",
+    "prompt": "怀疑一批账号不是重新登录被盗，而是 token 泄露后被黑产直接复用。如何判断、补证和治理？",
+    "black_industry_essence": "黑产绕过登录环节，复用存量登录态完成下游作恶，核心是 token 与设备/环境/行为链冲突。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "credential_stuffing_ato_skill",
+      "evidence_decomposition_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "token 与设备/IP/地理/UA 冲突",
+      "登录态与下游行为突变",
+      "风险 token 柔性踢出",
+      "下游扩散限制",
+      "快速找回/解封",
+      "误伤和体验控制"
+    ],
+    "must_not": [
+      "直接要求全量踢出所有 token",
+      "只说加强登录风控",
+      "把 token 泄露简单等同撞库"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-002",
+    "domain": "账号安全",
+    "subdomain": "欺诈盗号",
+    "difficulty": "hard",
+    "prompt": "用户被诱导扫码/人脸/验证码，黑产绕过平台限制完成盗号，如何还原链路和治理？",
+    "black_industry_essence": "黑产利用号主本人完成关键验证，平台看到的是本人动作，但意图被外部操控。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "号主本人参与但非真实意愿",
+      "站外诱导链路",
+      "验证状态流转",
+      "下游扩散",
+      "用户教育",
+      "Step-up/授权验证"
+    ],
+    "must_not": [
+      "把所有本人验证都当安全",
+      "只拦扫码不处理下游扩散"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-003",
+    "domain": "账号安全",
+    "subdomain": "撞库/ATO",
+    "difficulty": "medium",
+    "prompt": "登录失败量和成功登录量同时上升，如何判断是不是撞库导致 ATO？",
+    "black_industry_essence": "泄漏凭证批量测试，成功后账号被接管并进入下游作恶。",
+    "expected_skills": [
+      "credential_stuffing_ato_skill",
+      "account_security_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "失败/成功序列",
+      "同 IP/代理多账号尝试",
+      "成功后行为突变",
+      "条件 MFA/Step-up",
+      "速率限制",
+      "泄漏凭证库"
+    ],
+    "must_not": [
+      "把撞库等同密码爆破",
+      "只看失败次数不看成功后行为"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-004",
+    "domain": "账号安全",
+    "subdomain": "机器小号",
+    "difficulty": "medium",
+    "prompt": "注册小号发生量下降但活跃/回扫阶段仍有大量黑产号，账号安全怎么从注册扩到全链路？",
+    "black_industry_essence": "黑产不只在注册作恶，存量小号会在登录、活跃、回扫、任务、交易中复用。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "business_domain_map_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "注册+登录+token刷新+活跃+回扫",
+      "存量小号回捞",
+      "黑市报价/发生量/漏过量",
+      "账号安全分",
+      "分层治理"
+    ],
+    "must_not": [
+      "只优化注册策略",
+      "只封新号不管存量"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-005",
+    "domain": "账号安全",
+    "subdomain": "二次放号",
+    "difficulty": "medium",
+    "prompt": "二次放号场景如何在满足监管要求基础上降低风险和体验损伤？",
+    "black_industry_essence": "老号主和新号主权益冲突，既要合规解绑，又要防止旧身份资产造成风险。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "发生前提醒",
+      "发生后解绑",
+      "快速找回",
+      "客诉量",
+      "新旧号主体验",
+      "监管边界"
+    ],
+    "must_not": [
+      "只站平台安全视角",
+      "强行阻断正常换号"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-006",
+    "domain": "账号安全",
+    "subdomain": "交易号",
+    "difficulty": "medium",
+    "prompt": "如何识别养号后交易给黑灰产的交易号，并阻断下游作恶？",
+    "black_industry_essence": "账号像商品一样被养成、交易、换绑并进入欺诈/导流/刷量等下游。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "risk_chain_reconstruction_skill"
+    ],
+    "must_have": [
+      "画风突变",
+      "登录环境突变",
+      "交易链路",
+      "下游行为",
+      "社交封禁/强实名/限权",
+      "关系网络"
+    ],
+    "must_not": [
+      "只看注册风险",
+      "只看单账号不看交易链"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-007",
+    "domain": "账号安全",
+    "subdomain": "登录接口合法自动化",
+    "difficulty": "hard",
+    "prompt": "商家和黑产都会捅接口登录，现有策略对商家站点登录豁免，如何设计更合理方案？",
+    "black_industry_essence": "合法自动化需求与黑产接口滥用混在一起，需要白化通道+非法收紧。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "官方工具/授权登记",
+      "调用范围绑定",
+      "非授权接口收紧",
+      "高风险动作验证",
+      "审计",
+      "业务合理性"
+    ],
+    "must_not": [
+      "一刀切拦截商家",
+      "继续无条件豁免"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-008",
+    "domain": "账号安全",
+    "subdomain": "可信体系",
+    "difficulty": "medium",
+    "prompt": "登录风控误伤高，如何用可信体系平衡安全和体验？",
+    "black_industry_essence": "通过可信环境/可信用户/可信设备降低正常号主打扰，集中火力打高危风险。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "可信环境",
+      "账号价值",
+      "风险类型",
+      "决策体系",
+      "登录打扰率",
+      "验证量下降"
+    ],
+    "must_not": [
+      "只提高阈值",
+      "只讲风控拦截"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-009",
+    "domain": "账号安全",
+    "subdomain": "验无可验",
+    "difficulty": "medium",
+    "prompt": "大量高风险登录没有合适验证方式，如何建设验证体系？",
+    "black_industry_essence": "风险识别有结论但缺少可用验证手段，导致只能放过或重伤体验。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "验证覆盖率",
+      "特色验证",
+      "授权验证",
+      "兜底验证",
+      "Step-up",
+      "体验/通过率"
+    ],
+    "must_not": [
+      "默认所有风险都强拦",
+      "忽略用户体验"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AS-010",
+    "domain": "账号安全",
+    "subdomain": "账号安全年度述职",
+    "difficulty": "hard",
+    "prompt": "帮我把账号安全方向整理成年度述职材料，突出历史负债、盗号、小号、token、验证和下一步。",
+    "black_industry_essence": "材料交付要求体现从还债到体系化治理，不能只是列工作。",
+    "expected_skills": [
+      "material_delivery_skill",
+      "account_security_expert_skill",
+      "executive_summary_skill"
+    ],
+    "must_have": [
+      "业务情况",
+      "核心思考",
+      "策略打法",
+      "核心进展+一句话总结",
+      "做得好的/可提升的",
+      "下一步方向"
+    ],
+    "must_not": [
+      "流水账",
+      "没有指标",
+      "没有问题反思"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-001",
+    "domain": "反爬",
+    "subdomain": "外网跟价",
+    "difficulty": "hard",
+    "prompt": "外网实时跟价我们产品，但内部没发现明显攻击。如何定位外网是怎么拿到价格的？",
+    "black_industry_essence": "核心资产被外部低成本获取，可能是协议、群控、真人、缓存、合作方或内部泄漏。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "attack_type_classification_skill"
+    ],
+    "must_have": [
+      "资产分级",
+      "泄漏入口",
+      "协议/群控/真人/合作方/缓存/内部",
+      "外部报价/同步延迟",
+      "补证动作"
+    ],
+    "must_not": [
+      "直接断定协议攻击",
+      "只看接口频率"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-002",
+    "domain": "反爬",
+    "subdomain": "版权内容泄漏",
+    "difficulty": "hard",
+    "prompt": "版权内容被竞品拿到，后端流量都是真人访问，但用户没有前端操作，可能是什么路径？",
+    "black_industry_essence": "真人/端行为/服务端日志出现矛盾，可能是破解包、协议后拉、埋点缺失、授权后脚本化。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "attack_type_classification_skill",
+      "cracked_app_expert_skill",
+      "real_user_crowdsourcing_skill"
+    ],
+    "must_have": [
+      "解释真人访问和无前端操作矛盾",
+      "端日志/SDK/埋点补证",
+      "破解包/协议/真人众包/口径差异",
+      "版权资产保护"
+    ],
+    "must_not": [
+      "因为是真人就放过",
+      "直接认定协议"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-003",
+    "domain": "反爬",
+    "subdomain": "单纯协议判定",
+    "difficulty": "hard",
+    "prompt": "如何明确一个攻击是单纯协议类攻击，而不是群控、破解包或真人众包？",
+    "black_industry_essence": "必须证明请求脱离端侧执行链，同时排除端行为缺失的其他原因。",
+    "expected_skills": [
+      "protocol_attack_expert_skill",
+      "attack_type_classification_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "无端行为",
+      "接口序列异常",
+      "签名/token/设备冲突",
+      "排除群控/破解包/埋点缺失",
+      "补证动作"
+    ],
+    "must_not": [
+      "只有高频就判协议",
+      "不做排除项"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-004",
+    "domain": "反爬",
+    "subdomain": "群控真机爬取",
+    "difficulty": "hard",
+    "prompt": "核心资产访问看起来都有真实设备和端行为，但目标高度一致，如何判断是不是群控真机爬取？",
+    "black_industry_essence": "真机/端行为存在不代表安全，关键看是否被统一调度完成资产访问。",
+    "expected_skills": [
+      "group_control_expert_skill",
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "统一调度",
+      "设备团组",
+      "访问路径一致",
+      "资产命中",
+      "收益/目标一致",
+      "协议反证"
+    ],
+    "must_not": [
+      "有端行为就判正常",
+      "只按协议治理"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-005",
+    "domain": "反爬",
+    "subdomain": "破解包反爬",
+    "difficulty": "medium",
+    "prompt": "怀疑破解包绕过 SDK 采集爬核心资产，如何确认和治理？",
+    "black_industry_essence": "客户端被改造导致端侧证据缺失或采集失真，进而低成本获取资产。",
+    "expected_skills": [
+      "cracked_app_expert_skill",
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "包签名/版本/渠道异常",
+      "SDK日志缺失",
+      "关键接口上下文",
+      "强制升级/完整性校验",
+      "样本库"
+    ],
+    "must_not": [
+      "只看服务端请求",
+      "忽略端包证据"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-006",
+    "domain": "反爬",
+    "subdomain": "6+1飞轮",
+    "difficulty": "medium",
+    "prompt": "如何把一个反爬专项从单点策略升级成“非常6+1”体系？",
+    "black_industry_essence": "从策略对抗升级到未接漏洞、产品改造、实时发现、处置、评估和引擎体系。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "business_domain_map_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "未接漏洞",
+      "产品改造",
+      "实时发现",
+      "策略对抗",
+      "风险处置",
+      "水位评估",
+      "引擎"
+    ],
+    "must_not": [
+      "只罗列接口策略",
+      "没有评估指标"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-007",
+    "domain": "反爬",
+    "subdomain": "资产分级",
+    "difficulty": "medium",
+    "prompt": "高价值/中价值/低价值资产如何分级治理？",
+    "black_industry_essence": "不同资产价值不同，治理态度不同，不能全量强防造成业务成本过高。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "must_have": [
+      "价格/库存/版权/关系链/普通页面",
+      "治理态度",
+      "观测指标",
+      "轻重边界"
+    ],
+    "must_not": [
+      "所有资产同等防护",
+      "没有成本收益"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-008",
+    "domain": "流量反作弊",
+    "subdomain": "刷粉刷赞刷播放",
+    "difficulty": "medium",
+    "prompt": "刷粉/刷赞/刷播放/刷人气如何建立通用评估体系，而不是每个场景单独打？",
+    "black_industry_essence": "流量作弊本质影响指标可信和流量分配公平，应沉淀跨场景评估和柔性处置。",
+    "expected_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "must_have": [
+      "站外价格",
+      "漏出量",
+      "质量指标",
+      "标准化+场景化",
+      "柔性处置",
+      "数据矫正"
+    ],
+    "must_not": [
+      "只封账号",
+      "忽略指标口径"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-009",
+    "domain": "流量反作弊",
+    "subdomain": "DAU口径作弊",
+    "difficulty": "medium",
+    "prompt": "DAU/DNU 反作弊需要 SLA 保障，如何设计查杀和口径稳定机制？",
+    "black_industry_essence": "业务决策依赖口径，风控要保证稳定识别且不误伤业务判断。",
+    "expected_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "SLA",
+      "阻断/监控/告警/应急/修复",
+      "实时离线diff",
+      "准确率/召回率",
+      "任务产出时间"
+    ],
+    "must_not": [
+      "只关注查杀",
+      "不关注口径稳定"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-010",
+    "domain": "反爬",
+    "subdomain": "未登录态爬取",
+    "difficulty": "medium",
+    "prompt": "未登录态接口能拿到核心内容，如何治理？",
+    "black_industry_essence": "弱端/无登录态入口降低资产获取成本，是反爬未接漏洞和产品改造问题。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "未接漏洞",
+      "弱端入口",
+      "登录/权限门槛",
+      "字段最小化",
+      "敏感接口接入风控"
+    ],
+    "must_not": [
+      "只加频控",
+      "不改产品入口"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-011",
+    "domain": "反爬",
+    "subdomain": "真人众包爬取",
+    "difficulty": "medium",
+    "prompt": "如果爬取流量都是真人完成，怎么防？",
+    "black_industry_essence": "真人执行不代表正常，背后可能被任务化组织，治理要抬收益成本而不是只技术拦截。",
+    "expected_skills": [
+      "real_user_crowdsourcing_skill",
+      "anti_crawler_expert_skill"
+    ],
+    "must_have": [
+      "任务化组织",
+      "收益链路",
+      "低价值行为",
+      "任务随机化",
+      "后验质量",
+      "外部情报"
+    ],
+    "must_not": [
+      "真人就不治理",
+      "按协议处理"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-012",
+    "domain": "反爬",
+    "subdomain": "外部黑市报价",
+    "difficulty": "medium",
+    "prompt": "黑市报价从很低涨到很高，如何作为反爬效果指标使用？",
+    "black_industry_essence": "外部价格体现黑产成本和供需，但需结合内部水位和漏出验证。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "报价作为外部指标",
+      "内部TOP请求账号量",
+      "投诉/漏出",
+      "供需变化反证",
+      "不能单独证明"
+    ],
+    "must_not": [
+      "只看报价就认定成功",
+      "忽略样本偏差"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-013",
+    "domain": "流量反作弊",
+    "subdomain": "内容互动刷量",
+    "difficulty": "hard",
+    "prompt": "有内容点赞/关注质量异常，如何区分真人众包、群控、协议刷量？",
+    "black_industry_essence": "同一业务结果可能由不同手法造成，需要先判手法再治理。",
+    "expected_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "attack_type_classification_skill",
+      "group_control_expert_skill",
+      "protocol_attack_expert_skill",
+      "real_user_crowdsourcing_skill"
+    ],
+    "must_have": [
+      "手法分类",
+      "站内质量",
+      "行为链",
+      "设备团组",
+      "任务化真人",
+      "柔性处置"
+    ],
+    "must_not": [
+      "只看结果异常",
+      "全部封禁"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-014",
+    "domain": "反爬",
+    "subdomain": "版权诉讼支撑",
+    "difficulty": "medium",
+    "prompt": "版权反爬如何同时支撑防控、溯源、内容清理和法律诉讼？",
+    "black_industry_essence": "版权反爬不是只拦爬虫，还要形成取证和诉讼支撑能力。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "防控+溯源",
+      "取证召回/准确率",
+      "内容清理",
+      "案件素材",
+      "投诉指标",
+      "法务协同"
+    ],
+    "must_not": [
+      "只讲技术防护",
+      "不讲取证和诉讼"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AC-015",
+    "domain": "反爬",
+    "subdomain": "反爬业务存在感弱",
+    "difficulty": "hard",
+    "prompt": "反爬水位提升但业务价值存在感弱，如何汇报和规划下一步？",
+    "black_industry_essence": "技术水位不等于业务价值，需要把资产保护、投诉、报价、诉讼、业务反馈串起来。",
+    "expected_skills": [
+      "anti_crawler_expert_skill",
+      "executive_summary_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "业务情况",
+      "核心思考",
+      "资产保护价值",
+      "核心指标",
+      "做得好/可提升",
+      "下一步方向"
+    ],
+    "must_not": [
+      "只讲策略命中",
+      "没有业务价值"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-001",
+    "domain": "活动反作弊",
+    "subdomain": "黑产假量",
+    "difficulty": "hard",
+    "prompt": "裂变活动资损率高，怀疑黑产假量，如何建立查杀分离能力？",
+    "black_industry_essence": "黑产通过账号、设备、协议、群控、插件等批量薅奖励，查侧要独立评估，杀侧分层处置。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "group_control_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "查杀分离",
+      "资损率",
+      "账号/设备/行为/收益链路",
+      "高准/中准/低准",
+      "误伤/客诉"
+    ],
+    "must_not": [
+      "只堆拦截策略",
+      "没有评估"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-002",
+    "domain": "活动反作弊",
+    "subdomain": "低质真人",
+    "difficulty": "hard",
+    "prompt": "活动低钱效用户很多，但未必是黑产，如何治理？",
+    "black_industry_essence": "低质风险不等于黑产，需要监控赋能业务而非全部打击。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "黑产vs低质",
+      "业务钱效",
+      "留存/付费",
+      "监控赋能",
+      "活动规则优化",
+      "灰度"
+    ],
+    "must_not": [
+      "把低质都封禁",
+      "只看设备风险"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-003",
+    "domain": "活动反作弊",
+    "subdomain": "渠道抢量",
+    "difficulty": "hard",
+    "prompt": "站外投放存在抢量作弊，只有点击数据，如何从0到1建设识别和评估？",
+    "black_industry_essence": "渠道通过曝光/点击/归因链路抢量，风险识别要前置并能进入结算/归因评估。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "traffic_anti_cheating_expert_skill"
+    ],
+    "must_have": [
+      "点击数据",
+      "抢量设备召回/准确率",
+      "内外双策略评估",
+      "自然量/付费量误伤",
+      "结算应用"
+    ],
+    "must_not": [
+      "没有评估直接处罚",
+      "只看激活"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-004",
+    "domain": "活动反作弊",
+    "subdomain": "口令劫持",
+    "difficulty": "medium",
+    "prompt": "口令劫持从无感助力到有感知助力，怎么治理和评估？",
+    "black_industry_essence": "黑产利用产品交互和用户无感知机制获益，需要产品交互+举报证据+策略+离线处罚。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "risk_chain_reconstruction_skill"
+    ],
+    "must_have": [
+      "产品交互改造",
+      "举报证据",
+      "内容/行为/意图",
+      "分享回流风控",
+      "冻结打款"
+    ],
+    "must_not": [
+      "只加策略不改产品",
+      "忽略用户感知"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-005",
+    "domain": "活动反作弊",
+    "subdomain": "插件脚本活动",
+    "difficulty": "medium",
+    "prompt": "活动激励场景发现风险插件，如何判断和沉淀策略？",
+    "black_industry_essence": "插件辅助自动完成任务，既要逆向证据，也要业务特征保准确。",
+    "expected_skills": [
+      "plugin_reverse_analysis_skill",
+      "activity_anti_cheating_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "插件证据",
+      "业务特征",
+      "设备风险保召回",
+      "场景内增量拦截",
+      "样本库"
+    ],
+    "must_not": [
+      "只有逆向没有业务验证",
+      "只有业务异常没有插件证据"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-006",
+    "domain": "活动反作弊",
+    "subdomain": "规则漏洞",
+    "difficulty": "medium",
+    "prompt": "活动规则被普通用户套利，不一定是黑产，如何处理？",
+    "black_industry_essence": "平台规则设计被利用，重点是规则修复、收益限制和后验评估。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "规则漏洞",
+      "收益上限",
+      "冷却期",
+      "延迟结算",
+      "异常收益回收",
+      "用户体验"
+    ],
+    "must_not": [
+      "直接定义黑产",
+      "只靠封禁"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-007",
+    "domain": "活动反作弊",
+    "subdomain": "直播红包群控",
+    "difficulty": "hard",
+    "prompt": "直播红包被大量群控设备抢，如何查和打？",
+    "black_industry_essence": "群控设备批量参与实时权益分发，收益链路和设备团组是关键。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "group_control_expert_skill"
+    ],
+    "must_have": [
+      "设备团组",
+      "同批启动",
+      "收益聚集",
+      "限额/延迟/验证",
+      "抢红包漏出量/金额"
+    ],
+    "must_not": [
+      "只按频控",
+      "忽略收益链路"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-008",
+    "domain": "活动反作弊",
+    "subdomain": "活动策略体系",
+    "difficulty": "medium",
+    "prompt": "活动策略数过多、难维护，如何从打地鼠升级为结构化策略体系？",
+    "black_industry_essence": "长期应急策略导致熵增，需要大问题小解、小问题根解，沉淀策略包。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "结构化策略体系",
+      "场景分类/手法分类",
+      "策略数压缩",
+      "迭代效率",
+      "策略包"
+    ],
+    "must_not": [
+      "只继续加规则",
+      "没有治理逻辑"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-009",
+    "domain": "活动反作弊",
+    "subdomain": "活动年度复盘",
+    "difficulty": "hard",
+    "prompt": "帮我复盘增长反作弊：黑产、真人低质、站外投放三个方向怎么讲？",
+    "black_industry_essence": "需要材料级表达，不只是技术分析。",
+    "expected_skills": [
+      "material_delivery_skill",
+      "activity_anti_cheating_expert_skill",
+      "executive_summary_skill"
+    ],
+    "must_have": [
+      "业务情况",
+      "核心思考",
+      "站内黑产/真人低质/站外投放",
+      "核心进展+一句话总结",
+      "做得好/可提升"
+    ],
+    "must_not": [
+      "流水账",
+      "没有业务钱效"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "ACT-010",
+    "domain": "活动反作弊",
+    "subdomain": "渠道结算扣除",
+    "difficulty": "hard",
+    "prompt": "渠道推广作弊已经能识别，但业务落地推广困难，如何推进？",
+    "black_industry_essence": "能力建成不等于业务价值落地，需要 BP 机制、归因沙盒、误伤边界和结算策略。",
+    "expected_skills": [
+      "activity_anti_cheating_expert_skill",
+      "executive_summary_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "落地应用不足",
+      "BP机制",
+      "归因沙盒",
+      "误伤<阈值",
+      "结算扣除",
+      "业务协同"
+    ],
+    "must_not": [
+      "只说模型准确率",
+      "不讲落地阻力"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-001",
+    "domain": "黑灰产基建",
+    "subdomain": "协议降发生",
+    "difficulty": "medium",
+    "prompt": "协议发生量下降但养设备协议变多，如何做认知迭代和下一步？",
+    "black_industry_essence": "黑产从低成本纯协议迁移到更接近端行为的养设备协议，需要升级证据和策略。",
+    "expected_skills": [
+      "protocol_attack_expert_skill",
+      "anti_crawler_expert_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "纯协议 vs 养设备协议",
+      "迁移路径",
+      "前后端冲突",
+      "强目的接口",
+      "下一步策略"
+    ],
+    "must_not": [
+      "只庆祝发生量下降",
+      "不看迁移"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-002",
+    "domain": "黑灰产基建",
+    "subdomain": "小号通用能力",
+    "difficulty": "medium",
+    "prompt": "黑产小号只在注册场景有策略，如何扩成通用基建？",
+    "black_industry_essence": "小号资源贯穿注册、登录、活跃、任务、交易和回扫，不能只在注册打。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "must_have": [
+      "授权号/接码号/转生号/双参号",
+      "注册+登录+活跃+回扫",
+      "标签库",
+      "业务复用"
+    ],
+    "must_not": [
+      "只做注册拦截",
+      "不做全链路"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-003",
+    "domain": "黑灰产基建",
+    "subdomain": "设备处置",
+    "difficulty": "medium",
+    "prompt": "设备处置从无感验证、强制登录到强制升级，如何定位价值？",
+    "black_industry_essence": "设备处置是连接协议、群控、设备基建和验证体系的通用治理能力。",
+    "expected_skills": [
+      "group_control_expert_skill",
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "无感验证",
+      "强制登录",
+      "强制升级",
+      "长链接下发",
+      "设备层处置",
+      "体验和发版约束"
+    ],
+    "must_not": [
+      "只当单点处罚",
+      "不讲通用基建价值"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-004",
+    "domain": "黑灰产基建",
+    "subdomain": "设备同步上报",
+    "difficulty": "medium",
+    "prompt": "实时指纹同步上报为什么重要，如何和网络库/风控联动？",
+    "black_industry_essence": "端侧设备数据时效是准实时防控基础，影响协议、群控、反爬、账号。",
+    "expected_skills": [
+      "account_security_expert_skill",
+      "anti_crawler_expert_skill",
+      "tool_call_planning_skill"
+    ],
+    "must_have": [
+      "统一网络库",
+      "拦截器",
+      "设备指纹",
+      "端云联动",
+      "实时/准实时",
+      "接口覆盖"
+    ],
+    "must_not": [
+      "只讲采集字段",
+      "不讲防控闭环"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-005",
+    "domain": "黑灰产基建",
+    "subdomain": "插件能力复用",
+    "difficulty": "medium",
+    "prompt": "风险 APP 取证如何服务活动、爬虫、注册等多个场景？",
+    "black_industry_essence": "逆向取证不是孤立能力，应反哺风险认知、特征、策略和样本库。",
+    "expected_skills": [
+      "plugin_reverse_analysis_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "情报还原",
+      "攻击路径",
+      "可复用特征",
+      "多场景复用",
+      "证据完整度"
+    ],
+    "must_not": [
+      "只做逆向报告",
+      "不回流策略"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-006",
+    "domain": "黑灰产基建",
+    "subdomain": "黑产产业链",
+    "difficulty": "medium",
+    "prompt": "一个风险 case 如何拆作恶方、上游资源、中游执行、下游变现？",
+    "black_industry_essence": "黑产本质是资源、工具、任务、收益的产业链协作。",
+    "expected_skills": [
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "risk_governance_design_skill"
+    ],
+    "must_have": [
+      "上游账号/设备/IP/工具",
+      "中游接单/群控/任务平台",
+      "下游导流/套利/诈骗",
+      "治理断点"
+    ],
+    "must_not": [
+      "只看单账号异常",
+      "不讲收益链路"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-007",
+    "domain": "黑灰产基建",
+    "subdomain": "业务安全监控",
+    "difficulty": "medium",
+    "prompt": "如何建立黑灰产通用监控，而不是等业务反馈？",
+    "black_industry_essence": "从被动问题驱动变成主动发现，需要业务监控、外部情报、异常检测、看板运营。",
+    "expected_skills": [
+      "business_domain_map_skill",
+      "risk_governance_design_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "业务监控",
+      "外部情报",
+      "异常检测",
+      "客诉举报",
+      "监控运营",
+      "告警接手"
+    ],
+    "must_not": [
+      "只做离线报表",
+      "没有运营机制"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "BI-008",
+    "domain": "黑灰产基建",
+    "subdomain": "专家材料复盘",
+    "difficulty": "hard",
+    "prompt": "把协议、群控、小号、插件四类黑灰产基建写成述职材料，怎么组织？",
+    "black_industry_essence": "材料要体现通能能力沉淀、业务复用、指标进展和短板，不是列标签。",
+    "expected_skills": [
+      "material_delivery_skill",
+      "executive_summary_skill",
+      "protocol_attack_expert_skill",
+      "group_control_expert_skill",
+      "account_security_expert_skill",
+      "plugin_reverse_analysis_skill"
+    ],
+    "must_have": [
+      "核心进展+一句话总结+策略打法",
+      "协议/群控/小号/插件",
+      "做得好/可提升",
+      "下一步方向"
+    ],
+    "must_not": [
+      "只列项目名",
+      "没有认知迭代"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-001",
+    "domain": "AI Agent",
+    "subdomain": "风控RAG问答",
+    "difficulty": "medium",
+    "prompt": "风控 RAG 助手回答风险问题时，如何避免编造结论？",
+    "black_industry_essence": "RAG 管检索和引用，风险 Skill 管专业判断，证据不足必须显式降级。",
+    "expected_skills": [
+      "risk_rag_answering_skill",
+      "evidence_decomposition_skill",
+      "ai_agent_orchestration_skill"
+    ],
+    "must_have": [
+      "引用依据",
+      "确定/推测/不足",
+      "下一步查证",
+      "Skill路由",
+      "不编造"
+    ],
+    "must_not": [
+      "检索到一句就强结论",
+      "不标注不确定性"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-002",
+    "domain": "AI Agent",
+    "subdomain": "策略算法化",
+    "difficulty": "hard",
+    "prompt": "历史策略命中作为标签，如何避免模型只是复制老策略？",
+    "black_industry_essence": "策略算法化要拆规则背后的风险认知，并加入人工样本、弱标签、特征和评估。",
+    "expected_skills": [
+      "strategy_to_model_distillation_skill",
+      "evidence_decomposition_skill"
+    ],
+    "must_have": [
+      "规则拆解",
+      "标签偏差",
+      "特征设计",
+      "人工复核",
+      "灰度评估",
+      "蒸馏"
+    ],
+    "must_not": [
+      "直接用策略命中训练上线",
+      "不评估偏差"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-003",
+    "domain": "AI Agent",
+    "subdomain": "Agent工具规划",
+    "difficulty": "medium",
+    "prompt": "未来 AI 风控 Agent 想读用户画像、设备画像、行为日志，工具规划怎么做？",
+    "black_industry_essence": "Agent 需要工具化读数和证据链，而不是只聊天。",
+    "expected_skills": [
+      "tool_call_planning_skill",
+      "ai_agent_orchestration_skill"
+    ],
+    "must_have": [
+      "用户画像",
+      "设备画像",
+      "行为日志",
+      "接口日志",
+      "关系网络",
+      "支付/提现",
+      "权限和审计"
+    ],
+    "must_not": [
+      "只做自然语言问答",
+      "没有工具边界"
+    ],
+    "expected_output_type": "plan",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-004",
+    "domain": "表达交付",
+    "subdomain": "领域大图",
+    "difficulty": "medium",
+    "prompt": "基于业务领域大图格式，生成某业务风控全景大图应包含什么？",
+    "black_industry_essence": "领域大图是治理取舍和指标体系，不是简单功能列表。",
+    "expected_skills": [
+      "business_domain_map_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "领域/子领域/治理态度/策略打法/观测指标/轻重边界/依赖能力"
+    ],
+    "must_not": [
+      "所有方向都重点建设",
+      "没有指标"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-005",
+    "domain": "表达交付",
+    "subdomain": "策略树",
+    "difficulty": "medium",
+    "prompt": "给一个新风险，什么时候用树状策略图，什么时候用一页纸汇报图？",
+    "black_industry_essence": "策略树适合策略同学工作和证据推理，一页纸适合管理层同步。",
+    "expected_skills": [
+      "diagram_generation_skill",
+      "material_delivery_skill"
+    ],
+    "must_have": [
+      "适用场景区分",
+      "中心问题",
+      "一级风险",
+      "证据/处置/指标",
+      "管理层简化"
+    ],
+    "must_not": [
+      "所有图都做成树状",
+      "只追求好看"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "AG-006",
+    "domain": "表达交付",
+    "subdomain": "面试项目讲法",
+    "difficulty": "medium",
+    "prompt": "把反爬 6+1、账号安全、活动反作弊三个项目包装成高阶面试表达怎么讲？",
+    "black_industry_essence": "面试表达要体现体系化、组织协同、业务价值和认知迭代。",
+    "expected_skills": [
+      "interview_storytelling_skill",
+      "executive_summary_skill",
+      "anti_crawler_expert_skill",
+      "account_security_expert_skill",
+      "activity_anti_cheating_expert_skill"
+    ],
+    "must_have": [
+      "背景/问题/动作/结果/沉淀",
+      "指标",
+      "负责人视角",
+      "追问准备"
+    ],
+    "must_not": [
+      "只讲技术细节",
+      "没有业务价值"
+    ],
+    "expected_output_type": "material",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  },
+  {
+    "case_id": "MIX-001",
+    "domain": "综合混合攻击",
+    "subdomain": "直播间截流+账号搜索+私信导流",
+    "difficulty": "hard",
+    "prompt": "直播间公开展示/口播用户信息后，黑产搜索用户 ID 定向添加并私信导流，怎么还原证据链和治理？",
+    "black_industry_essence": "公开信息暴露被结构化利用，黑产通过人工/半自动搜索目标、触达并站外承接。",
+    "expected_skills": [
+      "traffic_diversion_interception_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "account_security_expert_skill"
+    ],
+    "must_have": [
+      "信息暴露入口",
+      "目标获取",
+      "搜索手误/时间相关",
+      "关注/私信承接",
+      "站外导流",
+      "脱敏/搜索限制/私信风控/主播教育"
+    ],
+    "must_not": [
+      "当成反爬",
+      "只封单个账号不治理暴露入口"
+    ],
+    "expected_output_type": "risk_answer",
+    "scoring_weights": {
+      "expert_depth": 45,
+      "evidence_executability": 20,
+      "material_delivery": 15,
+      "boundary_anti_overfit": 10,
+      "codex_usability": 10
+    }
+  }
+]

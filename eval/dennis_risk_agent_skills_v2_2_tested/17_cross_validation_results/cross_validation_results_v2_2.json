@@ -1,0 +1,630 @@
+[
+  {
+    "case_id": "AS-001",
+    "score": 82,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "credential_stuffing_ato_skill",
+      "evidence_decomposition_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [
+      "ATO 方向需要更多登录序列和下游扩散口径。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-002",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-003",
+    "score": 86,
+    "status": "pass",
+    "triggered_skills": [
+      "credential_stuffing_ato_skill",
+      "account_security_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [
+      "ATO 方向需要更多登录序列和下游扩散口径。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-004",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "business_domain_map_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-005",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-006",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "risk_chain_reconstruction_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-007",
+    "score": 85,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-008",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-009",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AS-010",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "material_delivery_skill",
+      "account_security_expert_skill",
+      "executive_summary_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-001",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "attack_type_classification_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-002",
+    "score": 82,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "attack_type_classification_skill",
+      "cracked_app_expert_skill",
+      "real_user_crowdsourcing_skill"
+    ],
+    "gap_notes": [
+      "破解包方向需要更多样本级证据和逆向短链标准。",
+      "真人众包方向需要更多任务平台、收益链和业务质量指标样例。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-003",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "protocol_attack_expert_skill",
+      "attack_type_classification_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-004",
+    "score": 85,
+    "status": "pass",
+    "triggered_skills": [
+      "group_control_expert_skill",
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-005",
+    "score": 86,
+    "status": "pass",
+    "triggered_skills": [
+      "cracked_app_expert_skill",
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [
+      "破解包方向需要更多样本级证据和逆向短链标准。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-006",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "business_domain_map_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-007",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-008",
+    "score": 87,
+    "status": "pass",
+    "triggered_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-009",
+    "score": 87,
+    "status": "pass",
+    "triggered_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-010",
+    "score": 89,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-011",
+    "score": 86,
+    "status": "pass",
+    "triggered_skills": [
+      "real_user_crowdsourcing_skill",
+      "anti_crawler_expert_skill"
+    ],
+    "gap_notes": [
+      "真人众包方向需要更多任务平台、收益链和业务质量指标样例。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-012",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-013",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "traffic_anti_cheating_expert_skill",
+      "attack_type_classification_skill",
+      "group_control_expert_skill",
+      "protocol_attack_expert_skill",
+      "real_user_crowdsourcing_skill"
+    ],
+    "gap_notes": [
+      "真人众包方向需要更多任务平台、收益链和业务质量指标样例。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-014",
+    "score": 87,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AC-015",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "anti_crawler_expert_skill",
+      "executive_summary_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-001",
+    "score": 86,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "group_control_expert_skill",
+      "protocol_attack_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-002",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-003",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "traffic_anti_cheating_expert_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-004",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "risk_chain_reconstruction_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-005",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "plugin_reverse_analysis_skill",
+      "activity_anti_cheating_expert_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-006",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-007",
+    "score": 85,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "group_control_expert_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-008",
+    "score": 88,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-009",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "material_delivery_skill",
+      "activity_anti_cheating_expert_skill",
+      "executive_summary_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "ACT-010",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "activity_anti_cheating_expert_skill",
+      "executive_summary_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-001",
+    "score": 85,
+    "status": "pass",
+    "triggered_skills": [
+      "protocol_attack_expert_skill",
+      "anti_crawler_expert_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-002",
+    "score": 85,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "business_domain_map_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-003",
+    "score": 86,
+    "status": "pass",
+    "triggered_skills": [
+      "group_control_expert_skill",
+      "account_security_expert_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-004",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "account_security_expert_skill",
+      "anti_crawler_expert_skill",
+      "tool_call_planning_skill"
+    ],
+    "gap_notes": [
+      "工具规划仍缺真实表名、字段和权限边界。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-005",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "plugin_reverse_analysis_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-006",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "risk_governance_design_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-007",
+    "score": 84,
+    "status": "pass",
+    "triggered_skills": [
+      "business_domain_map_skill",
+      "risk_governance_design_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "BI-008",
+    "score": 82,
+    "status": "pass",
+    "triggered_skills": [
+      "material_delivery_skill",
+      "executive_summary_skill",
+      "protocol_attack_expert_skill",
+      "group_control_expert_skill",
+      "account_security_expert_skill",
+      "plugin_reverse_analysis_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AG-001",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "risk_rag_answering_skill",
+      "evidence_decomposition_skill",
+      "ai_agent_orchestration_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AG-002",
+    "score": 79,
+    "status": "borderline",
+    "triggered_skills": [
+      "strategy_to_model_distillation_skill",
+      "evidence_decomposition_skill"
+    ],
+    "gap_notes": [
+      "专家细节仍需补强，尤其需要更多真实字段、样本或反例。"
+    ],
+    "regression_judgement": "需继续增强"
+  },
+  {
+    "case_id": "AG-003",
+    "score": 80,
+    "status": "pass",
+    "triggered_skills": [
+      "tool_call_planning_skill",
+      "ai_agent_orchestration_skill"
+    ],
+    "gap_notes": [
+      "工具规划仍缺真实表名、字段和权限边界。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AG-004",
+    "score": 82,
+    "status": "pass",
+    "triggered_skills": [
+      "business_domain_map_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AG-005",
+    "score": 83,
+    "status": "pass",
+    "triggered_skills": [
+      "diagram_generation_skill",
+      "material_delivery_skill"
+    ],
+    "gap_notes": [],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "AG-006",
+    "score": 82,
+    "status": "pass",
+    "triggered_skills": [
+      "interview_storytelling_skill",
+      "executive_summary_skill",
+      "anti_crawler_expert_skill",
+      "account_security_expert_skill",
+      "activity_anti_cheating_expert_skill"
+    ],
+    "gap_notes": [
+      "材料类输出需人工确认指标口径，避免跨年份误用。"
+    ],
+    "regression_judgement": "符合预期"
+  },
+  {
+    "case_id": "MIX-001",
+    "score": 77,
+    "status": "borderline",
+    "triggered_skills": [
+      "traffic_diversion_interception_skill",
+      "risk_chain_reconstruction_skill",
+      "evidence_decomposition_skill",
+      "account_security_expert_skill"
+    ],
+    "gap_notes": [
+      "专家细节仍需补强，尤其需要更多真实字段、样本或反例。",
+      "导流截流 Skill 需要继续补充更多站外承接、矩阵治理和私信风控细节。"
+    ],
+    "regression_judgement": "需继续增强"
+  }
+]
