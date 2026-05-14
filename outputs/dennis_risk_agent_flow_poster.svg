@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2200" viewBox="0 0 1600 2200">
+  <defs>
+    <style>
+      .bg { fill: #f6f7f9; }
+      .title { font: 800 54px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #162033; letter-spacing: 0; }
+      .subtitle { font: 400 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #4d5a6d; }
+      .section-title { font: 750 30px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #182132; }
+      .small-title { font: 720 22px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #1d2b3f; }
+      .body { font: 400 19px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #344256; }
+      .body-strong { font: 650 19px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #1f2c3f; }
+      .tiny { font: 400 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #566477; }
+      .tag { font: 650 17px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #ffffff; }
+      .card { fill: #ffffff; stroke: #d8dee8; stroke-width: 1.4; rx: 14; }
+      .panel { fill: #ffffff; stroke: #ccd5e1; stroke-width: 1.6; rx: 18; }
+      .core { fill: #172033; rx: 18; }
+      .blue { fill: #2c6fe3; }
+      .teal { fill: #088b8f; }
+      .green { fill: #2f8b57; }
+      .orange { fill: #cc6d1d; }
+      .red { fill: #b84242; }
+      .purple { fill: #6c55c7; }
+      .gray { fill: #657184; }
+      .line { stroke: #97a4b8; stroke-width: 2.2; fill: none; }
+      .arrow { stroke: #758399; stroke-width: 2.4; marker-end: url(#arrow); fill: none; }
+      .dash { stroke: #a7b2c2; stroke-width: 2; stroke-dasharray: 8 8; fill: none; }
+      .chip { fill: #eef2f7; stroke: #d6dde8; stroke-width: 1; rx: 18; }
+      .chip-text { font: 620 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; fill: #344256; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#758399"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="2200"/>
+
+  <text class="title" x="80" y="96">Dennis 风控专家 Agent：完整执行流程与 Skill 地图</text>
+  <text class="subtitle" x="82" y="142">目标：把风险研判、证据补强、边界防误判、治理方案和材料沉淀放进同一条可迭代工作流</text>
+
+  <rect class="core" x="80" y="180" width="1440" height="118"/>
+  <text class="tag" x="118" y="225">核心原则</text>
+  <text class="subtitle" x="118" y="263" fill="#ffffff">先判断业务领域，再判断攻击手法；先讲本质差异，再拆证据；证据不足先降级补证，不强行下黑产结论。</text>
+  <rect class="blue" x="1260" y="205" width="220" height="58" rx="29"/>
+  <text class="tag" x="1313" y="241">v2.3 executable-deep</text>
+
+  <text class="section-title" x="80" y="360">1. 一次风险问题的执行流水线</text>
+  <rect class="panel" x="80" y="385" width="1440" height="250"/>
+
+  <g>
+    <rect class="card" x="112" y="430" width="155" height="142"/>
+    <circle class="blue" cx="140" cy="458" r="18"/><text class="tag" x="134" y="465">1</text>
+    <text class="small-title" x="112" y="503">领域归类</text>
+    <text class="tiny" x="112" y="536">账号 / 流量 / 反爬</text>
+    <text class="tiny" x="112" y="562">活动 / 导流 / AI</text>
+
+    <rect class="card" x="294" y="430" width="155" height="142"/>
+    <circle class="teal" cx="322" cy="458" r="18"/><text class="tag" x="316" y="465">2</text>
+    <text class="small-title" x="294" y="503">手法识别</text>
+    <text class="tiny" x="294" y="536">协议 / 群控 / 破解包</text>
+    <text class="tiny" x="294" y="562">众包 / ATO / token</text>
+
+    <rect class="card" x="476" y="430" width="155" height="142"/>
+    <circle class="green" cx="504" cy="458" r="18"/><text class="tag" x="498" y="465">3</text>
+    <text class="small-title" x="476" y="503">主辅 Skill</text>
+    <text class="tiny" x="476" y="536">主控定业务边界</text>
+    <text class="tiny" x="476" y="562">辅助补攻击证据</text>
+
+    <rect class="card" x="658" y="430" width="155" height="142"/>
+    <circle class="orange" cx="686" cy="458" r="18"/><text class="tag" x="680" y="465">4</text>
+    <text class="small-title" x="658" y="503">本质标识</text>
+    <text class="tiny" x="658" y="536">正常是什么样</text>
+    <text class="tiny" x="658" y="562">最小区分点</text>
+
+    <rect class="card" x="840" y="430" width="155" height="142"/>
+    <circle class="purple" cx="868" cy="458" r="18"/><text class="tag" x="862" y="465">5</text>
+    <text class="small-title" x="840" y="503">证据分层</text>
+    <text class="tiny" x="840" y="536">强 / 中 / 弱证据</text>
+    <text class="tiny" x="840" y="562">反证与误判</text>
+
+    <rect class="card" x="1022" y="430" width="155" height="142"/>
+    <circle class="red" cx="1050" cy="458" r="18"/><text class="tag" x="1044" y="465">6</text>
+    <text class="small-title" x="1022" y="503">补证治理</text>
+    <text class="tiny" x="1022" y="536">查数 / 灰度 / 限权</text>
+    <text class="tiny" x="1022" y="562">误伤控制</text>
+
+    <rect class="card" x="1204" y="430" width="155" height="142"/>
+    <circle class="gray" cx="1232" cy="458" r="18"/><text class="tag" x="1226" y="465">7</text>
+    <text class="small-title" x="1204" y="503">指标沉淀</text>
+    <text class="tiny" x="1204" y="536">命中 / 误伤 / 迁移</text>
+    <text class="tiny" x="1204" y="562">策略树 / Skill / case</text>
+
+    <path class="arrow" d="M270 501 H287"/>
+    <path class="arrow" d="M452 501 H469"/>
+    <path class="arrow" d="M634 501 H651"/>
+    <path class="arrow" d="M816 501 H833"/>
+    <path class="arrow" d="M998 501 H1015"/>
+    <path class="arrow" d="M1180 501 H1197"/>
+  </g>
+
+  <text class="section-title" x="80" y="704">2. Skill 分层定位：谁主控、谁补证、谁交付</text>
+  <rect class="panel" x="80" y="730" width="1440" height="705"/>
+
+  <g>
+    <rect class="blue" x="112" y="770" width="210" height="44" rx="22"/>
+    <text class="tag" x="142" y="798">通用底座 Skills</text>
+    <text class="body-strong" x="112" y="850">负责：证据拆解、链路还原、分类、治理、材料底座</text>
+    <rect class="chip" x="112" y="880" width="310" height="38"/><text class="chip-text" x="132" y="905">evidence_decomposition：强中弱证据</text>
+    <rect class="chip" x="112" y="928" width="310" height="38"/><text class="chip-text" x="132" y="953">risk_chain_reconstruction：作恶链路</text>
+    <rect class="chip" x="112" y="976" width="310" height="38"/><text class="chip-text" x="132" y="1001">attack_type_classification：手法归类</text>
+    <rect class="chip" x="112" y="1024" width="310" height="38"/><text class="chip-text" x="132" y="1049">risk_governance_design：治理闭环</text>
+    <rect class="chip" x="112" y="1072" width="310" height="38"/><text class="chip-text" x="132" y="1097">material_delivery：复盘 / 汇报</text>
+  </g>
+
+  <g>
+    <rect class="teal" x="482" y="770" width="210" height="44" rx="22"/>
+    <text class="tag" x="512" y="798">业务领域 Skills</text>
+    <text class="body-strong" x="482" y="850">负责：业务目标、风险价值、治理态度和指标口径</text>
+    <rect class="chip" x="482" y="880" width="340" height="38"/><text class="chip-text" x="502" y="905">anti_crawler：资产保护 / 外部抓取</text>
+    <rect class="chip" x="482" y="928" width="340" height="38"/><text class="chip-text" x="502" y="953">account_security：登录 / ATO / token</text>
+    <rect class="chip" x="482" y="976" width="340" height="38"/><text class="chip-text" x="502" y="1001">activity_anti_cheating：活动套利</text>
+    <rect class="chip" x="482" y="1024" width="340" height="38"/><text class="chip-text" x="502" y="1049">traffic_anti_cheating：DAU / DNU / 流量质量</text>
+    <rect class="chip" x="482" y="1072" width="340" height="38"/><text class="chip-text" x="502" y="1097">traffic_diversion：目标获取到站外承接</text>
+    <rect class="chip" x="482" y="1120" width="340" height="38"/><text class="chip-text" x="502" y="1145">business_domain_map：领域大图</text>
+  </g>
+
+  <g>
+    <rect class="orange" x="882" y="770" width="210" height="44" rx="22"/>
+    <text class="tag" x="912" y="798">攻击手法 Skills</text>
+    <text class="body-strong" x="882" y="850">负责：具体作恶方式、强证据、反证和混合攻击边界</text>
+    <rect class="chip" x="882" y="880" width="330" height="38"/><text class="chip-text" x="902" y="905">group_control：真机 / 账号统一调度</text>
+    <rect class="chip" x="882" y="928" width="330" height="38"/><text class="chip-text" x="902" y="953">protocol_attack：脱端 / 接口直达</text>
+    <rect class="chip" x="882" y="976" width="330" height="38"/><text class="chip-text" x="902" y="1001">cracked_app：破解包绕采集</text>
+    <rect class="chip" x="882" y="1024" width="330" height="38"/><text class="chip-text" x="902" y="1049">real_user_crowdsourcing：真人任务化</text>
+    <rect class="chip" x="882" y="1072" width="330" height="38"/><text class="chip-text" x="902" y="1097">plugin_reverse：插件 / 逆向辅助</text>
+    <rect class="chip" x="882" y="1120" width="330" height="38"/><text class="chip-text" x="902" y="1145">credential_stuffing_ato：撞库 / 接管</text>
+  </g>
+
+  <g>
+    <rect class="purple" x="112" y="1210" width="210" height="44" rx="22"/>
+    <text class="tag" x="152" y="1238">AI / Agent Skills</text>
+    <text class="body-strong" x="112" y="1290">负责：RAG、编排、工具规划、策略蒸馏</text>
+    <rect class="chip" x="112" y="1320" width="330" height="38"/><text class="chip-text" x="132" y="1345">risk_rag_answering：知识检索回答</text>
+    <rect class="chip" x="455" y="1320" width="330" height="38"/><text class="chip-text" x="475" y="1345">strategy_to_model：策略模型化</text>
+    <rect class="chip" x="798" y="1320" width="330" height="38"/><text class="chip-text" x="818" y="1345">ai_agent_orchestration：多步编排</text>
+    <rect class="chip" x="1141" y="1320" width="330" height="38"/><text class="chip-text" x="1161" y="1345">tool_call_planning：查数与工具计划</text>
+  </g>
+
+  <g>
+    <rect class="green" x="112" y="1380" width="210" height="44" rx="22"/>
+    <text class="tag" x="152" y="1408">表达交付 Skills</text>
+    <text class="body-strong" x="112" y="1460">负责：把研判变成组内能读、业务能用、后续能迭代的材料</text>
+    <rect class="chip" x="112" y="1490" width="330" height="38"/><text class="chip-text" x="132" y="1515">executive_summary：老板视角摘要</text>
+    <rect class="chip" x="455" y="1490" width="330" height="38"/><text class="chip-text" x="475" y="1515">diagram_generation：策略树 / 流程图</text>
+    <rect class="chip" x="798" y="1490" width="330" height="38"/><text class="chip-text" x="818" y="1515">interview_storytelling：项目叙事</text>
+    <rect class="chip" x="1141" y="1490" width="330" height="38"/><text class="chip-text" x="1161" y="1515">legal_matrix_playbook：合法矩阵前置判断</text>
+  </g>
+
+  <text class="section-title" x="80" y="1612">3. 易错边界：防过拟合的主规则</text>
+  <rect class="panel" x="80" y="1638" width="700" height="380"/>
+  <text class="body-strong" x="115" y="1686">协议 vs 群控</text>
+  <text class="body" x="115" y="1720">协议看是否脱离正常端链路；群控看真机 / 账号是否统一调度。</text>
+  <text class="body-strong" x="115" y="1762">协议 vs 破解包</text>
+  <text class="body" x="115" y="1796">前端无日志不等于协议；包签名、SDK、安全模块异常优先查破解包。</text>
+  <text class="body-strong" x="115" y="1838">群控 vs 真人众包</text>
+  <text class="body" x="115" y="1872">设备离散不等于自然用户；行为真实但目标任务化，应优先考虑众包。</text>
+  <text class="body-strong" x="115" y="1914">导流 vs 反爬 / 协议</text>
+  <text class="body" x="115" y="1948">目标信息被暴露后搜索、关注、私信、站外承接，优先导流截流。</text>
+  <text class="body-strong" x="115" y="1990">合法矩阵 vs 黑产</text>
+
+  <rect class="panel" x="820" y="1638" width="700" height="380"/>
+  <text class="section-title" x="855" y="1686">4. 标准输出：让结论可审计、可治理、可沉淀</text>
+  <text class="body" x="855" y="1730">一句话判断：当前最多能下什么结论</text>
+  <text class="body" x="855" y="1764">本质标识：正常 / 风险 / 最小区分点</text>
+  <text class="body" x="855" y="1798">主控 Skill + 辅助 Skill：谁定边界、谁补证据</text>
+  <text class="body" x="855" y="1832">强 / 中 / 弱证据：避免把弱信号当强结论</text>
+  <text class="body" x="855" y="1866">反证与误判：埋点缺失、合法运营、自然热点、测试流量</text>
+  <text class="body" x="855" y="1900">补证动作：查哪些链路、字段、样本和 join 关系</text>
+  <text class="body" x="855" y="1934">治理方案：加采、限权、验证、拦截、教育、回流</text>
+  <text class="body" x="855" y="1968">灰度指标：命中率、误伤率、召回、迁移、业务损伤</text>
+
+  <text class="body" x="115" y="2024">批量不等于黑产；授权不等于豁免。先看授权、范围、工具、审计和收益主体。</text>
+
+  <text class="section-title" x="80" y="2088">5. 迭代闭环</text>
+  <rect class="card" x="245" y="2052" width="210" height="74"/><text class="small-title" x="285" y="2098">真实 Case</text>
+  <rect class="card" x="510" y="2052" width="210" height="74"/><text class="small-title" x="543" y="2098">回归评测</text>
+  <rect class="card" x="775" y="2052" width="210" height="74"/><text class="small-title" x="815" y="2098">边界回写</text>
+  <rect class="card" x="1040" y="2052" width="210" height="74"/><text class="small-title" x="1070" y="2098">Skill 升级</text>
+  <path class="arrow" d="M455 2088 H502"/>
+  <path class="arrow" d="M720 2088 H767"/>
+  <path class="arrow" d="M985 2088 H1032"/>
+  <path class="dash" d="M1145 2050 C1260 1990 1260 1900 1160 1845"/>
+  <text class="tiny" x="1265" y="2060">低于 80 分：回写具体 Skill 章节</text>
+</svg>
