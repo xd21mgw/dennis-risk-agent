@@ -47,6 +47,10 @@ normalized_evidence:
   evidence_type:
   applicable_skill:
   evidence_summary:
+  data_findings:
+  speculation_notes:
+  hypothesis_notes:
+  counter_evidence_exclusion_status:
   key_findings:
   strong_evidence:
   medium_evidence:
@@ -95,6 +99,10 @@ normalized_evidence:
 
 - “数据发现 / 结果 / 分析”：候选 key findings。
 - “结论 / 判断 / 可能”：候选 provider_conclusion_hint，需与事实分离，不能作为 final judgement。
+- “数据发现 vs 模型推测分界”：必须拆为 `data_findings`、`speculation_notes`、`hypothesis_notes`。
+- “反证路径 / 排除状态 / 排除情况”：必须解析为 `counter_evidence_exclusion_status`。
+- “P0 / P1 / P2 / P3”：必须解析为缺口优先级和 Router / Dennis 的 next action 依据。
+- “策略引擎 / BLOCK / CHALLENGE / MONITOR”：必须解析为不同强度的策略证据。
 - “缺失 / 需要补充 / 信息不足”：missing evidence。
 - “反证 / 可能原因 / 其他解释”：counter evidence。
 - “风险 / 注意 / 口径”：quality risks。
@@ -151,11 +159,15 @@ parser 必须区分：
 
 - 数据事实：Data Agent 返回的可识别数据摘要、表格结果、看板结果。
 - 模型推测：markdown 中“可能、疑似、建议、看起来、推测”等描述。
+- 假设性分析：markdown 中“如果 / 若 / 假设 / 可推断 / 需要验证后才成立”等未被数据执行结果支撑的推理。
 - 风控结论：Dennis Agent 后续基于 normalized evidence 输出的判断。
 
 处理原则：
 
+- “数据发现”可以进入 `data_findings`、`key_findings` 和 evidence。
 - markdown 里的模型推测不能直接转为 strong evidence。
+- “模型推测”只能进入 `weak_evidence`、`quality_risks`、`speculation_notes` 或 `provider_conclusion_hint`。
+- “假设性分析”必须进入 `hypothesis_notes`，不得进入 strong_evidence。
 - markdown 里的“疑似协议 / 疑似黑产”只能进入 `provider_conclusion_hint` 或 interpretation note，不得进入 `dennis_final_judgement`。
 - 最终结论等级由 Dennis Agent 根据 normalized evidence 决定。
 
@@ -201,6 +213,69 @@ Data Agent 返回中的结论性文字，例如“高度疑似”“可能是协
 - `related_misjudgment_risk`
 - `whether_closed`
 
+## 10.1 反证路径排除状态表解析规则
+
+parser 必须解析复杂 Data Agent markdown 中的“反证路径排除状态表”。
+
+至少支持以下状态：
+
+- `已排除`
+- `部分排除`
+- `未排除`
+- `未查`
+- `无权限`
+- `待验证`
+
+标准结构：
+
+```yaml
+counter_evidence_exclusion_status:
+  - counter_evidence_path:
+    status:
+    evidence_basis:
+    impact_on_conclusion:
+    priority:
+```
+
+协议攻击场景 P0 反证路径：
+
+- 破解包绕 SDK / 绕采集
+- 官方包埋点缺失
+- 前后端 join 口径问题
+- 合法自动化 / 授权工具
+- 群控真机
+
+如果任一 P0 反证状态为 `未排除`、`未查`、`无权限`、`待验证`，则 conclusion_support 不得超过 `highly_suspicious_support`，且通常应整体降为 `insufficient_support` 或“局部高度疑似 + 整体证据不足”。
+
+`部分排除` 只能支持局部路径，不能支持全量明确判断。
+
+## 10.2 P0 / P1 / P2 / P3 下一步解析规则
+
+parser 必须识别 Data Agent markdown 中的 P0 / P1 / P2 / P3 下一步。
+
+标准映射：
+
+- P0：影响结论上限的关键缺口，写入 `missing_evidence` 和 Router / Dennis 生成 `recommended_next_provider` 的依据；存在 P0 缺口时 `manual_review_required = true`。
+- P1：重要补证，影响置信度和治理范围。
+- P2：增强解释或复盘的补证。
+- P3：长期能力建设或效率优化。
+
+parser 不直接采用 Data Agent 的 provider 推荐作为最终 `recommended_next_provider`，只能把 P0/P1/P2/P3 作为 Router / Dennis 的路由依据。
+
+## 10.3 策略引擎决策强度解析规则
+
+parser 必须区分策略引擎决策强度：
+
+- `BLOCK`：较强处置证据。只能说明策略已强处置，不等于风险事实；可进入 medium_evidence 或在反证闭合时辅助 strong_evidence。
+- `CHALLENGE`：中等风险 / 验证证据。通常进入 medium_evidence。
+- `MONITOR`：观察证据。只能进入 weak_evidence 或 quality_risks，不能作为强打击证据。
+
+策略证据必须保留限制：
+
+- 策略命中不等于风险事实。
+- 策略处置需要后验验证。
+- 如果策略引擎域无权限，必须进入 `permission_notes` 和 `missing_evidence`。
+
 ## 11. quality_risks 提取规则
 
 以下内容应进入 `quality_risks`：
@@ -216,6 +291,23 @@ Data Agent 返回中的结论性文字，例如“高度疑似”“可能是协
 - 样本范围不明。
 - 指标口径不明。
 - Data Agent-only 缺少实时 provider。
+- 模型推测和假设性分析未与数据发现分离。
+- 反证路径排除状态不完整。
+- 策略引擎 BLOCK / CHALLENGE / MONITOR 语义被混用。
+
+## 11.1 Permission Notes 规则
+
+no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
+
+对结论有影响的无权限域还必须进入 `missing_evidence`：
+
+- 前端行为域无权限：无法确认前端真实缺失。
+- 策略引擎域无权限：无法确认命中、拦截、验证、监控或放行。
+- 关联网络域无权限：无法排除群控真机和强关联团组。
+- 授权运营域无权限：无法排除合法自动化 / 授权工具。
+- 设备 / SDK / 指纹域无权限：无法判断破解包、SDK 绕采集或设备环境。
+
+无权限场景必须建议权限申请后重查，但该建议应作为 Router / Dennis next action，不是 Data Agent 最终决策。
 
 ## 12. Status 推断规则
 
@@ -240,15 +332,21 @@ Data Agent 返回中的结论性文字，例如“高度疑似”“可能是协
 - `empty_result` 不能解释为无风险。
 - `sql_only` 不能解释为已查数。
 - parser 无法稳定识别 markdown 时，标记 `parse_failed`，并降级。
+- complex success 也不能自动升级为“明确判断”。只要存在 P0 关键反证未排除，结论上限不能超过 `highly_suspicious_support`。
+- complex partial 中，可查域产生的数据发现可以进入 evidence；未查关键域必须进入 missing_evidence；结论应支持“局部高度疑似 + 整体证据不足”的组合表达。
+- complex no_permission 中，无权限域必须进入 permission_notes；对结论有影响的无权限域必须进入 missing_evidence；结论不得强于“证据不足 / 高度疑似”。
 
 ## 12.1 Returned Type 推断规则
 
 `returned_type` 用于描述 Data Agent 返回内容形态：
 
 - `table + analysis`：有 markdown 表格、数据摘要和分析结论。
+- `complex_table + full_spec_analysis`：多数据域联合取证、包含反证路径、策略引擎、P0/P1/P2/P3、数据发现 vs 推测分界的完整规格分析。
 - `sql_only`：只有 SQL 或查询逻辑，无执行结果。
 - `partial_table + analysis`：有部分表格 / 数据摘要，但缺关键数据源或反证。
+- `complex_partial_table + analysis`：多数据域规格中部分域可查、部分关键域缺失，支持局部高度疑似但整体证据不足。
 - `partial_table + permission_blocked`：有部分数据，但核心数据因权限不足不可见。
+- `complex_permission_blocked`：多数据域规格中核心域无权限，必须降级并生成 permission notes。
 - `empty_result + analysis`：查询执行完成且返回 0 行，同时包含空结果解释。
 - `none`：查询失败、超时或无任何可靠数据返回。
 - `ambiguous_analysis`：自然语言分析多于数据发现，且明确无法判断。
@@ -298,6 +396,9 @@ parser 只能生成 `conclusion_support`，不能生成最终风控结论。
 - Data Agent-only 缺 `realtime_log_provider`、`device_fingerprint_provider`、`risk_engine_provider` 时，必须写入 `provider_limitations`。
 - Data Agent 返回中的结论性文字只进入 `provider_conclusion_hint`，不得进入 `dennis_final_judgement`。
 - `recommended_next_provider` 由 Router / Dennis Agent 根据 `missing_evidence` 和 `provider_limitations` 生成，Data Agent 原文中的“下一步建议”只能作为 next_action_hint 或 missing_evidence 参考。
+- P0 反证存在未排除、未查、无权限或待验证时，不得生成 `clear_support`。
+- complex success 只有在 P0 反证均已排除且数据发现覆盖核心链路时，才可接近明确判断；Data Agent-only 阶段仍建议由 Dennis Agent 和人工复核确认。
+- partial 版本允许表达“局部高度疑似 + 整体证据不足”，不得压平成全量高度疑似。
 
 ## 14.1 Normalized Evidence 输出完整性规则
 
@@ -307,6 +408,10 @@ parser 输出 `unified_normalized_evidence` 时必须包含：
 - `provider_response_id: queryId`
 - `raw_result_reference: queryId + sessionId + 本地保存路径或内部引用`
 - `provider_limitations`
+- `data_findings`
+- `speculation_notes`
+- `hypothesis_notes`
+- `counter_evidence_exclusion_status`
 - `key_findings`
 - `strong_evidence`
 - `medium_evidence`
