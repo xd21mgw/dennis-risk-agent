@@ -39,6 +39,74 @@ query_intent:
   next_query_intent_when_insufficient:
 ```
 
+## 1.1 调用前最小输入校验
+
+Data Agent-only 真实取数前，必须先做最小输入校验。
+
+必须具备：
+
+```yaml
+minimum_executable_inputs:
+  entity_identifier:
+    required: true
+    at_least_one:
+      - user_id
+      - device_id
+      - session_id
+      - trace_id
+      - risk_event_id
+      - request_id
+  time_window:
+    required: true
+    accepted:
+      - start_time + end_time
+      - 具体日期区间
+  business_context:
+    required: recommended
+    examples:
+      - 主站
+      - 电商
+      - 商业化
+      - 直播
+      - 活动
+      - 账号安全
+  target_api_or_action:
+    required: recommended
+    examples:
+      - 目标业务动作
+      - 目标接口模式
+      - 目标页面 / 事件 / 行为
+```
+
+如果缺少 `entity_identifier` 或 `time_window`：
+
+- 不生成可执行 Data Agent question。
+- 不调用 Data Agent。
+- 不进入 parser 阶段。
+- 不生成 normalized evidence。
+- 生成 `missing_input_request`，明确告诉用户需要补哪些信息。
+
+如果缺少 `business_context` 或 `target_api_or_action`：
+
+- 可以生成补充信息请求。
+- 不建议直接调用 Data Agent。
+- 如用户坚持，也必须在 question 中标注“业务场景 / 接口范围不明确，可能无法找表或生成可执行 SQL”。
+
+### missing_input_request 结构
+
+```yaml
+missing_input_request:
+  status: blocked_by_missing_minimum_inputs
+  missing_required_inputs:
+    - entity_identifier
+    - time_window
+  missing_recommended_inputs:
+    - business_context
+    - target_api_or_action
+  message_to_user:
+  next_step:
+```
+
 ## 2. 输出
 
 输出为 Data Agent 可消费的自然语言 question。
@@ -49,6 +117,17 @@ natural_language_question:
   question_text:
   encoder_notes:
   dataagent_only_limitations:
+```
+
+如果最小输入缺失，则输出：
+
+```yaml
+missing_input_request:
+  source_query_intent_id:
+  status: blocked_by_missing_minimum_inputs
+  missing_required_inputs:
+  missing_recommended_inputs:
+  message_to_user:
 ```
 
 ## 3. 编码原则
@@ -67,6 +146,7 @@ natural_language_question:
 - 不写真实字段名。
 - 不写真实 SQL。
 - 不把 query intent 当真实数据。
+- 不在缺少实体标识或时间窗口时生成可执行 question。
 - 不要求 Data Agent 直接给最终处罚、冻结、扣除、封禁或策略上线建议。
 - 不要求 Data Agent 输出最终风控定性。
 - 不要求 Data Agent 决定 recommended_next_provider。
@@ -307,6 +387,8 @@ question 中必须显式表达：
 - 禁止写真实 SQL。
 - 禁止编造 Data Agent API。
 - 禁止把 query intent 当真实数据。
+- 禁止缺少 entity_identifier 或 time_window 时调用 Data Agent。
+- 禁止把缺输入场景伪装成 Data Agent 查询失败。
 - 禁止要求 Data Agent 直接做最终风控定性。
 - 禁止要求 Data Agent 输出 dennis_final_judgement。
 - 禁止要求 Data Agent 决定 recommended_next_provider。

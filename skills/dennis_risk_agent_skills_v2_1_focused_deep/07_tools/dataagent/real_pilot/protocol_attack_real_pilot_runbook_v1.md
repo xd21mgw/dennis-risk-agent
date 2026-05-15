@@ -87,6 +87,53 @@
 - 先输出缺失输入清单。
 - 只生成可执行的第一轮补证 query intent。
 
+## 5.1 真实只读 Case 启动前置条件
+
+真实 Data Agent-only 只读 case 启动前，必须具备以下输入。
+
+必须输入：
+
+- `case_id`
+- 至少一个实体标识：
+  - `user_id`
+  - `device_id`
+  - `session_id`
+  - `trace_id`
+  - `risk_event_id`
+  - `request_id`
+- `time_window`
+  - `start_time / end_time`
+  - 或具体日期区间
+- `business_scene`
+  - 主站 / 电商 / 商业化 / 直播 / 活动 / 账号安全等
+- `target_api_or_action`
+  - 目标业务动作
+  - 目标接口模式
+  - 目标页面 / 行为 / 事件
+
+缺失时：
+
+- case 状态标记为 `blocked_by_missing_minimum_inputs`。
+- 不能调用 Data Agent。
+- 不能生成风险结论。
+- 不能进入 parser / normalized evidence 阶段。
+- 只能输出待补信息清单。
+
+待补信息清单模板：
+
+```yaml
+missing_input_request:
+  case_id:
+  status: blocked_by_missing_minimum_inputs
+  missing_required_inputs:
+    - entity_identifier
+    - time_window
+  missing_recommended_inputs:
+    - business_scene
+    - target_api_or_action
+  next_step: 用户补齐最小输入后，再生成 Data Agent question。
+```
+
 ## 6. 首批 3 个真实 Case
 
 ### RP-AC-001：前端无日志 + 后端有请求
@@ -371,9 +418,14 @@ Dennis Agent 基于 `normalized_evidence` 做解释：
 ## 17. 启动 Checklist
 
 - [ ] 当前 case 已脱敏或符合内部只读试点要求。
+- [ ] 已填写 case_id。
 - [ ] 输入包含 user_id 或 device_id。
+- [ ] 如无 user_id / device_id，至少包含 session_id / trace_id / risk_event_id / request_id。
 - [ ] 输入包含 api_name 或业务动作。
 - [ ] 输入包含 time_window。
+- [ ] 输入包含 business_scene。
+- [ ] 输入包含 target_api_or_action。
+- [ ] 若缺 entity_identifier 或 time_window，case 已标记为 blocked_by_missing_minimum_inputs，且未调用 Data Agent。
 - [ ] 已选择主控 Skill 和辅助 Skill。
 - [ ] query intent 包含反证补证路径。
 - [ ] dataagent request 不包含真实 API、真实 SQL、真实表名、真实字段名。
