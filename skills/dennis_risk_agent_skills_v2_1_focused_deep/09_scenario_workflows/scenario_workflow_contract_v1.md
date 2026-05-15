@@ -172,6 +172,9 @@ workflow:
 - Data Agent 分批返回，只返回第一批结果。
 - Data Agent 只生成 SQL，并询问是否执行。
 - Data Agent 返回 partial，需要选择继续查哪个数据域。
+- Data Agent 仍在运行，提示 process still running / polling / no new output。
+- 多组 SQL 部分完成，部分仍 running。
+- SQL 字段错误被修复后重新提交。
 - Data Agent 建议扩大时间窗。
 - Data Agent 需要用户补充 user_id / device_id / session_id / trace_id / risk_event_id / request_id 或 time_window。
 - Data Agent 提供多个后续取数方向。
@@ -183,11 +186,18 @@ workflow:
 - 当前数据发现摘要。
 - 当前缺失证据。
 - Data Agent 提出的 next_data_options，如有。
+- 当前执行状态：running / partial_completed / completed / failed / timeout。
+- 已完成、仍运行、失败、修复重跑的查询摘要。
+- 可用的部分结果和仍待返回的 pending evidence。
 - 用户可接受的查询成本 / 时间窗 / 样本范围。
 
 输出结构：
 - 当前已完成查询。
+- 当前执行状态。
+- 已完成查询、仍在运行查询、失败 / 修复查询。
 - 当前数据发现摘要。
+- 当前可用数据发现。
+- 仍等待的证据。
 - 当前结论上限。
 - 缺失证据。
 - Data Agent 给出的可选下一步。
@@ -201,9 +211,21 @@ workflow:
 禁止行为：
 - 将 Data Agent 的 next_data_options 直接当最终 next_action。
 - 在 SQL-only / running / partial 状态下输出强结论。
+- 将 “process still running” 当风险信号。
+- 将 SQL 修复 / 重跑动作当风险证据。
+- 将仍 running 的查询当作已完成证据。
 - 未经用户确认就建议继续高成本 Hive、长周期扩窗、跨域 join 或大样本回捞。
 - 将“扩大时间窗”当默认动作，必须先说明成本和能验证什么。
 - 将交互式下一步选择写成自动治理或自动策略上线。
+
+运行中 / polling 分支：
+
+- Data Agent 仍在运行且无可用结果时，Dennis Agent 应只展示执行进度、已等待内容和用户选项，不输出风险结论。
+- 如果已有部分 SQL 完成，Dennis Agent 可以读取已完成聚合摘要，形成阶段性 `data_findings`。
+- 如果未完成 SQL 对关键证据有决定性影响，必须等待最终结果，或明确输出“阶段性判断，不是最终判断”。
+- 如果已完成结果足以说明“当前证据不足”，可以停止剩余高成本查询并输出阶段性 Dennis 判断，但要保留 pending evidence。
+- 如果用户希望节省成本，Dennis Agent 应提供等待、停止、缩小范围、继续高成本查询等选项，并推荐低成本优先。
+- SQL 字段错误修复重跑时，Dennis Agent 只记录 `sql_repair_state` 和执行轨迹，不把修复动作写入证据链。
 
 ### 2.7 generalization_and_recall
 

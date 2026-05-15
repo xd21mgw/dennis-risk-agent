@@ -190,7 +190,43 @@ Dennis 主 Agent / Router 负责：
 
 如果用户未确认，高成本动作只能作为待选项，不得默认继续执行。
 
-## 8. parser 期望识别的归属
+## 8. Running / Polling / Partial Completed 边界
+
+Data Agent running / polling 状态只代表执行进度，不代表风险证据。
+
+Data Agent 可以输出：
+
+- process still running。
+- no new output。
+- 多组 SQL 的执行进度。
+- 已完成 / running / failed / repaired / rerun 的任务状态。
+- 已完成查询的聚合摘要。
+- 剩余查询预计仍需等待或无法估计。
+
+Dennis 主 Agent 可以：
+
+- 向用户解释执行进度。
+- 读取已完成查询的聚合摘要，形成阶段性 data_findings。
+- 将仍 running 的查询写入 `pending_evidence`。
+- 判断是否允许阶段性 Dennis 判断。
+- 提供等待、停止、缩小范围、修复重跑、扩窗或补充数据域等选项。
+
+Dennis 主 Agent 不得：
+
+- 把“正在跑 / 轮询中”解释成风险信号。
+- 把 SQL 字段错误、修复或重跑当作风险证据。
+- 把部分完成结果包装成完整证据链。
+- 在关键证据仍 pending 时输出最终判断。
+
+阶段性判断边界：
+
+- 如果没有可用结果，只能输出执行状态，不能输出风险判断。
+- 如果部分结果可用，可以输出 interim judgement，但必须标注“阶段性”。
+- 如果 pending queries 涉及关键证据，结论上限必须降级。
+- 如果第一批结果已经足以支持“证据不足”，可以输出阶段性 Dennis 判断，同时说明继续查询能补什么。
+- 最终判断必须等待关键证据闭合，或明确说明当前只基于已完成结果。
+
+## 9. parser 期望识别的归属
 
 “parser 期望识别”只属于：
 
@@ -216,7 +252,7 @@ Data Agent 输出自然语言 / markdown
 → Dennis 主 Agent 输出 dennis_final_judgement
 ```
 
-## 9. 真实 Data Agent question 的写法边界
+## 10. 真实 Data Agent question 的写法边界
 
 真实 question 应要求：
 
@@ -240,7 +276,7 @@ Data Agent 输出自然语言 / markdown
 - 输出治理处置。
 - 直接替 Dennis 主 Agent 做研判。
 
-## 10. 前后端缺口案例边界
+## 11. 前后端缺口案例边界
 
 对于“后端有请求、前端无日志”：
 

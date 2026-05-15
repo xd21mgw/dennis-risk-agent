@@ -68,6 +68,12 @@ normalized_evidence:
   required_missing_inputs:
   estimated_query_cost:
   batch_status:
+  provider_status:
+  query_execution_summary:
+  polling_state:
+  sql_repair_state:
+  pending_evidence:
+  interim_judgement_allowed:
   conclusion_support:
     level:
     reason:
@@ -143,6 +149,7 @@ interactive_followup:
     level: low / medium / high / unknown
     reason:
   batch_status: first_batch / intermediate / final / sql_only / waiting_user_choice
+  provider_status: running / completed / partial_completed / failed / timeout / waiting_user_choice
 ```
 
 识别规则：
@@ -161,6 +168,64 @@ interactive_followup:
 - `next_data_options` 不等于最终 `next_action`。
 - Dennis Agent / Router 负责排序、解释成本、生成用户可选择动作和下一步问题。
 - 高成本 Hive、长周期扩窗、跨域 join、大样本回捞必须要求用户显式确认。
+
+## 4.2 执行进度 / Polling 解析规则
+
+当 Data Agent markdown 中出现多组 SQL 并行、部分完成、仍在运行、轮询、SQL 修复重跑等执行过程信息时，parser 必须抽取执行进度字段。
+
+标准字段：
+
+```yaml
+execution_progress:
+  provider_status: running / completed / partial_completed / failed / timeout / waiting_user_choice
+  batch_status: first_batch / intermediate / polling / partial_completed / final / sql_repaired_rerun / waiting_remaining_queries
+  query_execution_summary:
+    total_queries_count:
+    completed_queries_count:
+    running_queries_count:
+    failed_queries_count:
+    repaired_queries_count:
+    available_partial_results:
+    unavailable_results:
+    current_progress_summary:
+  polling_state:
+    process_still_running:
+    no_new_output:
+    next_poll_recommended:
+    estimated_remaining_unknown:
+    should_wait_for_final_result:
+  sql_repair_state:
+    sql_error_detected:
+    sql_error_type:
+    repair_attempted:
+    rerun_submitted:
+    repaired_query_status:
+  pending_evidence:
+    - evidence_item:
+      pending_reason:
+      related_query:
+  interim_judgement_allowed:
+    allowed: true / false
+    reason:
+```
+
+识别规则：
+
+- “process still running / running / 执行中 / 轮询中 / 暂无新输出” -> `provider_status: running`，`batch_status: polling`。
+- “部分 SQL 完成，部分 SQL running” -> `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
+- “X 组完成 / Y 组运行 / Z 组失败” -> 填充 `query_execution_summary`。
+- “可以先读取已完成结果” -> `available_partial_results` 非空，并评估 `interim_judgement_allowed`。
+- “字段名错误 / SQL 错误 / 修正后重跑 / rerun submitted” -> 填充 `sql_repair_state`，并标记 `batch_status: sql_repaired_rerun`。
+- 仍 running 的查询对应证据必须进入 `pending_evidence` 或 `missing_evidence`，不得当作已完成证据。
+- SQL 修复和重跑只进入 `execution_trace` / `sql_repair_state`，不得进入 strong / medium / weak evidence。
+
+阶段性判断规则：
+
+- `provider_status: running` 且没有可用结果时，`interim_judgement_allowed.allowed=false`。
+- `provider_status: partial_completed` 且已完成结果能覆盖局部证据时，`interim_judgement_allowed.allowed=true`，但必须标注 interim。
+- 如果未完成查询涉及关键证据，阶段性结论不得超过 `insufficient_support` 或“局部支持 + 整体证据不足”。
+- 如果第一批结果已经足以支持“证据不足”，可以输出阶段性 Dennis 判断，但必须列出仍 pending 的证据。
+- 最终 `dennis_final_judgement` 必须等待关键证据闭合，或明确标记为阶段性判断。
 
 ## 5. SQL 代码块解析规则
 
@@ -449,10 +514,13 @@ no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
    - 如果部分 SQL ID 已完成、部分 SQL ID running / failed / no_permission，标记 `execution_state: execution_partial`。
 7. markdown 包含“是否继续 / 是否执行 / 可选下一步 / 请选择 / 建议继续查 / 需要用户确认”等交互语义 -> 保留原始证据状态，同时标记 `batch_status: waiting_user_choice`，并抽取 `next_data_options`。
 8. markdown 包含“第一批 / 首批 / 先返回 / 后续再查” -> 标记 `batch_status: first_batch` 或 `intermediate`；如关键证据未闭合，status 仍为 `partial`。
-9. markdown 包含“无法判断 / 信息不足 / 需要补充” -> `ambiguous_result` 或 `partial`。
-10. markdown 有部分数据，但明确缺关键数据源或关键反证未排除 -> `partial`。
-11. markdown 有数据表和分析，但 missing_evidence / counter_evidence 仍未闭合 -> `success`，但 conclusion_support 不得超过 `highly_suspicious_support`。
-12. markdown 返回完整数据发现并覆盖关键反证 -> `success`。
+9. markdown 包含“process still running / no new output / running / 执行中 / 轮询中” -> 保留原始证据状态，标记 `provider_status: running`，`batch_status: polling`。
+10. markdown 包含“部分完成 / some completed / remaining running / 等待剩余 SQL” -> 标记 `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
+11. markdown 包含“字段错误 / SQL error / 修正后重跑 / repaired / rerun submitted” -> 标记 `batch_status: sql_repaired_rerun`，并抽取 `sql_repair_state`。
+12. markdown 包含“无法判断 / 信息不足 / 需要补充” -> `ambiguous_result` 或 `partial`。
+13. markdown 有部分数据，但明确缺关键数据源或关键反证未排除 -> `partial`。
+14. markdown 有数据表和分析，但 missing_evidence / counter_evidence 仍未闭合 -> `success`，但 conclusion_support 不得超过 `highly_suspicious_support`。
+15. markdown 返回完整数据发现并覆盖关键反证 -> `success`。
 
 补充规则：
 
@@ -467,6 +535,9 @@ no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
 - `execution_partial` 必须保留已完成 SQL 与未完成 SQL 的差异，整体结论默认降级。
 - `batch_status: waiting_user_choice` 表示 Data Agent 等待用户决定下一步，不是证据充分状态。
 - `batch_status: first_batch / intermediate` 表示当前只完成部分取证，结论必须受 missing_evidence 和 quality_risks 限制。
+- `provider_status: running` / `batch_status: polling` 表示执行进度，不是风险证据；没有可用结果时不能生成风险结论。
+- `provider_status: partial_completed` 允许读取已完成结果形成阶段性 data_findings，但未完成查询必须进入 `pending_evidence`。
+- `batch_status: sql_repaired_rerun` 只能说明执行轨迹，SQL 修复动作不得进入风险证据。
 - 如果出现 `required_missing_inputs`，不得继续生成可执行 Data Agent question，只能先向用户要最小输入。
 - 如果出现长周期扩窗、跨域 join、大样本回捞或高成本 Hive，必须标记 `needs_user_confirmation: true`。
 - parser 无法稳定识别 markdown 时，标记 `parse_failed`，并降级。
@@ -485,6 +556,9 @@ no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
 - `sql_execution_tracking`：SQL 已提交并返回 SQL ID / running / completed 状态，但缺完整聚合摘要。
 - `interactive_followup`：Data Agent 返回可选下一步、等待用户选择或需要用户补充输入。
 - `first_batch_result`：Data Agent 只返回第一批结果，后续证据仍待选择继续查询。
+- `running_progress`：查询仍在运行或轮询中，没有新的完整结果。
+- `partial_completed_execution`：部分查询已完成并有可用结果，部分查询仍 running / failed / no_permission。
+- `sql_repaired_rerun`：SQL 字段或语法错误被修复后重新提交，当前只代表执行轨迹。
 - `partial_sql_execution_result`：部分 SQL 已完成并返回结果摘要，部分 SQL 仍 running / failed / no_permission。
 - `partial_table + analysis`：有部分表格 / 数据摘要，但缺关键数据源或反证。
 - `complex_partial_table + analysis`：多数据域规格中部分域可查、部分关键域缺失，支持局部高度疑似但整体证据不足。
@@ -572,6 +646,12 @@ parser 输出 `unified_normalized_evidence` 时必须包含：
 - `required_missing_inputs`
 - `estimated_query_cost`
 - `batch_status`
+- `provider_status`
+- `query_execution_summary`
+- `polling_state`
+- `sql_repair_state`
+- `pending_evidence`
+- `interim_judgement_allowed`
 - `conclusion_support`
 - `recommended_next_provider`，但该字段必须标记为 Router / Dennis Agent 生成，不得直接采用 Data Agent 的推荐
 - `manual_review_required`

@@ -121,10 +121,16 @@ dataagent_interpretation_response:
 
 ```yaml
 dataagent_interactive_followup_response:
+  当前执行状态:
   当前已完成查询:
+  仍在运行查询:
+  已失败 / 已修复查询:
   当前数据发现摘要:
+  当前可用数据发现:
+  仍等待的证据:
   当前结论上限:
   缺失证据:
+  是否可以阶段性判断:
   Data Agent 给出的可选下一步:
     - option_id:
       option_summary:
@@ -144,12 +150,23 @@ dataagent_interactive_followup_response:
   是否需要用户确认:
   可复制给 Data Agent 的下一步问题:
   是否可以先输出阶段性 Dennis 判断:
+  用户可选动作:
+    A_等待剩余_SQL_完成:
+    B_先读取已完成结果_做阶段性判断:
+    C_停止继续查询_基于当前证据输出阶段性结论:
+    D_修正失败_SQL_后重跑:
+    E_缩小查询范围_降低_Hive_成本:
+    F_扩大时间窗或补充数据域_需用户确认:
 ```
 
 边界：
 - Data Agent 可以提出 `next_data_options`，但不决定最终 `next_action`。
 - Dennis Agent 负责把选项转成用户可理解、可选择的动作。
 - SQL-only、running、partial、no_permission 状态下，阶段性判断必须降级。
+- running / polling 只代表执行进度，不代表风险证据。
+- partial completed 可输出阶段性判断，但必须标注 interim，并保留 pending evidence。
+- 已完成查询可以进入当前可用数据发现；仍 running 的查询不得进入证据链。
+- SQL 修复重跑只能进入执行轨迹，不得进入风险证据。
 - 高成本 Hive、长周期扩窗、跨域 join、大样本回捞必须显式确认。
 - 可复制给 Data Agent 的下一步问题仍然只能要求只读取证，不要求最终定性或治理动作。
 
