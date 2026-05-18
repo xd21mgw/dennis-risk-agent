@@ -56,6 +56,7 @@ DataAgent 只定位为 Hive / 公司数仓取数分析能力。
 
 如果用户要的是“查数建议 / query intent / Hive 取证路径”，先按 `dataagent_query_suggestion_contract_v1.md` 输出标准结构，再决定是否进入后续取数方向。
 其中入参要分层表达：最小必要入参、建议补充入参、可选上下文；只要最小必要入参具备，建议补充入参或可选上下文缺失都不应阻断初步查询建议。
+查询建议结构不等于可直接执行 SQL；执行前仍需 DataAgent / Hive 根据真实表名、权限、分区、join key 和数据口径转换。
 
 ## 5. 哪些情况不要调 DataAgent
 
@@ -77,3 +78,4 @@ DataAgent 只定位为 Hive / 公司数仓取数分析能力。
 
 正式接入前，可以先用 5 个 smoke test 问题验证路由是否按预期命中 ATO 完全体或对应 runtime summary。
 v2.4.1 接入时，建议先确认 startup checklist 未被放入每轮常驻。
+smoke test 通过只代表 internal publish 层最小格式与边界回归通过，仍需内部小范围试运行验证真实回答质量；非 ATO 不因此视为完全体能力。

@@ -34,6 +34,7 @@ Dennis Risk Agent 是通用业务风控专家 Agent。
 不要默认把 `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 放到每轮常驻；它更适合初始化 / 配置期检查。
 `dataagent_query_suggestion_contract_v1.md` 是“查询建议格式规则”，不是 DataAgent 调用器；只有用户明确要求“查数建议 / query intent / Hive 取证路径”时才加载。
 查询建议的入参要分层：最小必要入参、建议补充入参、可选上下文；最小必要入参具备时，即使建议补充入参或可选上下文缺失，也应先输出通用查询建议，不要把建议补充项写成“未提供就不能生成建议”。
+查询建议结构不等于可直接执行 SQL；执行前仍需 DataAgent / Hive 根据真实表名、权限、分区、join key 和数据口径转换。
 
 ## 4. Knowledge / Skill 文件装载顺序
 
@@ -78,7 +79,7 @@ Dennis Risk Agent 是通用业务风控专家 Agent。
 - 批量 case / 批量盗号 / 批量申诉。
 
 命中 ATO 后，应进入 ATO 完全体，不要只停留在 runtime summary。
-ATO / 账号安全短问默认按 6 段骨架回答：初步判断、风险本质、关键证据、误判边界、补证 / 查数建议、治理建议。
+ATO / 账号安全短问默认使用 6 段内部 checklist：初步判断、风险本质、关键证据、误判边界、补证 / 查数建议、治理建议。最终用户短答不强制展示 6 个标题，但内容必须覆盖这 6 类信息。
 
 ## 6. 非 ATO runtime summary 触发规则
 
@@ -99,7 +100,7 @@ ATO / 账号安全短问默认按 6 段骨架回答：初步判断、风险本�
 - 治理建议。
 - 下一步动作。
 
-盗号 / 账号安全短问建议固定为 6 段骨架：
+盗号 / 账号安全短问建议固定使用 6 段内部 checklist，最终用户短答不强制展示 6 个标题：
 
 1. 初步判断
 2. 风险本质
@@ -174,3 +175,4 @@ DataAgent 仅代表 Hive / 公司数仓取数分析能力。
 - 不把非 ATO 推成深度闭环。
 - v2.4.1 加载优化后，startup checklist 不再每轮常驻。
 - 首次生成 DataAgent 查询建议时，必须符合 `dataagent_query_suggestion_contract_v1.md` 的标准结构。
+- 回归结果只代表 internal publish 层最小格式与边界回归通过，仍需内部小范围试运行验证真实回答质量；不宣称非 ATO 已具备完全体能力。

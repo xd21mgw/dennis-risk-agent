@@ -50,6 +50,7 @@
 - 不真实调用 DataAgent。
 - 不假装已经查到结果。
 - 不输出虚构数据。
+- 查询建议结构不等于可直接执行 SQL；执行前仍需 DataAgent / Hive 根据真实表名、权限、分区、join key 和数据口径转换。
 - 具体阈值只能作为示例阈值，且必须注明“需按业务历史分布和风控口径校准”。
 - 查询建议阶段不得直接输出强处置结论，例如 `block` / `ignore`。
 - 如需处置建议，只能写 `recommended_action_candidate`、`manual_review_required`、`need_more_evidence`。
