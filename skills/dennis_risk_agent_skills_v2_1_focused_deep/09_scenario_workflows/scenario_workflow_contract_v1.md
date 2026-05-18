@@ -175,6 +175,7 @@ workflow:
 - Data Agent 仍在运行，提示 process still running / polling / no new output。
 - 多组 SQL 部分完成，部分仍 running。
 - SQL 字段错误被修复后重新提交。
+- Data Agent timeout。
 - Data Agent 建议扩大时间窗。
 - Data Agent 需要用户补充 user_id / device_id / session_id / trace_id / risk_event_id / request_id 或 time_window。
 - Data Agent 提供多个后续取数方向。
@@ -189,6 +190,7 @@ workflow:
 - 当前执行状态：running / partial_completed / completed / failed / timeout。
 - 已完成、仍运行、失败、修复重跑的查询摘要。
 - 可用的部分结果和仍待返回的 pending evidence。
+- timeout 持续时间与超时类型。
 - 用户可接受的查询成本 / 时间窗 / 样本范围。
 
 输出结构：
@@ -199,6 +201,7 @@ workflow:
 - 当前可用数据发现。
 - 仍等待的证据。
 - 当前结论上限。
+- timeout 状态下的结论上限。
 - 缺失证据。
 - Data Agent 给出的可选下一步。
 - Dennis Agent 推荐优先级。
@@ -214,9 +217,25 @@ workflow:
 - 将 “process still running” 当风险信号。
 - 将 SQL 修复 / 重跑动作当风险证据。
 - 将仍 running 的查询当作已完成证据。
+- 将 timeout 解释为无风险或反证。
 - 未经用户确认就建议继续高成本 Hive、长周期扩窗、跨域 join 或大样本回捞。
 - 将“扩大时间窗”当默认动作，必须先说明成本和能验证什么。
 - 将交互式下一步选择写成自动治理或自动策略上线。
+
+超时分支：
+
+- `quick_wait_threshold`：60~120 秒，用于提示用户查询可能较慢。
+- `single_call_timeout`：5~10 分钟，用于停止当前等待并标记 timeout。
+- `high_cost_confirmation_threshold`：预计超过 10 分钟、长周期、多表 join、大样本回捞时，必须用户确认。
+
+超时处理规则：
+
+- timeout 只代表取证未完成，不代表没有风险。
+- timeout 不能作为反证。
+- timeout 后不得生成明确低风险结论。
+- timeout 后应进入 pending evidence / missing evidence。
+- 如果已有部分结果，可以继续给阶段性解释，但必须标注 interim。
+- 高成本查询、长周期扩窗、多表 join、大样本回捞不能自动连续执行。
 
 运行中 / polling 分支：
 
@@ -226,6 +245,7 @@ workflow:
 - 如果已完成结果足以说明“当前证据不足”，可以停止剩余高成本查询并输出阶段性 Dennis 判断，但要保留 pending evidence。
 - 如果用户希望节省成本，Dennis Agent 应提供等待、停止、缩小范围、继续高成本查询等选项，并推荐低成本优先。
 - SQL 字段错误修复重跑时，Dennis Agent 只记录 `sql_repair_state` 和执行轨迹，不把修复动作写入证据链。
+- 如果出现 timeout，且无可用结果，应返回用户可选动作，不要继续默认等待。
 
 ### 2.7 generalization_and_recall
 

@@ -74,6 +74,13 @@ normalized_evidence:
   sql_repair_state:
   pending_evidence:
   interim_judgement_allowed:
+  timeout_type:
+  elapsed_time:
+  partial_results_available:
+  pending_queries:
+  retry_recommended:
+  retry_with_smaller_scope:
+  user_confirmation_required:
   conclusion_support:
     level:
     reason:
@@ -150,6 +157,7 @@ interactive_followup:
     reason:
   batch_status: first_batch / intermediate / final / sql_only / waiting_user_choice
   provider_status: running / completed / partial_completed / failed / timeout / waiting_user_choice
+  timeout_type: quick_wait_exceeded / single_call_timeout / query_execution_timeout / no_output_timeout
 ```
 
 识别规则：
@@ -161,6 +169,7 @@ interactive_followup:
 - “可继续查登录 / 发布 / 私信 / 爬虫 / 活动”等多个方向 -> `next_data_options`。
 - “查询量大 / Hive 较慢 / 跨域 join / 长周期 / 大样本” -> `estimated_query_cost: high`。
 - “单日、小样本、单域聚合” -> `estimated_query_cost: low`，除非 Data Agent 明确提示成本高。
+- “timeout / 超时 / 进程长时间无新输出 / 轮询后仍无结果” -> timeout 相关字段。
 
 归属边界：
 
@@ -216,6 +225,8 @@ execution_progress:
 - “X 组完成 / Y 组运行 / Z 组失败” -> 填充 `query_execution_summary`。
 - “可以先读取已完成结果” -> `available_partial_results` 非空，并评估 `interim_judgement_allowed`。
 - “字段名错误 / SQL 错误 / 修正后重跑 / rerun submitted” -> 填充 `sql_repair_state`，并标记 `batch_status: sql_repaired_rerun`。
+- “无新输出 / 超时 / 长时间未返回 / 轮询后仍无结果” -> `provider_status: timeout`，并根据语义选择 `timeout_type`。
+- “继续等待 / 缩小范围 / 降低复杂度 / 换更低成本问题” -> `retry_recommended` / `retry_with_smaller_scope` / `user_confirmation_required`。
 - 仍 running 的查询对应证据必须进入 `pending_evidence` 或 `missing_evidence`，不得当作已完成证据。
 - SQL 修复和重跑只进入 `execution_trace` / `sql_repair_state`，不得进入 strong / medium / weak evidence。
 
@@ -226,6 +237,41 @@ execution_progress:
 - 如果未完成查询涉及关键证据，阶段性结论不得超过 `insufficient_support` 或“局部支持 + 整体证据不足”。
 - 如果第一批结果已经足以支持“证据不足”，可以输出阶段性 Dennis 判断，但必须列出仍 pending 的证据。
 - 最终 `dennis_final_judgement` 必须等待关键证据闭合，或明确标记为阶段性判断。
+- `provider_status: timeout` 必须进入 `pending_evidence` / `missing_evidence`，不能作为无风险或反证。
+- `timeout` 只能说明取证未完成，不能直接生成明确低风险结论。
+
+## 4.3 Timeout 解析规则
+
+当 Data Agent markdown 或 SSE 文本中出现超时信息时，parser 必须抽取 timeout 专属字段。
+
+标准字段：
+
+```yaml
+timeout_analysis:
+  provider_status: timeout
+  timeout_type: quick_wait_exceeded / single_call_timeout / query_execution_timeout / no_output_timeout
+  elapsed_time:
+  partial_results_available:
+    - result_item:
+      source_query:
+  pending_queries:
+    - query_item:
+      reason:
+  retry_recommended:
+  retry_with_smaller_scope:
+  user_confirmation_required:
+```
+
+识别规则：
+
+- “60 秒无返回、刚开始变慢” -> `timeout_type: quick_wait_exceeded`，通常还不应停止整体流程。
+- “5~10 分钟仍无最终结果、查询无新输出” -> `timeout_type: single_call_timeout` 或 `query_execution_timeout`。
+- “预计超过 10 分钟、长周期、多表 join、大样本回捞” -> `user_confirmation_required: true`，不应自动连续执行。
+- “先给出部分结果，剩余查询超时” -> `partial_results_available` 非空，同时 `pending_queries` 非空。
+- “建议缩小范围 / 降低 join 复杂度 / 换更低成本问题” -> `retry_with_smaller_scope`。
+- `timeout` 不得被解析为 `failed` 的等价物；它是独立的未完成状态。
+- `timeout` 不能作为反证，也不能直接压成低风险。
+- 如果已有部分结果，Dennis Agent 可以给阶段性判断，但必须明确是 interim。
 
 ## 5. SQL 代码块解析规则
 
@@ -504,23 +550,24 @@ no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
 按以下顺序推断 status：
 
 1. `error_msg` 包含“权限不足”“无权限”“访问被拒绝”“permission” -> `no_permission`。
-2. `result != success` 或 `result = error`，且 `error_msg` 包含“超时”“timeout”“执行失败” -> `timeout` 或 `failed`。
-3. `result != success` 或 `result = error`，且无权限特征也无超时特征 -> `failed`。
-4. 流结束但内容为空 -> `empty_result`。
-5. markdown 包含“查询执行成功，但返回 0 行”“Result: 0 rows” -> `empty_result`。
-6. markdown 包含“SQL 不等于已查数结果”，或只有 SQL / 查询逻辑但无执行结果 -> `sql_only` 或 `partial`。
+2. `result != success` 或 `result = error`，且 `error_msg` 包含“超时”“timeout” -> `timeout`，并映射为 `provider_status: timeout`。
+3. `result != success` 或 `result = error`，且 `error_msg` 包含“执行失败”但不含 timeout 特征 -> `failed`。
+4. `result != success` 或 `result = error`，且无权限特征也无超时特征 -> `failed`。
+5. 流结束但内容为空 -> `empty_result`。
+6. markdown 包含“查询执行成功，但返回 0 行”“Result: 0 rows” -> `empty_result`。
+7. markdown 包含“SQL 不等于已查数结果”，或只有 SQL / 查询逻辑但无执行结果 -> `sql_only` 或 `partial`。
    - 如果同时出现“等待授权执行 / 需人工执行 / SQL 下载 / 可授权 Data Agent 执行”等语义，标记 `execution_state: pending_execution`。
    - 如果出现 SQL ID、任务 ID、已提交、running、执行中等语义，但未返回执行结果，标记 `execution_state: execution_in_progress`。
    - 如果部分 SQL ID 已完成、部分 SQL ID running / failed / no_permission，标记 `execution_state: execution_partial`。
-7. markdown 包含“是否继续 / 是否执行 / 可选下一步 / 请选择 / 建议继续查 / 需要用户确认”等交互语义 -> 保留原始证据状态，同时标记 `batch_status: waiting_user_choice`，并抽取 `next_data_options`。
-8. markdown 包含“第一批 / 首批 / 先返回 / 后续再查” -> 标记 `batch_status: first_batch` 或 `intermediate`；如关键证据未闭合，status 仍为 `partial`。
-9. markdown 包含“process still running / no new output / running / 执行中 / 轮询中” -> 保留原始证据状态，标记 `provider_status: running`，`batch_status: polling`。
-10. markdown 包含“部分完成 / some completed / remaining running / 等待剩余 SQL” -> 标记 `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
-11. markdown 包含“字段错误 / SQL error / 修正后重跑 / repaired / rerun submitted” -> 标记 `batch_status: sql_repaired_rerun`，并抽取 `sql_repair_state`。
-12. markdown 包含“无法判断 / 信息不足 / 需要补充” -> `ambiguous_result` 或 `partial`。
-13. markdown 有部分数据，但明确缺关键数据源或关键反证未排除 -> `partial`。
-14. markdown 有数据表和分析，但 missing_evidence / counter_evidence 仍未闭合 -> `success`，但 conclusion_support 不得超过 `highly_suspicious_support`。
-15. markdown 返回完整数据发现并覆盖关键反证 -> `success`。
+8. markdown 包含“是否继续 / 是否执行 / 可选下一步 / 请选择 / 建议继续查 / 需要用户确认”等交互语义 -> 保留原始证据状态，同时标记 `batch_status: waiting_user_choice`，并抽取 `next_data_options`。
+9. markdown 包含“第一批 / 首批 / 先返回 / 后续再查” -> 标记 `batch_status: first_batch` 或 `intermediate`；如关键证据未闭合，status 仍为 `partial`。
+10. markdown 包含“process still running / no new output / running / 执行中 / 轮询中” -> 保留原始证据状态，标记 `provider_status: running`，`batch_status: polling`。
+11. markdown 包含“部分完成 / some completed / remaining running / 等待剩余 SQL” -> 标记 `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
+12. markdown 包含“字段错误 / SQL error / 修正后重跑 / repaired / rerun submitted” -> 标记 `batch_status: sql_repaired_rerun`，并抽取 `sql_repair_state`。
+13. markdown 包含“无法判断 / 信息不足 / 需要补充” -> `ambiguous_result` 或 `partial`。
+14. markdown 有部分数据，但明确缺关键数据源或关键反证未排除 -> `partial`。
+15. markdown 有数据表和分析，但 missing_evidence / counter_evidence 仍未闭合 -> `success`，但 conclusion_support 不得超过 `highly_suspicious_support`。
+16. markdown 返回完整数据发现并覆盖关键反证 -> `success`。
 
 补充规则：
 

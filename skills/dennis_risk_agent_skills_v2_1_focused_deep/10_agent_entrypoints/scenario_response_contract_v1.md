@@ -122,6 +122,8 @@ dataagent_interpretation_response:
 ```yaml
 dataagent_interactive_followup_response:
   当前执行状态:
+  timeout_status:
+  elapsed_time:
   当前已完成查询:
   仍在运行查询:
   已失败 / 已修复查询:
@@ -129,8 +131,11 @@ dataagent_interactive_followup_response:
   当前可用数据发现:
   仍等待的证据:
   当前结论上限:
+  current_conclusion_ceiling:
   缺失证据:
   是否可以阶段性判断:
+  why_timeout_is_not_counter_evidence:
+  recommended_next_action:
   Data Agent 给出的可选下一步:
     - option_id:
       option_summary:
@@ -157,6 +162,7 @@ dataagent_interactive_followup_response:
     D_修正失败_SQL_后重跑:
     E_缩小查询范围_降低_Hive_成本:
     F_扩大时间窗或补充数据域_需用户确认:
+    G_继续等待但不改变当前证据上限:
 ```
 
 边界：
@@ -167,6 +173,10 @@ dataagent_interactive_followup_response:
 - partial completed 可输出阶段性判断，但必须标注 interim，并保留 pending evidence。
 - 已完成查询可以进入当前可用数据发现；仍 running 的查询不得进入证据链。
 - SQL 修复重跑只能进入执行轨迹，不得进入风险证据。
+- timeout 只代表取证未完成，不代表没有风险。
+- timeout 不能作为反证。
+- timeout 后不得输出明确低风险结论。
+- 高成本查询必须用户确认。
 - 高成本 Hive、长周期扩窗、跨域 join、大样本回捞必须显式确认。
 - 可复制给 Data Agent 的下一步问题仍然只能要求只读取证，不要求最终定性或治理动作。
 

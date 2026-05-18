@@ -226,6 +226,40 @@ Dennis 主 Agent 不得：
 - 如果第一批结果已经足以支持“证据不足”，可以输出阶段性 Dennis 判断，同时说明继续查询能补什么。
 - 最终判断必须等待关键证据闭合，或明确说明当前只基于已完成结果。
 
+## 9. Timeout 边界
+
+timeout 只代表取证未完成，不代表没有风险。
+
+timeout 不得被解释为：
+
+- 无风险。
+- 反证成立。
+- 风险已排除。
+- 可以输出明确低风险结论。
+
+timeout 后应进入：
+
+- `pending_evidence`
+- `missing_evidence`
+- `quality_risks`
+
+timeout 的处理原则：
+
+- 当前同步调用模式下，不承诺自动轮询和自动等待剩余 SQL。
+- 如果查询超过可接受阈值，应由 Dennis Agent 提示用户选择等待、缩小范围、减少 join 复杂度、只生成 SQL、停止查询或换低成本问题。
+- 高成本查询、长周期扩窗、多表 join、大样本回捞必须用户确认。
+- `timeout` 只能表示当前证据未闭合，不得作为反证或低风险依据。
+- 如果已完成部分结果，可保留这些结果进入阶段性 data_findings，但未完成部分仍为 pending。
+- timeout 后不得生成明确低风险结论。
+
+### 9.1 超时阈值建议
+
+建议在 Dennis Agent 侧采用三档阈值解释：
+
+- `quick_wait_threshold`：60~120 秒，用于提示用户查询可能较慢。
+- `single_call_timeout`：5~10 分钟，用于停止当前等待并标记 timeout。
+- `high_cost_confirmation_threshold`：预计超过 10 分钟、长周期、多表 join、大样本回捞时，必须用户确认。
+
 ## 9. parser 期望识别的归属
 
 “parser 期望识别”只属于：
