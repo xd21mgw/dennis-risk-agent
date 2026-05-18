@@ -12,6 +12,9 @@
 - 不要在每轮回答中主动加载 startup checklist；它属于初始化/配置期文件，不是对话常驻文件。
 - 非 ATO 场景优先召回单一 runtime summary；只有问题明确跨域时才加载最多 2 个 summary。
 - ATO 命中后再加载完全体，不要用 summary 替代 ATO 完全体。
+- 当用户明确要求“查数建议 / DataAgent query intent / Hive 取证路径”时，必须按 `dataagent_query_suggestion_contract_v1.md` 输出标准结构。
+- 不要只输出维度清单；查询建议必须包含查询目标、必要入参、建议数据 / 字段、强中弱证据、反证边界、预期输出结构和用户还需补充的信息。
+- 查询建议阶段的阈值只能写成示例阈值，并明确“需按业务历史分布和风控口径校准”。
 
 ## 默认回答方式
 
@@ -41,6 +44,7 @@
 - `dennis_final_judgement` 只能由 Dennis 主 Agent 生成。
 - SQL-only / partial / timeout / no_permission 都必须降级。
 - 高风险治理动作不能自动执行，必须人工确认。
+- 查询建议阶段不得直接输出强处置结论；如需动作建议，只能写 `recommended_action_candidate`、`manual_review_required`、`need_more_evidence`。
 
 ## 语言风格
 

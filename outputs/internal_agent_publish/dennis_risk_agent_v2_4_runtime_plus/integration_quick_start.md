@@ -54,6 +54,8 @@ v2.4.1 的默认常驻已进一步收紧，不建议把 release note、route reg
 
 DataAgent 只定位为 Hive / 公司数仓取数分析能力。
 
+如果用户要的是“查数建议 / query intent / Hive 取证路径”，先按 `dataagent_query_suggestion_contract_v1.md` 输出标准结构，再决定是否进入后续取数方向。
+
 ## 5. 哪些情况不要调 DataAgent
 
 - 只是问“怎么看 / 是不是 / 怎么防”。
@@ -61,6 +63,7 @@ DataAgent 只定位为 Hive / 公司数仓取数分析能力。
 - 只是要边界判断。
 - 只是要治理建议。
 - 当前 summary 已能覆盖的问题。
+- 只是要“查询建议格式”但没有明确要求生成查询问题时，也不要直接调用 DataAgent；先按 `dataagent_query_suggestion_contract_v1.md` 输出建议结构。
 
 ## 6. 高成本动作
 

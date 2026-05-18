@@ -6,6 +6,10 @@
 - `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
 - `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
 
+## 查询建议契约
+
+- `dataagent_query_suggestion_contract_v1.md`
+
 ## ATO 完全体
 
 - `account_security_expert_skill.md`
