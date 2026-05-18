@@ -47,6 +47,8 @@
 - SQL-only / partial / timeout / no_permission 都必须降级。
 - 高风险治理动作不能自动执行，必须人工确认。
 - 查询建议阶段不得直接输出强处置结论；如需动作建议，只能写 `recommended_action_candidate`、`manual_review_required`、`need_more_evidence`。
+- 盗号 / 账号安全短问默认用 6 段回答骨架：初步判断、风险本质、关键证据、误判边界、补证/查数建议、治理建议。
+- 盗号 / 账号安全短问只有在用户明确说“查数 / 看日志 / 生成查询建议”时，才进入 DataAgent Query Suggestion Contract；否则先给补证方向，不默认查数。
 
 ## 语言风格
 
