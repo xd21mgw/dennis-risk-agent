@@ -35,6 +35,16 @@
 9. 预期输出结构
 10. 还需要用户补充的信息
 
+其中第 2 段“必要入参”必须分为三类表达：
+
+- 最小必要入参：缺失后会影响查询建议是否能成立，或者无法明确查询目标。
+- 建议补充入参：有助于缩小范围、提升查询质量；缺失不阻塞初步查询建议。
+- 可选上下文：仅用于解释和人工复核；不能作为 strong evidence。
+
+说明：
+- 只要最小必要入参已具备，即使建议补充入参或可选上下文缺失，也应先输出通用查询建议。
+- 只有最小必要入参缺失时，才需要在第 10 段中明确说明哪些内容会帮助把查询建议收敛得更好。
+
 ## 4. 硬性约束
 
 - 不真实调用 DataAgent。
@@ -57,11 +67,9 @@ query_goal:
 - 验证是否存在 ATO / 协议上号 / Web 扫码 / OAuth / 异步登录 / 登录态接管的证据。
 
 required_inputs:
-- user_id / case_id
-- time_window
-- suspicious_event_time
-- user_claim_summary
-- manual_note
+- 最小必要入参: user_id, time_window
+- 建议补充入参: suspicious_event_time, business_line, sensitive_action_scope
+- 可选上下文: user_claim_summary, manual_note
 
 suggested_data_and_fields:
 - 登录 / 授权链路
@@ -101,7 +109,7 @@ expected_output_structure:
 - query_plan
 - need_more_evidence
 
-user_to_add:
+suggested_additional_info:
 - 更明确的异常时间
 - 账号标识
 - 已知的异常行为描述
@@ -114,10 +122,9 @@ query_goal:
 - 区分群控、真人众包、正常矩阵运营、合法代运营。
 
 required_inputs:
-- sample_list / account_list
-- time_window
-- current_label_or_source
-- investigation_goal
+- 最小必要入参: sample_list / account_list, time_window
+- 建议补充入参: current_label_or_source, investigation_goal
+- 可选上下文: 样本来源备注, 人工标签说明
 
 suggested_data_and_fields:
 - 设备团组
@@ -156,7 +163,7 @@ expected_output_structure:
 - query_plan
 - manual_review_required
 
-user_to_add:
+suggested_additional_info:
 - 是否有授权矩阵
 - 是否有业务合作关系
 - 是否有已知任务群线索
@@ -169,10 +176,9 @@ query_goal:
 - 验证高价值资产是否被异常获取、同步或外泄。
 
 required_inputs:
-- asset_scope
-- time_window
-- suspected_channel
-- business_owner
+- 最小必要入参: asset_scope, time_window
+- 建议补充入参: suspected_channel, business_owner, external_site
+- 可选上下文: 业务备注, 站外线索描述
 
 suggested_data_and_fields:
 - 访问链路
@@ -207,7 +213,7 @@ expected_output_structure:
 - 误判边界
 - query_plan
 
-user_to_add:
+suggested_additional_info:
 - 资产类型
 - 暴露范围
 - 期望查的时间窗
@@ -220,10 +226,9 @@ query_goal:
 - 验证活动增长是否存在假量、套利或后验质量失真。
 
 required_inputs:
-- campaign_id / activity_id
-- time_window
-- sample_scope
-- analysis_goal
+- 最小必要入参: campaign_id / activity_id, time_window
+- 建议补充入参: sample_scope, analysis_goal, business_line
+- 可选上下文: 活动备注, 运营说明, 争议样本线索
 
 suggested_data_and_fields:
 - 邀请链路
@@ -260,9 +265,8 @@ expected_output_structure:
 - 查杀分离
 - query_plan
 
-user_to_add:
+suggested_additional_info:
 - 活动目标
 - 结算方式
 - 是否已有争议样本
 ```
-

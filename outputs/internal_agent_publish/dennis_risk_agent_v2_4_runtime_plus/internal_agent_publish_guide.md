@@ -33,6 +33,7 @@ Dennis Risk Agent 是通用业务风控专家 Agent。
 不要默认把所有 deep skill 全量注入。
 不要默认把 `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 放到每轮常驻；它更适合初始化 / 配置期检查。
 `dataagent_query_suggestion_contract_v1.md` 是“查询建议格式规则”，不是 DataAgent 调用器；只有用户明确要求“查数建议 / query intent / Hive 取证路径”时才加载。
+查询建议的入参要分层：最小必要入参、建议补充入参、可选上下文；最小必要入参具备时，即使建议补充入参或可选上下文缺失，也应先输出通用查询建议，不要把建议补充项写成“未提供就不能生成建议”。
 
 ## 4. Knowledge / Skill 文件装载顺序
 
