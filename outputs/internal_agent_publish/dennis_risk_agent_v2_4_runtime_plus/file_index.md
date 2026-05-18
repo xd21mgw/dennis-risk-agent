@@ -37,6 +37,12 @@
 - `dennis_risk_agent_v2_4_runtime_plus_final_route_regression_v1.md`
 - `dennis_risk_agent_v2_4_runtime_plus_integration_smoke_test_v1.md`
 
+## v2.4.1 加载优化
+
+- `dennis_risk_agent_v2_4_1_runtime_loading_optimization_note_v1.md`
+- `dennis_risk_agent_v2_4_1_runtime_loading_optimization_regression_plan_v1.md`
+- `dennis_risk_agent_v2_4_1_runtime_loading_optimization_regression_result_v1.md`
+
 ## Release Note
 
 - `dennis_risk_agent_v2_4_runtime_plus_release_note_v1.md`

@@ -17,11 +17,14 @@
 
 1. 总控 system prompt / working guide / routing rules。
 2. `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
-3. `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
-4. 通用 scenario contract 摘要。
-5. DataAgent boundary 摘要。
-6. timeout 摘要。
-7. 当前场景 runtime summary。
+3. 通用 scenario contract 摘要。
+4. DataAgent boundary 摘要。
+5. timeout 摘要。
+6. 当前场景 runtime summary。
+
+`dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 建议作为初始化 / 配置期文件，不建议每轮问答常驻加载。
+
+v2.4.1 进一步收紧默认常驻，目标是降低每轮问答 token 成本，同时不改变能力边界。
 
 ## 3. ATO 加载方式
 
@@ -66,10 +69,9 @@ ATO 完全体以 manifest 中列出的文件为准，包括：
 
 1. 总控规则。
 2. Runtime Plus manifest。
-3. Startup loading order checklist。
-4. 当前问题对应的 scenario summary。
-5. 如果命中 ATO，再加载 ATO 完全体。
-6. 如果用户明确要求查数，再进入 DataAgent 边界和取证模板。
+3. 当前问题对应的 scenario summary。
+4. 如果命中 ATO，再加载 ATO 完全体。
+5. 如果用户明确要求查数，再进入 DataAgent 边界和取证模板。
 
 ## 7. 不建议一次性全量注入所有 deep skill
 
@@ -91,3 +93,9 @@ ATO 完全体以 manifest 中列出的文件为准，包括：
 - 非 ATO 场景可默认走 runtime summary。
 - 默认不误调 DataAgent。
 - 不会把非 ATO 场景退化成表面化回答。
+
+## 10. v2.4.1 加载优化
+
+v2.4.1 将 `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 调整为初始化 / 配置期文件，不建议每轮常驻。
+
+非 ATO 场景优先单一 summary，跨域最多 2 个 summary。

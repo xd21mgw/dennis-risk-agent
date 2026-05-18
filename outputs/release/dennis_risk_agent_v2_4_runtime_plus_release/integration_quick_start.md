@@ -6,9 +6,10 @@
 
 1. `README.md`
 2. `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
-3. `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
 
 再按场景加载对应内容。
+
+`dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 建议作为初始化 / 配置期文件使用，不建议每轮问答都常驻加载。
 
 ## 2. 用户问 ATO 怎么走
 
@@ -24,7 +25,7 @@
 
 ## 3. 用户问非 ATO 怎么走
 
-默认只加载对应 runtime summary：
+默认只加载对应 runtime summary，优先单一 summary；只有问题明确跨域时最多加载 2 个 summary：
 
 - 反爬 → `anti_crawler_runtime_summary_v1.md`
 - 协议 → `protocol_attack_runtime_summary_v1.md`

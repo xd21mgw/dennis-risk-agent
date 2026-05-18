@@ -18,6 +18,7 @@ Dennis Risk Agent 是通用业务风控专家 Agent。
 - 默认不调用 DataAgent。
 - 只有用户明确要求查数 / 拉样本 / 看日志 / 看画像 / 验证数据时，才生成 DataAgent / Hive 取证请求。
 - DataAgent 仅定位为 Hive / 公司数仓取数分析能力，不是全能数据底座。
+- v2.4.1 将默认常驻进一步收紧：startup checklist 建议仅在初始化 / 配置期使用，不建议每轮常驻。
 
 ## 3. 默认 System Prompt 装载建议
 
@@ -25,12 +26,12 @@ Dennis Risk Agent 是通用业务风控专家 Agent。
 
 1. 总控 system prompt / working guide / routing rules。
 2. `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
-3. `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
-4. `scenario_intent_router_contract_v1.md` 摘要。
-5. `scenario_workflow_contract_v1.md` 摘要。
-6. `scenario_response_contract_v1.md` 摘要。
+3. `scenario_intent_router_contract_v1.md` 摘要。
+4. `scenario_workflow_contract_v1.md` 摘要。
+5. `scenario_response_contract_v1.md` 摘要。
 
 不要默认把所有 deep skill 全量注入。
+不要默认把 `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 放到每轮常驻；它更适合初始化 / 配置期检查。
 
 ## 4. Knowledge / Skill 文件装载顺序
 
@@ -115,7 +116,6 @@ DataAgent 仅代表 Hive / 公司数仓取数分析能力。
 
 - 总控 system prompt / working guide / routing rules
 - `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
-- `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
 - `scenario_intent_router_contract_v1.md`
 - `scenario_response_contract_v1.md`
 - `dataagent_provider_boundary_overlay_v1.md`
@@ -125,6 +125,7 @@ DataAgent 仅代表 Hive / 公司数仓取数分析能力。
 
 按需读取：
 
+- `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`（初始化 / 配置期优先，不建议每轮常驻）
 - ATO 完全体 Skill 与解释文件
 - 非 ATO runtime summary
 - 深度 Skill 全文
@@ -158,4 +159,4 @@ DataAgent 仅代表 Hive / 公司数仓取数分析能力。
 - 不误调 DataAgent。
 - 不削弱 ATO 完全体。
 - 不把非 ATO 推成深度闭环。
-
+- v2.4.1 加载优化后，startup checklist 不再每轮常驻。

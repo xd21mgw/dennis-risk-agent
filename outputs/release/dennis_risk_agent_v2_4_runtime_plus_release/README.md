@@ -17,11 +17,12 @@
 
 1. 总控 system prompt / working guide / routing rules。
 2. `dennis_risk_agent_v2_4_runtime_plus_manifest_v1.md`
-3. `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md`
-4. 通用 scenario contract 摘要。
-5. DataAgent boundary 摘要。
-6. timeout 摘要。
-7. 当前场景 runtime summary。
+3. 通用 scenario contract 摘要。
+4. DataAgent boundary 摘要。
+5. timeout 摘要。
+6. 当前场景 runtime summary。
+
+`dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 建议作为初始化 / 配置期文件，不建议每轮问答常驻加载。
 
 ## 3. ATO 加载方式
 
@@ -66,10 +67,9 @@ ATO 完全体以 manifest 中列出的文件为准，包括：
 
 1. 总控规则。
 2. Runtime Plus manifest。
-3. Startup loading order checklist。
-4. 当前问题对应的 scenario summary。
-5. 如果命中 ATO，再加载 ATO 完全体。
-6. 如果用户明确要求查数，再进入 DataAgent 边界和取证模板。
+3. 当前问题对应的 scenario summary。
+4. 如果命中 ATO，再加载 ATO 完全体。
+5. 如果用户明确要求查数，再进入 DataAgent 边界和取证模板。
 
 ## 7. 不建议一次性全量注入所有 deep skill
 
@@ -79,11 +79,7 @@ ATO 完全体以 manifest 中列出的文件为准，包括：
 - 路由容易被历史材料污染。
 - 非 ATO 场景只需要轻量但不表面的认知，不需要全量历史。
 
-## 8. 回归说明
-
-本 release 包中的 8 个非 ATO 扩展案例回归**不作为本次 release 阻塞项**，后续作为质量体检执行。
-
-## 9. 集成前冒烟测试
+## 8. 集成前冒烟测试
 
 本 release 包已通过集成前冒烟测试，确认：
 
@@ -91,3 +87,7 @@ ATO 完全体以 manifest 中列出的文件为准，包括：
 - 非 ATO 场景可默认走 runtime summary。
 - 默认不误调 DataAgent。
 - 不会把非 ATO 场景退化成表面化回答。
+
+## 9. 回归说明
+
+本 release 包中的 8 个非 ATO 扩展案例回归**不作为本次 release 阻塞项**，后续作为质量体检执行。

@@ -12,6 +12,8 @@
 - [ ] 未发现误调 DataAgent。
 - [ ] 未发现回答表面化。
 - [ ] 可以进入小范围试运行。
+- [ ] v2.4.1 加载优化说明已同步。
+- [ ] v2.4.1 三问回归结果已通过。
 
 ## 备注
 
@@ -19,4 +21,5 @@
 - 非 ATO 问题默认走 runtime summary。
 - 用户明确要求查数时再进入 DataAgent / Hive。
 - 高成本查询必须用户确认。
-
+- `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 更适合作为初始化 / 配置期检查，不建议每轮问答常驻加载。
+- v2.4.1 的默认常驻不包含 startup checklist、release note、route regression、smoke test。
