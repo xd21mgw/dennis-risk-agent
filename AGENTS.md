@@ -144,6 +144,18 @@
 
 - 默认不写 routing trace，日常问答保持零成本。
 - 仅在 smoke test / regression / 问题排查 / 用户明确说“开启路由观测”时触发。
-- 触发后仅追加写入 `memory/routing-trace.md`，不展示给最终用户。
-- trace 仅包含命中场景、意图、加载路径、DataAgent 状态、降级原因、边界风险。
+- 当用户明确要求“开启路由观测”时，本轮必须执行：
+  - `mkdir -p memory`
+  - 追加一条 routing trace 到 `memory/routing-trace.md`
+- 触发后只追加写入 `memory/routing-trace.md`，不展示给最终用户。
+- 如果未写入，不得声称 routing trace 已开启。
+- trace 至少包含：
+  - `timestamp`
+  - `scene`
+  - `intent`
+  - `loading_path`
+  - `dataagent_status: none / suggestion_only / real_call / result_interpretation`
+  - `degraded`
+  - `degrade_reason`
+  - `boundary_risk`
 - routing trace 不影响正常回答，也不改变 DataAgent 边界。
