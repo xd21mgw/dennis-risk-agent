@@ -44,6 +44,20 @@
 
 ## 4. 后续执行要求
 
+v2.4.9 已将这些执行教训沉淀为统一前置检查清单：
+
+`computer_use_poc/browser_auth_preflight_checklist_v2_4_9.md`
+
+任何平台手脚必须按以下顺序执行：
+
+```text
+source_entry_resolution
+→ browser_auth_preflight
+→ saved_state_reuse_check
+→ single_browser_session_check
+→ 页面字段探索
+```
+
 任何 multi-source e2e 前，执行器必须先输出：
 
 ```yaml
@@ -68,6 +82,7 @@ source_entry_resolution:
 - 不输出半成品 multi-source 报告。
 - 不把成功 source 的 observation 包装成 multi-source success。
 - 不要求用户手动执行平台查询，除非明确标记 `human_input_required=true` 且说明缺失文档项。
+- 不把登录态阻断、saved state 缺失、SPA route 污染或 selector 范围不明解释成页面无数据、用户无记录、用户无风险或平台不可用。
 
 ## 5. 状态口径
 

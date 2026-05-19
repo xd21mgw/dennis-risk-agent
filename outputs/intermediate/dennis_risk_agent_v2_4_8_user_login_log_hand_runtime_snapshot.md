@@ -157,6 +157,7 @@ P0:
 
 - 固化 Run 007 的 focused_login_risk multi-source observation schema。
 - 多源 e2e 前必须继续完成每个 source 的 `entry_resolution`，优先读取已有 playbook / run log / runtime snapshot / README，不允许猜 URL。
+- 执行 v2.4.9 `browser_auth_preflight` 清单：`computer_use_poc/browser_auth_preflight_checklist_v2_4_9.md`。后续任何平台手脚必须按 `source_entry_resolution → browser_auth_preflight → saved_state_reuse_check → single_browser_session_check → 页面字段探索` 顺序执行。
 - 补齐统一登录日志全分页遍历和档案中心用户分析全分页遍历。
 - 建立 agent-browser 串行锁或 session 隔离策略。
 
@@ -222,3 +223,4 @@ Guardrail:
 - 档案中心入口缺失不等于档案中心无数据。
 - 档案中心入口 404 不等于用户无档案记录。
 - 统一登录日志单源结果不等于多源 e2e 成功。
+- `browser_auth_preflight` 未通过时，只能返回 blocker；不得把登录态阻断、saved state 缺失、SPA route 污染或 selector 范围不明解释成页面无数据、用户无记录、用户无风险或平台不可用。

@@ -152,6 +152,8 @@ Auth preflight：
 - 这属于认证态环境差异，不代表 browser computer use 能力失败。
 - saved state 复用、state 过期、重新登录恢复规则继续有效。
 - 如果 `agent-browser` 缺少档案中心独立登录态，应停止并返回 `archives_browser_auth_blocked` / `archives_independent_login_required_for_agent_browser`；下一步是人工在 `agent-browser` 中完成档案中心独立登录并保存 state，或在已有档案中心认证态的 Dennis Risk Agent 环境中重跑。随后再执行 Run 007：`multi_source_e2e_with_archives_saved_state`。
+- v2.4.9 已新增统一前置检查清单：`computer_use_poc/browser_auth_preflight_checklist_v2_4_9.md`。所有后续平台手脚在读取页面字段前，必须按 `source_entry_resolution → browser_auth_preflight → saved_state_reuse_check → single_browser_session_check → 页面字段探索` 顺序执行。
+- 若 `browser_auth_preflight` 未通过，只能返回 blocker；不得把登录态阻断、saved state 缺失、SPA route 污染或 selector 范围不明解释成页面无数据、用户无记录或平台不可用。
 
 v2.4.8 当前汇总状态：
 
