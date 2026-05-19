@@ -1,2 +1,4 @@
 .DS_Store
 outputs/dist/
+archives_auth_state.json
+**/archives_auth_state.json
