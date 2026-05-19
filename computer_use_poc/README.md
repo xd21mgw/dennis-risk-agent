@@ -50,6 +50,12 @@ computer use readonly POC 负责：
 v2.4.4-computer-use-readonly-poc-validated
 ```
 
+最新 P0 深读状态：
+
+```text
+v2.4.5 archives center user profile P0 tabs deep-read validated
+```
+
 已验证：
 
 - 档案中心 `userId` direct URL 只读查询链路可用。
@@ -59,7 +65,15 @@ v2.4.4-computer-use-readonly-poc-validated
 - 页面可识别用户信息、审核日志、打标日志、用户分析、视频作品集、直播作品集、粉丝列表、关注列表、合集列表、收藏列表、动态列表等 Tab。
 - 页面可识别基本信息、用户实时负向、最近登录、最近启动、注册信息、账户信息、同设备登录/注册入口等模块。
 - target object / operator account 身份信息分层规则已补齐：`user_header` 可用于核验查询目标，`nav_menu` 当前登录操作者信息必须 redacted。
+- 敏感字段策略已分层：认证票据类永远 `never_collect`；IP、设备 ID、手机号、open_id、版本、地理位置等字段可在执行态用于派生风控判断，但沉淀态只输出 redacted、计数、分布或一致性结论；字段名、操作类型、时间范围、表头和分布类结构信息可沉淀。
 - userId 不存在 / 非法时的预期失败处理已验证：已登录、无重定向、SPA 完整渲染、页面返回“用户不存在”，识别为 `USER_NOT_FOUND`。
+- v2.4.5 已验证用户信息、用户分析、审核日志、视频作品集四个 P0 Tab 的只读深读。
+- v2.4.5.1 是性能优化设计，不是新能力扩展；目标是通过 quick / focused / deep mode、scoped extraction 和列表采样降低耗时与 token 成本。
+- v2.4.5.1 quick mode 已验证，约 22 秒。
+- v2.4.5.1 focused_login_risk 结构提取已验证，103 秒；full risk_event_scan 仍待验证。
+- v2.4.5.1 focused_login_risk risk_event_scan 已部分验证，约 156 秒；已能输出派生风险摘要，但存在 selector 噪声，状态为 `partial_validated_with_selector_noise`。
+- v2.4.5.1 focused_login_risk risk_event_scan selector noise 已修复，约 63 秒；row feature filter 已验证有效，状态可标记为 `validated`。
+- quick mode、focused structure extraction、focused risk_event_scan 均已验证。
 - 未点击任何写操作按钮，只读安全检查通过。
 
 未验证：
@@ -68,4 +82,11 @@ v2.4.4-computer-use-readonly-poc-validated
 - 多入参查询。
 - 批量查询。
 - 自动研判。
+- 二级链接、详情页、查重页。
 - 处置、审批、导出、封禁、解封等任何写操作。
+- 多平台 / 多入口风险联动。
+
+后续建议：
+
+- 将 dedupe 逻辑内置到 eval 脚本中。
+- 继续保持边界：本阶段只代表档案中心 `userId` direct URL 下的只读派生观察能力，不代表自动风险定性完成。

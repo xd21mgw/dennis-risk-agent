@@ -98,6 +98,15 @@
 - 返回：`failure_reason=saved_state_expired`
 - 动作：停止，要求重新人工认证。
 
+## 13.1 STATE_EXPIRED_RELOGIN_REQUIRED
+
+- 表现：saved state 过期后回到档案中心独立登录页。
+- 返回：
+  - `state_reuse_status=EXPIRED_RELOGIN_REQUIRED`
+  - `failure_type=STATE_EXPIRED_RELOGIN_REQUIRED`
+- 动作：不误判为权限失败；可通过人工重新登录并保存新 state 恢复。
+- 边界：重新登录过程仍不得记录密码、token、cookie、session、KIM code 或认证 header。
+
 ## 14. saved state domain mismatch
 
 - 表现：state 存在但无法应用到当前域名，或跨域 cookie 不生效。
@@ -121,3 +130,12 @@
 - 表现：页面头部展示查询目标用户信息，可用于核验页面对象。
 - 返回：在 `identity_context.user_header` 中记录 `object_type=target_user`、`user_id_match=true/false/unknown`。
 - 动作：仅保留必要核验信息；如果 user_id 不匹配，返回 `failure_reason=query_value_page_mismatch`。
+
+## 18. LOADED_EMPTY_OR_NO_ROWS
+
+- 表现：Tab 加载成功，但当前筛选条件下没有数据行。
+- 返回：
+  - `tab_status=loaded_empty_or_no_rows`
+  - 记录当前筛选条件和时间范围。
+- 动作：不得解释为没有风险、没有行为或没有审核记录。
+- 适用：审核日志、用户分析、视频作品集等列表型 Tab。
