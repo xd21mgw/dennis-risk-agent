@@ -127,6 +127,18 @@ sensitive_fields_visible:
     visibility: visible_or_possible
     value_policy: redacted
     reason: 不输出 IP 明文
+identity_context:
+  user_header:
+    visibility: visible
+    object_type: target_user
+    user_id_match: true
+    value_policy: target_object_allowed
+    reason: 用于确认页面展示对象与 query_value 匹配
+  nav_menu:
+    visibility: visible_or_possible
+    object_type: operator_account
+    value_policy: operator_identity_redacted
+    reason: 当前登录操作者信息不属于查询对象，必须隐藏
 risk_relevant_observations:
   - 档案中心 SPA 可完整渲染。
   - 用户详情页可通过 userId direct URL 进入。

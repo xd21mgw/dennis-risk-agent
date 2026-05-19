@@ -48,6 +48,38 @@ computer use 只能执行只读页面查询和观察，不得执行任何会改�
 - 不截图保存明文敏感内容。
 - 不复制手机号、身份证、实名信息、token、cookie、会话标识等明文。
 
+## 4.1 页面身份信息分层
+
+页面身份信息必须先判断对象归属：
+
+- 查询目标对象信息：用于确认页面展示对象是否与 `query_value` 匹配，可保留必要核验信息，并标注为 `target_object_info`。
+- 当前登录操作者信息：属于 operator / current login account，不属于查询对象，默认必须隐藏。
+
+允许保留的 target object 示例：
+
+```yaml
+user_header:
+  visibility: visible
+  object_type: target_user
+  user_id_match: true
+  value_policy: target_object_allowed
+```
+
+必须隐藏的 operator 示例：
+
+```yaml
+nav_menu:
+  visibility: visible
+  object_type: operator_account
+  value_policy: operator_identity_redacted
+```
+
+规则：
+
+- 如果是 target object，用于核验查询对象，可保留必要信息。
+- 如果是 operator / current login account，一律隐藏。
+- 无法判断对象归属时，按 operator 身份处理并 redacted。
+
 ## 5. 查询规模限制
 
 - 只允许单个 `user_id` 查询。

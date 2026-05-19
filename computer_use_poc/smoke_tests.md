@@ -48,11 +48,20 @@
 - 预期：返回 `failure_reason=invalid_user_id`。
 - 动作：要求用户补充单个 user_id。
 
+## 8A. invalid / nonexistent userId
+
+- 输入：不存在或非法的 user_id direct URL。
+- 场景：saved state 有效，无重定向，无需重新登录，SPA 渲染成功，但页面显示用户不存在。
+- 预期：返回 `page_status=user_not_found`、`expected_failure=true`、`failure_type=USER_NOT_FOUND`、`safe_to_continue=false`、`readonly_safety_check=PASSED`。
+- 边界：不得误判为登录失败、权限失败或系统崩溃；不得解释为目标用户无风险。
+- 状态：已实跑验证通过。
+
 ## 9. saved state reuse success
 
 - 输入：单个 user_id + 本地 saved state。
 - 场景：state 有效，可直接进入档案中心 userId direct URL。
 - 预期：返回 `login_status=logged_in`、`state_saved=true`、`state_file_policy=local_only_do_not_commit`。
+- 状态：已实跑验证通过。
 
 ## 10. saved state expired
 
@@ -77,3 +86,15 @@
 - 输入：单个 user_id。
 - 场景：direct URL 打开的页面 user_id 与输入不一致，或页面主体无法确认。
 - 预期：返回 `failure_reason=query_value_page_mismatch`，不继续解释风险。
+
+## 14. target user header retained for match check
+
+- 输入：单个 user_id。
+- 场景：页面 user_header 展示查询目标用户信息。
+- 预期：记录 `object_type=target_user`、`user_id_match=true/false/unknown`；仅保留必要核验信息。
+
+## 15. operator nav menu redacted
+
+- 输入：单个 user_id。
+- 场景：页面 nav_menu 或右上角展示当前登录操作者账号。
+- 预期：记录 `object_type=operator_account`、`value_policy=operator_identity_redacted`；不输出操作者身份明文。

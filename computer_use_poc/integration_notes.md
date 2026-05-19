@@ -71,15 +71,32 @@ computer use 不输出最终结论。
 
 ## 6. Saved State 使用边界
 
-后续可复用已保存的浏览器 state，减少重复认证成本。
+saved state 复用是当前推荐执行方式，可减少重复认证成本。
+
+当前已验证：
+
+- 加载已保存的档案中心认证 state 后，直接打开 userId direct URL 成功。
+- 无重定向。
+- 无需重新登录。
+- SPA 完整渲染。
+- 页面模块可识别。
+- 只读安全检查通过。
 
 安全要求：
 
 - state 文件属于敏感认证态资产。
+- state 文件只允许保存在内部 Agent 运行环境。
 - state 文件不得提交到 Git。
 - `archives_auth_state.json` 必须加入 `.gitignore` 或仅保存在本地安全路径。
 - run log 不得包含 token、cookie、session、KIM code、认证 header。
 - run log 不得包含用户名、手机号、设备 ID、IP、昵称、快手号等明文敏感字段。
+- 使用 state 时仍必须遵守只读边界、敏感字段 redaction、operator account redaction。
+
+失效回退：
+
+- state 失效时，停止自动查询。
+- 回退到人工登录 / 重新保存 state。
+- 不尝试绕过 SSO、二次认证或档案中心独立登录。
 
 推荐策略：
 
