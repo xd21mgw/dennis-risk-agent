@@ -1,6 +1,10 @@
 # 档案中心 Computer Use 只读执行 Playbook
 
-本文是内部 Agent 执行档案中心只读查询时的运行时规范。它不是设计文档，也不是风险定性规则。
+本文是 Dennis 子 Agent 调用 browser computer use 执行档案中心只读查询时的运行时规范。它不是设计文档，也不是风险定性规则。
+
+端到端链路：
+
+用户问题 → Dennis 子 Agent 生成 readonly plan → Dennis 调用 browser computer use → browser 返回 observation → Dennis 消化 observation → 输出证据总结 / 风险线索 / 证据缺口 / 下一步建议。
 
 ## 1. 当前能力范围
 
@@ -19,6 +23,13 @@
 - 二级链接 validated。
 - 批量查询。
 - 自动风险定性。
+
+Auth preflight：
+
+- 如果 Dennis 子 Agent 使用的 browser profile / workspace 与前期测试环境不同，可能需要重新扫码 / 登录。
+- 这属于认证态环境差异，不代表 browser computer use 能力失败。
+- saved state 复用、state 过期、重新登录恢复规则继续有效。
+- 重新登录过程中不得记录 password、token、cookie、session、KIM code。
 - 处置、审批、导出、封禁、解封等任何写操作。
 
 ## 2. execution_mode 定义
@@ -197,7 +208,7 @@
 
 ## 7. 统一 observation 输出
 
-内部 Agent 必须输出以下结构：
+browser computer use 必须输出以下 observation 结构，供 Dennis 子 Agent 消化：
 
 ```yaml
 execution_mode:

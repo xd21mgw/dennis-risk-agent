@@ -2,7 +2,7 @@
 
 ## 1. POC 目标
 
-验证 Dennis Risk Agent 是否可以通过内部 computer use / browser automation 环境，完成最小只读平台查询动作。
+验证 Dennis Risk Agent 体系中的 Dennis 子 Agent 是否可以调用 browser computer use / browser automation 环境，完成最小只读平台查询动作。
 
 本 POC 只验证一个动作：
 
@@ -22,7 +22,7 @@
 - 不做任何写操作、提交、处置、审批、封禁、解封、导出。
 - 不绕过权限。
 - 不自动形成处罚、冻结、解封、策略上线建议。
-- 不替代 Dennis Risk Agent 的风险判断。
+- 不替代 Dennis 子 Agent 的风险理解、证据解释和下一步建议。
 
 ## 4. 与 v2.4.3 的关系
 
@@ -40,7 +40,9 @@ computer use readonly POC 负责：
 
 二者关系：
 
-先由 `internal_risk_platforms/00_platform_routing_index.md` 判断是否应查档案中心，再由本 POC 执行档案中心只读查询。
+Dennis 子 Agent 先根据用户问题和 `internal_risk_platforms/00_platform_routing_index.md` 判断是否应查档案中心，再生成 readonly plan，并调用 browser computer use 执行档案中心只读查询。browser computer use 返回 observation 后，由 Dennis 子 Agent 消化 observation，输出证据总结、风险线索、证据缺口和下一步建议。
+
+DataAgent / Hive 边界不变：DataAgent 只负责 Hive / 公司数仓取数分析，不替代 browser computer use、在线平台、实时日志、策略平台或设备平台。
 
 ## 5. 当前状态
 
@@ -92,4 +94,10 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 
 - 将 dedupe 逻辑内置到 eval 脚本中。
 - 继续保持边界：本阶段只代表档案中心 `userId` direct URL 下的只读派生观察能力，不代表自动风险定性完成。
-- 进入 v2.4.7 端到端联合测试：内部 Agent 只读 observation → Dennis Agent 消化 → 下一步平台补证建议。
+- 进入 v2.4.7 端到端联合测试：用户问题 → Dennis 子 Agent 生成 readonly plan → Dennis 调用 browser computer use → browser 返回 observation → Dennis 消化 observation → 输出总结。
+
+Auth preflight：
+
+- 如果 Dennis 子 Agent 使用的 browser profile / workspace 与前期测试环境不同，可能需要重新扫码 / 登录。
+- 这属于认证态环境差异，不代表 browser computer use 能力失败。
+- saved state 复用、state 过期、重新登录恢复规则继续有效。

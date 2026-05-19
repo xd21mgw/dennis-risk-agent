@@ -359,3 +359,21 @@
 - 场景：Dennis Agent 输出解释。
 - 预期：不输出 IP、设备 ID、手机号、open_id、token、cookie、session、KIM code 等明文。
 - 状态：已通过。
+
+## 57. Dennis sub-agent calls browser computer use
+
+- 输入：用户提出档案中心 userId 只读查询需求。
+- 场景：Dennis 子 Agent 生成 readonly plan，并调用 browser computer use。
+- 预期：browser computer use 返回 observation；Dennis 子 Agent 消化 observation 后输出证据总结、风险线索、证据缺口和下一步建议。
+
+## 58. auth preflight detects browser profile mismatch
+
+- 输入：Dennis 子 Agent 使用的 browser profile / workspace 与前期测试环境不同。
+- 场景：saved state 不可直接复用，可能需要重新扫码 / 登录。
+- 预期：标记为认证态环境差异，不误判为 computer use 能力失败；保留 state 过期和重新登录恢复规则。
+
+## 59. DataAgent boundary remains separate from browser computer use
+
+- 输入：用户问档案中心页面只读查询或 Hive / 公司数仓取数。
+- 场景：需要区分 browser computer use 与 DataAgent。
+- 预期：档案中心页面只读查询走 browser computer use；批量离线取数 / 数仓分析才考虑 DataAgent / Hive；不得把 DataAgent 写成在线平台替代品。

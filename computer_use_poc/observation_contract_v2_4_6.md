@@ -1,6 +1,6 @@
 # v2.4.6 Observation Contract
 
-本文定义内部 Agent 返回档案中心只读 observation 后，Dennis Agent 如何读取、解释、汇总并给出下一步建议。
+本文定义 Dennis 子 Agent 调用 browser computer use 完成档案中心只读查询后，如何读取、解释、汇总 browser 返回的 observation，并给出下一步建议。
 
 当前验证状态：
 
@@ -10,19 +10,35 @@
 
 ## 1. 三方分工
 
-### 内部 Agent
+### Dennis 子 Agent / 编排 Agent
 
 职责：
 
-- 执行档案中心只读页面观察。
-- 返回结构化 observation。
-- 遵守只读边界、敏感字段 redaction、operator account redaction。
+- 理解用户问题。
+- 生成只读查询计划。
+- 调用 browser computer use 执行档案中心只读查询。
+- 消化 browser 返回的 observation。
+- 输出证据总结、风险线索、证据强度、缺口和下一步平台建议。
 
 不负责：
 
-- 最终风险定性。
+- 直接替代 observation 伪造平台结果。
 - 自动处置。
-- 跨平台综合研判。
+- 在证据不足时输出最终风险定性。
+
+### browser computer use
+
+职责：
+
+- 在只读边界内执行页面操作。
+- 返回结构化 observation。
+- 遵守敏感字段 redaction、operator account redaction、readonly safety。
+
+不负责：
+
+- 理解业务问题。
+- 生成最终风险判断。
+- 自动处置。
 
 ### Codex
 
@@ -36,25 +52,22 @@
 不负责：
 
 - 直接操作内部平台。
-- 替代内部 Agent 实时采集。
+- 替代 Dennis 子 Agent 或 browser computer use 实时执行。
 
-### Dennis Agent
+### DataAgent / Hive
 
 职责：
 
-- 消化内部 Agent 返回的 observation。
-- 输出证据总结、风险线索、证据强度、缺口和下一步平台建议。
-- 结合账号安全、协议上号、设备风险、行为链路等专家规则做解释。
+- Hive / 公司数仓取数分析。
 
 不负责：
 
-- 直接操作平台。
-- 替代内部 Agent。
-- 把 observation 直接升级成最终风险定性。
+- 替代 browser computer use。
+- 覆盖在线平台、实时日志、策略平台、设备平台的页面只读查询。
 
 ## 2. Observation 输入结构
 
-内部 Agent 返回 observation 时，建议使用以下最小结构：
+browser computer use 返回 observation 时，建议使用以下最小结构：
 
 ```yaml
 platform:
@@ -99,9 +112,19 @@ limitations:
 - `risk_event_scan`：只读派生摘要，不是最终登录全量事实。
 - `limitations`：必须保留，不得在解释时忽略。
 
+## 2.1 Auth preflight
+
+Dennis 子 Agent 调用 browser computer use 前，应先判断认证态：
+
+- 如果 browser profile / workspace 与前期测试环境一致，可优先复用 saved state。
+- 如果 browser profile / workspace 不同，可能需要重新扫码 / 登录。
+- 这属于认证态环境差异，不代表 browser computer use 能力失败。
+- state 过期时可走重新登录恢复，但不得记录 password、token、cookie、session、KIM code。
+- 无权限时停止，不绕过权限。
+
 ## 3. Dennis Agent 输出结构
 
-Dennis Agent 消化 observation 后，必须输出：
+Dennis 子 Agent 消化 observation 后，必须输出：
 
 ```yaml
 evidence_summary:
@@ -184,7 +207,7 @@ ATO / 异常登录 / 协议上号场景默认路径：
 
 ## 6. 禁止事项
 
-Dennis Agent 禁止：
+Dennis 子 Agent 禁止：
 
 - 输出敏感明文。
 - 把 observation 当最终风险定性。
