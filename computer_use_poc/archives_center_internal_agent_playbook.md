@@ -26,11 +26,47 @@
 
 Auth preflight：
 
+- 档案中心 `userId` direct URL 已确认：
+  `https://admin.p.adm-corp.kuaishou.com/frontend/archives/index.html#/archives/user/profile?userId={userId}`。
+- 档案中心独立登录域：`account.p.adm-corp.kuaishou.com`。
+- 认证链路：SSO → 档案中心独立登录 → userId direct URL。
 - 如果 Dennis 子 Agent 使用的 browser profile / workspace 与前期测试环境不同，可能需要重新扫码 / 登录。
 - 这属于认证态环境差异，不代表 browser computer use 能力失败。
+- `sso_session.py` 可 HTTP 级访问不代表 `agent-browser` GUI 进程已复用该 cookie。
+- 如果 `agent-browser` 打开 direct URL 后仍被重定向到 `account.p.adm-corp.kuaishou.com`，应标记 `archives_browser_auth_blocked` / `archives_independent_login_required_for_agent_browser`。
 - saved state 复用、state 过期、重新登录恢复规则继续有效。
 - 重新登录过程中不得记录 password、token、cookie、session、KIM code。
 - 处置、审批、导出、封禁、解封等任何写操作。
+
+## 1-A. Entry resolution before execution
+
+档案中心 source 在任何单源或多源 e2e 执行前，必须先完成 `entry_resolution`。
+
+规则：
+
+- 优先读取本 playbook、既有 run log、README、runtime snapshot。
+- 不允许凭记忆或猜测 archives-center URL。
+- 不允许从首页菜单随意探索作为正式执行路径。
+- 如果 entry 找不到，返回 `source_entry_missing`，不要继续执行 browser computer use。
+- 档案中心入口 404 只能说明入口解析失败或路径无效，不等于用户无档案记录。
+- 多源 e2e 中，如果档案中心 source 失败，不得把用户登录统一日志单源 observation 包装成 multi_source observation。
+- 当前已确认入口 URL，不得再将 Run 006 解释为 entry missing / URL missing。
+- 如果 entry 已找到但 `agent-browser` 缺少档案中心独立登录态，返回 auth blocker；下一步是完成 agent-browser 档案中心独立登录并保存 state，或在已有认证态环境中重跑。
+- 当前已验证 saved state：`archives_center_4700398885_20260519`。该 state 当前可复用，但不得泛化为所有账号 / 所有时间均可复用。
+
+输出格式：
+
+```yaml
+source_entry_resolution:
+  source_name: archives_center
+  docs_searched:
+  entry_found:
+  entry_url:
+  validated_execution_path_found:
+  selector_or_playbook_found:
+  blocker:
+  next_action:
+```
 
 ## 2. execution_mode 定义
 
@@ -61,6 +97,65 @@ Auth preflight：
 - 必须记录实际页面 time_range。
 - 必须先做 table_schema_probe。
 - 如用于登录 / 高危操作研判，必须做 risk_event_scan。
+
+## 2-A. 用户分析分页 guardrail
+
+Run 009 已修正此前错误结论：档案中心用户分析 / APP端核心操作日志存在分页。
+
+执行规则：
+
+- 不得再默认认为用户分析是无分页 / 无限滚动模式。
+- 未观察到分页控件不等于没有分页。
+- 必须区分 page body scroll 和 table container scroll。
+- 分页控件可能位于表格底部 / 表格容器底部，不一定随 body scroll 暴露。
+- 若 `total_count > visible_row_count`，必须标记 `partial_coverage=true`。
+- 未逐页遍历前，禁止输出：
+  - 已查看6个月全量。
+  - 当前页就是全部历史。
+  - 没有更多登录记录。
+  - 用户分析无更多数据。
+
+## 2-B. 审核日志 / 打标日志 guardrail
+
+Run 010 已部分验证审核日志 / 打标日志可访问性。
+
+执行规则：
+
+- 权限系统升级通知弹窗可能遮挡 Tab 点击，点击 Tab 前应先关闭弹窗。
+- Tab 点击后必须确认 `current_url` 仍在档案中心 direct URL 下。
+- Tab selected 状态和页面实际内容都要确认，不能只看 click 成功。
+- 打标日志表头可见不等于有数据。
+- 审核日志有结果不等于登录风险定性完成。
+- 审核 / 打标日志只作为补充 source，不替代登录链路证据。
+
+## 2-C. SPA route / Tab click guardrail
+
+后台 SPA 页面测试时，多 session 并发可能污染路由状态。
+
+执行规则：
+
+- 不允许多个 Dennis / agent-browser session 同时访问同一个档案中心 saved state。
+- 测试前必须关闭其他 browser session，确保 `single_browser_session=true`。
+- Tab 点击前必须确认 click target 属于当前页面内部 Tab 容器，而不是左侧导航、顶部导航或其他应用入口。
+- 点击前必须记录：`current_url`、`source_name`、`user_id`、`target_tab_text`、`target_tab_container_identified`、`click_target_scope`。
+- 点击后必须校验：current_url 是否仍在目标 source 下、是否仍为同一 userId、target_tab 是否 selected、是否出现 `unexpected_route_redirect`。
+- 如果点击后跳出目标 source，必须标记 `tab_click_invalid` / `unexpected_route_redirect`。
+- unexpected route redirect 不能解释为目标 Tab 不可访问、无结果、无权限或用户无数据。
+- 若 `click_target_scope=unknown`，不允许点击，应先返回 blocker。
+
+## 2-D. agent-browser serial execution guardrail
+
+当前 agent-browser 是单 daemon / 单 Chrome 进程架构，`--session` 无法提供真正并行隔离；`--profile` 在 daemon 已运行时也不能可靠切换。
+
+执行规则：
+
+- 当前阶段默认采用串行锁方案。
+- 同一时间只允许一个 agent-browser session 操作内部平台页面。
+- 不允许两个 Dennis / browser session 同时访问档案中心、统一登录日志等 SPA 页面。
+- 开始 browser computer use 前必须检查是否已有任务在操作 agent-browser。
+- 如果已有任务在运行，应等待或停止当前任务。
+- 多 session 并发导致的跳转异常不得解释为页面不可用、Tab 不可访问、用户无数据或权限阻断。
+- Tab 点击、分页、详情弹窗、saved state 保存等操作必须在 `single_browser_session=true` 条件下执行。
 
 目标耗时：3-5 分钟。
 

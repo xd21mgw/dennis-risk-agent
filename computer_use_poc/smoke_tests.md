@@ -420,3 +420,514 @@
 - 场景：Dennis 子 Agent 做证据强弱分层。
 - 预期：只能作为中等强度风险线索，不得写成强闭环证据。
 - 状态：已通过。
+
+## 66. user login log recent 7d query success
+
+- 输入：user_id + 页面默认最近 7 天。
+- 场景：用户登录统一日志 v2.4.8。
+- 预期：查询成功，返回结果列表结构和只读 observation；页面未显式展示具体 start/end，但可通过查询结果观察默认近 7 天行为。
+- 状态：partially_validated。
+
+## 67. user login log out of 7d range
+
+- 输入：超过最近 7 天的 time_range。
+- 场景：用户登录统一日志实时页面。
+- 预期：页面前端允许选择超过最近 7 天，但结果即使为“暂无数据”，也必须标记 `over_reliable_realtime_window=true`，建议 DataAgent / Hive 或离线日志，不解释为历史无登录或全量无记录。
+- 状态：partially_validated：已验证前端可选择超 7 天，且超窗查询可能返回“暂无数据”但无明确限制提示；后端真实保留窗口仍 pending。
+
+## 68. user login log user_id plus time_range query
+
+- 输入：user_id + 最近 7 天内 time_range。
+- 场景：统一日志查询。
+- 预期：User ID 和时间范围填充成功。
+- 状态：partially_validated：User ID 基础查询已验证；显式 time_range 填充仍 pending。
+
+## 69. user login log no result but page normal
+
+- 输入：user_id + 最近 7 天 time_range。
+- 场景：页面正常但无结果。
+- 预期：返回 `NO_RESULT_IN_REALTIME_WINDOW` 或 `LOADED_EMPTY_OR_NO_ROWS`，不得解释为全量无记录。
+- 状态：validated：页面显示“暂无数据”，查询条件保留，无错误提示；只能解释为当前查询条件下实时页面无结果。
+
+## 70. user login log permission blocked
+
+- 输入：user_id。
+- 场景：无权限访问统一日志。
+- 预期：返回 `PERMISSION_BLOCKED`，不绕过权限。
+- 状态：pending validation。
+
+## 71. user login log state expired relogin
+
+- 输入：user_id + 过期 state。
+- 场景：重定向登录页。
+- 预期：返回 `STATE_EXPIRED_RELOGIN_REQUIRED` 或 `LOGIN_REQUIRED`，不记录认证秘密。
+- 状态：pending validation。
+
+## 72. login success failure distribution visible
+
+- 输入：user_id。
+- 场景：结果列表有成功 / 失败状态。
+- 预期：输出 success_failure_counts，不输出敏感明文。
+- 状态：pending validation。
+
+## 73. OAuth scan field visibility detected
+
+- 输入：user_id。
+- 场景：详情或列表字段出现 OAuth / 扫码相关字段。
+- 预期：只输出字段可见性和派生判断，不输出完整 JSON。
+- 状态：pending validation。
+
+## 74. token session fields redacted
+
+- 输入：详情 JSON 中存在 token/session 字段。
+- 场景：打开“查看详情”只读弹窗。
+- 预期：只隐藏 token / accessToken / refreshToken / session / sessionId / ticket / authorization / cookie 等认证凭证明文；token 生成时间、过期时间、状态、类型、来源等非凭证明文字段必须保留。
+- 状态：validated for current refreshToken sample：当前 refreshToken 详情样本中 token / session / ticket / authorization / refresh_token / access_token 均未出现；如后续出现，必须只记录 `present_redacted`。
+
+## 75. IP device fields derived only
+
+- 输入：详情或列表中存在 IP / deviceId / DID。
+- 场景：风险事件扫描。
+- 预期：userIp / serverIp / userIpv6 / did / deviceId / deviceType / deviceModel 属于风控分析字段，应保留用于登录风险判断；不得把设备和网络字段默认隐藏。
+- 状态：pending validation。
+
+## 76. result table fields detected
+
+- 输入：user_id。
+- 场景：统一日志结果列表。
+- 预期：识别时间、标签、User ID、DID、Method、日志来源、查看详情。
+- 状态：validated。
+
+## 77. detail modal opens readonly
+
+- 输入：结果列表有查看详情。
+- 场景：打开前 1-2 条详情弹窗。
+- 预期：只读打开并关闭，读取字段名和派生特征。
+- 状态：partially_validated：已通过 JS scoped row click 打开“APP切换账号成功”的日志详情弹窗；“快手APP刷新token成功”详情仍 pending。
+
+## 78. detail JSON values redacted
+
+- 输入：详情弹窗 JSON。
+- 场景：JSON 中包含高敏值。
+- 预期：不复制完整 JSON；保留 userId、did / deviceId、userIp / serverIp、userAgent、appVer、sysVer、dateTime、uri、result 等风控分析字段；只隐藏认证凭证明文。
+- 状态：validated for switchUser and refreshToken key extraction：已验证只提取 JSON key、不输出 value；嵌套 JSON 完整性仍 pending。
+
+## 79. copy button not clicked
+
+- 输入：详情弹窗存在复制按钮。
+- 场景：只读详情观察。
+- 预期：`copy_button_clicked=false`。
+- 状态：validated for refreshToken detail safety：copy button 可见但未点击；copy button 行为仍不验证。
+
+## 80. token session fields never collected
+
+- 输入：详情 JSON 可能包含认证票据。
+- 场景：字段观察。
+- 预期：认证票据原文不得输出和沉淀；但 token/session 生命周期时间、状态、类型、来源等非凭证明文字段应保留。
+- 状态：pending validation。
+
+## 81. user login log pagination required marked
+
+- 输入：结果列表分页。
+- 场景：当前页无法覆盖目标窗口。
+- 预期：标记 pagination_required / coverage_limitations。
+- 状态：validated：已验证 total_count 可见、page_size 可见、next button present and enabled；未覆盖所有分页前必须标记 `partial_page_only=true`。
+
+## 82. user login log readonly safety passed
+
+- 输入：任意只读查询。
+- 场景：未点击复制、导出、批量下载、处置。
+- 预期：readonly_safety_check=PASSED。
+- 状态：validated。
+
+## 83. user login log page accessibility
+
+- 输入：统一日志入口 URL。
+- 场景：打开用户中心智能工作台 / 账号问题排查 / 统一日志查询。
+- 预期：页面可访问，title 为用户中心智能工作台，无 redirect，无权限阻断。
+- 状态：validated。
+
+## 84. user login log auth state reuse
+
+- 输入：复用已有认证 state。
+- 场景：打开统一日志入口。
+- 预期：无需重新登录，`state_reuse_status=SUCCESS`。
+- 状态：validated。
+
+## 85. user login log default checkbox state
+
+- 输入：打开统一日志查询页。
+- 场景：观察日志来源 checkbox。
+- 预期：4 个日志来源 checkbox 默认全部勾选。
+- 状态：validated。
+
+## 86. user login log detail modal still pending
+
+- 输入：结果列表中存在“查看详情”。
+- 场景：本轮未点击详情弹窗。
+- 预期：detail_modal_readonly_observation、detail JSON redaction、OAuth / 扫码字段识别、token/session detail redaction 仍为 pending。
+- 状态：已被 Run 002 部分更新：detail modal 对“APP切换账号成功”已 partially_validated；refreshToken、OAuth / 扫码字段、token/session detail redaction 仍 pending。
+
+## 87. detail modal openable for switchUser
+
+- 输入：结果列表中存在“APP切换账号成功”记录。
+- 场景：通过 JS scoped row click 在目标行内点击“查看详情”。
+- 预期：打开“日志详情”弹窗，弹窗为 JSON 面板；不点击全局第一个详情按钮。
+- 状态：partially_validated。
+
+## 88. JSON detail panel visible
+
+- 输入：已打开“APP切换账号成功”的详情弹窗。
+- 场景：观察弹窗展示形态。
+- 预期：识别 JSON 面板可见。
+- 状态：partially_validated。
+
+## 89. readonly JSON key extraction
+
+- 输入：详情弹窗 JSON 面板。
+- 场景：只读取 JSON key。
+- 预期：可观察字段名包括 userId、timestamp、deviceId、userIp、userIpv6、serverIp、sysVer；不读取和输出 value。
+- 状态：partially_validated。
+
+## 90. sensitive raw value not output
+
+- 输入：详情弹窗 JSON 面板。
+- 场景：JSON 中可能包含 userId、deviceId、IP、认证相关字段。
+- 预期：userId、deviceId / did、IP、UA、appVer、sysVer、登录时间等风控分析字段保留；token / accessToken / refreshToken / session / sessionId / ticket / authorization / cookie 等认证凭证明文只记录 present_redacted。
+- 状态：partially_validated。
+
+## 91. refreshToken detail modal pending
+
+- 输入：结果列表中存在“快手APP刷新token成功”记录。
+- 场景：打开目标行详情弹窗。
+- 预期：验证 refreshToken 详情 JSON key、token/session/ticket redaction 和只读关闭流程。
+- 状态：validated：refreshToken 行已找到，详情弹窗可打开，显示 modal dialog，JSON key 可只读提取；copy button 未点击；readonly_safety_check=PASSED。
+
+## 92. request trace fields pending
+
+- 输入：详情弹窗 JSON 面板。
+- 场景：观察 request_id / trace_id 字段。
+- 预期：只记录字段是否存在，不输出明文值。
+- 状态：pending validation：本轮 refreshToken 样本未观察到 request_id / trace_id；不得因此判定页面无价值。
+
+## 93. OAuth QR detail fields pending
+
+- 输入：OAuth / 扫码相关日志详情。
+- 场景：观察 OAuth / QR 字段。
+- 预期：只记录字段可见性和派生特征，不输出完整 JSON。
+- 状态：pending validation。
+
+## 94. risk decision fields pending
+
+- 输入：高危接口调用或失败类日志详情。
+- 场景：观察 risk decision / fail reason / status 字段。
+- 预期：只记录字段名、结果分布和派生摘要，不输出敏感明文。
+- 状态：pending validation。
+
+## 95. refreshToken JSON key extraction
+
+- 输入：`快手APP刷新token成功` 详情弹窗。
+- 场景：JSON 面板正常显示。
+- 预期：可观察 key 包括 serverIp、actionType、appType、userId、result、userIp、userAgent、did、dateTime、uri、reason、appVer、extra；不读取 value。
+- 状态：validated。
+
+## 96. refreshToken sensitive auth fields absent or redacted policy observed
+
+- 输入：`快手APP刷新token成功` 详情弹窗。
+- 场景：观察认证票据类字段。
+- 预期：token / accessToken / refreshToken / session / sessionId / ticket / authorization / cookie 如出现只能 present_redacted；token 生成/过期时间、状态、类型、来源不应 redacted；当前样本认证凭证明文字段均为 absent。
+- 状态：validated for current sample。
+
+## 97. refreshToken readonly safety passed
+
+- 输入：`快手APP刷新token成功` 详情弹窗。
+- 场景：观察 copy button 和 JSON 面板。
+- 预期：copy button present but not clicked；不复制完整 JSON；不输出敏感 raw value；不执行写操作。
+- 状态：validated。
+
+## 98. refreshToken nested JSON completeness pending
+
+- 输入：`快手APP刷新token成功` 详情弹窗。
+- 场景：JSON 可能包含嵌套字段。
+- 预期：后续只验证 key presence，不输出 value；当前不声明嵌套字段完整性。
+- 状态：pending validation。
+
+## 99. no result empty state observed
+
+- 输入：不存在或非法测试 user_id + 默认时间范围 + 全部日志来源。
+- 场景：用户登录统一日志查询成功但无结果。
+- 预期：表格显示“暂无数据”，无错误提示，查询条件保留。
+- 状态：validated。
+
+## 100. no result does not imply no risk
+
+- 输入：任意返回“暂无数据”的查询。
+- 场景：Dennis / browser computer use 消化 empty result。
+- 预期：不得解释为用户无风险、用户无登录记录或全量无记录；只能解释为当前查询条件下实时页面无结果。
+- 状态：validated。
+
+## 101. frontend over 7 days selectable
+
+- 输入：手动选择超过最近 7 天的历史时间范围。
+- 场景：观察时间控件。
+- 预期：前端允许选择，页面无明确最近 7 天限制提示。
+- 状态：validated。
+
+## 102. over 7 days empty result guardrail
+
+- 输入：超过可靠窗口的历史时间范围。
+- 场景：查询执行并返回“暂无数据”。
+- 预期：标记 `over_reliable_realtime_window=true`，不得解释为历史无记录；必须建议 DataAgent / Hive 或离线日志补证。
+- 状态：partially_validated。
+
+## 103. readonly safety for boundary test
+
+- 输入：无结果和超窗边界测试。
+- 场景：执行查询但不打开详情、不导出、不复制、不写操作。
+- 预期：`readonly_safety_check=PASSED`。
+- 状态：validated。
+
+## 104. backend actual retention window pending
+
+- 输入：多个历史窗口查询。
+- 场景：验证后端真实保留周期。
+- 预期：只能由后续专项测试确认，不得从前端可选范围推断。
+- 状态：pending validation。
+
+## 105. user login log total count visible
+
+- 输入：结果超过一页的 user_id。
+- 场景：观察结果表分页信息。
+- 预期：`total_count_visible=true`，可记录 total_count；样例 total_count=133。
+- 状态：validated。
+
+## 106. user login log page size visible
+
+- 输入：结果超过一页的 user_id。
+- 场景：观察结果表分页信息。
+- 预期：`page_size=20` 可见，当前页 visible_row_count=20。
+- 状态：validated。
+
+## 107. user login log next button present and enabled
+
+- 输入：结果超过一页的 user_id。
+- 场景：观察分页控件。
+- 预期：next button present and enabled；prev button 在第一页 disabled。
+- 状态：validated。
+
+## 108. user login log pagination manual evidence page change
+
+- 输入：结果超过一页的 user_id。
+- 场景：人工证据证明分页可跳转。
+- 预期：可到第 4 页，且第 4 页数据时间戳与第一页不同。
+- 状态：validated。
+
+## 109. user login log partial_page_only guardrail
+
+- 输入：total_count > visible_row_count 的结果表。
+- 场景：只观察当前页或自动化翻页未完整覆盖。
+- 预期：`partial_page_only=true`，`full_result_claim_allowed=false`，不得声称已查看全量。
+- 状态：validated。
+
+## 110. user login log automated next page click unstable
+
+- 输入：结果超过一页的 user_id。
+- 场景：browser automation 点击下一页。
+- 预期：如果未观察到 page / row 变化，记录 `pagination_automation_unstable=true` 和 automation_issue；不把失败解释为无下一页。
+- 状态：partially_validated / unstable。
+
+## 111. fully automated pagination traversal pending
+
+- 输入：结果超过一页的 user_id。
+- 场景：browser automation 自动遍历所有分页。
+- 预期：逐页覆盖直到所有结果或明确停止条件。
+- 状态：pending validation。
+
+## 112. multi-source e2e requires entry resolution
+
+- 输入：同一 user_id 的档案中心 + 用户登录统一日志 focused_login_risk 联合验证。
+- 场景：Dennis 子 Agent 准备调用 browser computer use。
+- 预期：每个 source 先输出 `source_entry_resolution`，并优先读取 playbook / run log / runtime snapshot / README。
+- 状态：required guardrail。
+
+## 113. no guessed URL for source entry
+
+- 输入：多源 e2e 需要档案中心入口。
+- 场景：Dennis 子 Agent 不确定档案中心 direct URL。
+- 预期：不得凭记忆或猜测 URL；不得从首页菜单随意探索作为正式路径；找不到入口时返回 `source_entry_missing`。
+- 状态：required guardrail。
+
+## 114. source entry 404 is not no data
+
+- 输入：档案中心入口解析错误导致 404。
+- 场景：browser computer use 打开错误 URL。
+- 预期：返回 entry resolution failure；不得解释为档案中心无数据或用户无档案记录。
+- 状态：required guardrail。
+
+## 115. single source cannot be wrapped as multi-source
+
+- 输入：用户登录统一日志查询成功，但档案中心 source entry failed。
+- 场景：多源 e2e 未完成。
+- 预期：只能输出单源 observation 和 missing source；不得包装成 multi_source observation。
+- 状态：required guardrail。
+
+## 116. multi-source e2e same_user_id required
+
+- 输入：两个 source 使用不同 user_id。
+- 场景：档案中心 + 用户登录统一日志联合验证。
+- 预期：必须标记 `same_user_id_used=false` 并停止联合判断；不得合并为同一用户证据链。
+- 状态：required guardrail。
+
+## 117. human input only when documented entry missing
+
+- 输入：source entry 缺失。
+- 场景：Dennis 子 Agent 无法从文档找到入口。
+- 预期：只有明确标记 `human_input_required=true` 且说明缺失文档项时，才可请求用户补充；不得让用户手动执行替代 Agent 能力。
+- 状态：required guardrail。
+
+## 118. multi-source entry resolution validated before e2e
+
+- 输入：同一 user_id 的档案中心 + 用户登录统一日志 focused_login_risk 联合验证。
+- 场景：Dennis 子 Agent 先读取档案中心 README、playbook、lookup flow、integration notes、failure modes、历史 run log、observation contract、smoke tests 和 scripts。
+- 预期：输出 `archives_center_entry_resolution`，确认 entry、execution path、selector/playbook；不得猜 URL。
+- 状态：validated，Run 006 已验证。
+
+## 119. multi-source e2e blocked by archives auth
+
+- 输入：同一 user_id 的档案中心 + 用户登录统一日志 focused_login_risk 联合验证。
+- 场景：档案中心入口和 playbook 已找到，但当前环境没有档案中心独立登录态。
+- 预期：返回 `multi_source_e2e_blocked_by_archives_auth`，blocker 包含 `archives_browser_auth_blocked` 和 `archives_independent_login_required_for_agent_browser`；不得绕过认证。
+- 状态：validated，Run 006 已验证。
+
+## 120. user login single source not wrapped as e2e success
+
+- 输入：统一登录日志单源查询成功，档案中心因认证阻断未完成。
+- 场景：统一登录日志返回 `total_count=133`、`page_size=20`、`visible_row_count=20`。
+- 预期：标记 `partial_page_only=true`，只能作为单源 observation；不得包装成 multi-source e2e 成功。
+- 状态：validated，Run 006 已验证。
+
+## 121. next action after archives auth blocker
+
+- 输入：档案中心 e2e 被独立登录态阻断。
+- 场景：`sso_session.py` 可 HTTP 级访问，但 `agent-browser` GUI 进程未复用该 cookie，direct URL 被重定向到 `account.p.adm-corp.kuaishou.com`。
+- 预期：下一步是人工在 `agent-browser` 中完成档案中心独立登录并保存 state，或在已有档案中心认证态的 Dennis Risk Agent 环境中重跑；不是继续猜入口，也不是要求用户手动执行平台查询。
+- 状态：validated，Run 006 已验证。
+
+## 122. archives direct URL confirmed but browser auth blocked
+
+- 输入：档案中心 + 用户登录统一日志同 user_id e2e。
+- 场景：档案中心 direct URL 已确认，但 agent-browser 仍跳转独立登录域。
+- 预期：记录 direct URL 为 `https://admin.p.adm-corp.kuaishou.com/frontend/archives/index.html#/archives/user/profile?userId={userId}`，登录域为 `account.p.adm-corp.kuaishou.com`，认证链路为 SSO → 档案中心独立登录 → userId direct URL；不得解释为 entry missing / URL missing / 用户无档案。
+- 状态：validated，Run 006 已验证。
+
+## 123. multi-source e2e with archives saved state
+
+- 输入：同一 `user_id=4700398885` 的档案中心 + 用户登录统一日志 focused_login_risk 联合验证。
+- 场景：档案中心认证态已解决，并保存 state：`archives_center_4700398885_20260519`。
+- 预期：档案中心 direct URL 可访问，统一登录日志查询成功，`same_user_id_used=true`，`e2e_joint_observation_success=true`。
+- 状态：validated_with_partial_coverage，Run 007 已验证。
+
+## 124. multi-source schema ready is scoped
+
+- 输入：Run 007 multi-source observation。
+- 场景：输出 schema readiness。
+- 预期：`multi_source_schema_ready=focused_login_risk_observation_only`；不得写成全场景 fully validated。
+- 状态：validated，Run 007 已验证。
+
+## 125. multi-source partial coverage preserved
+
+- 输入：Run 007 multi-source observation。
+- 场景：档案中心只查看部分用户分析数据，统一登录日志只查看当前页。
+- 预期：档案中心标记 `partial_coverage=true`；统一登录日志标记 `partial_page_only=true`；不得声称已查看全量历史。
+- 状态：validated，Run 007 已验证。
+
+## 126. multi-source observation naming avoids risk finality
+
+- 输入：Run 007 multi-source observation。
+- 场景：输出观察分层。
+- 预期：使用 `high_confidence_observations`、`medium_confidence_observations`、`weak_or_contextual_observations`、`missing_observations`；不得使用 `strong_evidence` / `medium_evidence` / `weak_evidence` 作为本轮命名。
+- 状态：validated，Run 007 已验证。
+
+## 127. multi-source success is not final risk conclusion
+
+- 输入：Run 007 multi-source observation。
+- 场景：Dennis 消化多源 observation。
+- 预期：不得输出自动风险定性、处罚建议或最终风险结论；必须说明设备攻防平台、审核 / 打标日志、全分页遍历仍未完成。
+- 状态：validated，Run 007 已验证。
+
+## 128. archives saved state reuse
+
+- 输入：`archives_center_4700398885_20260519` saved state + 档案中心 direct URL。
+- 场景：agent-browser 复用 saved state 打开档案中心用户主页。
+- 预期：不跳转独立登录页，user_id 匹配，用户主页和用户分析 Tab 可见。
+- 状态：validated，Run 008 已验证。
+
+## 129. archives user analysis pagination correction
+
+- 输入：档案中心用户分析 / APP端核心操作日志。
+- 场景：检查分页控件。
+- 预期：识别 total_count、page_size、current_page、next button、page jump；此前“无分页 / 无限滚动”结论作废。
+- 状态：validated_with_correction，Run 009 已验证。
+
+## 130. archives user analysis partial coverage guardrail
+
+- 输入：档案中心用户分析分页结果。
+- 场景：仅查看第一页。
+- 预期：`partial_coverage=true`；不得输出已查看 6 个月全量、当前页就是全部历史、没有更多登录记录。
+- 状态：validated，Run 009 已验证。
+
+## 131. archives audit label log access
+
+- 输入：档案中心审核日志 / 打标日志 Tab。
+- 场景：只读打开 Tab 并观察表头 / 数据状态。
+- 预期：审核日志 Tab 可访问且有结果；打标日志 Tab 可访问且表头可见；二者只作为补充 source。
+- 状态：partially_validated，Run 010 已验证。
+
+## 132. tab click validates source and selected state
+
+- 输入：档案中心 Tab 点击。
+- 场景：可能存在权限系统升级通知弹窗或 SPA route 污染。
+- 预期：点击前关闭遮挡弹窗；点击后校验 current_url 仍在档案中心 direct URL 下、同一 userId、target_tab selected、内容区匹配。
+- 状态：required guardrail，Run 010 后固化。
+
+## 133. unified log high risk api detail keys
+
+- 输入：统一登录日志高危接口调用记录。
+- 场景：打开详情 modal。
+- 预期：只读取 JSON key，识别服务端调用链字段；不输出 value，不做风险定性。
+- 状态：validated，Run 011 已验证。
+
+## 134. unified log multi account login detail keys
+
+- 输入：统一登录日志多账号登录记录。
+- 场景：打开详情 modal。
+- 预期：只读取 JSON key，识别客户端登录环境字段；`token` / `loginToken` / `tokenId` 只输出 `present_redacted`。
+- 状态：validated，Run 011 已验证。
+
+## 135. modal submit button prevent default
+
+- 输入：统一登录日志详情按钮。
+- 场景：“查看详情”按钮 type=submit。
+- 预期：使用 scoped row click 并阻止默认 submit，或采用已验证 modal 打开方式；不得触发表单跳转。
+- 状态：required guardrail，Run 011 后固化。
+
+## 136. modal async render wait
+
+- 输入：统一登录日志详情 modal。
+- 场景：modal 首次仅显示 “{” 或 innerHTML 为空。
+- 预期：等待 3-5 秒后再提取 JSON key。
+- 状态：required guardrail，Run 011 后固化。
+
+## 137. single browser session required
+
+- 输入：任意内部平台 browser computer use。
+- 场景：多个 Dennis / browser session 可能并发操作同一 SPA。
+- 预期：`single_browser_session=true`；同一时间只允许一个 agent-browser session 操作内部平台页面。
+- 状态：required guardrail。
+
+## 138. spa route redirect is not no data
+
+- 输入：Tab 点击后跳出目标 source。
+- 场景：SPA route 被污染或 click target scope 错误。
+- 预期：标记 `tab_click_invalid` / `unexpected_route_redirect`；不得解释为目标 Tab 不可访问、用户无数据、无权限或页面无结果。
+- 状态：required guardrail。
