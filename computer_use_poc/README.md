@@ -74,6 +74,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.4.5.1 focused_login_risk risk_event_scan 已部分验证，约 156 秒；已能输出派生风险摘要，但存在 selector 噪声，状态为 `partial_validated_with_selector_noise`。
 - v2.4.5.1 focused_login_risk risk_event_scan selector noise 已修复，约 63 秒；row feature filter 已验证有效，状态可标记为 `validated`。
 - quick mode、focused structure extraction、focused risk_event_scan 均已验证。
+- v2.4.6 Dennis Agent single-source observation digestion 已验证：能消化档案中心 focused_login_risk observation，并输出证据总结、风险线索、证据缺口和下一步平台建议。
 - 未点击任何写操作按钮，只读安全检查通过。
 
 未验证：
@@ -85,8 +86,10 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 二级链接、详情页、查重页。
 - 处置、审批、导出、封禁、解封等任何写操作。
 - 多平台 / 多入口风险联动。
+- 多源联合 observation digest。
 
 后续建议：
 
 - 将 dedupe 逻辑内置到 eval 脚本中。
 - 继续保持边界：本阶段只代表档案中心 `userId` direct URL 下的只读派生观察能力，不代表自动风险定性完成。
+- 进入 v2.4.7 端到端联合测试：内部 Agent 只读 observation → Dennis Agent 消化 → 下一步平台补证建议。

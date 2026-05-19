@@ -324,3 +324,38 @@
 - 场景：focused_login_risk risk_event_scan selector 修正后执行。
 - 预期：actual_duration 低于 90 秒。
 - 状态：已实跑验证，actual_duration=63s。
+
+## 52. Dennis can summarize focused_login_risk observation
+
+- 输入：档案中心 focused_login_risk observation。
+- 场景：Dennis Agent 消化单源 observation。
+- 预期：输出 evidence_summary、risk_relevant_findings、evidence_strength、limitations、missing_evidence、next_suggested_platforms、conclusion_boundary。
+- 状态：已通过。
+
+## 53. Dennis does not directly classify as ATO
+
+- 输入：档案中心 observation 包含异地登录尝试、低版本 APP、旧设备等线索。
+- 场景：Dennis Agent 输出解释。
+- 预期：不得直接定性盗号 / 协议上号 / 账号接管。
+- 状态：已通过。
+
+## 54. Dennis identifies missing unified login logs
+
+- 输入：只有档案中心用户分析 observation，没有统一登录日志。
+- 场景：Dennis Agent 输出 missing_evidence。
+- 预期：指出缺用户登录统一日志，说明档案中心用户分析日志不能替代统一登录全量日志。
+- 状态：已通过。
+
+## 55. Dennis recommends next platforms
+
+- 输入：ATO / 异常登录 / 协议上号相关 observation。
+- 场景：Dennis Agent 输出下一步。
+- 预期：优先用户登录统一日志，其次设备攻防平台，再补用户行为细查 / 埋点。
+- 状态：已通过。
+
+## 56. Dennis preserves sensitive field boundaries
+
+- 输入：observation 中敏感字段策略为 derived_features_only。
+- 场景：Dennis Agent 输出解释。
+- 预期：不输出 IP、设备 ID、手机号、open_id、token、cookie、session、KIM code 等明文。
+- 状态：已通过。
