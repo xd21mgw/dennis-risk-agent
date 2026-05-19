@@ -18,13 +18,17 @@
 | strategy_detail | strategy_detail, 策略详情 | 策略命中摘要/明细 | RAP 可能是摘要；天狮是策略配置/归因 | 完整归因以天狮为准 |
 | hit_policy | hit_policy, 命中策略 | 命中的策略 | 天狮归因核心字段 | 命中策略不是最终风控结论 |
 | feature_value | feature_value, 特征值 | 策略命中特征取值 | 依赖 feature_expression 解释 | 必须结合条件表达式和事件口径 |
+| relation_node_type | 关系图谱节点类型 | 设备、手机号、第三方登录、实名注册、IP 等关联节点 | 风险运营中心 RAP 以用户侧关系展示；设备平台以设备侧图谱展示 | 节点类型只说明关联路径，不等于风险定性 |
+| related_user_count | 关联用户数 | 某关联节点下挂的用户数量 | RAP 字段明细和设备平台关联图谱口径可能不同 | 大量关联是扩量线索，需看节点类型、时间和用户标签 |
+| user_label_aggregation | 用户标签聚合 | 关联用户的风险/业务标签汇总 | RAP 页面聚合展示；具体标签字典待确认 | 可解释群体画像，不能直接替代逐样本证据 |
+| last_relation_time | 最后一次关联时间 | 某用户/设备/节点最近关联时间 | 不同平台可能取登录、注册、绑定或设备上报时间 | 用于判断关系新鲜度，需确认口径 |
 
 ## 2. 平台字段映射
 
 | 平台 | 账号锚点 | 设备锚点 | 时间字段 | 风险字段 | 行为字段 |
 |---|---|---|---|---|---|
 | 档案中心 | user_id, author_id | device_id, deviceId | last_login_time, audit_time, upload_time, timestamp | punish_status, punish_code, mark_code | operation_type, operation_url, operation_result |
-| 风险运营中心 | user_id | device_info, related_accounts | 判罚时间、举报时间 | current_risk_status, strategy_detail, mark_code | 评论、搜索、社交数据 |
+| 风险运营中心 | user_id, related_user_id | device_info, relation_node_type, related_user_count | 判罚时间、举报时间、last_relation_time | current_risk_status, strategy_detail, mark_code, user_label_aggregation | 评论、搜索、社交数据、关联用户图谱 |
 | 设备攻防基建平台 | user_id | device_id, deviceId | log_time, risk_time, app_install_time | risk_label, risk_level, apk_risk | appLaunchCount, app list |
 | 用户登录统一日志 | User ID | DID | timestamp, start_time, end_time | tag, action | method, request, log_source |
 | 天狮策略引擎 | user_id | 依事件而定 | event time, policy version time | hit_policy, policy_result | event_id, feature_value |
@@ -37,4 +41,3 @@
 - 用户自述、人工备注、审核备注不能进入 strong evidence。
 - IP 解释必须区分用户侧 IP、服务内网 IP、设备网络 IP。
 - 时间字段必须确认时区、精度和数据延迟。
-
