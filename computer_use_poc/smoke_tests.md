@@ -365,6 +365,7 @@
 - 输入：用户提出档案中心 userId 只读查询需求。
 - 场景：Dennis 子 Agent 生成 readonly plan，并调用 browser computer use。
 - 预期：browser computer use 返回 observation；Dennis 子 Agent 消化 observation 后输出证据总结、风险线索、证据缺口和下一步建议。
+- 状态：已通过，v2.4.7 端到端只读联合测试 validated。
 
 ## 58. auth preflight detects browser profile mismatch
 
@@ -377,3 +378,45 @@
 - 输入：用户问档案中心页面只读查询或 Hive / 公司数仓取数。
 - 场景：需要区分 browser computer use 与 DataAgent。
 - 预期：档案中心页面只读查询走 browser computer use；批量离线取数 / 数仓分析才考虑 DataAgent / Hive；不得把 DataAgent 写成在线平台替代品。
+
+## 60. browser returns focused_login_risk observation
+
+- 输入：Dennis 子 Agent 调用 browser computer use 执行档案中心 focused_login_risk。
+- 场景：browser 使用 scripts 下 eval 脚本提取 observation。
+- 预期：返回 user_info_tab、user_analysis_tab、risk_event_scan.status=validated、readonly_safety_check=PASSED。
+- 状态：已通过。
+
+## 61. dedupe works in end-to-end run
+
+- 输入：用户分析 Tab 日志行存在 DOM 重复。
+- 场景：端到端 run 中 dedupe 生效。
+- 预期：raw 10 行去重为 5 行，selector_noise.present=false。
+- 状态：已通过。
+
+## 62. Dennis digests observation and preserves conclusion boundary
+
+- 输入：browser 返回 focused_login_risk observation。
+- 场景：Dennis 子 Agent 消化 observation。
+- 预期：输出证据总结 / 风险线索 / 缺口 / 下一步平台建议；不直接定性盗号 / 协议上号 / 账号接管。
+- 状态：已通过。
+
+## 63. Dennis recommends unified login device behavior trace
+
+- 输入：档案中心单源 observation。
+- 场景：Dennis 子 Agent 给下一步建议。
+- 预期：指出缺统一登录日志、设备平台、埋点行为链路；建议优先查统一登录日志，其次设备攻防平台，再补用户行为细查 / 埋点。
+- 状态：已通过。
+
+## 64. no automatic enforcement recommendation
+
+- 输入：端到端 observation digest。
+- 场景：Dennis 子 Agent 输出。
+- 预期：不建议处罚、封禁、冻结、解封、审批、策略上线等自动处置。
+- 状态：已通过。
+
+## 65. failed login is medium risk signal, not strong closed-loop evidence
+
+- 输入：异地 + 异设备 + 登录失败线索。
+- 场景：Dennis 子 Agent 做证据强弱分层。
+- 预期：只能作为中等强度风险线索，不得写成强闭环证据。
+- 状态：已通过。

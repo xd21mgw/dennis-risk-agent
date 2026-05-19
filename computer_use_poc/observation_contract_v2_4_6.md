@@ -5,6 +5,7 @@
 当前验证状态：
 
 - single-source archives_center focused_login_risk observation digestion validated。
+- v2.4.7 end-to-end readonly joint test validated：Dennis 子 Agent 可调用 browser computer use，browser 返回 observation 后 Dennis 可完成证据消化。
 - 当前仅验证单源消化，不代表多源联合研判完成。
 - Dennis Agent 输出必须保留“线索 / 证据 / 结论边界”三层区分。
 
@@ -158,6 +159,7 @@ manual_review_required:
 - 可解释为风险线索。
 - 不能直接解释为盗号、协议上号或账号接管。
 - 需要结合统一登录日志、设备历史、常用地、登录方式和下游行为验证。
+- 如果异地登录事件是失败登录，只能作为中等强度风险线索，不得升级为强闭环证据。
 
 ### 4.2 低版本 APP + 旧设备
 
@@ -227,6 +229,7 @@ Dennis 子 Agent 禁止：
 - Dennis 不直接定性盗号。
 - Dennis 不输出敏感明文。
 - Dennis 能给下一步平台建议。
+- Dennis 子 Agent 可调用 browser computer use，完成单平台端到端只读链路。
 
 边界：这些通过项只覆盖单源 archives_center focused_login_risk observation，不代表多源联合完成。
 
