@@ -18,6 +18,12 @@
 - 查询建议里的入参必须分层表达：最小必要入参、建议补充入参、可选上下文；不要把可选上下文写成阻塞项。
 - 如果最小必要入参已具备，即使建议补充入参或可选上下文缺失，也要先输出通用查询建议，不要把建议补充项写成阻塞项。
 - 查询建议结构不等于可直接执行 SQL；执行前仍需 DataAgent / Hive 根据真实表名、权限、分区、join key 转换。
+- 当用户问题涉及内部平台查询、证据补充、风险研判路径、平台手脚选择时，优先读取 `internal_risk_platforms/00_platform_routing_index.md`。
+- 需要解释具体平台字段、页面模块、截图锚点、查询对象或适用边界时，再按需读取对应平台卡：`01_archives_center_platform_card.md`、`02_risk_ops_center_platform_card.md`、`03_device_defense_platform_card.md`、`04_user_login_unified_log_platform_card.md`、`05_tianshi_policy_engine_platform_card.md`、`06_user_behavior_trace_platform_card.md`。
+- 需要跨平台研判链路时，再读取 `internal_risk_platforms/90_cross_platform_investigation_paths.md`；涉及字段口径差异时，再读取 `internal_risk_platforms/91_platform_field_dictionary.md`。
+- 字段含义、权限、截图或平台能力不确定时，必须参考 `internal_risk_platforms/99_todo_unknown_fields.md`，不得把待确认项写成确定事实。
+- `92_platform_routing_smoke_tests.md` 和 `93_platform_knowledge_quality_report.md` 仅作为测试和质量验收资产，不进入常规回答上下文，除非用户明确要求查看测试或质量报告。
+- `internal_risk_platforms/` 是平台路由、字段解释和取证路径知识库，不代表 Agent 已具备自动操作内部平台能力。
 
 ## 默认回答方式
 

@@ -139,3 +139,45 @@
   - 首次回答必须输出标准查询建议结构。
   - 明确查询建议结构不等于可直接执行 SQL。
   - 仍不真实调用 DataAgent。
+
+## 9. internal_risk_platforms 平台路由 smoke tests
+
+### Case 1: 用户 5 月 4 日扫码后账号异常，先查哪里？
+
+- 期望加载路径：`internal_risk_platforms/00_platform_routing_index.md` → `04_user_login_unified_log_platform_card.md`
+- 合格回答标准：优先用户登录统一日志；补充档案中心、设备攻防、用户行为细查、天狮；不假装已有结果。
+
+### Case 2: 一批账号同设备注册登录，像不像号商？
+
+- 期望加载路径：`00_platform_routing_index.md` → `03_device_defense_platform_card.md`
+- 合格回答标准：优先设备攻防；补充档案中心、风险运营中心；说明同设备只是聚集线索，不直接等于群控/号商。
+
+### Case 3: 后端有高危操作，但前端没看到操作，怎么排查协议上号？
+
+- 期望加载路径：`00_platform_routing_index.md` → `04_user_login_unified_log_platform_card.md` + `06_user_behavior_trace_platform_card.md`
+- 合格回答标准：先查后端 method/action，再查前端行为反证；说明埋点缺失可能误判。
+
+### Case 4: 怀疑设备是模拟器或刷机，先查哪个平台？
+
+- 期望加载路径：`00_platform_routing_index.md` → `03_device_defense_platform_card.md`
+- 合格回答标准：优先设备攻防；查 hardware_trusted、safe_status、appLaunchCount、apkPath；字段不确定时参考 todo。
+
+### Case 5: 用户申诉策略误伤，想知道为什么命中。
+
+- 期望加载路径：`00_platform_routing_index.md` → `05_tianshi_policy_engine_platform_card.md`
+- 合格回答标准：优先天狮；补充档案中心和原始日志；说明策略命中不等于最终风险成立。
+
+### Case 6: 1000 个样本要看留存和奖励提现趋势。
+
+- 期望加载路径：`00_platform_routing_index.md`
+- 合格回答标准：路由到 DataAgent/Hive 查询建议；说明 DataAgent 只负责 Hive/数仓聚合，不替代在线平台。
+
+### Case 7: 设备平台查到 risk_label，但不知道含义。
+
+- 期望加载路径：`00_platform_routing_index.md` → `03_device_defense_platform_card.md` → `99_todo_unknown_fields.md`
+- 合格回答标准：不强解释未知标签；登记为待确认字段；不能进入 strong evidence。
+
+### Case 8: 某视频被大量举报，想看内容风险和审核过程。
+
+- 期望加载路径：`00_platform_routing_index.md` → `01_archives_center_platform_card.md`
+- 合格回答标准：优先档案中心；补充风险运营中心和天狮；说明举报不等于事实。
