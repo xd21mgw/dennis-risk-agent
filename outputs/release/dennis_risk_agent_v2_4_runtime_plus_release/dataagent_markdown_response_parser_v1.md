@@ -1,0 +1,731 @@
+# DataAgent Markdown Response Parser v1
+
+## 0. 边界声明
+
+本文件定义 Data Agent-only 阶段如何把 SSE / markdown response 解析为 `unified_normalized_evidence`。
+
+- 当前不调用真实 Data Agent。
+- 当前不定义真实 API、真实表名、真实字段名、真实 SQL。
+- 当前只定义解析和降级规则。
+- Data Agent 返回 markdown 不是结构化 evidence JSON，必须经过 parser 和降级判断。
+
+## 1. 输入
+
+输入可能包含：
+
+```yaml
+dataagent_response:
+  sse_chunks:
+  final_markdown_text:
+  queryId:
+  sessionId:
+  result:
+  error_msg:
+```
+
+字段说明：
+
+- `sse_chunks`：SSE 分片文本。
+- `final_markdown_text`：合并后的 markdown 正文。
+- `queryId`：Data Agent 查询弱引用。
+- `sessionId`：会话弱引用。
+- `result`：Data Agent 返回状态标识。
+- `error_msg`：错误信息。
+
+## 2. 输出
+
+输出为 `unified_normalized_evidence`。
+
+```yaml
+normalized_evidence:
+  evidence_id:
+  source_query_intent_id:
+  source_provider_request_id:
+  provider: dataagent_provider
+  provider_response_id:
+  status:
+  evidence_type:
+  applicable_skill:
+  evidence_summary:
+  data_findings:
+  speculation_notes:
+  hypothesis_notes:
+  counter_evidence_exclusion_status:
+  key_findings:
+  strong_evidence:
+  medium_evidence:
+  weak_evidence:
+  counter_evidence:
+  missing_evidence:
+  quality_risks:
+  freshness_notes:
+  permission_notes:
+  provider_limitations:
+  provider_conclusion_hint:
+  next_data_options:
+  needs_user_confirmation:
+  suggested_query_expansion:
+  required_missing_inputs:
+  estimated_query_cost:
+  batch_status:
+  provider_status:
+  query_execution_summary:
+  polling_state:
+  sql_repair_state:
+  pending_evidence:
+  interim_judgement_allowed:
+  timeout_type:
+  elapsed_time:
+  partial_results_available:
+  pending_queries:
+  retry_recommended:
+  retry_with_smaller_scope:
+  user_confirmation_required:
+  conclusion_support:
+    level:
+    reason:
+  next_query_intent:
+  recommended_next_provider:
+    generated_by: router_or_dennis_agent
+  manual_review_required:
+  raw_result_reference:
+  audit_reference:
+  dennis_final_judgement:
+    generated_by: Dennis 主 Agent
+    filled_by_parser: false
+```
+
+## 3. SSE 合并规则
+
+1. 按 SSE chunk 顺序拼接文本。
+2. 保留 markdown 结构，包括标题、列表、表格、代码块。
+3. 去除协议层包装和空事件。
+4. 如果 chunk 中存在重复片段，按内部平台去重策略处理，当前文档只要求保留最终可读文本。
+5. 如果流结束但没有正文，标记为 `empty_result`。
+6. 如果流未正常结束，标记为 `partial` 或 `failed`，并记录质量风险。
+
+## 4. Markdown 解析规则
+
+解析以下结构：
+
+- 标题：用于识别摘要、发现、结论、风险、建议、SQL、表格等区块。
+- 列表：用于提取 key findings、missing evidence、counter evidence、quality risks。
+- 表格：用于提取数据摘要和维度对比。
+- 代码块：用于识别 SQL 或伪代码。
+- 加粗文本：可作为重点提示，但不能直接当事实。
+
+默认区块映射：
+
+- “数据发现 / 结果 / 分析”：候选 key findings。
+- “结论 / 判断 / 可能”：候选 provider_conclusion_hint，需与事实分离，不能作为 final judgement。
+- “数据发现 vs 模型推测分界”：必须拆为 `data_findings`、`speculation_notes`、`hypothesis_notes`。
+- “反证路径 / 排除状态 / 排除情况”：必须解析为 `counter_evidence_exclusion_status`。
+- “P0 / P1 / P2 / P3”：必须解析为缺口优先级和 Router / Dennis 的 next action 依据。
+- “策略引擎 / BLOCK / CHALLENGE / MONITOR”：必须解析为不同强度的策略证据。
+- “下一步 / 继续查询 / 是否执行 / 可选方向 / 建议扩窗 / 需要补充”：必须解析为交互式 follow-up 字段。
+- “缺失 / 需要补充 / 信息不足”：missing evidence。
+- “反证 / 可能原因 / 其他解释”：counter evidence。
+- “风险 / 注意 / 口径”：quality risks。
+- “SQL / 查询语句”：SQL generated，不等于执行结果。
+
+## 4.1 交互式 Follow-up 解析规则
+
+当 Data Agent markdown 中出现分批返回、等待用户选择或多个后续取数方向时，parser 必须抽取交互式字段。
+
+标准字段：
+
+```yaml
+interactive_followup:
+  next_data_options:
+    - option_id:
+      option_summary:
+      target_evidence:
+      data_domain_hint:
+      source_text:
+  needs_user_confirmation:
+  suggested_query_expansion:
+    time_window:
+    sample_scope:
+    data_domains:
+    reason:
+  required_missing_inputs:
+    - input_name:
+      reason:
+      examples:
+  estimated_query_cost:
+    level: low / medium / high / unknown
+    reason:
+  batch_status: first_batch / intermediate / final / sql_only / waiting_user_choice
+  provider_status: running / completed / partial_completed / failed / timeout / waiting_user_choice
+  timeout_type: quick_wait_exceeded / single_call_timeout / query_execution_timeout / no_output_timeout
+```
+
+识别规则：
+
+- “是否执行 SQL / 是否授权执行 / 要不要继续跑” -> `needs_user_confirmation: true`，`batch_status: waiting_user_choice` 或 `sql_only`。
+- “只返回第一批 / 先返回登录结果 / 后续可继续查” -> `batch_status: first_batch` 或 `intermediate`。
+- “建议扩大时间窗 / 扩到 7-10 天 / 扩展到 N 天” -> `suggested_query_expansion.time_window`，且通常 `needs_user_confirmation: true`。
+- “请补充 user_id / device_id / session_id / trace_id / risk_event_id / request_id / 时间窗” -> `required_missing_inputs`。
+- “可继续查登录 / 发布 / 私信 / 爬虫 / 活动”等多个方向 -> `next_data_options`。
+- “查询量大 / Hive 较慢 / 跨域 join / 长周期 / 大样本” -> `estimated_query_cost: high`。
+- “单日、小样本、单域聚合” -> `estimated_query_cost: low`，除非 Data Agent 明确提示成本高。
+- “timeout / 超时 / 进程长时间无新输出 / 轮询后仍无结果” -> timeout 相关字段。
+
+归属边界：
+
+- parser 只抽取 Data Agent 提供的候选选项。
+- `next_data_options` 不等于最终 `next_action`。
+- Dennis Agent / Router 负责排序、解释成本、生成用户可选择动作和下一步问题。
+- 高成本 Hive、长周期扩窗、跨域 join、大样本回捞必须要求用户显式确认。
+
+## 4.2 执行进度 / Polling 解析规则
+
+当 Data Agent markdown 中出现多组 SQL 并行、部分完成、仍在运行、轮询、SQL 修复重跑等执行过程信息时，parser 必须抽取执行进度字段。
+
+标准字段：
+
+```yaml
+execution_progress:
+  provider_status: running / completed / partial_completed / failed / timeout / waiting_user_choice
+  batch_status: first_batch / intermediate / polling / partial_completed / final / sql_repaired_rerun / waiting_remaining_queries
+  query_execution_summary:
+    total_queries_count:
+    completed_queries_count:
+    running_queries_count:
+    failed_queries_count:
+    repaired_queries_count:
+    available_partial_results:
+    unavailable_results:
+    current_progress_summary:
+  polling_state:
+    process_still_running:
+    no_new_output:
+    next_poll_recommended:
+    estimated_remaining_unknown:
+    should_wait_for_final_result:
+  sql_repair_state:
+    sql_error_detected:
+    sql_error_type:
+    repair_attempted:
+    rerun_submitted:
+    repaired_query_status:
+  pending_evidence:
+    - evidence_item:
+      pending_reason:
+      related_query:
+  interim_judgement_allowed:
+    allowed: true / false
+    reason:
+```
+
+识别规则：
+
+- “process still running / running / 执行中 / 轮询中 / 暂无新输出” -> `provider_status: running`，`batch_status: polling`。
+- “部分 SQL 完成，部分 SQL running” -> `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
+- “X 组完成 / Y 组运行 / Z 组失败” -> 填充 `query_execution_summary`。
+- “可以先读取已完成结果” -> `available_partial_results` 非空，并评估 `interim_judgement_allowed`。
+- “字段名错误 / SQL 错误 / 修正后重跑 / rerun submitted” -> 填充 `sql_repair_state`，并标记 `batch_status: sql_repaired_rerun`。
+- “无新输出 / 超时 / 长时间未返回 / 轮询后仍无结果” -> `provider_status: timeout`，并根据语义选择 `timeout_type`。
+- “继续等待 / 缩小范围 / 降低复杂度 / 换更低成本问题” -> `retry_recommended` / `retry_with_smaller_scope` / `user_confirmation_required`。
+- 仍 running 的查询对应证据必须进入 `pending_evidence` 或 `missing_evidence`，不得当作已完成证据。
+- SQL 修复和重跑只进入 `execution_trace` / `sql_repair_state`，不得进入 strong / medium / weak evidence。
+
+阶段性判断规则：
+
+- `provider_status: running` 且没有可用结果时，`interim_judgement_allowed.allowed=false`。
+- `provider_status: partial_completed` 且已完成结果能覆盖局部证据时，`interim_judgement_allowed.allowed=true`，但必须标注 interim。
+- 如果未完成查询涉及关键证据，阶段性结论不得超过 `insufficient_support` 或“局部支持 + 整体证据不足”。
+- 如果第一批结果已经足以支持“证据不足”，可以输出阶段性 Dennis 判断，但必须列出仍 pending 的证据。
+- 最终 `dennis_final_judgement` 必须等待关键证据闭合，或明确标记为阶段性判断。
+- `provider_status: timeout` 必须进入 `pending_evidence` / `missing_evidence`，不能作为无风险或反证。
+- `timeout` 只能说明取证未完成，不能直接生成明确低风险结论。
+
+## 4.3 Timeout 解析规则
+
+当 Data Agent markdown 或 SSE 文本中出现超时信息时，parser 必须抽取 timeout 专属字段。
+
+标准字段：
+
+```yaml
+timeout_analysis:
+  provider_status: timeout
+  timeout_type: quick_wait_exceeded / single_call_timeout / query_execution_timeout / no_output_timeout
+  elapsed_time:
+  partial_results_available:
+    - result_item:
+      source_query:
+  pending_queries:
+    - query_item:
+      reason:
+  retry_recommended:
+  retry_with_smaller_scope:
+  user_confirmation_required:
+```
+
+识别规则：
+
+- “60 秒无返回、刚开始变慢” -> `timeout_type: quick_wait_exceeded`，通常还不应停止整体流程。
+- “5~10 分钟仍无最终结果、查询无新输出” -> `timeout_type: single_call_timeout` 或 `query_execution_timeout`。
+- “预计超过 10 分钟、长周期、多表 join、大样本回捞” -> `user_confirmation_required: true`，不应自动连续执行。
+- “先给出部分结果，剩余查询超时” -> `partial_results_available` 非空，同时 `pending_queries` 非空。
+- “建议缩小范围 / 降低 join 复杂度 / 换更低成本问题” -> `retry_with_smaller_scope`。
+- `timeout` 不得被解析为 `failed` 的等价物；它是独立的未完成状态。
+- `timeout` 不能作为反证，也不能直接压成低风险。
+- 如果已有部分结果，Dennis Agent 可以给阶段性判断，但必须明确是 interim。
+
+## 5. SQL 代码块解析规则
+
+当 markdown 中出现 SQL 代码块：
+
+- 标记 `provider_limitations` 包含 `dataagent_sql_not_result`。
+- 如果没有配套执行结果或数据摘要，`returned_type` 推断为 `sql_only`，status 推断为 `sql_only` 或 `partial`。
+- 如果 Data Agent 已完成表检索、查询计划或多组 SQL 生成，但明确等待授权执行 / 人工下载执行 / 后续执行确认，必须额外标记 `execution_state: pending_execution`。
+- SQL 中的逻辑可转为 weak evidence 的“待执行取证方案”，不能转为 strong evidence。
+- SQL 取证计划可以进入 `evidence_plan` 或 `weak_evidence`，不得进入 `strong_evidence` 或 `medium_evidence`。
+- 不保留真实 SQL 到对外 evidence 文本。
+- 不把 SQL 生成结果当已查数结果。
+- SQL 后的“假设性分析”“若返回量大”“如果占比高”等内容必须识别为模型推测，不得进入 strong_evidence。
+- 如果 markdown 明确写明“SQL 不等于已查数结果”“仅供人工执行”“未经执行验证”，必须将 conclusion_support 降为 `insufficient_support`。
+- `sql_only / pending_execution` 必须生成 `next_action: execute_sql_or_request_execution`，并设置 `manual_review_required: true`。
+- 只有拿到 SQL 执行结果、数据摘要、表格结果或明确空结果后，才能重新进入 parser evidence 阶段。
+
+### 5.1 SQL-only / pending_execution 定义
+
+`sql_only / pending_execution` 是 Data Agent-only 真实试点中的标准中间状态。
+
+适用条件：
+
+- Data Agent 完成表检索、字段口径说明、查询计划或 SQL 生成。
+- Data Agent 未执行查询，或正在等待用户授权执行。
+- Data Agent 提供 SQL 下载链接、执行确认选项或人工执行建议。
+- 返回内容没有真实执行结果、样本统计、数据摘要或明细表格。
+
+解析要求：
+
+```yaml
+status: sql_only
+execution_state: pending_execution
+returned_type: sql_only + table_search + query_plan
+evidence_plan:
+  - 待执行 SQL 覆盖的数据域和证据目标
+strong_evidence: []
+medium_evidence: []
+weak_evidence:
+  - SQL 取证计划
+conclusion_support:
+  level: insufficient_support
+next_action: execute_sql_or_request_execution
+manual_review_required: true
+```
+
+ATO 场景中，`sql_only / pending_execution` 不得支持“明确盗号”或“高度疑似盗号”。它最多说明取证路径设计合理。
+
+### 5.2 SQL execution follow-up 状态机
+
+Data Agent-only 真实试点中，SQL 从生成到进入 evidence 阶段必须经过执行状态机。
+
+标准状态：
+
+| 状态 | 定义 | 允许做什么 | 禁止做什么 |
+|---|---|---|---|
+| `sql_only` | 只有 SQL / 查询计划，无执行动作 | 记录查询目的和 evidence_plan | 进入强/中证据链 |
+| `pending_execution` | SQL 已生成，等待授权或人工执行 | 生成 `execute_sql_or_request_execution` | 输出风险结论 |
+| `execution_in_progress` | SQL 已提交，部分或全部 still running | 记录 SQL ID、查询目的、进度 | 将 running 任务进入 evidence |
+| `execution_result_ready` | 单个 SQL 已完成并有结果摘要 | 进入候选数据发现解析 | 直接跳过质量检查 |
+| `execution_partial` | 部分 SQL 完成，部分 running / failed / no_permission | 只解析已完成结果，整体结论降级 | 做最终判断 |
+| `execution_failed` | SQL 执行失败 | 记录失败原因和重试建议 | 推断风险不存在 |
+| `execution_no_permission` | SQL 因权限失败或字段被裁剪 | 写入 permission_notes / missing_evidence | 强结论 |
+| `execution_timeout` | SQL 超时 | 写入 quality_risks，建议拆分/收窄 | 当作无结果 |
+| `evidence_ready` | 必要 SQL 均有结果或明确空结果，质量风险已记录 | 进入 parser evidence 阶段 | 忽略缺失 SQL |
+
+状态转换：
+
+```text
+sql_only
+→ pending_execution
+→ execution_in_progress
+→ execution_result_ready / execution_partial / execution_failed / execution_no_permission / execution_timeout
+→ evidence_ready
+```
+
+解析要求：
+
+- `execution_in_progress` 不能进入 `strong_evidence`、`medium_evidence` 或 `weak_evidence`，只能进入 `execution_tracking`。
+- `execution_partial` 只能基于已完成 SQL 的聚合摘要生成局部 evidence，整体 `conclusion_support` 不得超过 `insufficient_support`，除非缺失 SQL 与结论无关且理由明确。
+- 只有 `execution_result_ready` 或明确 `empty_result` 才能进入 parser evidence 阶段。
+- SQL ID 不是证据，只是执行任务追踪引用。
+- 聚合摘要优先，不要求或外泄全量明细。
+
+## 6. Markdown 表格解析规则
+
+当 markdown 中出现表格：
+
+- 识别表头和行数。
+- 提取维度、指标、趋势、占比、异常方向等摘要。
+- 表格可支持 key findings，但仍需检查是否覆盖时间窗、样本范围和口径。
+- 表格缺少关键维度或口径说明时，加入 `quality_risks`。
+- 表格仅表达 Data Agent 返回摘要，不代表原始明细可回放。
+
+## 7. 数据发现提取规则
+
+数据发现必须满足：
+
+- 来自 markdown 中明确的数据摘要、表格、执行结果说明或看板 / 数据集分析结果。
+- 能对应 query intent 的 target evidence。
+- 能说明时间窗、对象范围或维度范围。
+
+强度判定：
+
+- strong_evidence：有明确数据摘要、覆盖关键时间窗、能支持目标证据，且对应事实不依赖假设推理。协议攻击场景中，破解包指纹标记与无 SDK 上报等强关联可进入 strong_evidence，但若策略引擎、群控标签、授权工具白名单或精确 join 口径仍缺失，结论仍不得升级为明确判断。
+- medium_evidence：有数据摘要但反证未闭合，或覆盖范围不完整。
+- weak_evidence：只有趋势描述、SQL 生成、口径说明、模型推测或样本范围不明。
+
+result 为 `success` 只表示 Data Agent 技术执行成功，不等于证据充分。parser 必须继续检查：
+
+- 是否有真实数据摘要或表格。
+- 是否只是 SQL-only。
+- 是否存在 missing_evidence。
+- 是否存在 counter_evidence 未闭合。
+- 是否存在 Data Agent-only 缺少实时 provider 的限制。
+- 是否覆盖协议攻击关键反证：破解包、官方埋点缺失、join 口径、合法自动化、群控真机。
+
+## 8. 结论 / 推测分离规则
+
+parser 必须区分：
+
+- 数据事实：Data Agent 返回的可识别数据摘要、表格结果、看板结果。
+- 模型推测：markdown 中“可能、疑似、建议、看起来、推测”等描述。
+- 假设性分析：markdown 中“如果 / 若 / 假设 / 可推断 / 需要验证后才成立”等未被数据执行结果支撑的推理。
+- 风控结论：Dennis Agent 后续基于 normalized evidence 输出的判断。
+
+处理原则：
+
+- “数据发现”可以进入 `data_findings`、`key_findings` 和 evidence。
+- markdown 里的模型推测不能直接转为 strong evidence。
+- “模型推测”只能进入 `weak_evidence`、`quality_risks`、`speculation_notes` 或 `provider_conclusion_hint`。
+- “假设性分析”必须进入 `hypothesis_notes`，不得进入 strong_evidence。
+- markdown 里的“疑似协议 / 疑似黑产”只能进入 `provider_conclusion_hint` 或 interpretation note，不得进入 `dennis_final_judgement`。
+- 最终结论等级由 Dennis Agent 根据 normalized evidence 决定。
+
+## 8.1 Provider Conclusion Hint 规则
+
+Data Agent 返回中的结论性文字，例如“高度疑似”“可能是协议攻击”“建议判断为异常”，只能抽取为 `provider_conclusion_hint`。
+
+`provider_conclusion_hint` 的约束：
+
+- 只代表 Data Agent 基于当前返回内容的提示。
+- 不是 Dennis 主 Agent 的最终判断。
+- 不得直接进入 strong_evidence。
+- 不得直接生成治理动作。
+- 不得填充 `dennis_final_judgement`。
+- 如果 provider_conclusion_hint 与 missing_evidence / counter_evidence 冲突，parser 必须保留冲突并降级。
+
+## 9. missing_evidence 提取规则
+
+以下内容应进入 `missing_evidence`：
+
+- markdown 明确说“无法判断 / 信息不足 / 需要补充”。
+- query intent 要求但 response 未覆盖的证据。
+- Data Agent-only 阶段无法覆盖的实时证据。
+- 协议攻击场景中缺失实时日志、SDK / 指纹、策略引擎、破解包反证、合法自动化反证、群控真机反证。
+- 渠道场景中缺投放策略、预算、品牌活动、归因窗口反证。
+- 导流场景中缺站外承接、正常社交、授权运营反证。
+- 策略复盘中缺申诉 / 客诉、对照组、后验质量。
+
+## 10. counter_evidence 提取规则
+
+以下内容应进入 `counter_evidence`：
+
+- markdown 中列出的其他解释路径。
+- 埋点缺失、join 口径问题、版本差异、采集延迟。
+- 合法自动化 / 授权工具。
+- 正常社交、普通关注、用户主动外联。
+- 投放策略、预算、品牌活动、实验或版本变化。
+- 策略命中但后验风险不支持。
+
+每条反证必须包含：
+
+- `counter_item`
+- `related_misjudgment_risk`
+- `whether_closed`
+
+## 10.1 反证路径排除状态表解析规则
+
+parser 必须解析复杂 Data Agent markdown 中的“反证路径排除状态表”。
+
+至少支持以下状态：
+
+- `已排除`
+- `部分排除`
+- `未排除`
+- `未查`
+- `无权限`
+- `待验证`
+
+标准结构：
+
+```yaml
+counter_evidence_exclusion_status:
+  - counter_evidence_path:
+    status:
+    evidence_basis:
+    impact_on_conclusion:
+    priority:
+```
+
+协议攻击场景 P0 反证路径：
+
+- 破解包绕 SDK / 绕采集
+- 官方包埋点缺失
+- 前后端 join 口径问题
+- 合法自动化 / 授权工具
+- 群控真机
+
+如果任一 P0 反证状态为 `未排除`、`未查`、`无权限`、`待验证`，则 conclusion_support 不得超过 `highly_suspicious_support`，且通常应整体降为 `insufficient_support` 或“局部高度疑似 + 整体证据不足”。
+
+`部分排除` 只能支持局部路径，不能支持全量明确判断。
+
+## 10.2 P0 / P1 / P2 / P3 下一步解析规则
+
+parser 必须识别 Data Agent markdown 中的 P0 / P1 / P2 / P3 下一步。
+
+标准映射：
+
+- P0：影响结论上限的关键缺口，写入 `missing_evidence` 和 Router / Dennis 生成 `recommended_next_provider` 的依据；存在 P0 缺口时 `manual_review_required = true`。
+- P1：重要补证，影响置信度和治理范围。
+- P2：增强解释或复盘的补证。
+- P3：长期能力建设或效率优化。
+
+parser 不直接采用 Data Agent 的 provider 推荐作为最终 `recommended_next_provider`，只能把 P0/P1/P2/P3 作为 Router / Dennis 的路由依据。
+
+## 10.3 策略引擎决策强度解析规则
+
+parser 必须区分策略引擎决策强度：
+
+- `BLOCK`：较强处置证据。只能说明策略已强处置，不等于风险事实；可进入 medium_evidence 或在反证闭合时辅助 strong_evidence。
+- `CHALLENGE`：中等风险 / 验证证据。通常进入 medium_evidence。
+- `MONITOR`：观察证据。只能进入 weak_evidence 或 quality_risks，不能作为强打击证据。
+
+策略证据必须保留限制：
+
+- 策略命中不等于风险事实。
+- 策略处置需要后验验证。
+- 如果策略引擎域无权限，必须进入 `permission_notes` 和 `missing_evidence`。
+
+## 11. quality_risks 提取规则
+
+以下内容应进入 `quality_risks`：
+
+- 前端日志延迟或丢点。
+- 后端日志采样或延迟。
+- Data Agent 只返回 SQL。
+- Data Agent markdown partial。
+- 表格缺口径。
+- 时间窗不一致。
+- join 口径不一致。
+- 权限受限。
+- 样本范围不明。
+- 指标口径不明。
+- Data Agent-only 缺少实时 provider。
+- 模型推测和假设性分析未与数据发现分离。
+- 反证路径排除状态不完整。
+- 策略引擎 BLOCK / CHALLENGE / MONITOR 语义被混用。
+
+## 11.1 Permission Notes 规则
+
+no_permission 或 partial 中的无权限域必须进入 `permission_notes`。
+
+对结论有影响的无权限域还必须进入 `missing_evidence`：
+
+- 前端行为域无权限：无法确认前端真实缺失。
+- 策略引擎域无权限：无法确认命中、拦截、验证、监控或放行。
+- 关联网络域无权限：无法排除群控真机和强关联团组。
+- 授权运营域无权限：无法排除合法自动化 / 授权工具。
+- 设备 / SDK / 指纹域无权限：无法判断破解包、SDK 绕采集或设备环境。
+
+无权限场景必须建议权限申请后重查，但该建议应作为 Router / Dennis next action，不是 Data Agent 最终决策。
+
+## 12. Status 推断规则
+
+按以下顺序推断 status：
+
+1. `error_msg` 包含“权限不足”“无权限”“访问被拒绝”“permission” -> `no_permission`。
+2. `result != success` 或 `result = error`，且 `error_msg` 包含“超时”“timeout” -> `timeout`，并映射为 `provider_status: timeout`。
+3. `result != success` 或 `result = error`，且 `error_msg` 包含“执行失败”但不含 timeout 特征 -> `failed`。
+4. `result != success` 或 `result = error`，且无权限特征也无超时特征 -> `failed`。
+5. 流结束但内容为空 -> `empty_result`。
+6. markdown 包含“查询执行成功，但返回 0 行”“Result: 0 rows” -> `empty_result`。
+7. markdown 包含“SQL 不等于已查数结果”，或只有 SQL / 查询逻辑但无执行结果 -> `sql_only` 或 `partial`。
+   - 如果同时出现“等待授权执行 / 需人工执行 / SQL 下载 / 可授权 Data Agent 执行”等语义，标记 `execution_state: pending_execution`。
+   - 如果出现 SQL ID、任务 ID、已提交、running、执行中等语义，但未返回执行结果，标记 `execution_state: execution_in_progress`。
+   - 如果部分 SQL ID 已完成、部分 SQL ID running / failed / no_permission，标记 `execution_state: execution_partial`。
+8. markdown 包含“是否继续 / 是否执行 / 可选下一步 / 请选择 / 建议继续查 / 需要用户确认”等交互语义 -> 保留原始证据状态，同时标记 `batch_status: waiting_user_choice`，并抽取 `next_data_options`。
+9. markdown 包含“第一批 / 首批 / 先返回 / 后续再查” -> 标记 `batch_status: first_batch` 或 `intermediate`；如关键证据未闭合，status 仍为 `partial`。
+10. markdown 包含“process still running / no new output / running / 执行中 / 轮询中” -> 保留原始证据状态，标记 `provider_status: running`，`batch_status: polling`。
+11. markdown 包含“部分完成 / some completed / remaining running / 等待剩余 SQL” -> 标记 `provider_status: partial_completed`，`batch_status: partial_completed` 或 `waiting_remaining_queries`。
+12. markdown 包含“字段错误 / SQL error / 修正后重跑 / repaired / rerun submitted” -> 标记 `batch_status: sql_repaired_rerun`，并抽取 `sql_repair_state`。
+13. markdown 包含“无法判断 / 信息不足 / 需要补充” -> `ambiguous_result` 或 `partial`。
+14. markdown 有部分数据，但明确缺关键数据源或关键反证未排除 -> `partial`。
+15. markdown 有数据表和分析，但 missing_evidence / counter_evidence 仍未闭合 -> `success`，但 conclusion_support 不得超过 `highly_suspicious_support`。
+16. markdown 返回完整数据发现并覆盖关键反证 -> `success`。
+
+补充规则：
+
+- 多种状态同时出现时，选择更保守的状态。
+- `no_permission` 优先级高于 `empty_result` 和 `partial`。
+- `timeout` / `failed` 等于零可靠数据支撑，不能给风险结论。
+- `empty_result` 不能解释为无风险。
+- `sql_only` 不能解释为已查数。
+- `sql_only / pending_execution` 是标准中间状态，不是风险证据状态；必须等待 SQL 执行结果后重新解析。
+- `sql_only / pending_execution` 必须输出 `next_action: execute_sql_or_request_execution`，并强制 `manual_review_required = true`。
+- `execution_in_progress` 不是证据状态；running SQL 只能进入 `execution_tracking`，不得进入 evidence。
+- `execution_partial` 必须保留已完成 SQL 与未完成 SQL 的差异，整体结论默认降级。
+- `batch_status: waiting_user_choice` 表示 Data Agent 等待用户决定下一步，不是证据充分状态。
+- `batch_status: first_batch / intermediate` 表示当前只完成部分取证，结论必须受 missing_evidence 和 quality_risks 限制。
+- `provider_status: running` / `batch_status: polling` 表示执行进度，不是风险证据；没有可用结果时不能生成风险结论。
+- `provider_status: partial_completed` 允许读取已完成结果形成阶段性 data_findings，但未完成查询必须进入 `pending_evidence`。
+- `batch_status: sql_repaired_rerun` 只能说明执行轨迹，SQL 修复动作不得进入风险证据。
+- 如果出现 `required_missing_inputs`，不得继续生成可执行 Data Agent question，只能先向用户要最小输入。
+- 如果出现长周期扩窗、跨域 join、大样本回捞或高成本 Hive，必须标记 `needs_user_confirmation: true`。
+- parser 无法稳定识别 markdown 时，标记 `parse_failed`，并降级。
+- complex success 也不能自动升级为“明确判断”。只要存在 P0 关键反证未排除，结论上限不能超过 `highly_suspicious_support`。
+- complex partial 中，可查域产生的数据发现可以进入 evidence；未查关键域必须进入 missing_evidence；结论应支持“局部高度疑似 + 整体证据不足”的组合表达。
+- complex no_permission 中，无权限域必须进入 permission_notes；对结论有影响的无权限域必须进入 missing_evidence；结论不得强于“证据不足 / 高度疑似”。
+
+## 12.1 Returned Type 推断规则
+
+`returned_type` 用于描述 Data Agent 返回内容形态：
+
+- `table + analysis`：有 markdown 表格、数据摘要和分析结论。
+- `complex_table + full_spec_analysis`：多数据域联合取证、包含反证路径、策略引擎、P0/P1/P2/P3、数据发现 vs 推测分界的完整规格分析。
+- `sql_only`：只有 SQL 或查询逻辑，无执行结果。
+- `sql_only + table_search + query_plan`：完成表检索和多组 SQL 生成，但未执行查询，通常对应 `execution_state: pending_execution`。
+- `sql_execution_tracking`：SQL 已提交并返回 SQL ID / running / completed 状态，但缺完整聚合摘要。
+- `interactive_followup`：Data Agent 返回可选下一步、等待用户选择或需要用户补充输入。
+- `first_batch_result`：Data Agent 只返回第一批结果，后续证据仍待选择继续查询。
+- `running_progress`：查询仍在运行或轮询中，没有新的完整结果。
+- `partial_completed_execution`：部分查询已完成并有可用结果，部分查询仍 running / failed / no_permission。
+- `sql_repaired_rerun`：SQL 字段或语法错误被修复后重新提交，当前只代表执行轨迹。
+- `partial_sql_execution_result`：部分 SQL 已完成并返回结果摘要，部分 SQL 仍 running / failed / no_permission。
+- `partial_table + analysis`：有部分表格 / 数据摘要，但缺关键数据源或反证。
+- `complex_partial_table + analysis`：多数据域规格中部分域可查、部分关键域缺失，支持局部高度疑似但整体证据不足。
+- `partial_table + permission_blocked`：有部分数据，但核心数据因权限不足不可见。
+- `complex_permission_blocked`：多数据域规格中核心域无权限，必须降级并生成 permission notes。
+- `empty_result + analysis`：查询执行完成且返回 0 行，同时包含空结果解释。
+- `none`：查询失败、超时或无任何可靠数据返回。
+- `ambiguous_analysis`：自然语言分析多于数据发现，且明确无法判断。
+
+## 13. raw_result_reference 生成规则
+
+`raw_result_reference` 只做内部弱引用。
+
+```yaml
+raw_result_reference:
+  provider: dataagent_provider
+  queryId:
+  sessionId:
+  reference_strength: weak
+  replay_supported: false
+  note: queryId/sessionId 只能作为内部弱引用，不能当作可回放证据。
+```
+
+要求：
+
+- queryId 只能作为弱引用。
+- sessionId 只能作为弱引用。
+- 不把 raw result 明细外泄到通用材料。
+- 如果未来平台提供 result_id / trace_id / replay_id，再由内部平台扩展。
+
+## 14. Conclusion Support 生成规则
+
+parser 只能生成 `conclusion_support`，不能生成最终风控结论。
+
+默认映射：
+
+- `success` 且关键反证覆盖：可到 `highly_suspicious_support`；是否支持更高等级必须由 Dennis Agent 和人工确认。
+- `success` 但关键反证未覆盖：不得超过 `highly_suspicious_support`。
+- `success` 且只有局部路径闭合：局部可标记 `highly_suspicious_support`，整体应标记 `insufficient_support` 或拆分说明。
+- `sql_only`：`insufficient_support`。
+- `sql_only / pending_execution`：`insufficient_support`，强 / 中证据必须为空，SQL 取证计划只能进入 `weak_evidence` 或 `evidence_plan`。
+- `execution_in_progress`：`insufficient_support`，SQL ID 和 running 状态不得进入 evidence。
+- `execution_partial`：默认 `insufficient_support`；仅允许已完成 SQL 的聚合摘要形成局部 evidence，不能做最终判断。
+- `partial`：`insufficient_support`。
+- `no_permission`：`insufficient_support`。
+- `empty_result`：`insufficient_support`。
+- `timeout`：`insufficient_support`。
+- `ambiguous_result`：`insufficient_support` 或 `reverse_or_exclusion_support`。
+- `failed`：`insufficient_support`。
+
+协议攻击 Data Agent-only 阶段：
+
+- 缺实时日志、SDK / 指纹、策略引擎或关键反证时，不得生成 `clear_support`。
+- 只要缺破解包、官方埋点缺失、join 口径、合法自动化、群控真机等关键反证，协议攻击结论不能升级为“明确判断”。
+- Data Agent-only 缺 `realtime_log_provider`、`device_fingerprint_provider`、`risk_engine_provider` 时，必须写入 `provider_limitations`。
+- Data Agent 返回中的结论性文字只进入 `provider_conclusion_hint`，不得进入 `dennis_final_judgement`。
+- `recommended_next_provider` 由 Router / Dennis Agent 根据 `missing_evidence` 和 `provider_limitations` 生成，Data Agent 原文中的“下一步建议”只能作为 next_action_hint 或 missing_evidence 参考。
+- P0 反证存在未排除、未查、无权限或待验证时，不得生成 `clear_support`。
+- complex success 只有在 P0 反证均已排除且数据发现覆盖核心链路时，才可接近明确判断；Data Agent-only 阶段仍建议由 Dennis Agent 和人工复核确认。
+- partial 版本允许表达“局部高度疑似 + 整体证据不足”，不得压平成全量高度疑似。
+
+## 14.1 Normalized Evidence 输出完整性规则
+
+parser 输出 `unified_normalized_evidence` 时必须包含：
+
+- `provider: dataagent_provider`
+- `provider_response_id: queryId`
+- `raw_result_reference: queryId + sessionId + 本地保存路径或内部引用`
+- `provider_limitations`
+- `data_findings`
+- `speculation_notes`
+- `hypothesis_notes`
+- `counter_evidence_exclusion_status`
+- `key_findings`
+- `strong_evidence`
+- `medium_evidence`
+- `weak_evidence`
+- `counter_evidence`
+- `missing_evidence`
+- `quality_risks`
+- `provider_conclusion_hint`
+- `next_data_options`
+- `needs_user_confirmation`
+- `suggested_query_expansion`
+- `required_missing_inputs`
+- `estimated_query_cost`
+- `batch_status`
+- `provider_status`
+- `query_execution_summary`
+- `polling_state`
+- `sql_repair_state`
+- `pending_evidence`
+- `interim_judgement_allowed`
+- `conclusion_support`
+- `recommended_next_provider`，但该字段必须标记为 Router / Dennis Agent 生成，不得直接采用 Data Agent 的推荐
+- `manual_review_required`
+
+`raw_result_reference` 只能保存弱引用和内部路径，不得外泄敏感明细。
+
+`dennis_final_judgement` 不得由 parser 填充。
+
+## 14.2 Parser 期望识别的归属
+
+“parser 期望识别”只用于 mock 样例、回归测试和 parser 校准。
+
+- 不得写入真实 Data Agent question。
+- 不得要求 Data Agent 输出 parser status、returned_type、strong_evidence、recommended_next_provider 等结构化字段。
+- 真实 Data Agent 只需输出数据发现、覆盖范围、缺失证据、权限限制、口径风险和必要的数据侧提示。
+- parser 负责把真实 markdown 映射为 normalized evidence。
+
+## 15. 禁止行为
+
+- 不得把 SQL 生成结果当已查数结果。
+- 不得把 markdown 里的模型推测当事实。
+- 不得把 `empty_result` 当无风险。
+- 不得在 `no_permission` 时强结论。
+- 不得把 queryId 当作可回放证据。
+- 不得把 Data Agent markdown 直接当最终风控判断。
+- 不得把 Data Agent 的结论性文字标记为 final judgement。
+- 不得让 Data Agent 原文决定 recommended_next_provider。
+- 不得把 parser 期望识别写入真实 Data Agent 请求。
+- 不得忽略 missing evidence、counter evidence 和 quality risks。
+- 不得在关键反证未闭合时输出明确判断支持。

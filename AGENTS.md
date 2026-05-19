@@ -139,3 +139,23 @@
 - 不要把低质用户直接等同黑产。
 - 不要忽略业务体验、误伤、灰度和回流。
 - 不要为了像历史材料而机械套用固定年份、固定指标、固定分支。
+
+## 路由观测
+
+- 默认不写 routing trace，日常问答保持零成本。
+- 仅在 smoke test / regression / 问题排查 / 用户明确说“开启路由观测”时触发。
+- 当用户明确要求“开启路由观测”时，本轮必须执行：
+  - `mkdir -p memory`
+  - 追加一条 routing trace 到 `memory/routing-trace.md`
+- 触发后只追加写入 `memory/routing-trace.md`，不展示给最终用户。
+- 如果未写入，不得声称 routing trace 已开启。
+- trace 至少包含：
+  - `timestamp`
+  - `scene`
+  - `intent`
+  - `loading_path`
+  - `dataagent_status: none / suggestion_only / real_call / result_interpretation`
+  - `degraded`
+  - `degrade_reason`
+  - `boundary_risk`
+- routing trace 不影响正常回答，也不改变 DataAgent 边界。
