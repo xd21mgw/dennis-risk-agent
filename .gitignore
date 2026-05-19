@@ -2,3 +2,6 @@
 outputs/dist/
 archives_auth_state.json
 **/archives_auth_state.json
+
+# Local agent traces
+memory/
