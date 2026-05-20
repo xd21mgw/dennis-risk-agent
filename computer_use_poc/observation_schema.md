@@ -39,6 +39,7 @@ risk_event_scan:
 selector_profile:
 time_range_policy:
 api_direct_post_profile:
+api_inventory_profile:
 ```
 
 ## 2. 字段说明
@@ -81,6 +82,7 @@ api_direct_post_profile:
 | selector_profile | 选择器 / fallback 状态 | non_standard, mixed, fallback_used=true |
 | time_range_policy | 时间范围策略 | record_actual_page_value |
 | api_direct_post_profile | API direct POST 读取档案中心用户分析日志的结构 | endpoint, request_shape, response_shape, pagination_profile |
+| api_inventory_profile | 档案中心 API inventory 覆盖矩阵 | module, endpoint, validation_status, fallback_strategy |
 
 ## 3. 输出边界
 
@@ -300,6 +302,72 @@ api_direct_post_profile:
 - `requestParam` / `extraParam` 中可能包含 token、tokenId、refresh_token、sig、open_id、egid 等敏感字段，只能执行态读取用于派生判断。
 - 不输出完整 `requestParam`、完整 `extraParam`、完整 response JSON。
 - 不输出 cookie、token、tokenId、refresh_token、sig、open_id 明文。
+
+## 8.1 Archives Center API Inventory Profile
+
+v2.4.7.2 已验证档案中心核心 API inventory。该 profile 用于记录档案中心模块级 API direct read 覆盖状态。
+
+```yaml
+api_inventory_profile:
+  version: v2.4.7.2
+  platform: archives_center
+  default_read_strategy:
+    - api_direct_read
+    - dom_scoped_js_eval_fallback
+    - row_feature_filter_fallback
+    - scoped_snapshot_fallback
+  page_fallback_trigger_conditions:
+    - API failed
+    - permission_blocked
+    - response_shape_changed
+    - key_fields_missing
+    - link_url_only
+    - mapping_pending_validation
+  summary:
+    candidate_api_count:
+    success_count:
+    failed_count:
+    partial_count:
+    auth_exported:
+    sensitive_raw_values_output:
+    write_operation_called:
+    batch_full_crawl:
+  modules:
+    - module_name:
+      endpoint:
+      method:
+      validation_status: validated / partial / failed
+      api_can_replace_dom:
+      request_shape:
+      response_shape:
+      pagination:
+        supported:
+        fields:
+      sensitive_fields_policy:
+      fallback_strategy:
+      boundary:
+  failed_apis:
+    - endpoint:
+      method:
+      failure_reason:
+      boundary:
+  partial_apis:
+    - endpoint:
+      method:
+      partial_scope:
+      mapping_status:
+      boundary:
+```
+
+规则：
+
+- `validation_status=failed` 的接口不得写成可用。
+- `validation_status=partial` 的接口不得写成 fully validated。
+- `same_device type=0/type=1` 必须保留 `mapping_pending_validation`，不得写死为同设备登录 / 同设备注册。
+- API direct read 可替代 DOM 只代表读取路径可用，不代表自动风险定性。
+- 页面 / DOM / selector 读取只作为 fallback，不应默认触发。
+- 列表接口如未覆盖所有分页，必须记录 `partial_coverage=true`。
+- 不输出手机号、IP、deviceId、open_id、sig、token、tokenId、refresh_token、完整 `requestParam`、完整 `extraParam`、完整 response JSON、关联用户 ID / 昵称 / device 明文。
 
 ## 9. User Analysis Selector Profile
 

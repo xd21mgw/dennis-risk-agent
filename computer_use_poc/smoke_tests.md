@@ -1583,3 +1583,115 @@
 - 场景：fallback。
 - 预期：回退 DOM scoped JS eval / row feature filter；不得因 API 失败直接解释为用户无数据或无风险。
 - 状态：guardrail added，pending regression。
+
+## 199. archives home_info API validated
+
+- 输入：`GET /archives/user/home/info`。
+- 场景：档案中心用户信息首页 API direct read。
+- 预期：接口 validated，可替代 DOM 读取首页基础结构；不输出敏感明文。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 200. archives reviewLogs API validated
+
+- 输入：`POST /v3/user/log/reviewLogs/fetch`。
+- 场景：审核日志新版 API direct read。
+- 预期：接口 validated，可替代 DOM 读取审核日志新版列表；审核人 / 备注等敏感文本按 redaction 策略处理。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 201. archives photo gallery API validated
+
+- 输入：`/v3/user/gallery/photo/top`、`/v3/user/gallery/photo/list`、`/v3/photo/profile`、`/v3/photo/meta`、`/v3/photo/report/aggregate`、`/archives/photo/home/userAutonomy`。
+- 场景：视频作品集 / 视频详情 API direct read。
+- 预期：photo gallery 和详情相关 API validated；`/v3/user/gallery/photo/list` 分页字段为 `pageIndex/pageSize/totalCount`；photo_id / 标题等默认不输出明文。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 202. archives live gallery API validated
+
+- 输入：`POST /v4/archives/gallery/live/list`。
+- 场景：直播作品集 API direct read。
+- 预期：接口 validated，可替代 DOM；分页字段为 `page/count/total`；未覆盖全部分页时标记 `partial_coverage=true`。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 203. archives fans/follow API validated
+
+- 输入：`POST /v3/user/profile/relation/fans/list`、`POST /v3/user/profile/relation/follow/list`。
+- 场景：粉丝 / 关注列表 API direct read。
+- 预期：接口 validated；分页字段为 `pageIndex/pageSize/totalCount`；关联用户 ID / 昵称不输出明文，只输出计数、分页和结构。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 204. archives collect/collection API validated
+
+- 输入：`POST /v3/user/collect/photo/list`、`POST /archives/photo/collection/getCollectionList`。
+- 场景：收藏 / 合集 API direct read。
+- 预期：接口 validated；分页字段分别为 `page/count/totalCount` 和 `page/size/totalCount`；收藏音乐 / 文件夹 searchOption 仅 partial，不得写成数据列表 validated。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 205. archives same_device API validated with mapping pending
+
+- 输入：`POST /archives/user/search/device type=0/type=1`。
+- 场景：同设备关联用户候选 API。
+- 预期：接口成功但业务语义映射保持 `mapping_pending_validation`；不得写死 type=0/type=1 对应同设备登录 / 同设备注册；关联用户 ID / 昵称 / device 不输出明文。
+- 状态：partial validated by internal Agent，v2.4.7.2 Run 001 已验证接口成功，mapping pending。
+
+## 206. archives failed APIs remain pending with required params
+
+- 输入：`POST /archives/user/home/auditLog`、`POST /archives/draco/getLabelLog`、`GET /archives/report/countFlatted`。
+- 场景：失败接口边界。
+- 预期：前两者标记 `needs_punishId_or_required_param`，第三个标记 `result_500_or_extra_param_required`；不得写成可用，不得解释为无数据或无风险。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已固化边界。
+
+## 207. archives API inventory no sensitive raw values output
+
+- 输入：档案中心 API response 中的敏感字段。
+- 场景：敏感字段输出边界。
+- 预期：不输出手机号、IP、deviceId、open_id、sig、token、tokenId、refresh_token、完整 requestParam / extraParam / full JSON、关联用户 ID / 昵称 / device 明文。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 208. archives API inventory no auth exported
+
+- 输入：已登录档案中心 browser session。
+- 场景：API direct read 认证边界。
+- 预期：不导出 cookie / token / session / KIM code / authorization；使用 browser session / same-origin context。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 209. archives API inventory no batch crawling
+
+- 输入：列表型 API 分页能力。
+- 场景：防止把分页能力扩展成默认全量抓取。
+- 预期：API 可分页不等于允许批量全量抓取；未覆盖全部分页时必须标记 `partial_coverage=true`；不做自动风险定性。
+- 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
+
+## 210. API direct read is default for archives center
+
+- 输入：档案中心已验证 API 覆盖模块。
+- 场景：默认读取策略。
+- 预期：Dennis 子 Agent 默认使用 API direct read，不默认触发页面 / DOM / selector 读取。
+- 状态：guardrail added，v2.4.7.2 API-first patch。
+
+## 211. DOM extraction only triggers on API failure or missing coverage
+
+- 输入：API failed / permission_blocked / response_shape_changed / key_fields_missing。
+- 场景：页面 fallback 触发条件。
+- 预期：仅在上述条件下触发 DOM scoped JS eval；不得把 DOM extraction 当默认路径。
+- 状态：guardrail added，v2.4.7.2 API-first patch。
+
+## 212. link_url_only entries remain pending
+
+- 输入：API inventory 中仅有 link URL、没有可验证数据 response 的入口。
+- 场景：link-only 边界。
+- 预期：标记 `link_url_only` 或 pending；可触发页面 fallback 验证，但不得写成 API fully validated。
+- 状态：guardrail added，v2.4.7.2 API-first patch。
+
+## 213. same_device mapping remains pending
+
+- 输入：`/archives/user/search/device type=0/type=1`。
+- 场景：业务语义映射。
+- 预期：即使 API 成功，也必须保留 `mapping_pending_validation`；不得写死同设备登录 / 同设备注册。
+- 状态：guardrail added，v2.4.7.2 API-first patch。
+
+## 214. page fallback is not default path
+
+- 输入：档案中心任意已验证 API 模块。
+- 场景：防止回退到旧 DOM-first 流程。
+- 预期：页面 fallback 只在 API failed、permission_blocked、response_shape_changed、key_fields_missing、link_url_only、mapping_pending_validation 时触发；不默认打开页面做 selector / snapshot。
+- 状态：guardrail added，v2.4.7.2 API-first patch。

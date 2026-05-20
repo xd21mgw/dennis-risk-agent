@@ -68,6 +68,65 @@ source_entry_resolution:
   next_action:
 ```
 
+## 1-B. Default archives extraction strategy
+
+v2.4.7.2 已验证档案中心核心 API inventory。档案中心后续默认使用 API direct read。页面 / DOM / selector 读取只作为 fallback，不应默认触发。
+
+默认读取顺序：
+
+1. API direct read。
+2. DOM scoped JS eval fallback。
+3. row feature filter fallback。
+4. scoped snapshot fallback。
+
+页面 fallback 仅在以下条件触发：
+
+- `API failed`。
+- `permission_blocked`。
+- `response_shape_changed`。
+- `key_fields_missing`。
+- `link_url_only`。
+- `mapping_pending_validation`。
+
+执行规则：
+
+- 能通过已验证 API direct read 读取的模块，不应默认使用整页 snapshot。
+- 已验证 API 覆盖模块必须优先走 API：home_info、negative / risk / label / shop / punish、reviewLogs、user_analyze_summary、coreLogs、photo_gallery / photo_detail、live_gallery、fans / follow、collect / collection、same_device_users。
+- API direct read 必须使用已登录档案中心 browser session / same-origin context，不导出 cookie、token、session、KIM code。
+- API 失败、response shape 变化、权限阻断或参数不足时，记录明确 failure / fallback reason，不得解释为用户无数据或无风险。
+- 失败接口不得写成可用；partial 接口不得写成 fully validated。
+- `/archives/user/search/device type=0/type=1` 只记录 `mapping_pending_validation`，不得写死为同设备登录 / 同设备注册。
+- 所有列表 API 如未覆盖全部分页，必须记录 `partial_coverage=true`。
+- 页面兜底不应默认触发；API direct read 只代表读取路径可用，不代表自动风险定性。
+
+已验证可优先 API direct read 的模块：
+
+- 用户信息首页：`GET /archives/user/home/info`。
+- 负向 / 标签 / 风险 / 处罚状态：`POST /v3/user/negative/report`、`POST /v3/user/negative/unInterested`、`GET /v3/user/risk/info`、`POST /archives/user/home/getUserLabel`、`GET /archives/user/home/getUserShopInfo`、`POST /archives/draco/getPunishStatus`。
+- 审核日志新版：`POST /v3/user/log/reviewLogs/fetch`。
+- 用户分析统计矩阵：`POST /v3/user/analyze/fetch`。
+- 用户分析 APP端核心操作日志：`POST /v3/user/log/coreLogs/fetch`。
+- 视频作品集 / 视频详情：`POST /v3/user/gallery/photo/top`、`POST /v3/user/gallery/photo/list`、`POST /v3/photo/profile`、`POST /v3/photo/meta`、`POST /v3/photo/report/aggregate`、`POST /archives/photo/home/userAutonomy`。
+- 直播作品集：`POST /v4/archives/gallery/live/list`。
+- 粉丝 / 关注：`POST /v3/user/profile/relation/fans/list`、`POST /v3/user/profile/relation/follow/list`。
+- 收藏 / 合集：`POST /v3/user/collect/photo/list`、`POST /archives/photo/collection/getCollectionList`。
+- 同设备关联用户：`POST /archives/user/search/device type=0/type=1`，但业务语义映射 pending。
+
+失败 / partial 边界：
+
+- `POST /archives/user/home/auditLog`：`needs_punishId_or_required_param`，单 userId 不足。
+- `POST /archives/draco/getLabelLog`：`needs_punishId_or_required_param`，单 userId 不足。
+- `GET /archives/report/countFlatted`：`result_500_or_extra_param_required`，可能需要额外参数或权限。
+- `auditLogOptions / getLogOption`：只验证 option 结构，非数据列表。
+- `GET /v3/user/collect/music/searchOption`、`GET /v3/user/collect/folder/searchOption`：只验证筛选项，非实际数据列表。
+
+敏感字段策略：
+
+- 不输出手机号、IP、deviceId、open_id、sig、token、tokenId、refresh_token 明文。
+- 不输出完整 `requestParam` / `extraParam` / full JSON。
+- 不输出关联用户 ID / 昵称 / device 明文。
+- 只输出字段名、计数、分布、状态、分页 profile 和派生特征。
+
 ## 2. execution_mode 定义
 
 ### quick
