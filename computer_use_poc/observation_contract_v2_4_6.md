@@ -343,6 +343,63 @@ tianshi_strategy_hit_consumption:
       - 处罚实际生效状态
 ```
 
+### 2.0.-4a tianshi_eventlist_api_read_observation
+
+当前为 v2.5.9 validated by internal Agent，范围仅限 `POST /v2/rest/event/eventList` 请求级 / 事件级只读细查。
+
+```yaml
+tianshi_eventlist_api_read_observation:
+  platform: tianshi_strategy_platform_rcp
+  platform_display_name: 天狮策略平台 / rcp
+  query_type: eventList
+  capability: tianshi_eventlist_api_read
+  endpoint: /v2/rest/event/eventList
+  method: POST
+  source_id:
+  source_ids_empty: false
+  event_type:
+  time_window:
+    start:
+    end:
+    timezone: Asia/Shanghai
+    cross_day:
+    segmentation:
+  query_status:
+  auth_status:
+  event_list_count:
+  eventList_present:
+  tableHeaderList_present:
+  extracted_events:
+    max_items: 3
+    value_policy: summarized_without_full_weapon_payload
+  sampling_and_completeness:
+    hit_policy_events_recorded_100_percent: true
+    non_hit_policy_events_sampled: true
+  readonly_safety_check:
+  blockers:
+  limitations:
+```
+
+解释规则：
+
+- `eventList API` 成功时，`query_status=success`。
+- 401 / 403 / `redirect_to_login` 归为 auth blocker，不得输出 `no_data`。
+- `sourceIds` 为空时不得作为用户级证据。
+- `event_list_count=0` 只能说明该查询条件下无事件，不能代表用户无风险或行为未发生。
+- 命中策略事件 100% 记录，非命中策略事件存在抽样。
+- `eventList` 查询窗口原则上不能跨天；如必须查长窗口，应分段，并在 observation 中记录 segmentation。
+- `extracted_events` 最多保留 3 条样例。
+- `weaponDataMap` / `weaponDecodeDataWeapon` 只做摘要，不全文落盘，避免字段过重。
+- 不保存或输出 cookie / token / 完整 header。
+- `logged_in_user` 只能作为 run log 样例，不是固定规则。
+
+与 `fastQueryHbase` 的关系：
+
+- 用户只问“是否命中生产策略”时，优先 `fastQueryHbase`。
+- 用户明确要求“细查某次具体请求 / 看某个 eventType 明细 / 看注册事件字段 / 看登录事件字段 / 看实时反馈动作 / 看错误码或惩罚动作”时，可选择 `eventList API-read`。
+- `fastQueryHbase` 不足以解释请求字段细节时，再补 `eventList API-read`。
+- 大范围统计、趋势、历史聚合不使用 `eventList`，应转 DataAgent / Hive 或要求缩小窗口。
+
 ### 2.0.-5 e2e_multi_evidence_evidence_summary
 
 v2.5.8 E2E 多手脚只读验证中，Dennis 消费多个 observation 时必须显式列出每个 evidence source 的状态。

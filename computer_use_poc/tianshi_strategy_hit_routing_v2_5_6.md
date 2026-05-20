@@ -223,6 +223,48 @@ observation_consumption:
 | 策略误伤 | 查策略命中证据 | 档案中心审核 / 打标日志、业务后验、DataAgent / Hive |
 | 批量样本统计 | 不直接替代 | DataAgent / Hive |
 
+## 9.1 v2.5.9 eventList API-read 路由补充
+
+`eventList API-read` 是 `fastQueryHbase` 的请求级 / 事件级补证，不替代 `strategy_hit_check`。
+
+触发 `eventlist_api_read` 的用户问法：
+
+- “细查某次具体请求。”
+- “看某个 eventType 明细。”
+- “看注册事件字段。”
+- “看登录事件字段。”
+- “看实时反馈动作。”
+- “看错误码 / 惩罚动作 / side effect。”
+- “fastQueryHbase 查到了命中，再看下这条请求细节。”
+
+不触发 `eventlist_api_read` 的问法：
+
+- “是否命中生产策略？”默认优先 `fastQueryHbase`。
+- “最近一周 / 一个月大盘趋势如何？”不使用 eventList，转 DataAgent / Hive 或要求缩小窗口。
+- “批量统计多少用户命中？”不使用 eventList，转 DataAgent / Hive。
+
+账号 eventType 推荐：
+
+| 场景 | 同步 eventType | 异步 eventType |
+|---|---|---|
+| app 登录 | `LOGIN_AUDIT` | `ASYNC_LOGIN` |
+| web 登录 | `LOGIN_AUDIT_FROM_WEB` | `ASYNC_WEB_LOGIN` |
+| 注册 | `USER_REGISTER_NEW` | `REGISTER_NEW` |
+
+查询窗口规则：
+
+- 窗口尽量小，优先围绕已知事件时间点前后 5-15 分钟。
+- 原则上不能跨天。
+- 用户说“今天”时，应先基于已有证据定位具体时间段，再发起 eventList 细查。
+- 不建议直接从 00:00 查到当前时间；如必须查较长窗口，应分段查询并记录 segmentation。
+
+硬性边界：
+
+- `sourceIds` 不能为空；为空时不得作为用户级证据。
+- 401 / 403 / 跳登录是 auth blocker，不是 no_data。
+- 命中策略事件 100% 记录，非命中策略事件存在抽样。
+- `eventList no_data` 不代表用户无风险或行为未发生。
+
 ## 10. 本轮不做
 
 - 不新增完整天狮策略分析能力。

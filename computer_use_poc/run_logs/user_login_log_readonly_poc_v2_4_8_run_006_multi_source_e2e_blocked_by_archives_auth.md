@@ -1,5 +1,19 @@
 # User Login Log Readonly POC v2.4.8 Run 006
 
+## v2.5.8.1 clarification
+
+本 run 记录的是当时执行环境下的认证阻断事实，不应被泛化为“档案中心独立登录页一定失败”。
+
+v2.5.8.1 云端内部 Agent 后续验证：
+
+- 档案中心 direct URL 可能先跳转 `account.p.adm-corp.kuaishou.com` 独立登录页。
+- 如果账号 / 用户名输入框已预填，可以先点击“下一步”尝试恢复会话。
+- 点击后成功进入档案中心时，应标记 `recoverable_preflight_success=true`，且 `archives_center_profile_check.query_status=success`。
+- 如果点击后仍要求密码 / 扫码 / MFA，才标记 `archives_independent_login_required`。
+- 如果账号 / 用户名未预填，不得猜测账号，应等待人工登录或标记 `wait_for_manual_login`。
+
+因此，Run 006 的 blocker 仍是历史事实，但新的通用规则应使用 `archives_independent_login_preflight_required_but_recoverable` 分支优先判断是否可恢复。
+
 ```yaml
 test_stage: v2.4.8
 test_type: multi_source_focused_login_risk_e2e

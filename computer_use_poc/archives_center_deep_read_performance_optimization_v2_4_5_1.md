@@ -46,6 +46,7 @@ P0 Tab deep-read 当前约 12 分钟。
 - 用户信息 Tab 与用户分析 Tab 的表格行会在同一页面 DOM 中共存；已通过 row feature filter 排除用户信息 Tab 的非日志表格行。
 - active tab container 当前不可用，因为档案中心不使用标准 `aria-selected` / `tabpanel` 结构；row feature filter 是当前可用 fallback。
 - DOM 中同一日志行可能重复渲染，需要 dedupe。
+- v2.4.7.1 进一步验证：档案中心用户分析 / APP端核心操作日志可通过 API direct POST `/v3/user/log/coreLogs/fetch` 读取。该路径可替代 DOM extraction，避免 selector noise、DOM 重复渲染和虚拟表格干扰；仍需已登录 browser session 做 same-origin fetch，不导出认证态。
 
 ### 3.1 quick
 
@@ -85,14 +86,15 @@ P0 Tab deep-read 当前约 12 分钟。
 
 - 记录实际 `time_range start/end`。
 - 记录 `time_range_source: auto_populated / manual / event_time / default_1y_adjusted`。
-- 先做 `table_schema_probe`，确认字段结构。
-- 再做 `risk_event_scan`，覆盖当前 `time_range` 内登录 / 高危操作相关记录摘要。
+- 优先走 API direct POST `/v3/user/log/coreLogs/fetch`，确认 response shape 后直接生成 `risk_event_scan`。
+- API direct POST 不可用时，先做 `table_schema_probe`，确认字段结构，再用 DOM fallback 做 `risk_event_scan`。
 - IP、设备号、手机号、open_id、第三方登录标识、APP 版本、系统版本、地理位置描述、操作 URL path 和结果可在执行态用于一致性、分布、序列等派生判断。
 - 上述执行态敏感字段默认不在 run log / 文档 / 对话报告中输出明文，只输出 redacted 标记、计数、分布、一致性判断或关键事件序列。
 - cookie、token、session、KIM code、password、access token、refresh token、完整认证票据永远 `never_collect`。
 - 如果记录很多，不全量输出；只输出聚合摘要和关键事件序列。
 - 如果分页导致当前结果无法覆盖目标窗口，标记 `pagination_required=true`，不得声称已完整覆盖。
 - 当前实跑发现用户分析 Tab 表格为非标准结构，初始 ant-table selector 不稳定，需要 fallback extraction。
+- API direct POST 使用 `pageIndex` / `pageSize` 分页，`data.totalCount` 为总数，`data.dataList` 为列表；本轮验证 pageIndex=1 返回 5 条，pageIndex=2 返回 0 条，has_more=false。
 
 目标耗时：3-5 分钟。
 
@@ -166,6 +168,8 @@ P0 Tab deep-read 当前约 12 分钟。
 
 用户分析 Tab selector 规则：
 
+- 优先使用 API direct POST 读取用户分析日志。
+- API direct POST 失败时，再进入 DOM selector 规则。
 - 优先尝试专属 `user_analysis_tab` selector。
 - 如果标准 `ant-table` selector 未命中，进入 fallback extraction。
 - fallback 可以使用语义点击 + scoped snapshot + 自定义 selector。
@@ -181,6 +185,49 @@ selector 优化策略：
 4. 如果 active tab container 不可用，row feature filter 是当前 validated fallback。
 5. selector 噪声未修复前，`risk_event_scan.status` 只能标记为 `partial_validated_with_selector_noise`；本轮 row feature filter 修复后可标记 `validated`。
 6. 后续应将 dedupe 逻辑内置到 eval 脚本。
+
+### 4.1 API direct POST 规则
+
+```yaml
+api_direct_post_profile:
+  endpoint: /v3/user/log/coreLogs/fetch
+  method: POST
+  auth_context:
+    browser_session_required: true
+    same_origin_fetch: true
+    auth_header_export_required: false
+    csrf_required: false
+  request_shape:
+    required_payload_fields:
+      - loginStart
+      - registerBind
+      - resetPass
+      - protectAccount
+      - liveStream
+      - scanCode
+      - logout
+      - frozen
+      - beginTime
+      - endTime
+      - userId
+      - pageSize
+      - pageIndex
+      - haveParamAuth
+  response_shape:
+    total_count_field: data.totalCount
+    list_field: data.dataList
+  pagination_profile:
+    page_index_field: pageIndex
+    page_size_field: pageSize
+    has_more_policy: pageIndex * pageSize < totalCount
+```
+
+敏感 JSON 规则：
+
+- `requestParam` / `extraParam` 可执行态读取用于派生判断。
+- 不输出完整 `requestParam` / `extraParam`。
+- 不输出 token / tokenId / refresh_token / sig / open_id 明文。
+- 不输出完整 response JSON。
 
 ## 5. 列表型 Tab 双层读取策略
 

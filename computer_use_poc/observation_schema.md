@@ -38,6 +38,7 @@ table_schema_probe:
 risk_event_scan:
 selector_profile:
 time_range_policy:
+api_direct_post_profile:
 ```
 
 ## 2. 字段说明
@@ -79,6 +80,7 @@ time_range_policy:
 | risk_event_scan | 风险事件扫描摘要 | 操作类型分布、成功失败分布、关键事件序列 |
 | selector_profile | 选择器 / fallback 状态 | non_standard, mixed, fallback_used=true |
 | time_range_policy | 时间范围策略 | record_actual_page_value |
+| api_direct_post_profile | API direct POST 读取档案中心用户分析日志的结构 | endpoint, request_shape, response_shape, pagination_profile |
 
 ## 3. 输出边界
 
@@ -256,7 +258,50 @@ risk_event_scan:
 - 分页未覆盖完整时间窗口时，必须标记 `pagination_required=true`。
 - 不得根据前 3 条样例得出无风险结论。
 
-## 8. User Analysis Selector Profile
+## 8. API Direct POST Profile
+
+档案中心用户分析 / APP端核心操作日志已验证 API direct POST 路径。
+
+```yaml
+api_direct_post_profile:
+  endpoint:
+  method:
+  auth_context:
+    browser_session_required:
+    same_origin_fetch:
+    auth_header_export_required:
+    csrf_required:
+    sensitive_headers_output:
+  request_shape:
+    required_payload_fields:
+    filter_policy:
+  response_shape:
+    top_level_fields:
+    data_fields:
+    record_fields:
+  pagination_profile:
+    pagination_supported:
+    page_index_field:
+    page_size_field:
+    total_count_field:
+    list_field:
+    has_more_policy:
+  sensitive_json_policy:
+    never_output_raw:
+    runtime_readable_but_not_persisted:
+    persistable_structure_or_derived_features:
+```
+
+解释规则：
+
+- API direct POST 属于档案中心用户分析 Tab，不属于用户登录统一日志。
+- API direct POST 若可用，作为 `focused_login_risk` 默认优先路径。
+- DOM scoped JS eval / row feature filter 作为 fallback。
+- `requestParam` / `extraParam` 中可能包含 token、tokenId、refresh_token、sig、open_id、egid 等敏感字段，只能执行态读取用于派生判断。
+- 不输出完整 `requestParam`、完整 `extraParam`、完整 response JSON。
+- 不输出 cookie、token、tokenId、refresh_token、sig、open_id 明文。
+
+## 9. User Analysis Selector Profile
 
 用户分析 Tab 可能不是标准表格结构，必须记录 selector profile。
 

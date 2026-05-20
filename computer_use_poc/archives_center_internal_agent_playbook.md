@@ -95,8 +95,37 @@ source_entry_resolution:
 用户分析要求：
 
 - 必须记录实际页面 time_range。
-- 必须先做 table_schema_probe。
+- 优先使用 API direct POST `/v3/user/log/coreLogs/fetch` 读取 APP 端核心操作日志。
+- API direct POST 不可用时，再回退 DOM scoped JS eval / row feature filter。
+- 必须先确认字段结构或 response shape。
 - 如用于登录 / 高危操作研判，必须做 risk_event_scan。
+
+### focused_login_risk API direct POST 优先路径
+
+v2.4.7.1 已验证档案中心用户分析 Tab 背后的 API direct POST。
+
+```yaml
+api_direct_post_priority:
+  endpoint: /v3/user/log/coreLogs/fetch
+  method: POST
+  auth_context:
+    browser_session_required: true
+    same_origin_fetch: true
+    auth_header_export_required: false
+    csrf_required: false
+  fallback:
+    - DOM scoped JS eval
+    - row feature filter
+```
+
+执行规则：
+
+- API direct POST 属于档案中心用户分析 Tab，不属于用户登录统一日志平台。
+- 不导出 cookie / token / session。
+- 不输出 requestParam / extraParam 明文。
+- 不输出 token / tokenId / refresh_token / sig / open_id 明文。
+- API response 可直接生成 `risk_event_scan`。
+- API 失败、认证失效、响应结构变化或敏感 JSON 过重时，回退 DOM fallback。
 
 ## 2-A. 用户分析分页 guardrail
 
@@ -184,6 +213,7 @@ Run 010 已部分验证审核日志 / 打标日志可访问性。
 
 规则：
 
+- 默认优先尝试 API direct POST `/v3/user/log/coreLogs/fetch`，避免 DOM selector noise。
 - 不要默认使用 `ant-table` 选择器。
 - 档案中心用户分析表格可能使用 `ks-table__row`。
 - 不要全页面直接 `querySelectorAll('.ks-table__row')`。
@@ -370,12 +400,14 @@ readonly_safety_check:
 1. 使用已保存 state，直接打开 userId direct URL。
 2. 如果 state 失效，停止并返回 state_reuse_status，不记录任何认证信息。
 3. 只读取用户信息 Tab 和用户分析 Tab。
-4. 用户分析 Tab 先做 table_schema_probe，再做 risk_event_scan。
-5. 不要默认使用 ant-table 选择器；用户分析表格可能是 ks-table__row。
-6. 不要全页面直接 querySelectorAll('.ks-table__row')。
-7. 优先定位 active user_analysis tab container；如果失败，使用 row feature filter。
-8. row feature filter 只保留有时间格式、操作 URL path 或操作类型、操作结果、APP 版本 / IP 描述 / 设备字段之一的日志行。
-9. 排除平台操作、直播功能、电商功能、行为封禁、流量调控、账户信息等非日志表格行。
+4. 用户分析 Tab 优先使用 same-origin API direct POST `/v3/user/log/coreLogs/fetch`。
+5. API response shape 正常时，直接从 response 生成 risk_event_scan。
+6. API 不可用时，再做 table_schema_probe + DOM fallback risk_event_scan。
+7. DOM fallback 不要默认使用 ant-table 选择器；用户分析表格可能是 ks-table__row。
+8. DOM fallback 不要全页面直接 querySelectorAll('.ks-table__row')。
+9. DOM fallback 优先定位 active user_analysis tab container；如果失败，使用 row feature filter。
+10. row feature filter 只保留有时间格式、操作 URL path 或操作类型、操作结果、APP 版本 / IP 描述 / 设备字段之一的日志行。
+11. 排除平台操作、直播功能、电商功能、行为封禁、流量调控、账户信息等非日志表格行。
 
 敏感字段策略：
 - cookie、token、session、KIM code、password、access token、refresh token 永远 never_collect。

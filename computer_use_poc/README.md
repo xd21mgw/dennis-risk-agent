@@ -109,6 +109,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - quick mode、focused structure extraction、focused risk_event_scan 均已验证。
 - v2.4.6 Dennis Agent single-source observation digestion 已验证：能消化档案中心 focused_login_risk observation，并输出证据总结、风险线索、证据缺口和下一步平台建议。
 - v2.4.7 end-to-end readonly joint test 已验证：用户问题 → Dennis 子 Agent 生成 readonly plan → browser computer use 执行 → scripts eval 提取 observation → dedupe 生效 → Dennis 消化 observation → 输出证据总结 / 风险线索 / 缺口 / 下一步平台建议。
+- v2.4.7.1 已验证档案中心“用户分析 / APP端核心操作日志”API direct POST：`POST /v3/user/log/coreLogs/fetch` 可在已登录档案中心 browser session 内通过 same-origin fetch 成功读取。该能力属于档案中心用户分析 Tab，不是用户登录统一日志；后续 `focused_login_risk` 优先走 API direct POST，DOM scoped JS eval / row feature filter 作为 fallback。API response 中 `requestParam` / `extraParam` 可能包含 token、tokenId、refresh_token、sig、open_id、egid 等敏感字段，只能执行态读取用于派生判断，不得输出明文或沉淀完整 JSON。
 - v2.4.8 用户登录统一日志 readonly POC 已完成页面可访问性、部分详情弹窗、边界行为和分页行为实跑，入口为 `https://user-center-workbench.corp.kuaishou.com/create-applications/unified-log-search`，当前状态为 `page_accessibility partially validated; result table partially validated; switchUser detail partially validated; refreshToken detail validated for readonly JSON key extraction; no_result/time_window boundary partially validated; pagination behavior partially validated`。
 - v2.4.10 已新增用户登录统一日志 API readonly hand POC。GET `/rest/unified/log/search` 已验证可访问，标准用户查询必须使用 `userId` 参数，不能把 userId 放到 `query` 参数里。样例一次返回 `totalCount=141` 且 `logSearchModels.length=141`，说明 API 可一次性返回当前查询窗口内完整结果；UI 翻页属于前端分页。当前状态：`user_login_log_api_hand=get_only_validated / api_readonly_poc`，final release package 未更新。
 - 未点击任何写操作按钮，只读安全检查通过。
@@ -158,6 +159,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.5.7 已新增多手脚证据编排样例：当用户问“某用户是否有风险 / 为什么被拦截或验证”时，Dennis 不应只依赖天狮策略命中，而应生成包含 strategy / login / profile / behavior / device 证据的 `multi_evidence_query_plan`。该版本只新增编排样例，不新增平台能力，不调用真实平台。
 - v2.5.8 已新增真实 E2E 多手脚只读验证模板：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。本轮只验证天狮策略命中、用户登录统一日志、档案中心三手脚最小闭环，不强制拉前端活跃画像、设备 SDK 或 DataAgent / Hive；当前为模板和 run log 模板，不是实际执行结果。
 - v2.5.8.1 已归档云端内部 Agent 真实 E2E 三源成功运行：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。`tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check` 三源均成功。档案中心先跳转 `account.p.adm-corp.kuaishou.com` 独立登录页，但账号 / 用户名已预填，点击“下一步”后成功进入档案中心，沉淀为 `archives_independent_login_preflight_required_but_recoverable`。该运行证明 Dennis Agent 可完成多手脚查询计划、多 observation 收集、跨证据汇总和边界说明；仍不代表自动风险定性或自动处置。
+- v2.5.9 已新增天狮 `eventList API-read` 请求级细查 POC：内部 Agent 已验证在已认证 rcp 浏览器会话中，`POST /v2/rest/event/eventList` 可用。该能力作为 `fastQueryHbase` 的补充：`fastQueryHbase` 负责策略命中概览，`eventList` 负责具体请求 / 事件明细细查。`eventList` 必须依赖已认证 browser context，查询窗口应尽量小、原则上不能跨天；命中策略事件 100% 记录，非命中事件存在抽样，`eventList no_data` 不代表无风险或行为未发生。
 
 Auth preflight：
 
@@ -190,6 +192,9 @@ release_status: release_candidate_not_final
 - user_login_log_api_over_reliable_window_behavior。
 - user_login_log_api_logContent_parse_normalization。
 - archives_user_analysis_full_pagination_traversal。
+- archives_user_analysis_api_direct_post_no_result_behavior。
+- archives_user_analysis_api_direct_post_permission_blocked_behavior。
+- archives_user_analysis_api_direct_post_response_shape_regression。
 - permission_blocked_behavior。
 - device_platform_verification。
 - audit_label_log_full_validation。
@@ -205,6 +210,9 @@ release_status: release_candidate_not_final
 - tianshi_strategy_hit_batch_or_long_term_validation。
 - tianshi_strategy_hit_final_enforcement_verification。
 - tianshi_strategy_hit_routing_live_regression。
+- tianshi_eventlist_api_read_routing_live_regression。
+- tianshi_eventlist_long_window_segmentation_validation。
+- tianshi_eventlist_auth_blocker_validation。
 - multi_evidence_orchestration_live_regression。
 - e2e_multi_evidence_readonly_real_run。
 

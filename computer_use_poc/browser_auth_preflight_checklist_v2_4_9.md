@@ -128,6 +128,38 @@ browser_session_check:
 - 目标平台不可用。
 - 目标 Tab 不存在。
 
+#### 2.5.1 档案中心 independent login recoverable preflight
+
+档案中心可能先跳转到 `account.p.adm-corp.kuaishou.com` 独立登录页。该状态是 auth preflight，不是页面无数据。
+
+规则：
+
+- 如果账号 / 用户名输入框已预填，可先点击“下一步”尝试恢复会话。
+- 点击后进入档案中心 direct URL，标记 `recoverable_preflight_success=true`，并继续执行只读查询。
+- 点击后仍要求密码 / 扫码 / MFA，标记 `archives_independent_login_required`。
+- 如果账号 / 用户名未预填，不得猜测或输入账号，应标记 `wait_for_manual_login` 或 `blocked_by_independent_login`。
+- 禁止把登录页 / 认证页解释为页面无数据、用户无记录、档案无数据或用户无风险。
+- 规则部分不得绑定具体账号名；具体预填账号只能在 run log 中作为本次运行样例记录。
+
+标准输出：
+
+```yaml
+archives_independent_login_preflight:
+  redirected_to_independent_login: true
+  login_domain: account.p.adm-corp.kuaishou.com
+  username_prefilled:
+  next_clicked:
+  recoverable_preflight_success:
+  still_requires_password_or_mfa:
+  query_status_after_recovery:
+  blocker:
+  forbidden_interpretation:
+    - 用户无记录
+    - 档案无数据
+    - 用户无风险
+    - 平台查询成功但无风险
+```
+
 ### 2.6 SPA route guardrail
 
 Tab 点击前记录：
@@ -189,6 +221,8 @@ spa_tab_click_preflight:
 | `unexpected_route_redirect` | 点击后跳出目标 source | 标记 tab_click_invalid，重新确认 click target | 不能解释为目标 Tab 不可访问 |
 | `selector_scope_unknown` | 无法确认点击或选择器范围 | 停止点击，补 selector | 不能盲点全局按钮 |
 | `permission_blocked` | 已登录但页面权限不足 | 返回权限阻断，提示换有权限环境或人工复核 | 不能解释为用户无数据 |
+| `archives_independent_login_required` | 档案中心独立登录页无法自动恢复，仍需密码 / 扫码 / MFA | 等待人工登录或换已有认证态环境 | 不能解释为档案无数据 |
+| `wait_for_manual_login` | 档案中心独立登录页账号 / 用户名未预填 | 等待人工登录 | 不能猜测账号，不能解释为用户无记录 |
 
 ## 5. 后续平台接入要求
 

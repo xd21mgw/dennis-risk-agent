@@ -1314,3 +1314,102 @@
 - 场景：parse key 和允许保留的非凭证明文 value。
 - 预期：保留 userId / deviceId / did / IP / UA / appVer / sysVer / uri / method / result / reason / timestamp / loginType 等风控字段；凭证明文 present_redacted。
 - 状态：pending validation。
+
+## 188. tianshi eventList USER_REGISTER_NEW API-read
+
+- 输入：“用天狮 eventList API-read 查 2740906395 今天 13:06-14:06 的 USER_REGISTER_NEW 事件”。
+- 场景：用户明确要求细查某个 sourceId、小时间窗口、单个注册 eventType 明细。
+- 预期：
+  - 生成 `eventlist_api_read` 查询计划。
+  - 使用 `POST /v2/rest/event/eventList`。
+  - `sourceIds` 必须填入 `2740906395`，不得为空。
+  - `eventType=USER_REGISTER_NEW`。
+  - `startTime/endTime` 为同一天 Asia/Shanghai 字符串。
+  - 不记录 cookie / token / 完整 header 敏感值。
+  - 返回 eventList / pagination / tableHeaderList 后结构化解析。
+  - 若接口返回 401 / 403 / 跳登录，标记 auth blocker，不得输出 no_data。
+- 状态：validated by internal Agent，v2.5.9 Run 001 已验证。
+
+## 189. tianshi eventList app login sync async query plan
+
+- 输入：“查 2740906395 今天 app 登录同步和异步事件”。
+- 场景：账号 app 登录事件级细查。
+- 预期：
+  - 识别为 app_login 细查。
+  - eventType 组合为 `LOGIN_AUDIT` + `ASYNC_LOGIN`。
+  - 生成两个 eventList 查询计划或分步查询计划。
+  - 查询窗口不跨天。
+  - 输出中区分 sync / async。
+  - no_data 只能解释为该查询条件下未见记录，不代表用户未登录或无风险。
+- 状态：routing smoke test added，pending live regression。
+
+## 190. tianshi eventList long window guardrail
+
+- 输入：“查 2740906395 最近一周 eventList 明细”。
+- 场景：用户要求大窗口 eventList 细查。
+- 预期：
+  - 不直接生成跨天 eventList 查询。
+  - 要求缩小时间窗口，或基于已有证据定位小窗口。
+  - 如必须查多天，应拆分为按天 / 小窗口分段。
+  - 输出说明 eventList 不适合大窗口全量统计；大范围统计、趋势、历史聚合应转 DataAgent / Hive 或离线能力。
+- 状态：guardrail added，pending regression。
+
+## 191. tianshi eventList no_data is not no login
+
+- 输入：“eventList 没查到记录，说明用户没登录吧？”
+- 场景：用户把 eventList no_data 误解为行为未发生。
+- 预期：
+  - 明确否定。
+  - 说明命中策略事件 100% 记录，但非命中策略事件存在抽样。
+  - `eventList no_data` 不代表行为未发生，不代表用户无风险。
+  - 如需确认登录链路，应补用户登录统一日志或围绕实际活跃时间缩小窗口再查。
+- 状态：guardrail added，pending regression。
+
+## 192. archives user_analysis API direct POST succeeds
+
+- 输入：档案中心用户分析 / APP端核心操作日志。
+- 场景：在已登录档案中心 browser session 内通过 same-origin fetch 调用 `/v3/user/log/coreLogs/fetch`。
+- 预期：POST 成功，response JSON 返回，`data.totalCount` 和 `data.dataList` 可见。
+- 状态：validated by internal Agent，v2.4.7.1 Run 001 已验证。
+
+## 193. archives user_analysis same-origin browser session fetch works
+
+- 输入：已登录档案中心 browser session。
+- 场景：API direct POST 认证上下文。
+- 预期：`browser_session_used=true`，`same_origin_fetch=true`，不导出 cookie / token / session，不需要额外 CSRF header。
+- 状态：validated by internal Agent，v2.4.7.1 Run 001 已验证。
+
+## 194. archives user_analysis pagination pageIndex pageSize validated
+
+- 输入：`pageIndex=1/2`、`pageSize=30`。
+- 场景：验证 API 分页机制。
+- 预期：pageIndex=1 返回 5 条，pageIndex=2 返回 0 条，totalCount 仍为 5，`has_more=false`。
+- 状态：validated by internal Agent，v2.4.7.1 Run 001 已验证。
+
+## 195. archives user_analysis response shape detected
+
+- 输入：API response。
+- 场景：字段结构识别。
+- 预期：top-level fields、`data.totalCount`、`data.dataList`、record fields 可识别；record fields 与 DOM 表格列一致。
+- 状态：validated by internal Agent，v2.4.7.1 Run 001 已验证。
+
+## 196. archives user_analysis risk_event_scan from API response
+
+- 输入：`data.dataList`。
+- 场景：focused_login_risk。
+- 预期：可直接从 API response 生成 `risk_event_scan`，不依赖 DOM row feature filter。
+- 状态：validated by internal Agent，v2.4.7.1 Run 001 已验证。
+
+## 197. archives user_analysis sensitive requestParam extraParam not output
+
+- 输入：record 中的 `requestParam` / `extraParam`。
+- 场景：敏感字段输出边界。
+- 预期：不输出完整 `requestParam` / `extraParam`；不输出 token / tokenId / refresh_token / sig / open_id 明文；只沉淀字段名、字段存在性、计数、分布和派生特征。
+- 状态：validated by documentation guardrail，v2.4.7.1 已固化。
+
+## 198. archives user_analysis DOM extraction fallback remains available
+
+- 输入：API direct POST 失败或 response shape 变化。
+- 场景：fallback。
+- 预期：回退 DOM scoped JS eval / row feature filter；不得因 API 失败直接解释为用户无数据或无风险。
+- 状态：guardrail added，pending regression。
