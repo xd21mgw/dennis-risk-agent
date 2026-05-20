@@ -107,22 +107,22 @@
 
 ## 9. 风险检查
 
-- **会削弱 ATO 判断能力吗？**  
+- **会削弱 ATO 判断能力吗？**
   不会，只要保留入口、response、DataAgent boundary、timeout 摘要和按需读取机制。
 
-- **会破坏 DataAgent evidence provider 边界吗？**  
+- **会破坏 DataAgent evidence provider 边界吗？**
   不会，边界来自 contract / policy，不来自全量注入。
 
-- **会影响短问入口吗？**  
+- **会影响短问入口吗？**
   不会，短问入口应保留在默认加载里。
 
-- **会影响 timeout / SQL-only / partial 降级吗？**  
+- **会影响 timeout / SQL-only / partial 降级吗？**
   不会，只要 parser / timeout 摘要能按需读取。
 
-- **会导致无法解释 DataAgent 返回吗？**  
+- **会导致无法解释 DataAgent 返回吗？**
   不会，只要 parser / response contract / boundary 仍在按需读取列表。
 
-- **会误删账号安全核心判断吗？**  
+- **会误删账号安全核心判断吗？**
   不会，`account_security_expert_skill` 仍是按需文件，不是移除。
 
 ## 10. 未来全局 runtime slimming 的迁移建议

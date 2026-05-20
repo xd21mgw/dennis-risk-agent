@@ -2,7 +2,7 @@
 
 ## 0. 说明
 
-本报告基于当前 `outputs/release/dennis_risk_agent_v2_4_runtime_plus_release/` 的发布包规则做一次集成前压测验收。  
+本报告基于当前 `outputs/release/dennis_risk_agent_v2_4_runtime_plus_release/` 的发布包规则做一次集成前压测验收。
 本轮不调用 DataAgent，不执行真实取数，只验证：
 
 - 路由是否按 startup loading order 生效；
@@ -289,12 +289,12 @@
 
 结论：**无**。
 
-当前 release package 的问题不在文档结构，而在于它需要被真实集成时严格按 startup checklist 执行。  
+当前 release package 的问题不在文档结构，而在于它需要被真实集成时严格按 startup checklist 执行。
 从文档本身看，ATO 没有被削弱，非 ATO 也没有变成泛泛摘要，DataAgent 边界清晰。
 
 ## 6. 结论
 
-本轮集成前压测通过。  
+本轮集成前压测通过。
 当前 release package 已满足：
 
 - ATO 深度完全体优先加载；
