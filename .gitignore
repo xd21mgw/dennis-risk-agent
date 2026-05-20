@@ -5,3 +5,6 @@ archives_auth_state.json
 
 # Local agent traces
 memory/
+
+# Generated release/package artifacts
+outputs/packages/
