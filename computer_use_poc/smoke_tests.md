@@ -1931,3 +1931,125 @@
   - “当前只有本人设备，说明非盗号。”
   - 用在线 API no_data 反向证明 `data_does_not_support_ato`。
 - 状态：bad case regression added，记录见 `computer_use_poc/run_logs/ato_login_log_window_false_negative_badcase_v2_6.md`。
+
+# Expert Reasoning First Smoke Tests
+
+## 233. expert_reasoning_first appeal text with normal device list and porn publish
+
+- 输入：用户称前几天账号莫名发布作品，登录设备只有本人，后续因色情视频被封，曾访问“快手助力成功”链接。
+- 期望识别场景：申诉文本 / 矛盾型账号异常。
+- 期望能力：`expert_reasoning_first`。
+- 禁止能力：不查平台、不调手脚、不进入真实执行、不直接定性。
+- 预期输出：
+  - 一句话判断：更像助力 / 活动页钓鱼导致登录态、Cookie、Token 或 OAuth 授权凭证被滥用，但需日志确认。
+  - 已知事实 / 核心矛盾 / 候选路径排序 / 强区分证据卡 / 查询路径建议 / 置信度边界。
+  - 至少包含 token 复用、OAuth 授权滥用、新设备盗号、客户端木马、本人误操作五类候选路径。
+  - 解释“登录设备只有本人”不能排除 token 复用或授权滥用。
+- 状态：text regression pass。
+
+## 234. expert_reasoning_first new device login then publish
+
+- 输入：账号有新设备登录后发布违规内容。
+- 期望识别场景：矛盾型账号异常，但已出现新设备登录线索。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - 候选路径中优先新设备盗号登录。
+  - token 复用仍可作为候选但不应排第一。
+  - 强区分证据卡应包括登录日志与发布接口来源。
+- 禁止：直接写成 token 劫持或协议破解。
+- 状态：text regression pass。
+
+## 235. expert_reasoning_first common device common IP publish
+
+- 输入：发布来源是本人常用设备、常用 IP、正常客户端。
+- 期望识别场景：申诉文本与事实线索冲突。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - 提示本人误操作、家庭共用设备或申诉信息不完整可能性上升。
+  - ATO / token 复用置信度下降。
+  - 仍需发布审计、时间线、设备使用人确认。
+- 禁止：仅凭申诉文本定性盗号。
+- 状态：text regression pass。
+
+## 236. expert_reasoning_first OAuth abnormal scope
+
+- 输入：用户称没操作，但存在 OAuth 新授权和异常 scope。
+- 期望识别场景：授权滥用候选路径。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - 优先怀疑 OAuth / 第三方授权滥用。
+  - 区分授权滥用、token 泄露、新设备登录。
+  - 强区分证据卡包含 OAuth 授权证据卡。
+- 禁止：把 OAuth 授权存在直接定性为盗号。
+- 状态：text regression pass。
+
+## 237. expert_reasoning_first insufficient case text
+
+- 输入：只有“用户说不是本人操作”，没有关键时间、作品、设备、链接信息。
+- 期望识别场景：信息不足的专家先判。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - current_confidence=low。
+  - 输出补充信息清单：异常时间、动作类型、作品 ID / 内容、设备变化、链接 / 授权、封禁原因。
+  - 只给候选路径，不给事实结论。
+- 禁止：强行进入平台查询或输出确定风险类型。
+- 状态：text regression pass。
+
+## 238. expert_reasoning_first routing tightened: explicit case with userId and time
+
+- 输入：`userId=290534602`，时间 `2026-05-12 12:53:16`，用户说“这个用户研判下”。
+- 期望识别场景：明确 case + 明确实体 + 明确时间 + 事实验证诉求。
+- 期望能力：Plan 模式或 read_only_execution_mode。
+- 禁止能力：不进入完整 `expert_reasoning_first` 模板。
+- 预期输出：
+  - Plan 开头可有一句简短专家假设。
+  - 主体应是只读查询计划。
+  - 不展开候选路径排序和完整强区分证据卡模板。
+- 状态：routing tightened regression pass。
+
+## 239. expert_reasoning_first routing: explicit case but user says do not query
+
+- 输入：同样提供 `userId=290534602` 和时间，但用户明确说“先不查数，先从专家视角判断这个现象”。
+- 期望识别场景：用户显式要求查证前专家先验分析。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - 完整专家认知先判模板。
+  - 已知事实 / 核心矛盾 / 候选路径 / 强区分证据卡 / 查询路径建议 / 边界。
+- 状态：routing tightened regression pass。
+
+## 240. expert_reasoning_first routing: appeal text without entity or time
+
+- 输入：只有申诉文本，没有 userId、时间窗口、平台查询对象。
+- 期望识别场景：模糊 case / 缺少可直接查询条件。
+- 期望能力：`expert_reasoning_first`。
+- 预期输出：
+  - current_confidence 根据文本完整性设置。
+  - 输出候选路径和补充信息清单。
+- 状态：routing tightened regression pass。
+
+## 241. expert_reasoning_first routing: observation already provided
+
+- 输入：用户给出 observation / 日志返回，并要求“帮我判断是否支持盗号结论”。
+- 期望识别场景：证据归纳 / 结论生成。
+- 期望能力：evidence_synthesis / conclusion_generation。
+- 禁止能力：不进入 `expert_reasoning_first`。
+- 预期输出：围绕已有 observation 做 supporting_evidence / counter_evidence / missing_evidence / conclusion_boundary。
+- 状态：routing tightened regression pass。
+
+## 242. expert_reasoning_first routing: explicit log query request
+
+- 输入：用户说“查一下这个用户 5/10-5/13 发布接口、登录日志、OAuth 授权”。
+- 期望识别场景：明确查日志 / 明确查询对象。
+- 期望能力：Plan 模式或 read_only_execution_mode。
+- 禁止能力：不进入 `expert_reasoning_first`。
+- 预期输出：只读查询计划，包含发布接口、登录日志、OAuth 授权的查询顺序和边界。
+- 状态：routing tightened regression pass。
+
+## 243. expert_reasoning_first routing: concept explanation
+
+- 输入：用户问“token 复用和协议破解有什么区别”。
+- 期望识别场景：概念解释。
+- 期望能力：普通概念解释 / 风险认知回答。
+- 禁止能力：不进入 `expert_reasoning_first`。
+- 预期输出：解释 token 复用与协议破解的本质差异、证据差异和误判边界。
+- 状态：routing tightened regression pass。

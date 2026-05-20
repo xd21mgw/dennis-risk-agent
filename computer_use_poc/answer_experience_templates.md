@@ -2,6 +2,242 @@
 
 本文沉淀 Dennis Agent 面向策略同学的标准回答体验模板。模板不是平台字段说明，而是把 observation 转成可读、可行动、有边界的业务回答。
 
+## 0. 专家认知先判回答模板
+
+### 适用问题
+
+- 用户明确说“先不查数 / 先从专家视角判断 / 先解释现象 / 先给候选路径 / 先设计强区分证据”。
+- 用户只提供申诉文本、客服记录、case 描述、人工备注或模糊现象，且缺少明确 `userId / deviceId / workId / IP / token_id / 时间窗口 / 平台名 / 日志对象`。
+- 文本中存在表面矛盾，例如登录设备只有本人但账号发生非本人发布，但当前缺少可直接查询条件。
+- 当前问题核心是解释“为什么会这样”、梳理候选路径、设计强区分证据，而不是事实验证。
+
+### 不适用问题
+
+- 用户明确要求查平台、看日志、调用手脚。
+- 用户提供明确实体和时间窗口，并且没有明确说“先不查数”。
+- 用户已经给出结构化 observation，需要做证据归纳。
+- 用户只是问概念解释。
+- 用户要求处置、封禁、批量扩散查询。
+
+### 使用边界
+
+`expert_reasoning_first` 的模板不应被所有 case 直接套用。
+
+当用户提供明确实体和时间窗口，并且没有明确说“先不查数”时，不使用完整 `expert_reasoning_first` 模板。此时应进入 Plan 模式或 read-only execution，最多在计划开头给一句简短专家假设，例如：
+
+```text
+从文本看，当前可先假设为 token/OAuth 凭证滥用或新设备盗号两类路径，但需要通过发布链路、登录日志、授权记录验证。
+```
+
+随后主体应输出只读查询计划，而不是完整专家认知模板。
+
+### 回答骨架
+
+```text
+# 专家认知先判
+
+## 1. 一句话判断
+当前更像是 XXX，但还需要通过 XXX 日志 / 记录确认，不能仅凭文本直接定性。
+
+## 2. 已知事实
+- fact_1:
+- fact_2:
+- fact_3:
+
+## 3. 核心矛盾解释
+- 表面矛盾：
+- 为什么不冲突：
+- 需要验证的关键点：
+
+## 4. 候选攻击路径排序
+- path_name:
+  likelihood: high / medium / low
+  reason:
+  what_would_confirm_it:
+  what_would_refute_it:
+
+## 5. 强区分证据卡
+- evidence_name:
+  distinguish_between:
+  why_it_matters:
+  expected_if_path_A_true:
+  expected_if_path_B_true:
+  priority: P0 / P1 / P2
+  suggested_data_source:
+  boundary_note:
+
+## 6. 查询路径建议
+P0:
+- 查什么：
+- 为了验证什么：
+- 预期看到什么：
+
+P1:
+- 查什么：
+- 为了验证什么：
+- 预期看到什么：
+
+P2:
+- 查什么：
+- 为了验证什么：
+- 预期看到什么：
+
+## 7. 结论置信度与边界
+- current_confidence:
+- confidence_reason:
+- cannot_conclude_yet:
+- key_missing_evidence:
+- risk_of_misjudgment:
+
+## 8. 下一步建议
+- 如果只做认知研判：当前可以先按 XXX 方向记录。
+- 如果要事实闭环：建议进入 Plan 模式，生成只读查询计划。
+- 如果证据不足：不要直接处置，需要补 XXX 证据。
+```
+
+### 证据表达规则
+
+- `suggested_data_source` 只写建议查什么类型的数据，不写成真实平台调用指令。
+- 必须区分已知事实、高概率推断、待验证假设、反证可能。
+- 强区分证据卡必须说明“为什么这条证据能区分路径”。
+- 可以写“当前更像 / 高度疑似 / 需要日志确认 / 证据不足”，不能写“已确认 / 确定就是”。
+- 设备列表无异常不能排除 token 复用或授权滥用。
+- API 调用异常不等于协议破解，可能只是合法 token 被复用。
+
+### 不应输出的内容
+
+- 不查数、不调内部平台、不读取真实用户数据。
+- 不输出最终风险定性。
+- 不输出处置建议。
+- 不把关联关系直接等同风险定性。
+- 不把“登录设备只有本人”写成“排除盗号”。
+
+### 样例：登录设备无异常但账号非本人发布色情视频
+
+```text
+# 专家认知先判
+
+## 1. 一句话判断
+当前更像是助力 / 活动页钓鱼导致登录态、Cookie、Token 或 OAuth 授权凭证被滥用，随后黑产复用凭证调用发布链路发布违规内容；但仍需通过发布日志、token 使用日志、OAuth 授权记录和登录日志交叉确认。
+
+## 2. 已知事实
+- 用户称前几天发现账号莫名其妙发作品，发现后删除。
+- 用户查看登录设备，显示只有本人登录，没有别人。
+- 后续账号因发布色情视频被封。
+- 用户回忆曾在浏览器访问过“快手助力成功”页面。
+
+## 3. 核心矛盾解释
+- 表面矛盾：登录设备只有本人，但账号出现非本人发布和色情内容封禁。
+- 为什么不冲突：登录设备列表只能说明没有明显新增客户端登录设备，不等于 token 没有被复用，也不等于 OAuth 授权、web 授权、接口调用没有异常。
+- 需要验证的关键点：违规作品是从本人客户端正常发布，还是通过异常 IP / UA / token / 授权链路调用发布接口。
+
+## 4. 候选攻击路径排序
+- path_name: Token / Cookie 被窃取后复用发布链路
+  likelihood: high
+  reason: 用户访问疑似助力页后出现非本人发布，且设备列表无新增设备并不能排除 token 复用。
+  what_would_confirm_it: 发布接口使用同一账号 token，但 IP / UA / 设备指纹与本人常用环境不一致。
+  what_would_refute_it: 发布接口、token 使用、IP / UA 全部与本人常用客户端一致。
+- path_name: OAuth / 第三方授权被滥用
+  likelihood: medium
+  reason: 助力页可能诱导授权，授权滥用可绕过传统登录设备列表感知。
+  what_would_confirm_it: 异常 OAuth 授权、异常 scope、授权后出现发布或账号态接口调用。
+  what_would_refute_it: 无新增授权，发布链路不依赖第三方授权。
+- path_name: 新设备登录盗号但设备列表未覆盖或记录缺失
+  likelihood: medium
+  reason: 登录设备页可能存在窗口、口径、端类型覆盖不足。
+  what_would_confirm_it: 离线登录日志或统一登录日志出现异常设备 / IP / 登录方式。
+  what_would_refute_it: 完整登录日志覆盖异常时间且无任何异常登录。
+- path_name: 用户本机被恶意插件 / 木马控制
+  likelihood: low
+  reason: 浏览器访问可疑页面可能带来本机环境风险，但需要端侧证据。
+  what_would_confirm_it: 本机异常插件、代理、Hook、恶意扩展或异常脚本行为。
+  what_would_refute_it: 端侧环境干净且发布链路来自外部环境。
+- path_name: 本人误操作 / 家庭共用设备 / 申诉信息不完整
+  likelihood: low
+  reason: 申诉文本可能缺少细节，不能完全排除本人或共用设备行为。
+  what_would_confirm_it: 发布来源为本人常用设备、常用 IP、正常客户端，且时间与本人使用一致。
+  what_would_refute_it: 发布来源与本人环境冲突。
+
+## 5. 强区分证据卡
+- evidence_name: 发布接口来源证据卡
+  distinguish_between: 本人客户端发布 vs 异常 IP / UA 发布
+  why_it_matters: 发布来源是区分误操作、木马控制和远程凭证复用的最小证据。
+  expected_if_path_A_true: 本人客户端发布会表现为常用设备、常用 IP、正常客户端版本和常规发布链路。
+  expected_if_path_B_true: 异常发布会出现非常用 IP / UA / SDK / 设备指纹或非典型发布入口。
+  priority: P0
+  suggested_data_source: 发布接口日志 / upload-publish 链路
+  boundary_note: API 调用异常不等于协议破解，可能只是合法 token 被复用。
+- evidence_name: Token 使用证据卡
+  distinguish_between: token 复用 vs 正常本人使用
+  why_it_matters: 登录设备无异常时，token 使用环境是判断凭证复用的关键。
+  expected_if_path_A_true: token 在异常 IP / UA / 设备环境调用账号态或发布接口。
+  expected_if_path_B_true: token 使用环境与本人常用客户端一致。
+  priority: P0
+  suggested_data_source: token 使用日志 / token 刷新 / passToken 链路
+  boundary_note: 无新增登录不代表 token 未被复用。
+- evidence_name: OAuth 授权证据卡
+  distinguish_between: 授权滥用 vs 普通登录态泄露
+  why_it_matters: 助力页可能诱导用户授权，授权滥用与 token 窃取治理路径不同。
+  expected_if_path_A_true: 异常时间前后存在新增授权、异常 scope 或第三方授权调用。
+  expected_if_path_B_true: 无新增授权，异常行为只出现在登录态 token 链路。
+  priority: P1
+  suggested_data_source: OAuth / 第三方授权记录
+  boundary_note: 授权存在不等于滥用，需要看 scope 与后续调用。
+- evidence_name: 登录日志证据卡
+  distinguish_between: 新设备盗号登录 vs 无登录复用凭证
+  why_it_matters: 新设备登录和凭证复用是两条不同攻击路径。
+  expected_if_path_A_true: 异常时间附近出现新设备、新 IP、新登录方式或验证链路。
+  expected_if_path_B_true: 无新增登录，但 token / 发布接口有异常调用。
+  priority: P1
+  suggested_data_source: 统一登录日志 / 离线登录日志
+  boundary_note: 在线日志窗口不完整时，no_data 不能作为强反证。
+- evidence_name: 关联发布证据卡
+  distinguish_between: 单个偶发 case vs 批量盗号发色情 / 引流内容
+  why_it_matters: 批量相似发布说明可能存在黑产链路，而非单点误操作。
+  expected_if_path_A_true: 只有单账号单次异常，关联 IP / UA / 文案不聚集。
+  expected_if_path_B_true: 同 IP / UA / token 使用环境关联多个账号发布相似色情或引流内容。
+  priority: P2
+  suggested_data_source: 异常 IP / UA / 发布素材关联分析
+  boundary_note: 关联聚集只能作为补证，不是单独定性依据。
+
+## 6. 查询路径建议
+P0:
+- 查什么：发布接口日志 / upload-publish 链路。
+- 为了验证什么：违规作品是否来自本人常用客户端还是异常发布来源。
+- 预期看到什么：发布 IP / UA / 设备 / SDK / 入口和本人常用环境是否一致。
+- 查什么：token 使用日志。
+- 为了验证什么：是否存在无新增登录但账号态 token 被异环境复用。
+- 预期看到什么：异常时间 token 调用环境和发布链路是否一致。
+
+P1:
+- 查什么：OAuth / 第三方授权记录。
+- 为了验证什么：是否由助力页诱导授权导致授权滥用。
+- 预期看到什么：异常授权、异常 scope、授权后账号态调用。
+- 查什么：统一登录日志。
+- 为了验证什么：是否存在新设备盗号登录。
+- 预期看到什么：异常设备 / IP / 登录方式；如果超出在线窗口，需要离线日志。
+
+P2:
+- 查什么：异常 IP / UA 关联账号反查。
+- 为了验证什么：是否为批量盗号发布色情 / 引流内容。
+- 预期看到什么：多个账号、相似内容、相同调用环境聚集。
+- 查什么：内容风险链路。
+- 为了验证什么：色情视频是否属于批量投放素材。
+- 预期看到什么：相似素材、相似标题、相似发布节奏。
+
+## 7. 结论置信度与边界
+- current_confidence: medium
+- confidence_reason: 申诉文本中的“助力成功链接 + 非本人发布 + 设备列表无新增设备”更符合凭证复用或授权滥用的先验路径，但缺少发布、token、授权和登录日志。
+- cannot_conclude_yet: 不能确认 token 劫持、不能确认协议破解、不能确认本人完全无操作。
+- key_missing_evidence: 发布接口来源、token 使用、OAuth 授权、完整登录日志。
+- risk_of_misjudgment: 把设备列表无异常误判为排除盗号；把 API 调用异常误判为协议破解。
+
+## 8. 下一步建议
+- 如果只做认知研判：当前可以先按“疑似助力页诱导后的凭证复用 / 授权滥用”方向记录。
+- 如果要事实闭环：建议进入 Plan 模式，生成只读查询计划。
+- 如果证据不足：不要直接处置，需要先补发布接口日志、token 使用日志和 OAuth 授权记录。
+```
+
 ## 1. 风险研判类回答模板
 
 ### 适用问题
