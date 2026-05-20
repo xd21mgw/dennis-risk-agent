@@ -1799,3 +1799,135 @@
   - 不允许缺少明确 deviceId 时直接进入 Device SDK。
 - 边界：设备风险补证只能说明设备侧异常证据，不直接定性作弊 / 盗号。
 - 状态：guardrail added，基于 `user_experience_golden_cases_dry_run_001.md`。
+
+# v2.6 Full Experience-First Semi-Open Regression
+
+## 223. SSO state preflight validation
+
+- 输入：v2.6 full 半开放自测前置认证态检查。
+- 场景：检查 `workspace/.ks_sso/sso-state.json`。
+- 预期：
+  - SSO state 存在。
+  - 覆盖 rcp / xz / weapon / track-analysis / rap / user-center-workbench 等域名。
+  - 当前无过期 cookie。
+  - 不因缺少某个平台独立 `*_state.json` 判断 state 丢失。
+  - `archives_auth_state.json`、`weapon_platform_auth_state.json` 可视为子集备份，不是完整登录态来源。
+- 状态：pass，半开放自测已验证。
+
+## 224. Login failure / verification real readonly regression
+
+- 输入：登录失败 / 被验证原因解释问题。
+- 场景：真实只读回归。
+- 预期：
+  - 统一登录日志通过 `sso_session.py + GET /rest/unified/log/search` API direct read 稳定读取。
+  - 天狮策略命中通过 `sso_session.py + GET /v2/rest/event/fastQueryHbase` 稳定读取。
+  - 档案中心若 API direct read 302，应走 agent-browser recoverable_preflight。
+  - 输出区分直接原因、证据链、边界和下一步。
+- 状态：pass。
+
+## 225. Archives center recoverable_preflight regression
+
+- 输入：档案中心账号画像 / ATO 背景补证。
+- 场景：档案中心 API direct read 可能返回 302 / 需要重新登录。
+- 预期：
+  - 不写档案中心完全不可用。
+  - 不写档案中心一定是纯 HTTP API direct read。
+  - API direct read 302 时进入 agent-browser recoverable_preflight。
+  - 在已登录 browser session 内使用 same-origin fetch / DOM read。
+  - 失败时返回 `auth_blocked / permission_blocked`，不得返回 `no_data`。
+- 状态：pass but browser-session-dependent。
+
+## 226. Weapon /apiv2 route regression
+
+- 输入：Weapon 相关实体解析 / 设备风险问题。
+- 场景：修正错误路径导致的误判。
+- 预期：
+  - Weapon 核心只读 API 优先走 `/apiv2/*`。
+  - `/anti-device/*` 是前端 UI 路径，可能被 AMC 权限中台拦截。
+  - `/anti-device/*` 被拦标记 `UI path blocked / path_error`。
+  - 不得把 `/anti-device/*` 被拦解释为 Weapon API 全站 `permission_blocked`。
+- 状态：pass，路径口径已修正。
+
+## 227. Weapon user_to_device graphData
+
+- 输入：userId -> deviceId 实体解析。
+- 场景：`GET /apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2`。
+- 预期：
+  - API 可达。
+  - 半开放测试 userId 返回 `no_data` 时，解释为当前 Weapon 图谱无结果 / 覆盖差异。
+  - 不得解释为 `permission_blocked`。
+  - 不得说“用户没有设备”。
+  - 可降级使用统一登录日志设备分布 + 档案中心最近登录设备作为候选来源。
+- 状态：partial；API pass but test user no_data。
+
+## 228. Weapon device_to_user graphData
+
+- 输入：deviceId -> userId 实体解析。
+- 场景：`GET /apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2`。
+- 预期：
+  - `/apiv2/graphData` 可执行。
+  - 样例 `deviceId=ANDROID_c1ab0d1eb0a0d1c0` 返回 `code=0`、3 nodes、2 edges、关联用户 2 个。
+  - 关联用户只能表达为候选关联用户。
+  - 关联用户中存在社交封禁 / 风险标签是继续深查线索，不是最终风险结论。
+- 状态：pass。
+
+## 229. Weapon Device SDK riskData
+
+- 输入：移动端 did 设备风险补证。
+- 场景：`GET /apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}`。
+- 预期：
+  - `/apiv2/riskData` 可执行。
+  - 移动端 did（如 `ANDROID_xxx`）适合主测。
+  - `web_` 前缀设备可能不在移动端 did 体系内，不适合作为 Device SDK 主测对象。
+  - 样例返回设备未插电话卡、APK 启动次数少于 10 次、手机系统服务被 Hook、frida=0 等标签。
+  - Hook level=50 是高严重度设备侧证据，但不能单独定性用户作弊或盗号。
+- 状态：pass。
+
+## 230. Q3-Q8 semi-open validation status
+
+- 输入：半开放自测 Q3-Q8。
+- 场景：体验黄金 Case 对应真实只读能力回归。
+- 预期状态：
+  - Q3 策略命中解释：partial，fastQueryHbase 可用；eventList POST 未封装，具体请求级详情仍 TODO。
+  - Q4 用户关联设备：partial，user_to_device API pass but test user no_data；不是 permission_blocked。
+  - Q5 设备关联用户：pass，device_to_user via `/apiv2/graphData` 可执行。
+  - Q6 设备风险补证：pass，Device SDK riskData via `/apiv2/riskData` 可执行。
+  - Q7 / Q8 如涉及前端活跃画像，不纳入半开放真实执行，只能作为 design_only / TODO。
+- 边界：不批量、不自动处置、不默认 DataAgent / Hive、不因单一证据定性作弊或盗号。
+- 状态：semi-open summary documented。
+
+## 231. frontend_activity_profile not open for real execution
+
+- 输入：前端活跃画像相关问题。
+- 场景：v2.6 full 半开放阶段。
+- 预期：
+  - 不把 frontend_activity_profile 包装成稳定可用手脚。
+  - 需要时只能作为后续 TODO 或 design_only 能力说明。
+  - 不作为 ATO / 登录失败 / 设备风险的强依赖能力。
+- 状态：not open for real execution。
+
+## 232. ATO login log online window false negative
+
+- case_name: ATO login log online window false negative
+- 输入：
+  - `userId=290534602`
+  - suspicious_event_time: `2026-05-12`
+  - query_time: `2026-05-20`
+  - 用户描述：前几天账号莫名发布作品，用户删除并联系工作人员；用户设备页只显示本人登录；之后账号因发布色情视频被封；用户曾访问浏览器“快手助力成功”链接。
+- 场景：统一登录日志在线 API 查询 5/10~5/13 只返回少量 token 刷新记录，未看到 5/12 LOGIN 事件。
+- 预期：
+  - 不得把“在线 API 无登录记录”写成强反证。
+  - 不得把“无 LOGIN 事件”写成“无异设备登录”。
+  - 必须输出 `login_log_window_incomplete`。
+  - 必须输出 `online_login_log_may_be_false_negative`。
+  - 必须建议 `offline_hive_required`。
+  - 必须建议 `publish_audit_required`。
+  - 必须建议补查 token 使用 / token 刷新 / passToken 链路。
+  - 必须建议补查封禁 / 审核工单。
+  - 结论不得超过 `partial_support`，除非有发布审计 / 离线登录日志 / token 链路补证。
+- 禁止：
+  - “5/12 全天零登录，因此不像盗号。”
+  - “无异设备登录，排除 ATO。”
+  - “当前只有本人设备，说明非盗号。”
+  - 用在线 API no_data 反向证明 `data_does_not_support_ato`。
+- 状态：bad case regression added，记录见 `computer_use_poc/run_logs/ato_login_log_window_false_negative_badcase_v2_6.md`。

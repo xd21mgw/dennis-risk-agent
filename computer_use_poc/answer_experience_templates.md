@@ -37,13 +37,21 @@
 - 先讲最能区分本质的证据，不堆字段。
 - 单源证据只能说“线索”或“证据”，不能说“最终定性”。
 - 多源一致时可以提高置信度，但仍保留边界。
+- 风险研判必须显式说明 `data_freshness / data_window`：关键异常时间是否被当前在线日志可靠窗口覆盖。
+- 统一登录日志在线 API 按约 7 天可靠窗口处理；超窗时在线 API `no_data` / 无 LOGIN 事件只能作为数据缺口，不能作为“无登录”或“无异设备登录”的证据。
+- no_data 不仅不等于无风险，也不等于无登录；当异常时间超过在线窗口时，要标记 `login_log_window_incomplete`、`offline_hive_required`、`online_login_log_may_be_false_negative`。
+- Device SDK riskData 返回 Hook / root / frida / simulator / proxy / repack 等标签时，只能表达为设备环境异常证据；即使 Hook level=50 这类高严重度标签出现，也不能单独定性用户作弊或盗号。
+- 设备异常 + 账号异常 + 登录链路异常组合后，才可以提升风险支持等级。
 
 ### 不确定性表达规则
 
 - 用“当前观察到”“在本查询窗口内”“仍缺少”。
 - 避免“确定”“必然”“一定”。
 - 无结果只能说“当前条件下未见”，不能说“没有风险”。
+- 超过 7 天窗口的 ATO / 异常发布 / 换绑 / 改密 / 色情视频发布等场景，必须输出：“在线登录日志无法覆盖完整异常时段，需离线 Hive / 发布审计补证。”
+- 结论不得超过 `partial_support` 或 `insufficient_support`，除非已有发布审计、离线登录日志或 token 使用链路补证。
 - 设备风险补证必须先确认 deviceId / did / deviceceid。若用户只给 userId，应先说明需要做 user_to_device entity resolution；若无法解析，返回 `missing_device_id`，不要假装已经完成 Device SDK 判断。
+- graphData `no_data` 不等于实体一定没有关联，只代表 Weapon 当前图谱在该查询条件下无结果。
 
 ### 不应输出的内容
 
@@ -52,6 +60,9 @@
 - 平台字段堆砌。
 - “用户一定作弊 / 一定盗号”。
 - 缺少明确 deviceId 时直接输出“这个设备没有/有 hook 风险”。
+- “异常发布当天零登录记录。”
+- “无异设备登录，因此不像盗号。”
+- “登录设备只有本人，排除 ATO。”
 
 ### 示例回答
 
@@ -69,6 +80,16 @@
 
 下一步建议：
 优先补设备 SDK 和登录成功后的行为链路，再决定是否进入人工复核。
+```
+
+### ATO 在线日志超窗标准表达
+
+```text
+当前在线统一登录日志未观察到异常时间点的登录记录，但该异常时间已超过在线日志可靠窗口，因此该结果不能作为无异设备登录的强反证。
+
+该窗口需要离线 Hive 登录日志、发布审计日志、token 使用 / token 刷新 / passToken 链路补证。
+
+现有证据不足以闭合 ATO 链路，也不足以反向排除 ATO。用户点击疑似助力链接 + 异常发布 + 在线日志窗口不完整，更适合标记为 partial_support，并优先补查发布审计与离线登录日志。
 ```
 
 ## 2. 原因解释类回答模板
@@ -168,22 +189,27 @@
 
 ### 证据表达规则
 
-- userId -> deviceId 使用 Weapon graphData。
-- deviceId -> userId 使用 Weapon graphData。
+- userId -> deviceId 使用 Weapon `/apiv2/graphData`，不要走 `/anti-device/*`。
+- deviceId -> userId 使用 Weapon `/apiv2/graphData`，不要走 `/anti-device/*`。
 - 说清 groupKey / dimKey 的方向，但不把接口细节放在正文主体里。
 - 候选过多时，只给 top candidates 和缩小范围建议。
+- device_to_user 返回关联用户时，只能表达为“候选关联用户”。
+- 关联用户中存在社交封禁 / 风险标签时，应表达为继续深查线索，不是最终风险结论。
 
 ### 不确定性表达规则
 
 - “关联”不等于“同一个人控制”。
 - “关联封禁用户”不等于“当前设备一定作弊”。
 - relationDetail 是摘要线索，不是最终结论。
+- graphData `no_data` 不等于无关联事实，只能说明 Weapon 当前图谱暂无结果；必要时可降级参考统一登录日志设备分布、档案中心最近登录设备等候选来源。
+- `/anti-device/*` 被 AMC 权限中台拦截时，只能标记 `UI path blocked / path_error`，不能解释为 Weapon API 全站 `permission_blocked`。
 
 ### 不应输出的内容
 
 - 不默认批量深查所有候选。
 - 不把多设备直接等同群控。
 - 不把多账号直接等同团伙。
+- 不把 Weapon 图谱无结果说成“用户没有设备”或“设备没有用户”。
 
 ### 示例回答
 
@@ -200,3 +226,17 @@
 下一步：
 如果要判断风险，先选关联强且有异常摘要的用户，补档案中心账号状态、统一登录日志和 Device SDK 设备环境证据。
 ```
+
+## 4. Plan 模式提示规则
+
+适用问题：
+
+- 需要先说明将如何查证，或用户要求“先给计划”。
+
+必须提示：
+
+- 默认先 Plan，再 Observation。
+- 档案中心可能需要 agent-browser recoverable_preflight；API direct read 若 302，不得写成档案中心不可用，应标注 `auth/session risk` 并尝试 browser session 内 same-origin fetch / DOM read。
+- Weapon 应走 `/apiv2/*`，不要走 `/anti-device/*`。
+- `/anti-device/*` 被 AMC 拦截是 UI path blocked / path_error，不是 Weapon API permission_blocked。
+- 如果遇到 `auth_blocked / permission_blocked / api_failed / no_data`，必须分开写，不得混成“无风险”。

@@ -22,6 +22,18 @@ expected_capabilities:
   - device_sdk_check_if_device_id_available
   - frontend_activity_profile_check_if_frontend_activity_question_relevant
   - tianshi_strategy_hit_check_if_strategy_hit_question_relevant
+data_window_rule:
+  suspicious_event_time_required: true
+  query_time_required: true
+  online_login_log_reliable_window_days: 7
+  if_suspicious_event_time_out_of_window:
+    - login_log_window_incomplete
+    - offline_hive_required
+    - online_login_log_may_be_false_negative
+  forbidden_interpretation:
+    - 在线 API 无登录记录不能作为强反证
+    - 在线 API 无 LOGIN 事件不能写成无异设备登录
+    - 用户设备页只有本人设备不能直接排除 ATO
 forbidden_capabilities:
   - 不默认批量 DataAgent / Hive
   - 不默认全量翻页抓取
@@ -29,10 +41,11 @@ forbidden_capabilities:
   - 不把单一登录失败直接定性为盗号
 ideal_answer_structure:
   - 一句话判断：当前是强风险线索 / 中等风险线索 / 证据不足，而不是直接定性
+  - 数据窗口完整性说明：异常时间是否落在统一登录日志在线可靠窗口内
   - 已观察证据：登录、设备、档案、策略命中分开说
   - 风险线索：异地、异设备、失败集中、token 下发 / 刷新、封禁状态等
   - 反证 / 降级因素：同设备、同地区、用户自身操作可能性、时间窗口不足
-  - 证据缺口：统一登录全量、设备画像、行为链路、审核历史
+  - 证据缺口：统一登录全量、离线 Hive 登录日志、发布审计、token 使用链路、设备画像、行为链路、审核历史
   - 下一步建议：最小补证动作
 user_experience_goal: 用户不需要知道平台细节，也能得到“是不是盗号”的证据化判断和下一步该查什么。
 pass_criteria:
@@ -40,6 +53,7 @@ pass_criteria:
   - 不直接输出“确定盗号”
   - 至少区分 supporting_evidence / counter_evidence / missing_evidence
   - 给出下一步补证能力
+  - 异常时间超出在线窗口时，必须输出 login_log_window_incomplete / offline_hive_required
 ```
 
 ## Case 2: 登录失败 / 被验证原因
@@ -97,6 +111,13 @@ input_completeness_rule:
 expected_capabilities:
   - device_sdk_api_direct_readonly
   - device_sdk_graph_or_relation_if_question_asks_associated_users
+weapon_api_path:
+  riskData: "/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}"
+validated_notes:
+  - "Device SDK riskData via /apiv2/riskData 已通过半开放真实只读验证。"
+  - "移动端 did（如 ANDROID_xxx）适合作为主测对象。"
+  - "web_ 前缀设备可能不在移动端 did 体系内，不适合作为 Device SDK 主测对象。"
+  - "最新样例返回设备未插电话卡、APK 启动次数少于 10 次、手机系统服务被 Hook、frida=0 等标签。"
 forbidden_capabilities:
   - 不默认统一登录日志，除非问题问登录链路
   - 不默认档案中心，除非需要账号画像
@@ -106,7 +127,7 @@ ideal_answer_structure:
   - 设备侧结论：是否有明确设备环境异常线索
   - 强证据：root/jailbreak、hook、frida、simulator、proxy、repack、强风险标签
   - 中弱证据：SDK 异常、低启动、appList/klink/graph 异常
-  - 边界：设备侧补证不等于用户最终作弊
+  - 边界：设备侧补证不等于用户最终作弊；Hook level=50 这类高严重度设备标签也只能说明设备环境异常证据
   - 下一步：关联账号、登录链路、前端行为或策略命中补证
 user_experience_goal: 用户能把“设备是不是有问题”拆成设备环境证据，而不是被泛化成账号风险。
 pass_criteria:
@@ -131,6 +152,13 @@ expected_capabilities:
   - user_to_device_entity_resolution
   - weapon_graphData
   - archives_user_analysis_recent_devices_as_supplemental_ranking
+weapon_api_path:
+  user_to_device: "/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2"
+validated_notes:
+  - "Weapon /apiv2/graphData API 可达。"
+  - "半开放测试 userId 的 user_to_device 返回 no_data；这是当前图谱无结果 / 覆盖差异，不是 permission_blocked。"
+  - "user_to_device no_data 应表达为“该数据源暂无关联”，不能说“用户没有设备”。"
+  - "可降级使用统一登录日志设备分布 + 档案中心最近登录设备作为候选来源。"
 forbidden_capabilities:
   - 不直接拿 userId 调 Device SDK riskData
   - 不默认批量深查所有设备风险
@@ -145,6 +173,7 @@ pass_criteria:
   - first_route=user_to_device
   - first_hand=weapon_graphData
   - groupKey=USER_ID, dimKey=DEVICE_ID
+  - graphData no_data 不解释为 permission_blocked 或用户没有设备
   - 候选过多时返回 top candidates / too_many_candidates
 ```
 
@@ -162,6 +191,13 @@ agent_should_recognize:
 expected_capabilities:
   - device_to_user_entity_resolution
   - weapon_graphData
+weapon_api_path:
+  device_to_user: "/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2"
+validated_notes:
+  - "device_to_user via /apiv2/graphData 已通过半开放真实只读验证。"
+  - "样例 deviceId=ANDROID_c1ab0d1eb0a0d1c0 返回 code=0、3 nodes、2 edges、关联用户 2 个。"
+  - "关联用户只能表达为候选关联用户。"
+  - "关联用户中存在社交封禁 / 风险标签是继续深查线索，不是最终风险结论。"
 forbidden_capabilities:
   - 不直接定性团伙作弊
   - 不默认拉所有关联用户的深度画像
