@@ -1999,11 +1999,11 @@
 
 - 输入：`userId=290534602`，时间 `2026-05-12 12:53:16`，用户说“这个用户研判下”。
 - 期望识别场景：明确 case + 明确实体 + 明确时间 + 事实验证诉求。
-- 期望能力：Plan 模式或 read_only_execution_mode。
+- 期望能力：read_only_execution_mode。
 - 禁止能力：不进入完整 `expert_reasoning_first` 模板。
 - 预期输出：
-  - Plan 开头可有一句简短专家假设。
-  - 主体应是只读查询计划。
+  - 开头可有一句简短专家假设。
+  - 主体应进入只读执行路径；只有用户显式要求计划或边界不清时才进入 Plan。
   - 不展开候选路径排序和完整强区分证据卡模板。
 - 状态：routing tightened regression pass。
 
@@ -2040,9 +2040,9 @@
 
 - 输入：用户说“查一下这个用户 5/10-5/13 发布接口、登录日志、OAuth 授权”。
 - 期望识别场景：明确查日志 / 明确查询对象。
-- 期望能力：Plan 模式或 read_only_execution_mode。
+- 期望能力：read_only_execution_mode。
 - 禁止能力：不进入 `expert_reasoning_first`。
-- 预期输出：只读查询计划，包含发布接口、登录日志、OAuth 授权的查询顺序和边界。
+- 预期输出：进入只读执行；执行前可轻量说明发布接口、登录日志、OAuth 授权的查询顺序和边界，但不只输出 Plan。
 - 状态：routing tightened regression pass。
 
 ## 243. expert_reasoning_first routing: concept explanation
@@ -2053,3 +2053,269 @@
 - 禁止能力：不进入 `expert_reasoning_first`。
 - 预期输出：解释 token 复用与协议破解的本质差异、证据差异和误判边界。
 - 状态：routing tightened regression pass。
+
+# Plan Mode / Execution Mode Smoke Tests
+
+## 244. Plan mode explicit plan request
+
+- input: “先说下你准备怎么查 user_id=123”
+- expected_mode: `plan_mode`
+- expected_routing:
+  - 不调用真实接口。
+  - 不生成 observation。
+  - 输出执行前研判计划。
+- expected_sections:
+  - 我理解的问题。
+  - 本次研判目标。
+  - 查询路径与强区分证据卡。
+  - 证据强弱说明。
+  - 查询边界。
+  - 预期输出。
+  - 你可以选择。
+- expected_evidence_cards_or_strength_layers:
+  - “查询路径与强区分证据卡”使用合并表格。
+  - 表格字段包含步骤 / 查询内容 / 使用能力 / 重点寻找的强区分证据 / 命中后说明什么。
+- boundary_checks:
+  - Plan 不是结论。
+  - 不伪造证据。
+  - 不假设已有安全执行框架。
+- pass_criteria: 显式计划请求触发 Plan，且不进入真实执行。
+- status: documented。
+
+## 245. User risk judgement defaults to execution mode
+
+- input: “帮我看下 user_id=123 是不是风险用户”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 不应只输出 Plan。
+  - 可以轻量说明执行思路。
+  - 进入只读执行路径。
+- expected_sections:
+  - 结论摘要。
+  - 关键证据。
+  - 证据强弱分层。
+  - 缺失证据。
+  - 下一步建议。
+- expected_evidence_cards_or_strength_layers:
+  - 强区分证据 / 中等辅助证据 / 弱证据 / 正常反证。
+- boundary_checks:
+  - 单一证据不能直接定性。
+  - 不默认批量扩展。
+- pass_criteria: 真实研判请求默认执行，而不是 Plan 阻断。
+- status: documented。
+
+## 246. Device risk judgement defaults to execution mode
+
+- input: “这个 device_id=abc 有没有群控风险”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 进入 Device SDK / 设备画像补证。
+  - 不应只输出 Plan。
+- expected_sections:
+  - 设备侧结论。
+  - 设备可信度。
+  - 设备环境异常。
+  - 账号关联 / 多账号共用证据。
+  - 边界与下一步。
+- expected_evidence_cards_or_strength_layers:
+  - 设备可信度卡。
+  - 设备环境异常卡。
+  - 多账号共用卡。
+- boundary_checks:
+  - 不直接定性为群控。
+  - Hook / root / frida 等只是设备侧补证。
+- pass_criteria: 明确 device_id + 设备风险问题直接执行。
+- status: documented。
+
+## 247. ATO judgement defaults to execution mode with login window guardrail
+
+- input: “帮我判断这个账号是不是被盗了”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 不应只输出 Plan。
+  - 进入 ATO / 盗号研判执行路径。
+- expected_sections:
+  - 账号习惯断裂。
+  - 登录异常链路。
+  - 新设备登录。
+  - 历史反证。
+  - 登录日志窗口限制提示。
+- expected_evidence_cards_or_strength_layers:
+  - 账号习惯断裂卡。
+  - 新设备登录卡。
+  - 异地 / 异常登录卡。
+  - 历史稳定反证卡。
+- boundary_checks:
+  - 超窗无数据不能作为“无异常登录”的强反证。
+  - 单次异地登录不能直接证明盗号。
+  - 需要标注 `login_log_window_incomplete` / `offline_hive_required` 等缺口。
+- pass_criteria: ATO 默认执行，但结果必须带在线登录日志窗口边界。
+- status: documented。
+
+## 248. request_id strategy explanation defaults to execution mode
+
+- input: “这个 request_id=xxx 为什么被风控拦了”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 进入策略命中解释。
+  - 不应只输出 Plan。
+- expected_sections:
+  - 策略命中解释。
+  - 行为时间匹配。
+  - 用户 / 设备补证。
+  - 误伤反证。
+- expected_evidence_cards_or_strength_layers:
+  - 策略命中解释卡。
+  - 命中时间与行为匹配卡。
+  - 请求上下文卡。
+  - 误伤反证卡。
+- boundary_checks:
+  - riskDecision 不是最终执行结果。
+  - 策略命中不等于最终作弊定性。
+- pass_criteria: request_id 解释默认执行，且保留误伤反证。
+- status: documented。
+
+## 249. Small-scale group relation judgement can execute
+
+- input: “这几个账号是不是一伙的”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 如果规模可控且实体明确，可以进入执行模式。
+  - 输出聚集关系、设备共用、行为一致性等证据。
+- expected_sections:
+  - 关联摘要。
+  - 强 / 中 / 弱证据。
+  - 正常反证。
+  - 缺失证据。
+- expected_evidence_cards_or_strength_layers:
+  - 多账号聚集卡。
+  - 设备共用卡。
+  - 行为节奏相似卡。
+- boundary_checks:
+  - 不把关联关系直接定性为作弊。
+  - 候选过多时停止扩展。
+- pass_criteria: 小范围明确实体可以执行，但不强结论。
+- status: documented。
+
+## 250. Large batch association expansion forces Plan
+
+- input: “帮我扩展这批账号所有关联设备和关联用户”
+- expected_mode: `plan_mode`
+- expected_routing:
+  - 强制 Plan。
+  - 说明不默认无限扩展。
+  - 不直接执行大范围扩展。
+- expected_sections:
+  - 查询边界。
+  - 候选过多保护。
+  - 用户选择项。
+- expected_evidence_cards_or_strength_layers:
+  - 候选过多保护卡。
+- boundary_checks:
+  - 返回 `too_many_candidates`。
+  - 不默认批量深查。
+  - 不假设已有安全执行框架。
+- pass_criteria: 大批量 / 关联扩展先 Plan。
+- status: documented。
+
+## 251. Misjudgement review defaults to execution mode
+
+- input: “这个用户是不是被误伤了”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 不应只输出 Plan。
+  - 强化正常反证。
+- expected_sections:
+  - 误伤判断摘要。
+  - 支持误伤证据。
+  - 支持风险证据。
+  - 缺失证据。
+- expected_evidence_cards_or_strength_layers:
+  - 正常历史卡。
+  - 设备连续卡。
+  - 行为自然卡。
+  - 策略命中孤立性卡。
+- boundary_checks:
+  - 避免先入为主判风险。
+  - 不因单一策略命中否定误伤可能。
+- pass_criteria: 误伤问题默认执行，并把正常反证放到核心位置。
+- status: documented。
+
+## 252. User explicitly skips Plan
+
+- input: “不用计划，直接查 user_id=123 的基础画像”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 跳过 Plan。
+  - 进入基础画像只读执行。
+- expected_sections:
+  - 目标实体。
+  - 查询结果摘要。
+  - 证据强弱分层。
+- expected_evidence_cards_or_strength_layers:
+  - 强 / 中 / 弱证据与反证。
+- boundary_checks:
+  - 不输出处置。
+  - 不默认扩展关联。
+- pass_criteria: 用户明确直接查时不输出 Plan。
+- status: documented。
+
+## 253. Single weak evidence cannot produce definitive ATO conclusion
+
+- input: “这个用户有一次异地登录，是不是盗号”
+- expected_mode: `execution_mode`
+- expected_routing:
+  - 可以进入执行模式或轻量解释。
+  - 需要补登录链路、设备、行为、历史稳定性。
+- expected_sections:
+  - 单次异地的证据等级。
+  - 需要补证的方向。
+  - 边界。
+- expected_evidence_cards_or_strength_layers:
+  - 单次异地登录归为弱证据 / 辅助证据。
+  - 新设备成功登录、登录失败后成功、行为突变才是更强区分证据。
+- boundary_checks:
+  - 不能直接定性盗号。
+- pass_criteria: 单点证据不输出强结论。
+- status: documented。
+
+## 254. Missing entity triggers clarification or generic Plan
+
+- input: “帮我看看是不是风险”
+- expected_mode: `clarification_or_plan_mode`
+- expected_routing:
+  - 不伪造实体。
+  - 提示缺少 user_id / device_id / request_id 等。
+  - 可给通用研判计划或要求补充实体。
+- expected_sections:
+  - 缺失实体说明。
+  - 可补充信息清单。
+  - 通用 Plan 可选。
+- expected_evidence_cards_or_strength_layers:
+  - 不生成具体证据卡。
+- boundary_checks:
+  - 不调用真实接口。
+  - 不生成 observation。
+- pass_criteria: 缺实体时不假装可查。
+- status: documented。
+
+## 255. Plan with disposition request respects missing safety framework
+
+- input: “帮我计划下后续怎么查和处置这批风险账号”
+- expected_mode: `plan_mode`
+- expected_routing:
+  - 只能说明只读查询计划。
+  - 处置动作需要后续安全执行框架约束或人工确认。
+- expected_sections:
+  - 研判计划。
+  - 查询边界。
+  - 安全执行框架尚未存在的说明。
+  - 用户选择项。
+- expected_evidence_cards_or_strength_layers:
+  - 查询路径与强区分证据卡。
+- boundary_checks:
+  - 不能承诺处置执行。
+  - 不能假设已有安全执行框架。
+  - 不执行写操作。
+- pass_criteria: 涉及处置时 Plan 只表达只读边界和待确认动作。
+- status: documented。

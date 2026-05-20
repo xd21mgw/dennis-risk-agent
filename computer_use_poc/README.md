@@ -72,6 +72,29 @@ DataAgent / Hive 边界不变：DataAgent 只负责 Hive / 公司数仓取数分
 - 设备关联用户查询。
 - 策略命中解释。
 
+## 4-C. Plan 模式 / 研判计划能力
+
+Plan 模式是复杂研判前的用户可读执行计划。
+
+核心口径：
+
+- Plan 不直接查询真实数据。
+- Plan 不是所有查询的默认前置流程。
+- 真实研判问题默认进入执行模式。
+- 只有用户显式要求计划，或边界不清、批量扩展、高风险动作不适合直接执行时，才触发 Plan。
+- Plan 的核心模块是“查询路径与强区分证据卡”。
+- 执行模式的最终输出也需要有证据强弱分层。
+- Plan 默认只读、不处置、不默认批量扩展。
+- Plan 不会假设已有安全执行框架，只预留安全边界说明。
+- Plan 让用户可以选择默认执行、缩小范围、加强关联分析，或先优化计划。
+
+本阶段新增 Plan 资产：
+
+- `computer_use_poc/plan_mode_capability_v1.md`：Plan 模式定义、触发条件、标准输出结构、场景化证据卡。
+- `computer_use_poc/capability_registry.md`：新增 `plan_mode` capability。
+- `computer_use_poc/scene_to_capability_routing.md`：新增 Plan 模式与执行模式路由规则。
+- `computer_use_poc/smoke_tests.md`：新增 Plan / execution mode 12 个 smoke tests。
+
 ## 4-A. Multi-source e2e entry resolution rule
 
 多源 e2e 前，每个 source 必须先完成 `entry_resolution`。
