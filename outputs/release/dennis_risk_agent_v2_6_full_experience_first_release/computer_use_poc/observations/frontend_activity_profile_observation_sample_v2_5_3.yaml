@@ -1,0 +1,139 @@
+frontend_activity_profile_observation:
+  metadata:
+    source: internal_agent
+    codex_role: documentation_only
+    test_stage: v2.5.3
+    validation_status: frontend_activity_profile_single_observation_validated
+    extraction_mode: screenshot_manual_read
+    dom_text_read_available: true
+    dom_text_read_verified_afterward: true
+    dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+
+  platform: track_analysis
+  module: "用户洞查 / 用户细查详情 / 用户属性及时长"
+  app_name: KUAISHOU
+  query_subject_type: userId
+  query_subject_value: "444946196"
+  query_status: success
+
+  query_access:
+    url_direct_open: true
+    login_state_reused: true
+    redirected_to_login: false
+    permission_blocked: false
+    page_loaded: true
+    target_area_visible: true
+    screenshot_saved: true
+
+  profile_card:
+    extraction_mode: screenshot_manual_read
+    dom_text_read_verified: true
+    dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+    fields:
+      user_id:
+        value: "444946196"
+        source: screenshot_manual_read
+        dom_text_read_verified: true
+      register_time:
+        value: "2017-02-17 19:30:21"
+        source: screenshot_manual_read
+        dom_text_read_verified: true
+      active_days_bucket:
+        value: "16-30天"
+        source: screenshot_manual_read
+        dom_text_read_verified: true
+      fan_distribution:
+        value: "100-1k"
+        source: screenshot_manual_read
+        dom_text_read_verified: true
+      device_attributes:
+        value: visible
+        source: screenshot_manual_read
+        dom_text_read_verified: true
+      age:
+        value: "26"
+        source: dom_text_read_afterward
+        dom_text_read_verified: true
+      region:
+        value: "浙江-嘉兴"
+        source: dom_text_read_afterward
+        dom_text_read_verified: true
+      device_type:
+        value: unknown
+        source: dom_text_read_afterward
+        dom_text_read_verified: true
+      attribution_channel:
+        value: unknown
+        source: dom_text_read_afterward
+        dom_text_read_verified: true
+      channel_targeting_strategy:
+        value: unknown
+        source: dom_text_read_afterward
+        dom_text_read_verified: true
+
+  usage_duration:
+    extraction_mode: canvas_rendered_with_screenshot_manual_read
+    dom_can_confirm_chart_present: true
+    dom_can_extract_bar_values: false
+    chart_present:
+      value: true
+      source: dom_canvas_count_or_visual_check
+    time_range_detected:
+      value: "29天"
+      source: screenshot_manual_read
+    active_days_observed:
+      value: true
+      source: screenshot_manual_read
+    total_usage_duration_observed:
+      value: true
+      source: screenshot_manual_read
+    daily_usage_points_observed:
+      value: true
+      source: screenshot_manual_read
+    peak_usage_day:
+      value: observed_redacted
+      source: visual_estimation
+    peak_usage_duration:
+      value: "约135分钟"
+      source: visual_estimation
+    precision_limitation:
+      - "使用时长图表为 canvas 渲染，DOM innerText 不能直接提取具体柱状图数值"
+      - "峰值和每日点位当前来自截图视觉估算"
+      - "如需精确数值，需后续验证 tooltip / 图表数据接口 / network API"
+
+  activity_judgement:
+    has_frontend_activity_signal: true
+    activity_strength: strong
+    judgement_reason:
+      - "用户属性及时长区域完整可见"
+      - "使用时长图表显示29天数据"
+      - "峰值约135分钟"
+      - "月活跃16-30天"
+    evidence_strength: strong_for_frontend_activity_only
+    evidence_limitations:
+      - "只能证明存在较强前端活跃信号"
+      - "不能单独证明真人操作"
+      - "不能单独证明本人操作"
+      - "不能单独证明具体业务动作发生"
+      - "不能单独证明无自动化、脚本、群控"
+
+  next_evidence_to_collect:
+    login_unified_log: "如需验证登录环境和 token / 接口调用链路，需要补查"
+    device_sdk_profile: "如需验证设备真实性、设备风险和稳定绑定，需要补查"
+    backend_action_log: "如需确认具体业务动作，需要补查"
+    frontend_event_sequence: "如需确认具体前端路径和事件链路，需要另起行为序列手脚"
+    data_agent_hive_check: "如需批量统计或长周期分析，需要 DataAgent / Hive"
+
+  raw_observation_reference:
+    screenshot_path: "/data/aime/af4d156d-64b4-4786-8f82-3eb758e17be9/workspace/poc_profile_top.png"
+    captured_at: internal_agent_runtime
+
+  readonly_scope:
+    behavior_records_read: false
+    behavior_replay_opened: false
+    behavior_sequence_parsed: false
+    behavior_stats_read: false
+    event_detail_opened: false
+    event_params_read: false
+
+  readonly_safety_check: PASSED

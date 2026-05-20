@@ -8,3 +8,6 @@ memory/
 
 # Generated release/package artifacts
 outputs/packages/
+
+# Local upload packages
+outputs/dist/

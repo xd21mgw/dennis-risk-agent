@@ -1,0 +1,195 @@
+frontend_activity_profile_matrix_validation:
+  metadata:
+    source: internal_agent
+    codex_role: documentation_only
+    test_stage: v2.5.4
+    validation_status: matrix_validation_passed_by_internal_agent
+    extraction_mode: screenshot_manual_read
+    dom_text_read_available: true
+    dom_text_read_verified_afterward: true
+    dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+    usage_duration_chart_mode: canvas_rendered
+    usage_duration_value_source: screenshot_manual_read_or_visual_estimation
+
+  platform: track_analysis
+  total_cases: 4
+  success_cases: 4
+  partial_success_cases: 0
+  failed_cases: 0
+
+  cases:
+    - matrix_case:
+        app_name: KUAISHOU
+        query_subject_type: userId
+        query_subject_value: "444946196"
+        url_opened: true
+        login_state_reused: true
+        redirected_to_login: false
+        permission_blocked: false
+        page_loaded: true
+        target_area_visible: true
+        profile_card_visible: true
+        usage_duration_chart_present: true
+        screenshot_saved: true
+        screenshot_path: "/data/aime/af4d156d-64b4-4786-8f82-3eb758e17be9/workspace/poc_profile_top.png"
+        query_status: success
+        blocker_type: none
+        extraction_mode:
+          profile_card: screenshot_manual_read
+          profile_card_dom_text_read_verified: true
+          dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+          usage_duration_chart: canvas_rendered
+          usage_duration_values: visual_estimation
+        evidence_observed:
+          - "用户属性及时长区域完整可见"
+          - "使用时长图表显示29天数据，峰值约135分钟"
+          - "注册时间2017-02-17，月活跃16-30天"
+          - "粉丝分布100-1k"
+          - "设备属性标签可见"
+        limitations:
+          - "未读取行为记录"
+          - "未验证设备指纹真实性"
+          - "profile card 字段最初来自截图人工读数，后续已验证 DOM 文本读取可行"
+          - "使用时长具体峰值来自截图视觉估算，不是 DOM 精确读取"
+
+    - matrix_case:
+        app_name: NEBULA
+        query_subject_type: userId
+        query_subject_value: "444946196"
+        url_opened: true
+        login_state_reused: true
+        redirected_to_login: false
+        permission_blocked: false
+        page_loaded: true
+        target_area_visible: true
+        profile_card_visible: true
+        usage_duration_chart_present: true
+        screenshot_saved: true
+        screenshot_path: "/data/aime/af4d156d-64b4-4786-8f82-3eb758e17be9/workspace/poc_nebula_userid.png"
+        query_status: success
+        blocker_type: none
+        extraction_mode:
+          profile_card: screenshot_manual_read
+          profile_card_dom_text_read_verified: true
+          dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+          usage_duration_chart: canvas_rendered
+          usage_duration_values: visual_estimation
+        evidence_observed:
+          - "用户属性及时长区域完整可见"
+          - "使用时长图表存在但数值极低，接近0"
+          - "注册时间、月活跃天数、粉丝分布与KUAISHOU一致"
+          - "设备属性标签可见"
+        limitations:
+          - "NEBULA端使用时长数据几乎为零，可能该用户极少使用极速版"
+          - "未读取行为记录验证"
+          - "profile card 字段最初来自截图人工读数，后续已验证 DOM 文本读取可行"
+          - "使用时长具体数值来自截图视觉估算，不是 DOM 精确读取"
+
+    - matrix_case:
+        app_name: KUAISHOU
+        query_subject_type: deviceId
+        query_subject_value: "HARMONY_4cc91f8f0ba877b6"
+        url_opened: true
+        login_state_reused: true
+        redirected_to_login: false
+        permission_blocked: false
+        page_loaded: true
+        target_area_visible: true
+        profile_card_visible: true
+        usage_duration_chart_present: true
+        screenshot_saved: true
+        screenshot_path: "/data/aime/af4d156d-64b4-4786-8f82-3eb758e17be9/workspace/poc_kuaishou_deviceid.png"
+        query_status: success
+        blocker_type: none
+        extraction_mode:
+          profile_card: screenshot_manual_read
+          profile_card_dom_text_read_verified: true
+          dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+          usage_duration_chart: canvas_rendered
+          usage_duration_values: visual_estimation
+        evidence_observed:
+          - "用户属性及时长区域完整可见"
+          - "使用时长图表显示29天数据，峰值约80分钟"
+          - "注册时间2017-02-17，月活跃16-30天"
+          - "设备ID查询自动关联到同一用户444946196"
+          - "设备属性标签可见"
+        limitations:
+          - "设备ID查询结果与userId查询指向同一用户，但不能单独证明稳定设备绑定关系"
+          - "使用时长峰值低于userId查询，可能该设备非主要使用设备"
+          - "profile card 字段最初来自截图人工读数，后续已验证 DOM 文本读取可行"
+          - "使用时长峰值来自截图视觉估算，不是 DOM 精确读取"
+
+    - matrix_case:
+        app_name: NEBULA
+        query_subject_type: deviceId
+        query_subject_value: "HARMONY_4cc91f8f0ba877b6"
+        url_opened: true
+        login_state_reused: true
+        redirected_to_login: false
+        permission_blocked: false
+        page_loaded: true
+        target_area_visible: true
+        profile_card_visible: true
+        usage_duration_chart_present: true
+        screenshot_saved: true
+        screenshot_path: "/data/aime/af4d156d-64b4-4786-8f82-3eb758e17be9/workspace/poc_nebula_deviceid.png"
+        query_status: success
+        blocker_type: none
+        extraction_mode:
+          profile_card: screenshot_manual_read
+          profile_card_dom_text_read_verified: true
+          dom_extraction_path: "iframe[1].contentDocument → .user-card → innerText"
+          usage_duration_chart: canvas_rendered
+          usage_duration_values: visual_estimation
+        evidence_observed:
+          - "用户属性及时长区域完整可见"
+          - "使用时长图表存在但数值极低，接近0"
+          - "注册时间、月活跃天数、粉丝分布与KUAISHOU一致"
+          - "设备ID查询同样关联到用户444946196"
+          - "设备属性标签可见"
+        limitations:
+          - "NEBULA端该设备使用时长几乎为零"
+          - "未读取行为记录验证"
+          - "profile card 字段最初来自截图人工读数，后续已验证 DOM 文本读取可行"
+          - "使用时长具体数值来自截图视觉估算，不是 DOM 精确读取"
+
+  overall_conclusion: |
+    四组合矩阵全部验证通过。所有组合均可直联打开、复用登录态、无权限阻断，
+    均能读取“用户属性及时长”区域。关键发现：
+    1. KUAISHOU端该用户前端活跃信号强，使用时长图表有明显波动。
+    2. NEBULA端该用户/设备使用时长几乎为零，可能极少使用极速版。
+    3. deviceId查询在本次样例中自动关联到同一用户444946196，但不能单独证明稳定设备绑定关系。
+    4. 设备维度查询的使用时长峰值低于用户维度，可能该设备非主要使用设备。
+
+  blockers_if_any: []
+
+  evidence_boundary:
+    suitable_for:
+      - "前端活跃存在性证据"
+      - "活跃强度大致判断"
+      - "KUAISHOU / NEBULA 使用差异观察"
+      - "userId / deviceId 查询结果是否可进入用户属性及时长区域"
+    not_sufficient_for:
+      - "真人操作证明"
+      - "本人操作证明"
+      - "具体业务动作发生证明"
+      - "设备稳定绑定关系证明"
+      - "无自动化、脚本、群控证明"
+    not_read:
+      - "下方行为记录"
+      - "行为回放"
+      - "行为序列"
+      - "行为统计"
+      - "单条事件详情"
+      - "事件参数"
+    extraction_boundary:
+      - "profile card 字段最初来自 screenshot_manual_read，后续已验证 DOM 文本读取可行"
+      - "DOM 路径为 iframe[1].contentDocument → .user-card → innerText"
+      - "使用时长图表为 canvas 渲染，DOM 只能确认 chart_present=true / canvas_rendered"
+      - "峰值和每日使用时长点位仍依赖截图视觉估算，未完成 DOM 精确读取"
+
+  next_step:
+    - "如需判断具体业务动作，需要进一步查看行为序列或后端业务日志。"
+    - "如需验证设备真实性，需要结合设备 SDK / 设备画像。"
+    - "如需验证登录环境，需要结合用户登录统一日志。"
+    - "如需批量统计，需要交给 Data Agent / Hive 做群体分析。"

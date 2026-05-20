@@ -7,6 +7,7 @@
 ```text
 dennis-risk-agent v2.6.0 User ↔ Device Entity Resolution Layer
 dennis-risk-agent v2.6 experience-first release
+dennis-risk-agent v2.6 full experience-first release
 ```
 
 本 addendum 吸收 `computer_use_poc` 中已完成一致性检查的实体解析层文档，以及 experience-first 阶段的 golden cases / answer templates / capability routing 文档。不修改核心 Skill，不新增接口，不包含真实查询结果。
@@ -71,7 +72,7 @@ Experience-first release package：
 - `outputs/release/dennis_risk_agent_v2_6_experience_first_release/`
 - `outputs/final/dennis_risk_agent_v2_6_experience_first_release_snapshot.md`
 
-该 release package 用于云端内部 Agent 集成，包含：
+该目录是 experience-first 增量包，包含：
 
 - `computer_use_poc/user_experience_golden_cases.md`
 - `computer_use_poc/answer_experience_templates.md`
@@ -80,7 +81,25 @@ Experience-first release package：
 - `computer_use_poc/run_logs/user_experience_golden_cases_dry_run_001.md`
 - `computer_use_poc/README.md`
 
-该包只提升用户体验稳定性，不新增真实平台能力，不修改真实读取逻辑。
+该包只提升用户体验稳定性，不新增真实平台能力，不修改真实读取逻辑；它不是可独立集成的完整包。
+
+Full experience-first release package：
+
+- `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/`
+- `outputs/final/dennis_risk_agent_v2_6_full_experience_first_release_snapshot.md`
+
+该目录以 `outputs/release/dennis_risk_agent_v2_4_runtime_plus_release/` 为完整基底，叠加 v2.6 experience-first 文件和关键 `computer_use_poc` contract / hand 文档，可作为云端内部 Agent 的独立完整集成包。
+
+该 full 包包含：
+
+- v2.4 Runtime Plus 核心 Agent runtime、working guide、routing、integration smoke、startup checklist。
+- ATO 完全体相关文件。
+- DataAgent 边界说明。
+- 已有平台 hand / computer_use_poc 关键文档。
+- observation contract / observation schema。
+- v2.6 experience-first golden cases、answer templates、scene_to_capability_routing、dry run。
+
+云端内部 Agent 集成应优先使用 full 包，而不是只加载增量 experience 包。
 
 ## 2. 可选附录
 
@@ -224,6 +243,14 @@ dennis-risk-agent-v2.3-dataagent-integration-design
 outputs/release/dennis_risk_agent_v2_6_experience_first_release/
 ```
 
+该路径是增量包，不建议单独用于云端内部 Agent 完整集成。
+
+完整包路径：
+
+```text
+outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/
+```
+
 ### 包含文件
 
 - `README.md`
@@ -332,6 +359,10 @@ tar --exclude='.git' \
 18. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/integration_notes.md`
 19. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/smoke_test_summary.md`
 20. `outputs/final/dennis_risk_agent_v2_6_experience_first_release_snapshot.md`
+21. `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/README.md`
+22. `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/dennis_risk_agent_v2_6_full_experience_first_manifest_v1.md`
+23. `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/integration_notes.md`
+24. `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/smoke_test_summary.md`
 
 最小使用方式：
 
@@ -342,7 +373,7 @@ tar --exclude='.git' \
 4. 若做 Data Agent 接入，读取 07_tools/dataagent/configs/ 与 adapter_design/。
 5. 当前包只支持设计、研判、query_intent 规划和 mock closed-loop，不真实调用 Data Agent。
 6. 若问题涉及 `userId ↔ deviceId` 入参不一致，先读取 v2.6.0 Entity Resolution addendum；该层只补齐实体，不给风险定性。
-7. 若做云端内部 Agent 集成，优先读取 v2.6 experience-first release 包中的 golden cases、answer templates 和 scene_to_capability_routing。
+7. 若做云端内部 Agent 完整集成，优先读取 `outputs/release/dennis_risk_agent_v2_6_full_experience_first_release/`；不要只加载 v2.6 experience-first 增量包。
 ```
 
 ## 7. 包内边界
