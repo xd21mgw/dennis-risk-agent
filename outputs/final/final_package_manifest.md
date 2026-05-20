@@ -6,9 +6,10 @@
 
 ```text
 dennis-risk-agent v2.6.0 User ↔ Device Entity Resolution Layer
+dennis-risk-agent v2.6 experience-first release
 ```
 
-本 addendum 仅吸收 `computer_use_poc` 中已完成一致性检查的实体解析层文档，不修改核心 Skill，不新增接口，不包含真实查询结果。
+本 addendum 吸收 `computer_use_poc` 中已完成一致性检查的实体解析层文档，以及 experience-first 阶段的 golden cases / answer templates / capability routing 文档。不修改核心 Skill，不新增接口，不包含真实查询结果。
 
 ## 1. 必须纳入的文件 / 目录
 
@@ -64,6 +65,22 @@ Computer Use POC / Entity Resolution addendum：
 - `computer_use_poc/smoke_tests.md`
 
 这些文件构成 v2.6.0 User ↔ Device Entity Resolution Layer 的 release package 增量：主 Agent 在 intent routing 与具体 hand 之间，先补齐 `userId ↔ deviceId / did / deviceceid` 入参映射，再进入 Device SDK、用户登录统一日志、档案中心等后续只读 hand。
+
+Experience-first release package：
+
+- `outputs/release/dennis_risk_agent_v2_6_experience_first_release/`
+- `outputs/final/dennis_risk_agent_v2_6_experience_first_release_snapshot.md`
+
+该 release package 用于云端内部 Agent 集成，包含：
+
+- `computer_use_poc/user_experience_golden_cases.md`
+- `computer_use_poc/answer_experience_templates.md`
+- `computer_use_poc/scene_to_capability_routing.md`
+- `computer_use_poc/smoke_tests.md`
+- `computer_use_poc/run_logs/user_experience_golden_cases_dry_run_001.md`
+- `computer_use_poc/README.md`
+
+该包只提升用户体验稳定性，不新增真实平台能力，不修改真实读取逻辑。
 
 ## 2. 可选附录
 
@@ -189,6 +206,53 @@ dennis-risk-agent-v2.3-dataagent-integration-design
 - release package 更新前一致性检查：已完成，未发现口径冲突。
 - 本 addendum 未真实查询、未新增接口、未批量、未修改核心 Skill。
 
+## 4.2 v2.6 Experience-First Release
+
+### 定位
+
+`dennis_risk_agent_v2_6_experience_first_release` 是用于内部 Agent 云端升级集成的体验优先最小可用版本。
+
+目标：
+
+- 用户仍按业务问题提问。
+- 系统内部按 capability routing 执行。
+- 输出稳定体现：场景识别、证据组织、结论边界、下一步建议。
+
+### 包路径
+
+```text
+outputs/release/dennis_risk_agent_v2_6_experience_first_release/
+```
+
+### 包含文件
+
+- `README.md`
+- `dennis_risk_agent_v2_6_experience_first_manifest_v1.md`
+- `integration_notes.md`
+- `smoke_test_summary.md`
+- `computer_use_poc/user_experience_golden_cases.md`
+- `computer_use_poc/answer_experience_templates.md`
+- `computer_use_poc/scene_to_capability_routing.md`
+- `computer_use_poc/smoke_tests.md`
+- `computer_use_poc/run_logs/user_experience_golden_cases_dry_run_001.md`
+- `computer_use_poc/README.md`
+
+### 验证状态
+
+- 6 个体验黄金 Case dry run：6/6 pass。
+- 设备风险补证 input completeness 已修正：Device SDK 前置输入是 deviceId；userId 输入先走 user_to_device；无法解析返回 `missing_device_id`。
+- 当前适合进入云端内部 Agent 集成。
+
+### 边界
+
+- 不新增平台手脚。
+- 不修改核心 Skill。
+- 不修改真实读取逻辑。
+- 不执行真实平台访问。
+- 不包含 `outputs/packages/`。
+- 不打印 cookie、token、storageState 等敏感认证信息。
+- 不允许因为单一设备关联、单一策略命中、单一登录失败直接定性作弊或盗号。
+
 ## 5. 打包命令
 
 推荐 zip 打包：
@@ -263,6 +327,11 @@ tar --exclude='.git' \
 13. `computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md`
 14. `computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md`
 15. `computer_use_poc/run_logs/entity_resolution_user_device_text_regression_run_v2_6_0.md`
+16. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/README.md`
+17. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/dennis_risk_agent_v2_6_experience_first_manifest_v1.md`
+18. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/integration_notes.md`
+19. `outputs/release/dennis_risk_agent_v2_6_experience_first_release/smoke_test_summary.md`
+20. `outputs/final/dennis_risk_agent_v2_6_experience_first_release_snapshot.md`
 
 最小使用方式：
 
@@ -273,6 +342,7 @@ tar --exclude='.git' \
 4. 若做 Data Agent 接入，读取 07_tools/dataagent/configs/ 与 adapter_design/。
 5. 当前包只支持设计、研判、query_intent 规划和 mock closed-loop，不真实调用 Data Agent。
 6. 若问题涉及 `userId ↔ deviceId` 入参不一致，先读取 v2.6.0 Entity Resolution addendum；该层只补齐实体，不给风险定性。
+7. 若做云端内部 Agent 集成，优先读取 v2.6 experience-first release 包中的 golden cases、answer templates 和 scene_to_capability_routing。
 ```
 
 ## 7. 包内边界
