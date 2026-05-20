@@ -1,0 +1,76 @@
+platform: tianshi_strategy_platform_rcp
+platform_display_name: 天狮策略平台 / rcp
+test_stage: v2.5.5
+query_type: fastQueryHbase
+capability: readonly_strategy_hit_check
+query_object: sourceId
+query_value: "4231737183"
+query_value_policy: source_id_allowed
+
+query_result:
+  query_status: success
+  api_response_status: 200
+  api_message: 成功
+  raw_record_count: 4
+  has_strategy_hit: true
+  production_policy_hit_count: 4
+  evidence_strength: strong
+
+distributions:
+  riskDecision:
+    阻止: 3
+    验证: 1
+  eventType:
+    USER_REGISTER_NEW: 3
+    LOGIN_AUDIT: 1
+  riskType:
+    其他: 3
+    账号: 1
+  confidence:
+    强: 4
+
+sample_hits:
+  max_items: 3
+  value_policy: summarized_without_trace_or_host
+  items:
+    - hitProductionPolicy: true
+      riskDecision: 阻止
+      eventType: USER_REGISTER_NEW
+      riskType: 其他
+      confidence: 强
+    - hitProductionPolicy: true
+      riskDecision: 阻止
+      eventType: USER_REGISTER_NEW
+      riskType: 其他
+      confidence: 强
+    - hitProductionPolicy: true
+      riskDecision: 验证
+      eventType: LOGIN_AUDIT
+      riskType: 账号
+      confidence: 强
+
+trace_observation:
+  has_trace: true
+  host_value_recorded: false
+  port_value_recorded: false
+  trace_id_value_recorded: false
+  trace_value_policy: not_in_standard_observation
+
+readonly_safety_check:
+  write_action_performed: false
+  mutation_performed: false
+  export_performed: false
+  passed: true
+
+interpretation_boundary:
+  - 天狮命中是策略证据，不等于最终作弊定性。
+  - riskDecision=阻止/验证 代表策略返回动作，不代表最终执行成功。
+  - 无命中不代表无风险。
+  - 该手脚不替代 DataAgent / Hive、登录统一日志、档案中心、前端埋点或设备平台。
+
+next_evidence_to_collect:
+  login_unified_log: 按需补登录链路、OAuth、扫码、token/session 等证据。
+  archives_center: 按需补账号状态、用户画像、审核 / 打标日志。
+  device_sdk_profile: 按需补设备画像和设备风险标签。
+  frontend_activity_profile: 按需补前端活跃痕迹。
+  data_agent_hive_check: 批量统计、长周期或离线证据时使用。
