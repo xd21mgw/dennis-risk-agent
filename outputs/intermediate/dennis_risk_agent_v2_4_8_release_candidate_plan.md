@@ -4,6 +4,9 @@
 
 ```yaml
 release_candidate_status: v2.4.8_user_login_log_hand_release_candidate_not_final
+user_login_log_ui_hand: release_candidate_not_final
+user_login_log_api_hand: get_only_validated / api_readonly_poc
+final_release_package: not_updated
 ```
 
 ## 2. 可进入 RC 的能力
@@ -18,10 +21,11 @@ release_candidate_status: v2.4.8_user_login_log_hand_release_candidate_not_final
 - 档案中心用户分析分页 guardrail。
 - 审核日志 / 打标日志补充 source 可访问性。
 - 统一登录日志 special event detail key extraction。
+- 统一登录日志 API GET-only 直联读取：`/rest/unified/log/search` 可访问，`totalCount == logSearchModels.length` 时可一次性读取当前查询窗口内完整结果。
 
 ## 3. 不能进入 final release 的原因
 
-- full pagination traversal 未完成。
+- UI full pagination traversal 未完成；v2.4.10 API hand 已发现当前样例 UI 翻页属于前端分页，API 可一次性返回当前查询窗口完整结果。
 - permission blocked behavior 未完成。
 - 设备攻防平台未验证。
 - 审核 / 打标日志未完整验证。
@@ -36,6 +40,8 @@ release_candidate_status: v2.4.8_user_login_log_hand_release_candidate_not_final
 - 不输出处罚建议。
 - 不复制完整 JSON。
 - token / session / ticket / authorization / loginToken / tokenId 等凭证明文只输出 `present_redacted`。
+- API hand 标准用户查询必须使用 `userId` 参数，不得把 userId 放到 `query` 参数中；`query` 仅作为 keyword fallback。
+- API full result 只代表当前查询条件和 reliable window 内完整，不代表历史全量。
 - `partial_page_only` / `partial_coverage` 必须保留。
 - table container scroll 与 page body scroll 必须区分。
 - Tab 点击前必须确认 click target 属于当前页面内部 Tab 容器。
@@ -54,6 +60,8 @@ release_candidate_status: v2.4.8_user_login_log_hand_release_candidate_not_final
 
 ```yaml
 user_login_log_hand: partially_ready
+user_login_log_ui_hand: release_candidate_not_final
+user_login_log_api_hand: get_only_validated / api_readonly_poc
 multi_source_entry_resolution: validated
 archives_saved_state_e2e: validated
 archives_saved_state_reuse: validated
@@ -61,12 +69,18 @@ multi_source_e2e: validated_with_partial_coverage
 archives_user_analysis_pagination: validated_with_correction
 archives_audit_label_log_access: partially_validated
 unified_log_special_event_detail: validated
+unified_log_api_get_only: validated
+unified_log_api_full_result_discovery: validated
 release_status: release_candidate_not_final
 ```
 
 仍未完成：
 
-- unified_log_full_pagination_traversal。
+- unified_log_ui_full_pagination_traversal。
+- user_login_log_api_no_result_behavior。
+- user_login_log_api_unauthorized_or_expired_auth_behavior。
+- user_login_log_api_over_reliable_window_behavior。
+- user_login_log_api_logContent_parse_normalization。
 - archives_user_analysis_full_pagination_traversal。
 - permission_blocked_behavior。
 - device_platform_verification。

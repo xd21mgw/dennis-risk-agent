@@ -110,6 +110,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.4.6 Dennis Agent single-source observation digestion 已验证：能消化档案中心 focused_login_risk observation，并输出证据总结、风险线索、证据缺口和下一步平台建议。
 - v2.4.7 end-to-end readonly joint test 已验证：用户问题 → Dennis 子 Agent 生成 readonly plan → browser computer use 执行 → scripts eval 提取 observation → dedupe 生效 → Dennis 消化 observation → 输出证据总结 / 风险线索 / 缺口 / 下一步平台建议。
 - v2.4.8 用户登录统一日志 readonly POC 已完成页面可访问性、部分详情弹窗、边界行为和分页行为实跑，入口为 `https://user-center-workbench.corp.kuaishou.com/create-applications/unified-log-search`，当前状态为 `page_accessibility partially validated; result table partially validated; switchUser detail partially validated; refreshToken detail validated for readonly JSON key extraction; no_result/time_window boundary partially validated; pagination behavior partially validated`。
+- v2.4.10 已新增用户登录统一日志 API readonly hand POC。GET `/rest/unified/log/search` 已验证可访问，标准用户查询必须使用 `userId` 参数，不能把 userId 放到 `query` 参数里。样例一次返回 `totalCount=141` 且 `logSearchModels.length=141`，说明 API 可一次性返回当前查询窗口内完整结果；UI 翻页属于前端分页。当前状态：`user_login_log_api_hand=get_only_validated / api_readonly_poc`，final release package 未更新。
 - 未点击任何写操作按钮，只读安全检查通过。
 
 未验证：
@@ -134,9 +135,10 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.4.7 当前仅验证档案中心 focused_login_risk 单平台端到端链路；不代表多平台联合、不代表自动风险定性、不代表自动处置。
 - v2.4.8 用户登录统一日志页面前端允许选择超过最近 7 天的历史时间，但当前 POC 仅将默认最近 7 天作为实时页面可靠查询窗口。超出窗口返回“暂无数据”时，不得解释为历史无记录或全量无风险；长周期登录链路应转 DataAgent / Hive 或离线日志能力。当前不得写成 fully validated。
 - v2.4.8 分页样例中 total_count 可见，样例 total_count=133、page_size=20；人工证据证明可翻到第 4 页且数据变化。browser automation 未稳定完成自动翻页前，不得声称当前页就是全量结果。
+- v2.4.10 API hand 发现：如果 `logSearchModels.length == totalCount`，可标记 `api_full_result_loaded=true`；UI hand 仍需保留 `ui_visible_page_only=true` / `partial_page_only`。API full result 只代表当前查询条件和可靠时间窗口内完整，不代表历史全量。
 - v2.4.8 user_login_log_hand_runtime_snapshot 已生成：`outputs/intermediate/dennis_risk_agent_v2_4_8_user_login_log_hand_runtime_snapshot.md`；release package 未更新。
-- v2.4.8 Run 006 已验证 multi-source entry resolution：Dennis 在档案中心 + 用户登录统一日志 e2e 前先读取档案中心 playbook / run log / runtime snapshot / README，找到档案中心入口和 selector/playbook；本轮 e2e 被 `agent-browser` 档案中心独立登录态阻断，状态为 `multi_source_e2e_blocked_by_archives_auth`，不是文档缺失、URL 缺失、页面无数据或统一登录日志失败。
-- Run 006 clarification：档案中心 `userId` direct URL 已确认为 `https://admin.p.adm-corp.kuaishou.com/frontend/archives/index.html#/archives/user/profile?userId={userId}`；独立登录域为 `account.p.adm-corp.kuaishou.com`；认证链路为 SSO → 档案中心独立登录 → userId direct URL。`sso_session.py` 可 HTTP 级访问，但 `agent-browser` GUI 进程未复用该 cookie，因此 direct URL 仍被重定向到独立登录页。
+- v2.4.8 Run 006 已验证 multi-source entry resolution：Dennis 在档案中心 + 用户登录统一日志 e2e 前先读取档案中心 playbook / run log / runtime snapshot / README，找到档案中心入口和 selector/playbook。该 run 当时被 `agent-browser` 档案中心独立登录态阻断，状态为 `multi_source_e2e_blocked_by_archives_auth`，不是文档缺失、URL 缺失、页面无数据或统一登录日志失败。
+- Run 006 clarification：档案中心 `userId` direct URL 已确认为 `https://admin.p.adm-corp.kuaishou.com/frontend/archives/index.html#/archives/user/profile?userId={userId}`；独立登录域为 `account.p.adm-corp.kuaishou.com`；认证链路为 SSO → 档案中心独立登录 → userId direct URL。旧环境中 `sso_session.py` 可 HTTP 级访问但 `agent-browser` GUI 进程未复用该 cookie，因此 direct URL 被重定向到独立登录页。后续 v2.5.8.1 证明：当独立登录页账号 / 用户名已预填时，点击“下一步”可能恢复进入档案中心，不应立即标记 failed。
 - Run 006 中统一登录日志单源查询成功，`user_id=4700398885`、`total_count=133`、`page_size=20`、`visible_row_count=20`、`partial_page_only=true`；该结果只能作为单源 observation，不能包装成 multi-source e2e 成功。
 - v2.4.8 Run 007 已完成同 userId 多源 e2e：档案中心 saved state 已解决，档案中心 direct URL 可访问，统一登录日志查询成功，跨源 DID / 历史一键登录 / 退出登录行为可对齐。当前状态为 `multi_source_e2e_validated_with_partial_coverage`，`multi_source_schema_ready=focused_login_risk_observation_only`，`release_status=release_candidate_not_final`。
 - v2.4.8 多源 e2e lessons learned 已沉淀：`computer_use_poc/multi_source_e2e_lessons_learned_v2_4_8.md`。
@@ -151,13 +153,18 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.5.3 单点 observation 已由内部 Agent 验证：KUAISHOU + userId + 444946196 可读取“用户属性及时长”区域并形成 observation，前端活跃信号强；该 observation 只能证明前端活跃存在性，不能证明真人、本人与具体业务动作。
 - v2.5.4 四组合矩阵已由内部 Agent 验证：KUAISHOU / NEBULA × userId / deviceId 共 4 组全部成功，均可直联查询“用户属性及时长”区域。KUAISHOU 活跃信号强，NEBULA 使用时长几乎为零；deviceId 查询样例自动关联到同一用户，但不能单独证明稳定设备绑定关系。
 - v2.5.3 / v2.5.4 extraction_mode 已校准：初始 profile card 与使用时长字段来自 `screenshot_manual_read`；后续已验证 profile card 可通过 `iframe[1].contentDocument → .user-card → innerText` 做 DOM 文本读取。使用时长图表为 canvas 渲染，DOM 只能确认图表存在，峰值和每日点位仍为截图视觉估算，精确数值需后续 tooltip / 图表接口 / network API 验证。
+- v2.5.5 已沉淀天狮策略平台 / rcp 极简 readonly 手脚：查询类型为 `fastQueryHbase`，能力为 `readonly_strategy_hit_check`，用于判断 `sourceId` 在指定时间窗口内是否命中生产反作弊 / 风控策略。本轮内部 Agent 已验证 `sourceId=4231737183` 查询成功，`raw_record_count=4`，`has_strategy_hit=true`，`production_policy_hit_count=4`，`riskDecision` 分布为阻止 3 / 验证 1。该结果是策略证据，不等于最终作弊定性，不替代 DataAgent / Hive、登录统一日志、档案中心、前端埋点或设备平台。
+- v2.5.6 已新增天狮 `strategy_hit_check` 路由规则：天狮手脚从“可用证据源”升级为“可被 Dennis Agent 查询计划调度的证据源”。当用户询问某个 `sourceId` 是否被风控 / 反作弊 / 生产策略命中过时，Dennis 可生成 `tianshi_strategy_hit_check` 只读查询计划；仍保持 readonly，不做写操作、不做最终风险定性。
+- v2.5.7 已新增多手脚证据编排样例：当用户问“某用户是否有风险 / 为什么被拦截或验证”时，Dennis 不应只依赖天狮策略命中，而应生成包含 strategy / login / profile / behavior / device 证据的 `multi_evidence_query_plan`。该版本只新增编排样例，不新增平台能力，不调用真实平台。
+- v2.5.8 已新增真实 E2E 多手脚只读验证模板：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。本轮只验证天狮策略命中、用户登录统一日志、档案中心三手脚最小闭环，不强制拉前端活跃画像、设备 SDK 或 DataAgent / Hive；当前为模板和 run log 模板，不是实际执行结果。
+- v2.5.8.1 已归档云端内部 Agent 真实 E2E 三源成功运行：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。`tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check` 三源均成功。档案中心先跳转 `account.p.adm-corp.kuaishou.com` 独立登录页，但账号 / 用户名已预填，点击“下一步”后成功进入档案中心，沉淀为 `archives_independent_login_preflight_required_but_recoverable`。该运行证明 Dennis Agent 可完成多手脚查询计划、多 observation 收集、跨证据汇总和边界说明；仍不代表自动风险定性或自动处置。
 
 Auth preflight：
 
 - 如果 Dennis 子 Agent 使用的 browser profile / workspace 与前期测试环境不同，可能需要重新扫码 / 登录。
 - 这属于认证态环境差异，不代表 browser computer use 能力失败。
 - saved state 复用、state 过期、重新登录恢复规则继续有效。
-- 如果 `agent-browser` 缺少档案中心独立登录态，应停止并返回 `archives_browser_auth_blocked` / `archives_independent_login_required_for_agent_browser`；下一步是人工在 `agent-browser` 中完成档案中心独立登录并保存 state，或在已有档案中心认证态的 Dennis Risk Agent 环境中重跑。随后再执行 Run 007：`multi_source_e2e_with_archives_saved_state`。
+- 如果 `agent-browser` 打开档案中心 direct URL 后跳到 `account.p.adm-corp.kuaishou.com` 独立登录页，应先判断账号 / 用户名是否已预填。若已预填，可点击“下一步”尝试恢复会话；成功进入档案中心时标记 `recoverable_preflight_success`，不得计入 failed source。若点击后仍要求密码 / 扫码 / MFA，或账号 / 用户名未预填，则返回 `archives_independent_login_required` / `wait_for_manual_login`。
 - v2.4.9 已新增统一前置检查清单：`computer_use_poc/browser_auth_preflight_checklist_v2_4_9.md`。所有后续平台手脚在读取页面字段前，必须按 `source_entry_resolution → browser_auth_preflight → saved_state_reuse_check → single_browser_session_check → 页面字段探索` 顺序执行。
 - 若 `browser_auth_preflight` 未通过，只能返回 blocker；不得把登录态阻断、saved state 缺失、SPA route 污染或 selector 范围不明解释成页面无数据、用户无记录或平台不可用。
 
@@ -178,6 +185,10 @@ release_status: release_candidate_not_final
 仍未完成：
 
 - unified_log_full_pagination_traversal。
+- user_login_log_api_no_result_behavior。
+- user_login_log_api_unauthorized_or_expired_auth_behavior。
+- user_login_log_api_over_reliable_window_behavior。
+- user_login_log_api_logContent_parse_normalization。
 - archives_user_analysis_full_pagination_traversal。
 - permission_blocked_behavior。
 - device_platform_verification。
@@ -191,6 +202,11 @@ release_status: release_candidate_not_final
 - frontend_activity_profile_user_attribute_duration_observation_sample。
 - frontend_activity_profile_behavior_sequence_hand。
 - frontend_activity_profile_usage_duration_precise_value_extraction。
+- tianshi_strategy_hit_batch_or_long_term_validation。
+- tianshi_strategy_hit_final_enforcement_verification。
+- tianshi_strategy_hit_routing_live_regression。
+- multi_evidence_orchestration_live_regression。
+- e2e_multi_evidence_readonly_real_run。
 
 ## 6. SPA / agent-browser guardrail
 

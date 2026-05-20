@@ -7,13 +7,16 @@
 - single-source archives_center focused_login_risk observation digestion validated。
 - v2.4.7 end-to-end readonly joint test validated：Dennis 子 Agent 可调用 browser computer use，browser 返回 observation 后 Dennis 可完成证据消化。
 - user_login_unified_log 是多源 observation 的第二个 source，当前为 v2.4.8 partially ready。
-- v2.4.8 Run 006 已验证 multi-source entry resolution；multi-source e2e 当前被 `agent-browser` 档案中心独立登录态阻断，状态为 `multi_source_e2e_blocked_by_archives_auth`。
+- user_login_log_api_readonly_hand 是 v2.4.10 新增的统一登录日志 API 优先读取方式，当前为 `get_only_validated / api_readonly_poc`；UI hand 保留为 auth bootstrap / fallback / 字段发现。
+- v2.4.8 Run 006 已验证 multi-source entry resolution；该 run 当时被 `agent-browser` 档案中心独立登录态阻断，状态为 `multi_source_e2e_blocked_by_archives_auth`。v2.5.8.1 进一步证明：档案中心独立登录页若账号 / 用户名已预填，可通过点击“下一步”恢复进入档案中心，标记为 `recoverable_preflight_success`。
 - v2.4.8 Run 007 已验证同 userId 档案中心 + 用户登录统一日志 focused_login_risk multi-source e2e，状态为 `multi_source_e2e_validated_with_partial_coverage`。
 - v2.4.8 Run 008 ~ Run 011 已补充 saved state 复用、档案中心用户分析分页修正、审核 / 打标日志可访问性、统一登录日志 special event detail key extraction。
+- v2.5.8.1 已完成云端内部 Agent 三源 E2E 成功运行：`tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check` 均成功。
 - 当前 release 状态为 `release_candidate_not_final`。
 - 当前已验证单源消化和 focused_login_risk 多源 observation partial coverage；不代表多源联合风险研判或最终定性完成。
 - device_sdk_foundation 是 v2.5.0 计划接入的第三个 browser computer use source，当前仅完成 readonly POC / internal playbook 设计，状态为 `design_pending_validation`。
 - frontend_activity_profile 是 v2.5.2 计划接入的前端活跃画像只读 source，当前仅完成方法论、URL 模板、schema、test cases 和 run log 模板，状态为 `design_only_pending_browser_validation`。
+- tianshi_strategy_platform_rcp 是 v2.5.5 已沉淀的策略命中只读 source，当前仅覆盖 `fastQueryHbase` / `readonly_strategy_hit_check` 极简能力，用于判断 `sourceId` 在指定时间窗口内是否命中生产反作弊 / 风控策略。
 - Dennis Agent 输出必须保留“线索 / 证据 / 结论边界”三层区分。
 
 ## 1. 三方分工
@@ -128,6 +131,7 @@ source_observations:
   - platform: user_login_unified_log
   - platform: device_sdk_foundation
   - platform: frontend_activity_profile
+  - platform: tianshi_strategy_platform_rcp
 same_user_id_used:
 source_entry_resolutions:
   - source_name:
@@ -145,12 +149,269 @@ source_entry_resolutions:
 - `user_login_unified_log` 后续用于补强档案中心 `focused_login_risk` 的登录链路证据。
 - 当前已完成页面可访问性、认证态复用、基础 User ID 查询、默认日志来源 checkbox、结果表可见性和只读安全边界的 partially validated。
 - `refresh_token_detail_observation` 已验证 readonly JSON key extraction；这只代表 refreshToken 详情弹窗字段名可安全观察，不代表统一登录日志 fully validated。
+- v2.4.10 API hand 已验证 GET `/rest/unified/log/search` 可直接返回当前查询窗口内完整结果；标准用户查询必须使用 `userId` 参数，不得把用户 ID 放到 `query` 参数中。
 - 当前尚未 fully validated；Run 007 仅验证 focused_login_risk multi-source observation partial coverage。
 - 当前 POC 仅将页面默认 / backend default 的近 7 天作为实时页面可靠查询窗口；前端时间控件允许选择超过最近 7 天，但超窗“暂无数据”不得解释为历史无记录。
 - 本轮页面未显式展示具体 start_time / end_time，但查询结果显示存在默认近 7 天行为；不得写成 UI 明确展示最近 7 天。
 - 需要离线补证时建议 DataAgent / Hive。
 - `device_sdk_foundation` 后续用于补充设备侧画像、SDK 采集状态、设备风险标签、设备一致性和设备关系摘要；当前未完成 source entry / auth preflight 实跑，不得写成可用能力。
 - `frontend_activity_profile` 后续用于补充前端活跃痕迹，只读取“用户属性及时长”区域，不替代完整行为序列、后端日志、登录日志或设备 SDK。
+- `tianshi_strategy_platform_rcp` 用于补充策略命中证据，不替代登录链路、设备画像、前端行为或离线数仓取证。
+
+### 2.0.-6 user_login_log_api_readonly_observation
+
+v2.4.10 API hand 用于统一登录日志结构化读取。
+
+```yaml
+user_login_log_api_query:
+  standard_query_mode:
+    userId:
+    did:
+    query:
+  fallback_query_mode:
+    query:
+    userId:
+    did:
+  from_timestamp:
+  to_timestamp:
+  recallSource:
+  reliable_window:
+  over_reliable_realtime_window:
+```
+
+标准查询模式：
+
+```yaml
+standard_query_mode:
+  user_id_exact_query:
+    userId: "{target_user_id}"
+    did: ""
+    query: ""
+```
+
+fallback 查询模式：
+
+```yaml
+fallback_query_mode:
+  keyword_query:
+    query: "{keyword}"
+    userId: ""
+    did: ""
+```
+
+响应结构：
+
+```yaml
+user_login_log_api_response:
+  status_code:
+  code:
+  total_count:
+  logSearchModels_length:
+  api_full_result_loaded:
+  index_continuity:
+    first_index:
+    last_index:
+    continuous:
+  log_models:
+    - date:
+      timestamp:
+      index:
+      userIds:
+      dids:
+      method:
+      logSource:
+      logTags:
+      logContent_keys:
+      normalized_event_type:
+      credential_fields_redacted:
+```
+
+pagination discovery:
+
+```yaml
+unified_log_api_pagination_discovery:
+  total_count:
+  logSearchModels_length:
+  length_equals_totalCount:
+  pagination_request_triggered_on_ui_page_change:
+  pagination_mode: frontend_pagination
+  api_full_result_loaded:
+  ui_frontend_pagination:
+```
+
+解释规则：
+
+- 标准用户查询必须用 `userId` 参数，不能用 `query` 参数替代。
+- `query=用户ID` 只能视为 keyword fallback，不能作为 Dennis Agent 标准用户链路查询方式。
+- 若 `logSearchModels.length == totalCount`，可标记 `api_full_result_loaded=true`。
+- 若 `logSearchModels.length < totalCount`，才需要继续寻找 page / offset / cursor / searchAfter 等分页参数。
+- `index` 不强制从 1 开始，只需判断连续性。
+- API full result 只代表当前查询条件和 reliable window 内完整，不代表历史全量。
+- API 返回空不等于无风险，也不等于用户无登录记录。
+- API 401 / 403 / redirect 不等于无数据。
+- UI hand 仍需标记 `ui_visible_page_only=true`；API hand 可标记 `api_full_result_loaded=true`。
+
+`logContent` parse policy：
+
+- `logContent` 是 JSON string，允许 parse key 和非凭证明文 value。
+- 保留 userId、deviceId、did、userIp、userIpv6、serverIp、userAgent、appVer、sysVer、uri、method、status、actionType、result、reason、timestamp、dateTime、loginType、deviceModel、osVersion、sdkVersion 等风控字段。
+- token、loginToken、tokenId、accessToken、refreshToken、session、sessionId、ticket、authorization、cookie、rawAuthHeader 等凭证明文字段只输出 `present_redacted`。
+- 不输出完整 response，不输出完整 `logContent`。
+
+### 2.0.-4 tianshi_strategy_hit_observation
+
+当前为 v2.5.5 validated by internal Agent，范围仅限 `fastQueryHbase` / `readonly_strategy_hit_check`。
+
+```yaml
+tianshi_strategy_hit_observation:
+  platform: tianshi_strategy_platform_rcp
+  platform_display_name: 天狮策略平台 / rcp
+  query_type: fastQueryHbase
+  capability: readonly_strategy_hit_check
+  query_object: sourceId
+  query_value_policy: source_id_allowed
+  time_window:
+  query_status:
+  api_response_status:
+  api_message:
+  raw_record_count:
+  has_strategy_hit:
+  production_policy_hit_count:
+  evidence_strength:
+  riskDecision_distribution:
+  eventType_distribution:
+  riskType_distribution:
+  confidence_distribution:
+  sample_hits:
+    max_items: 3
+    value_policy: summarized_without_trace_or_host
+  trace_observation:
+    has_trace:
+    host_value_recorded: false
+    port_value_recorded: false
+    trace_id_value_recorded: false
+    trace_value_policy: not_in_standard_observation
+  readonly_safety_check:
+  limitations:
+```
+
+判断规则：
+
+- `status=200` 且 `message=成功` 时，`query_status=success`。
+- `data` 数组非空时，`raw_record_count > 0`。
+- 任一 `data[*].hitProductionPolicy=true` 时，`has_strategy_hit=true`。
+- `production_policy_hit_count` 统计 `hitProductionPolicy=true` 的记录数。
+- `riskDecision`、`eventType`、`riskType` 做简单分布统计。
+- `sample_hits` 最多保留 3 条。
+- `host`、`port`、`traceId` 不进入标准 observation；如需记录，只记录 `has_trace=true/false`。
+
+解释边界：
+
+- 天狮命中是策略证据，不等于最终作弊定性。
+- `riskDecision=阻止/验证` 代表策略返回动作，不代表最终执行成功。
+- 无命中不代表无风险。
+- 该 source 不替代 DataAgent / Hive、用户登录统一日志、档案中心、前端埋点、设备 SDK / 设备平台。
+
+v2.5.6 observation 消费规则：
+
+```yaml
+tianshi_strategy_hit_consumption:
+  has_strategy_hit_true:
+    evidence_layer: strong_strategy_evidence
+    allowed_interpretation: 查询窗口内存在天狮生产策略命中记录。
+    forbidden_interpretation:
+      - 用户一定作弊
+      - 最终风险定性成立
+      - 处罚实际执行成功
+  has_strategy_hit_false:
+    evidence_layer: missing_strategy_hit_in_window
+    allowed_interpretation: 查询窗口内未见天狮生产策略命中。
+    forbidden_interpretation:
+      - 用户无风险
+      - 用户未作弊
+      - 其他证据源无风险
+  query_status_failed_or_permission_blocked_or_unknown:
+    evidence_layer: unavailable
+    allowed_interpretation: 当前天狮策略命中证据不可用。
+    forbidden_interpretation:
+      - 无风险
+      - 无策略命中
+  riskDecision:
+    allowed_interpretation: 策略返回动作。
+    forbidden_interpretation:
+      - 最终执行结果
+      - 处罚实际生效状态
+```
+
+### 2.0.-5 e2e_multi_evidence_evidence_summary
+
+v2.5.8 E2E 多手脚只读验证中，Dennis 消费多个 observation 时必须显式列出每个 evidence source 的状态。
+
+```yaml
+e2e_multi_evidence_summary:
+  source_status:
+    tianshi_strategy_hit_check:
+      status: success | failed | permission_blocked | no_data | skipped
+      coverage:
+    unified_login_log_check:
+      status: success | failed | permission_blocked | no_data | skipped
+      coverage:
+    archives_center_profile_check:
+      status: success | failed | permission_blocked | user_not_found | skipped
+      coverage:
+  evidence_readiness:
+    completed_sources:
+      - tianshi_strategy_hit_check
+      - unified_login_log_check
+      - archives_center_profile_check
+    failed_sources:
+  supporting_evidence:
+    - source:
+      finding:
+      strength:
+  counter_evidence:
+    - source:
+      finding:
+      interpretation:
+  missing_evidence:
+    - source:
+      reason:
+      impact:
+  blockers:
+    - source:
+      blocker:
+      next_action:
+  boundary_notes:
+    - 单源 strong evidence 不得直接输出 definitive conclusion。
+    - failed / permission_blocked / no_data 必须进入 missing_evidence 或 blockers。
+    - 无命中 / 无结果不等于无风险。
+```
+
+消费规则：
+
+- 每个 required source 都必须有 `status`。
+- `failed / permission_blocked / no_data / user_not_found` 不得被忽略，必须进入 `missing_evidence` 或 `blockers`。
+- 单源 strong evidence 只能提高怀疑等级，不得直接输出 definitive conclusion。
+- 未查的 optional source 必须标注为 not_required_in_current_e2e 或 missing_evidence，不能假装已查。
+- `independent_login_required` 是 auth blocker，不是 `no_data`。
+- `recoverable_preflight_success` 是可恢复认证态，不应计入 `failed_sources`。
+- 登录页状态不得作为用户无风险、用户无记录、档案无数据的证据。
+- 三源成功时，`evidence_readiness.completed_sources` 应包含 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`。
+- 当档案中心 preflight 可恢复成功时，`profile_evidence.query_status=success`。
+- 当档案中心 preflight 不可恢复时，`profile_evidence.query_status=blocked_by_independent_login`，并进入 `blockers` / `missing_evidence`。
+
+档案中心 recoverable preflight 输出：
+
+```yaml
+archives_center_recoverable_preflight:
+  redirected_to_independent_login:
+  username_prefilled:
+  next_clicked:
+  recoverable_preflight_success:
+  query_status_after_recovery: success | blocked_by_independent_login | wait_for_manual_login
+  fixed_identity_rule: false
+  note: 账号 / 用户名已预填时可尝试点击下一步；不得绑定具体账号名作为固定判断条件。
+```
 
 ### 2.0.-3 frontend_activity_profile_observation_draft
 
@@ -292,8 +553,10 @@ multi_source_e2e_entry_resolution_rule:
 - 档案中心入口 404 不等于用户无档案记录。
 - 统一登录日志单源结果不等于多源 e2e 成功。
 - 多源 e2e 必须 `same_user_id_used=true`。
-- 档案中心独立登录态缺失时，应返回 `multi_source_e2e_blocked_by_archives_auth`，不得把统一登录日志单源 observation 包装成多源联合结果。
-- 下一步应准备 archives saved state 后重跑 e2e，而不是继续猜入口或要求用户手动执行。
+- 档案中心跳转独立登录页时，应先判断账号 / 用户名是否已预填；若已预填，可点击“下一步”尝试恢复会话。
+- recoverable preflight 成功时，档案中心 source 应继续执行并记录 `query_status=success`，不得计入 failed source。
+- recoverable preflight 不成功时，返回 auth blocker，不得把统一登录日志单源 observation 包装成多源联合结果。
+- 下一步应准备 archives saved state、人工登录或在已有认证态环境中重跑，而不是继续猜入口或要求用户手动执行平台查询。
 
 Run 006 当前验证结果：
 
@@ -326,7 +589,8 @@ Run 006 clarification:
 - 当前不是 entry missing / URL missing。
 - 当前不是档案中心无结果或用户无档案。
 - `sso_session.py` 可 HTTP 级访问，但 `agent-browser` GUI 进程未复用该 cookie。
-- 下一步是人工在 `agent-browser` 中完成档案中心独立登录并保存 state，或在已有档案中心认证态的 Dennis Risk Agent 环境中重跑，再执行 Run 007：`multi_source_e2e_with_archives_saved_state`。
+- 这是 Run 006 当时执行环境下的认证阻断事实；v2.5.8.1 后续证明，如果独立登录页账号 / 用户名已预填，点击“下一步”可能恢复进入档案中心。
+- 通用规则应优先执行 `archives_independent_login_preflight_required_but_recoverable` 判断；不可恢复时再进入 auth blocker。
 
 Run 007 当前验证结果：
 

@@ -1120,3 +1120,197 @@
 - 场景：需要精确峰值和每日使用时长。
 - 预期：后续探索 tooltip / 图表数据接口 / network API；不得长期把截图视觉估算写成 DOM 精确读取。
 - 状态：pending validation。
+
+## 166. tianshi strategy hit query success
+
+- 输入：`sourceId` + 时间窗口。
+- 场景：天狮策略平台 / rcp `fastQueryHbase` 只读查询。
+- 预期：`status=200` 且 `message=成功` 时输出 `query_status=success`。
+- 状态：validated by internal Agent，v2.5.5 Run 001 已验证。
+
+## 167. tianshi strategy production policy hit
+
+- 输入：天狮 `data` 数组。
+- 场景：判断生产策略命中。
+- 预期：任一 `data[*].hitProductionPolicy=true` 时输出 `has_strategy_hit=true`；`production_policy_hit_count` 统计命中生产策略的记录数。
+- 状态：validated by internal Agent，v2.5.5 Run 001 已验证，样例为 4/4 命中。
+
+## 168. tianshi strategy distribution summary
+
+- 输入：天狮命中记录。
+- 场景：汇总策略返回动作和风险类型。
+- 预期：对 `riskDecision`、`eventType`、`riskType` 做分布统计；`sample_hits` 最多保留 3 条。
+- 状态：validated by internal Agent，v2.5.5 Run 001 已验证。
+
+## 169. tianshi trace value not persisted
+
+- 输入：天狮响应中的 host / port / traceId。
+- 场景：标准 observation 沉淀。
+- 预期：不记录 host、port、traceId 原值；如需表达链路可用性，仅记录 `has_trace=true/false`。
+- 状态：validated by documentation guardrail。
+
+## 170. tianshi strategy hit is not final risk classification
+
+- 输入：天狮策略命中 observation。
+- 场景：Dennis 消化策略证据。
+- 预期：明确天狮命中是策略证据，不等于最终作弊定性；`riskDecision=阻止/验证` 代表策略返回动作，不代表最终执行成功；无命中不代表无风险。
+- 状态：validated by documentation guardrail。
+
+## 171. tianshi strategy hit routing plan
+
+- 输入：“帮我看下 4231737183 今天有没有被风控策略命中过”。
+- 场景：用户明确询问单个 sourceId 是否命中风控 / 反作弊策略。
+- 预期：
+  - Dennis 识别 `intent=strategy_hit_check`。
+  - 生成 `tianshi_strategy_hit_check` 查询计划。
+  - 查询计划包含 `source_id=4231737183`、`time_window`、固定 `eventTypeCodes=BS/ANTICRAWL/ACTIVITY_ANTISPAM/ACCOUNT/FLOW_ANTISPAM`。
+  - 输出不得直接判定用户作弊。
+  - 输出必须包含“策略命中是证据，不等于最终风险定性；无命中不代表无风险”的边界说明。
+- 状态：routing smoke test added，pending live regression。
+
+## 172. multi evidence orchestration risk assessment
+
+- 输入：“帮我看下 4231737183 今天是不是风险用户”。
+- 场景：用户要求综合风险判断，而不是只问是否命中策略。
+- 预期：
+  - Dennis 不只调用天狮后直接定性。
+  - 生成 `multi_evidence_query_plan`。
+  - 查询计划包含五类 evidence：`strategy_evidence`、`login_evidence`、`profile_evidence`、`behavior_evidence`、`device_evidence`。
+  - 天狮用于 strategy evidence；统一登录日志用于 login evidence；档案中心用于 profile evidence；前端活跃画像用于 behavior evidence；设备 SDK 用于 device evidence。
+  - 明确 DataAgent / Hive 只在需要离线聚合统计、历史基线或批量样本时触发。
+  - 最终输出包含 `supporting_evidence`、`counter_evidence`、`missing_evidence`。
+  - 不输出“用户一定作弊”等绝对定性。
+- 状态：orchestration smoke test added，pending live regression。
+
+## 173. e2e multi evidence readonly minimum loop
+
+- 输入：“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”
+- 场景：真实 E2E 多手脚只读验证模板。
+- 期望：
+  - 生成 `multi_evidence_query_plan`。
+  - 包含 `tianshi_strategy_hit_check`。
+  - 包含 `unified_login_log_check`。
+  - 包含 `archives_center_profile_check`。
+  - 不强制包含 `frontend_activity_profile_check` / `device_sdk_foundation_check`。
+  - 不默认触发 DataAgent / Hive。
+  - 输出不能只根据天狮命中直接判定用户作弊。
+  - 输出必须包含 `supporting_evidence` / `counter_evidence` / `missing_evidence` / `boundary_notes`。
+  - `failed / permission_blocked / no_data` 必须进入 `missing_evidence` 或 `blockers`。
+- 状态：E2E template smoke test added，pending real run。
+
+## 174. archives independent login recoverable preflight
+
+- 输入：档案中心 direct URL 跳转到 `account.p.adm-corp.kuaishou.com` 独立登录页。
+- 场景：账号 / 用户名输入框已预填。
+- 预期：
+  - 不要立即判定 `archives_center_profile_check failed`。
+  - 应点击“下一步”尝试恢复会话。
+  - 若进入档案中心，则 `query_status=success`。
+  - 记录 `recoverable_preflight_success=true`。
+  - 不得把预填账号样例写成固定判断条件。
+- 状态：validated by cloud internal Agent，v2.5.8.1 Run 002 已验证。
+
+## 175. archives independent login still requires MFA
+
+- 输入：档案中心独立登录页点击“下一步”后仍要求密码 / 扫码 / MFA。
+- 场景：preflight 不可恢复。
+- 预期：
+  - `query_status=blocked_by_independent_login`。
+  - `blocker_type=archives_independent_login_required`。
+  - 进入 `blockers` / `missing_evidence`。
+  - 不得解释为用户无记录、档案无数据、用户无风险。
+- 状态：guardrail added，pending regression。
+
+## 176. archives independent login username not prefilled
+
+- 输入：档案中心独立登录页账号 / 用户名未预填。
+- 场景：无法确认操作者身份或恢复会话。
+- 预期：
+  - 不猜测账号。
+  - 不输入固定用户名。
+  - `query_status=blocked_by_independent_login` 或 `wait_for_manual_login`。
+  - 禁止解释为平台查询成功但无风险。
+- 状态：guardrail added，pending regression。
+
+## 177. e2e cloud three source success digest
+
+- 输入：“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”
+- 场景：云端内部 Agent 三源 E2E 成功运行。
+- 预期：
+  - completed_sources 包含 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`。
+  - failed_sources 为空。
+  - 档案中心 recoverable preflight 成功时，profile evidence `query_status=success`。
+  - 历史封禁原因与今日登录 / 注册策略命中不得强行合并成同一因果链。
+  - 登录成功 + token 下发只能作为 counter / nuance evidence，不解释为无风险。
+  - 不输出“用户一定作弊”等绝对结论。
+- 状态：validated by cloud internal Agent，v2.5.8.1 Run 002 已验证。
+
+## 178. user login log API GET-only accessible
+
+- 输入：`GET /rest/unified/log/search`。
+- 场景：内部 Agent 直接访问统一登录日志核心查询接口。
+- 预期：`status_code=200`，body `code=0`，无登录跳转，无 auth blocked。
+- 状态：validated，v2.4.10 Run 001 已验证。
+
+## 179. user login log API standard userId exact query mode
+
+- 输入：用户维度查询 `4700398885`。
+- 场景：构造 API query。
+- 预期：标准查询必须使用 `userId=4700398885&did=&query=`；不得使用 `query=4700398885&userId=` 作为 Dennis 标准用户链路查询方式。
+- 状态：validated by documentation guardrail，v2.4.10 已固化。
+
+## 180. user login log API keyword fallback mode
+
+- 输入：keyword 查询。
+- 场景：用户明确要求通用关键词搜索，或无法归入 userId / did 精确查询。
+- 预期：可使用 `query={keyword}&userId=&did=`；该模式是 fallback，不替代 userId exact query。
+- 状态：validated by documentation guardrail。
+
+## 181. user login log API full result loaded
+
+- 输入：API response。
+- 场景：`totalCount=141` 且 `logSearchModels.length=141`。
+- 预期：标记 `api_full_result_loaded=true`，记录 `length_equals_totalCount=true` 和 index continuity。
+- 状态：validated，v2.4.10 Run 001 已验证。
+
+## 182. user login log UI frontend pagination discovery
+
+- 输入：UI 翻页行为与 API 请求观察。
+- 场景：UI 翻页没有触发新的 search 请求。
+- 预期：标记 `pagination_mode=frontend_pagination`、`ui_frontend_pagination=true`；API hand 可作为结构化读取优先方式。
+- 状态：validated，v2.4.10 Run 001 已验证。
+
+## 183. user login log API credential raw value not output
+
+- 输入：API response / logContent。
+- 场景：parse `logContent`。
+- 预期：不输出完整 response，不输出完整 `logContent`；token / loginToken / tokenId / accessToken / refreshToken / session / ticket / authorization / cookie / rawAuthHeader 只输出 `present_redacted`。
+- 状态：validated by documentation guardrail。
+
+## 184. user login log API no result behavior
+
+- 输入：API 返回空结果。
+- 场景：目标查询条件下无 logSearchModels。
+- 预期：不得解释为无风险或用户无登录记录；只能说明当前查询条件和可靠窗口内 API 未返回记录。
+- 状态：pending validation。
+
+## 185. user login log API unauthorized / expired auth behavior
+
+- 输入：API 401 / 403 / redirect。
+- 场景：认证态失效或权限不足。
+- 预期：返回 auth / permission blocker；不得解释为无数据。
+- 状态：pending validation。
+
+## 186. user login log API over reliable window behavior
+
+- 输入：超过 reliable window 的 API 查询。
+- 场景：长周期查询。
+- 预期：不得解释为历史无记录；需要进入 limitations，并建议 DataAgent / Hive 或离线日志。
+- 状态：pending validation。
+
+## 187. user login log API logContent parse normalization
+
+- 输入：API `logContent` JSON string。
+- 场景：parse key 和允许保留的非凭证明文 value。
+- 预期：保留 userId / deviceId / did / IP / UA / appVer / sysVer / uri / method / result / reason / timestamp / loginType 等风控字段；凭证明文 present_redacted。
+- 状态：pending validation。

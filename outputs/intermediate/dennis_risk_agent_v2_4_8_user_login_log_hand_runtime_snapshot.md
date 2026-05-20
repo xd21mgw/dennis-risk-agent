@@ -4,6 +4,8 @@
 
 ```yaml
 user_login_log_hand_status: v2.4.8_user_login_log_hand_partially_ready
+user_login_log_ui_hand: release_candidate_not_final
+user_login_log_api_hand: get_only_validated / api_readonly_poc
 release_status: release_candidate_not_final
 not_fully_validated: true
 ```
@@ -23,11 +25,14 @@ not_fully_validated: true
 - Run 009: archives_user_analysis_pagination_behavior validated_with_correction。
 - Run 010: archives_audit_label_log_access partially_validated。
 - Run 011: unified_log_special_event_detail validated。
+- API Run 001: GET `/rest/unified/log/search` get_only_validated，`totalCount == logSearchModels.length`，API full result discovery validated。
 
 当前统一状态：
 
 ```yaml
 user_login_log_hand: partially_ready
+user_login_log_ui_hand: release_candidate_not_final
+user_login_log_api_hand: get_only_validated / api_readonly_poc
 multi_source_entry_resolution: validated
 archives_saved_state_e2e: validated
 archives_saved_state_reuse: validated
@@ -35,6 +40,8 @@ multi_source_e2e: validated_with_partial_coverage
 archives_user_analysis_pagination: validated_with_correction
 archives_audit_label_log_access: partially_validated
 unified_log_special_event_detail: validated
+unified_log_api_get_only: validated
+unified_log_api_full_result_discovery: validated
 e2e_joint_observation_success: true
 multi_source_schema_ready: focused_login_risk_observation_only
 release_status: release_candidate_not_final
@@ -70,6 +77,17 @@ Run 008 ~ Run 011 关键事实：
 - Run 010：档案中心审核日志 / 打标日志可访问性部分验证；审核 / 打标日志只作为补充 source。
 - Run 011：统一登录日志高危接口 / 多账号登录详情 key extraction 已验证；凭证明文字段只输出 `present_redacted`。
 
+API Run 001 关键事实：
+
+- GET `/rest/unified/log/search` 可直接访问，SSO 自动认证。
+- 标准用户查询必须使用 `userId` 参数；不要把 userId 放到 `query` 参数里。
+- 样例 `userId=4700398885` 查询返回 `totalCount=141`，`logSearchModels.length=141`。
+- `length_equals_totalCount=true`，可标记 `api_full_result_loaded=true`。
+- UI 翻页未触发新的 search 请求，属于前端分页。
+- 当前用户在查询窗口内有 login/logout 循环、`TOKEN_ISSUED_LOG`、`TOKEN_REVOKE_LOG`、`changeOption` 等事件。
+- 所有记录来自同一 DID：`3509C1CA-0DC3-4868-A5E8-9A88E83A8A81`。
+- 不输出完整 response，不输出完整 `logContent`，不输出 cookie / token / authorization 原值。
+
 ## 3. 当前可用能力
 
 - 可打开统一登录日志页面。
@@ -81,6 +99,7 @@ Run 008 ~ Run 011 关键事实：
 - 可处理无结果、超窗、分页的防误判解释。
 - 可在同 userId 下消费档案中心 + 用户登录统一日志 focused_login_risk multi-source observation，但当前覆盖仍为 partial。
 - 可使用统一登录日志 special event detail key extraction 作为字段结构和视角补充；不输出 JSON value。
+- 可优先使用统一登录日志 API hand 做结构化读取；当 `logSearchModels.length == totalCount` 时，可认为当前查询条件和可靠窗口内结果已完整加载。
 
 ## 4. 关键 guardrail
 
@@ -92,6 +111,10 @@ Run 008 ~ Run 011 关键事实：
 - 自动化翻页失败不等于没有下一页。
 - 详情 JSON 可见不等于可以复制完整 JSON。
 - 统一登录日志不替代 DataAgent / Hive / 设备平台 / 档案中心。
+- API 返回空不等于无风险，也不等于用户无登录记录。
+- API full result 不等于历史全量。
+- API 401 / 403 / redirect 不等于无数据。
+- 标准用户查询必须用 `userId` 参数，`query=用户ID` 只能作为 keyword fallback。
 
 ## 5. 字段保留与脱敏策略
 
@@ -146,9 +169,10 @@ Run 008 ~ Run 011 关键事实：
 ## 6. 使用建议
 
 - Dennis 在 focused_login_risk 场景中，可以把用户登录统一日志作为最近实时登录链路补证 source。
+- API hand 优先用于统一登录日志结构化读取；UI hand 保留为 auth bootstrap / fallback / 字段发现。
 - 默认不主动改时间。
 - 如果用户要求查超过最近 7 天，必须标记 `over_reliable_realtime_window=true`。
-- 如果 `total_count > visible_row_count`，必须标记 `partial_page_only=true`。
+- UI hand 如果 `total_count > visible_row_count`，必须标记 `partial_page_only=true`；API hand 若 `logSearchModels.length == totalCount`，可标记 `api_full_result_loaded=true`。
 - 即使 Run 007 多源 e2e 已跑通，也不要把用户登录统一日志或 multi-source observation 写成 fully validated；当前仅为 focused_login_risk partial coverage。
 
 ## 7. 下一步
@@ -158,7 +182,9 @@ P0:
 - 固化 Run 007 的 focused_login_risk multi-source observation schema。
 - 多源 e2e 前必须继续完成每个 source 的 `entry_resolution`，优先读取已有 playbook / run log / runtime snapshot / README，不允许猜 URL。
 - 执行 v2.4.9 `browser_auth_preflight` 清单：`computer_use_poc/browser_auth_preflight_checklist_v2_4_9.md`。后续任何平台手脚必须按 `source_entry_resolution → browser_auth_preflight → saved_state_reuse_check → single_browser_session_check → 页面字段探索` 顺序执行。
-- 补齐统一登录日志全分页遍历和档案中心用户分析全分页遍历。
+- 补齐统一登录日志 API no_result / unauthorized / over reliable window 行为。
+- 补齐 API `logContent` parse normalization。
+- 补齐档案中心用户分析全分页遍历。
 - 建立 agent-browser 串行锁或 session 隔离策略。
 
 P1:
