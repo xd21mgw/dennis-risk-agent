@@ -1016,6 +1016,176 @@
 - 预期：不点击写操作，不修改设备状态，不导出，不复制完整 JSON，不输出 token / session / ticket / authorization / cookie 明文。
 - 状态：pending validation。
 
+## 150-A. device SDK Android deviceId normalization
+
+- 输入：`ANDROID_fc1963b93f823ebd`。
+- 场景：Android API-direct 查询。
+- 预期：normalized_input_device_id 与 canonical_device_id 均为 `ANDROID_fc1963b93f823ebd`；不得去掉 `ANDROID_` 前缀。
+- 状态：validated by internal Agent，v2.5.1 Android 单样本已验证。
+
+## 150-B. device SDK iOS raw UUID normalization
+
+- 输入：`3509C1CA-0DC3-4868-A5E8-9A88E83A8A81`。
+- 场景：iOS API-direct 查询。
+- 预期：iOS 标准入参为 raw UUID，不加 `IOS_` 前缀；canonical_device_id 为 raw UUID。
+- 状态：validated by internal Agent，v2.5.1 iOS 单样本已验证。
+
+## 150-C. device SDK IOS_ prefix no_data semantics
+
+- 输入：`IOS_3509C1CA-0DC3-4868-A5E8-9A88E83A8A81`。
+- 场景：错误 iOS 入参格式。
+- 预期：返回空应解释为 `no_data_by_wrong_input_format`；不得解释为 iOS 不支持或设备无风险。
+- 状态：validated by internal Agent，v2.5.1 iOS 单样本已验证。
+
+## 150-D. device SDK riskData canonical identity extraction
+
+- 输入：`/apiv2/riskData` response。
+- 场景：主接口解析。
+- 预期：提取 canonical_device_id 和 user_id；Android 样本 user_id=2241990844，iOS 样本 user_id=681288977。
+- 状态：validated by internal Agent，v2.5.1 Android + iOS 单样本已验证。
+
+## 150-E. device SDK location API not called by default
+
+- 输入：设备 SDK API-direct hand。
+- 场景：默认接口链路。
+- 预期：location_extraction_enabled=false；location 不作为正式 Skill 默认接口。
+- 状态：validated by documentation guardrail，v2.5.2 已固化。
+
+## 150-F. device SDK iOS appList package_name semantics warning
+
+- 输入：iOS appList。
+- 场景：字段语义解释。
+- 预期：iOS `package_name` 不是 bundle ID；不得按 Android 包名解释。
+- 状态：validated by documentation guardrail，v2.5.2 已固化。
+
+## 150-G. device SDK klink data empty is no_data
+
+- 输入：klink response `data=[]`。
+- 场景：关系 / 链路补证。
+- 预期：解释为 `no_data`，不等于接口失败，也不等于设备无风险。
+- 状态：validated by documentation guardrail，v2.5.2 已固化。
+
+## 150-H. device SDK graphData structure
+
+- 输入：graphData response。
+- 场景：图谱关系摘要。
+- 预期：读取 `pointInfoMap` / `relationEdgeList` 结构，输出 point_count / edge_count / center_node_found / relation_format；不直接等同群控。
+- 状态：validated by internal Agent，v2.5.1 Android + iOS 单样本均成功。
+
+## 150-I. device SDK missing Android-only fields on iOS
+
+- 输入：iOS riskData。
+- 场景：Android-only 字段缺失。
+- 预期：标记 `platform_not_applicable` 或 `missing_field`；不得解释为未检测到模拟器 / 双开或设备无风险。
+- 状态：validated by documentation guardrail，v2.5.2 已固化。
+
+## 150-J. device SDK route root hook risk
+
+- 输入：“这个 deviceId 有没有 root/hook 风险？”
+- 场景：用户明确询问设备环境风险。
+- 预期：路由到 `device_sdk_api_direct_readonly_hand`；优先 riskData，再补 appList / klink / graphData；不得输出最终风险定性。
+- 状态：routing smoke test added，v2.5.3。
+
+## 150-K. device SDK should not handle pure login failure
+
+- 输入：“这个用户最近登录失败原因是什么？”
+- 场景：纯登录流水 / 登录失败原因。
+- 预期：不优先路由 device SDK；应优先用户登录统一日志。设备 SDK 只能作为后续设备环境补证。
+- 状态：routing smoke test added，v2.5.3。
+
+## 150-L. device SDK graphData account relation
+
+- 输入：“这个设备关联多少账号？”
+- 场景：设备关系 / 图谱问题。
+- 预期：路由到 device SDK `graphData`；输出 point_count / edge_count / center_node_found / relation_format；不得直接判定群控。
+- 状态：routing smoke test added，v2.5.3。
+
+## 150-M. device SDK location excluded by policy
+
+- 输入：“这个设备在哪里？”
+- 场景：定位 / 经纬度问题。
+- 预期：默认不调用 location；返回 `location_excluded_by_policy`，说明当前 hand 默认不采集定位信息。
+- 状态：routing smoke test added，v2.5.3。
+
+## 150-N. device SDK iOS missing Android field answer
+
+- 输入：iOS observation 缺少 Android-only 字段。
+- 场景：Dennis 回答解释。
+- 预期：标记 `platform_not_applicable`，不得写成未检测到模拟器 / 双开。
+- 状态：answer contract smoke test added，v2.5.3。
+
+## 150-O. device SDK klink empty answer
+
+- 输入：`klink data=[]`。
+- 场景：Dennis 回答解释。
+- 预期：标记 no_data；不得输出“无风险”。
+- 状态：answer contract smoke test added，v2.5.3。
+
+## 150-P. Device SDK API routing regression v2.5.4
+
+- 输入：`computer_use_poc/device_sdk_api_routing_regression_cases_v2_5_4.md` 中 12 个 case。
+- 场景：Dennis Agent 5 主脑调度与回答边界回归。
+- 覆盖：
+  - 应调用 device SDK hand：root / hook / frida、设备关联账号、群控 / 自动化设备、iOS 越狱 / 重打包 / 代理。
+  - 不应调用 device SDK hand：登录失败原因、档案画像、批量登录失败率、前端点击路径。
+  - 敏感边界：设备位置默认 `location_excluded_by_policy`，不调用 `getLocationInfo`。
+  - 错误语义：`klink data=[]` 为 `no_data`；iOS 缺 Android-only 字段为 `platform_not_applicable`；`IOS_` 前缀空结果为 input format mismatch / no_data。
+- 预期：主 Agent 能选择正确 hand，并在回答中保留设备侧补证边界；不得把设备 observation 单独写成最终风险定性。
+- 状态：routing regression cases added，v2.5.4。
+
+## 150-Q. Device SDK API routing text regression v2.5.5
+
+- 输入：`computer_use_poc/run_logs/device_sdk_api_routing_text_regression_run_v2_5_5.md`。
+- 场景：基于 v2.5.4 的 12 个 case，模拟主 Agent 文本问答，验证路由、是否调用 device SDK、边界说明和错误语义。
+- 覆盖：
+  - 应调用 device SDK hand 的 4 个 case 全部 pass。
+  - 不应调用 device SDK hand 的 4 个 case 全部 pass。
+  - `location_excluded_by_policy`、`no_data`、`platform_not_applicable`、`input_format_mismatch` 4 个边界 / 错误语义 case 全部 pass。
+- 预期：不做真实接口查询，不新增接口，不做批量；文本层不得把 device observation 单独作为最终风险定性。
+- 状态：passed，12/12，v2.5.5；`ready_for_release_package_update`。
+
+## 150-R. User ↔ Device Entity Resolution smoke tests v2.6.0
+
+- 输入：`computer_use_poc/entity_resolution_user_device_smoke_tests_v2_6_0.md` 中 10 个 case。
+- 场景：主 Agent 在调用具体 hand 前判断是否需要 `userId ↔ deviceId / did / deviceceid` 实体转译。
+- 覆盖：
+  - `userId → candidate_device_ids`：用户问 hook / frida、改机、最近登录设备 iOS 风险、泛化设备风险、用户关联设备。
+  - `deviceId → related_user_ids`：设备关联用户、设备是谁在用、设备是否团伙节点。
+  - 不需要转译：userId 问登录失败直接走用户登录统一日志；deviceId 问设备风险直接走 Device SDK。
+  - 候选过多：返回 `too_many_candidates`，不默认批量深查。
+- 预期：Entity Resolution 主入口统一为 Weapon `graphData`；`user_to_device` 使用 `groupKey=USER_ID, dimKey=DEVICE_ID`，`device_to_user` 使用 `groupKey=DEVICE_ID, dimKey=USER_ID`。Entity Resolution 只补齐后续 hand 入参，不查风险、不做风险定性；Device SDK `riskData` 只作为后续设备侧风险补证 hand。
+- 状态：smoke cases added，v2.6.0 MVP。
+
+## 150-S. User ↔ Device Entity Resolution text regression v2.6.0
+
+- 输入：`computer_use_poc/run_logs/entity_resolution_user_device_text_regression_run_v2_6_0.md`。
+- 场景：基于 v2.6.0 smoke cases 模拟主 Agent 文本问答，验证实体转译方向、是否调用 graphData、是否调用 Device SDK、候选过多和边界话术。
+- 覆盖：
+  - userId + 设备环境风险：先 `user_to_device`，再 Device SDK。
+  - userId + 登录流水：直接用户登录统一日志，不调用 graphData / Device SDK。
+  - deviceId + 设备环境风险：直接 Device SDK，不做实体转译。
+  - deviceId + 关联用户：`device_to_user`，Weapon graphData。
+  - 泛化设备风险：按输入实体区分 user_to_device 或直接 Device SDK。
+  - 候选过多：`too_many_candidates`，不默认批量深查。
+- 预期：10 个文本 case 全部 pass；Device SDK `riskData` 不作为实体解析主入口。
+- 状态：passed，10/10，v2.6.0。
+
+## 150-T. User ↔ Device Entity Resolution graphData error semantics v2.6.0
+
+- 输入：`computer_use_poc/entity_resolution_user_device_smoke_tests_v2_6_0.md` 中 error case 1-8。
+- 场景：Weapon graphData 运行态错误语义。
+- 覆盖：
+  - `code != 0` / `msg != success` → `graphdata_error`
+  - 认证失效 / 跳登录 / 无有效 cookie → `auth_required`
+  - 权限不足 → `permission_denied`
+  - `user_to_device` 无 `DEVICE_ID` → `missing_device_id`
+  - `device_to_user` 无 `USER_ID` → `no_related_user / missing_user_id`
+  - `relationEdgeList` 为空但 `pointInfoMap` 有节点 → `no_direct_relation`
+  - 候选过多 → `too_many_candidates`
+  - 返回结构变化 / 字段缺失 → `parse_error`
+- 预期：错误语义只描述实体解析执行状态，不输出风险结论；auth / permission / parse error 不得解释为无数据；no_related_entity / no_direct_relation 不得解释为无风险。
+- 状态：error semantics added，v2.6.0；不影响 10/10 文本回归结论。
+
 ## 151. frontend activity profile KUAISHOU userId active
 
 - 输入：`appName=KUAISHOU`、`filtersType=userId`。

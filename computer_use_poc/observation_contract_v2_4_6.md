@@ -580,6 +580,121 @@ device_sdk_foundation_observation:
 - 未看到字段不能解释为字段不存在，需区分 `field_not_visible` / `permission_blocked` / `query_no_result`。
 - deviceId / did / sdkVersion / appVersion / riskTag / deviceModel / osVersion / ip / region 等风控证据字段可以保留；token / session / ticket / authorization / cookie 等认证凭证明文只输出 `present_redacted`。
 
+### 2.0.-2a device_sdk_api_direct_observation
+
+当前为 Dennis Agent 5 v2.5.2 API-direct readonly Android + iOS 单样本已验证，ready_for_formal_skill_deposition。
+
+```yaml
+device_sdk_api_observation:
+  query:
+    raw_input_device_id:
+    normalized_input_device_id:
+    product:
+    platform_guess:
+    location_extraction_enabled: false
+  api_status:
+    user_info:
+    page_tree:
+    weapon_config:
+    risk_data:
+    app_list:
+    klink:
+    graph_data:
+  identity:
+    canonical_device_id:
+    user_id:
+    platform:
+    weapon_platform:
+  normalized_device_fields:
+    device_model:
+    brand:
+    os_version:
+    app_version:
+    sdk_version:
+    risk_level:
+    risk_tags:
+    source_ip_redacted:
+  normalized_risk_signals:
+    jailbreak_or_root:
+    hook:
+    frida:
+    simulator:
+    dual_or_multi_open:
+    debug:
+    proxy:
+    repack_or_tamper:
+  android_specific_fields:
+    api_level:
+    android_id_present:
+    oaid_present:
+    apk_path_present:
+    build_display_rom:
+    mount_risk:
+    accessibility_present:
+    sensor_present:
+  ios_specific_fields:
+    idfv_present:
+    idfa_enable:
+    device_model:
+    jailbreak_detector_present:
+    repack:
+    proxy_vpn:
+    kern_fields_count:
+    hw_fields_count:
+    posix_user_fields_count:
+  app_list_summary:
+    app_count:
+    identifier_field:
+    identifier_semantics:
+    sample_count:
+  klink_summary:
+    result_semantics:
+    data_count:
+    field_keys:
+  graph_summary:
+    point_count:
+    edge_count:
+    center_node_found:
+    relation_format:
+  location_policy:
+    called: false
+    reason: sensitive_data_excluded_by_policy
+  limitations:
+    harmony_verified: false
+    location_not_collected: true
+    platform_specific_semantics_required: true
+```
+
+Device ID normalization：
+
+- Android 样本使用 `ANDROID_` 前缀格式，canonical device ID 与输入一致。
+- iOS 标准入参为 raw UUID，不加 `IOS_` 前缀。
+- `IOS_` 前缀格式返回空时，只能解释为输入格式不匹配 / no_data，不得解释为 iOS 不支持或设备无风险。
+- Harmony / 鸿蒙 normalization 仍待验证。
+
+API 链路：
+
+- 默认先查 `/apiv2/riskData`，再串联 appList / klink / graphData。
+- `riskData` 用于确认 canonical_device_id、user_id、platform / weaponPlatform 和核心 originalLog。
+- appList / klink / graphData 作为派生补证接口。
+- location 默认不调用，不作为正式 Skill 默认接口。
+
+错误语义：
+
+- HTTP 200 + `data=[]` = `no_data`，不等于失败。
+- HTTP 200 + `has_permission=false` = `permission_blocked`，不等于无位置或无风险。
+- 字段不存在 = `platform_not_applicable` 或 `missing_field`，不能直接解释为无风险。
+- iOS `appList.package_name` 不是 bundle ID。
+- iOS 无 simulator / dual 字段，不能解释为未检测到模拟器 / 双开。
+
+边界：
+
+- 设备风险信号是设备侧线索，不是最终账号风险定性。
+- 不输出完整原始 JSON。
+- 不输出 token / session / ticket / authorization / cookie 明文。
+- 不默认采集定位。
+- 不批量查询。
+
 ### 2.0.-1 multi_source_e2e_entry_resolution_rule
 
 多源 e2e 前，每个 source 必须先完成 entry resolution。

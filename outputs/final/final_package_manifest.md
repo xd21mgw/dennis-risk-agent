@@ -2,6 +2,14 @@
 
 版本号：`dennis-risk-agent v2.3 executable-deep + Data Agent integration design`
 
+当前 release addendum：
+
+```text
+dennis-risk-agent v2.6.0 User ↔ Device Entity Resolution Layer
+```
+
+本 addendum 仅吸收 `computer_use_poc` 中已完成一致性检查的实体解析层文档，不修改核心 Skill，不新增接口，不包含真实查询结果。
+
 ## 1. 必须纳入的文件 / 目录
 
 根目录文件：
@@ -44,6 +52,18 @@
 - `outputs/reviews/dataagent_query_intent_4_case_rerun_after_schema_fix.md`
 - `outputs/reviews/dataagent_query_intent_8_case_regression.md`
 - `outputs/reviews/dataagent_adapter_mock_closed_loop_5_case.md`
+
+Computer Use POC / Entity Resolution addendum：
+
+- `computer_use_poc/entity_resolution_user_device_layer_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_smoke_tests_v2_6_0.md`
+- `computer_use_poc/run_logs/entity_resolution_user_device_text_regression_run_v2_6_0.md`
+- `computer_use_poc/device_sdk_api_routing_rules_v2_5_3.md`
+- `computer_use_poc/smoke_tests.md`
+
+这些文件构成 v2.6.0 User ↔ Device Entity Resolution Layer 的 release package 增量：主 Agent 在 intent routing 与具体 hand 之间，先补齐 `userId ↔ deviceId / did / deviceceid` 入参映射，再进入 Device SDK、用户登录统一日志、档案中心等后续只读 hand。
 
 ## 2. 可选附录
 
@@ -97,6 +117,77 @@ dennis-risk-agent v2.3 executable-deep + Data Agent integration design
 ```text
 dennis-risk-agent-v2.3-dataagent-integration-design
 ```
+
+## 4.1 v2.6.0 Entity Resolution Addendum
+
+### 能力摘要
+
+`User ↔ Device Entity Resolution Layer v2.6.0` 位于主 Agent intent routing 和具体 hand 之间，只负责 `userId ↔ deviceId / did / deviceceid` 的实体转译：
+
+- 不直接查风险。
+- 不直接做风险定性。
+- 不替代 Device SDK、用户登录统一日志、档案中心、前端活跃画像或 DataAgent。
+- 只为后续 hand 补齐必要入参。
+
+### 双向解析主入口
+
+`user_to_device`：
+
+- 主入口：Weapon `graphData`。
+- `groupValue={userId}`。
+- `groupKey=USER_ID`。
+- `dimKey=DEVICE_ID`。
+- 解析 `pointInfoMap` 中 `DEVICE_ID` 节点，以及 `relationEdgeList` 中 `source=userId`、`target=DEVICE_ID` 的直连边。
+
+`device_to_user`：
+
+- 主入口：Weapon `graphData`。
+- `groupValue={deviceId}`。
+- `groupKey=DEVICE_ID`。
+- `dimKey=USER_ID`。
+- 解析 `pointInfoMap` 中 `USER_ID` 节点，以及 `relationEdgeList` 中 `source=deviceId`、`target=USER_ID` 的直连边。
+
+### 与其他 hand 的职责切分
+
+- Device SDK hand / `riskData`：不作为实体解析主入口；只在拿到 deviceId 后做 hook / frida / root / jailbreak / proxy / simulator / repack 等设备侧风险补证。
+- 用户登录统一日志：登录失败、登录流水、登录原因类问题直接走登录日志，不应触发 graphData / Device SDK。
+- 档案中心用户分析 API：只作为近期关联设备补充排序来源，不作为 `user_to_device` 主入口。
+- DataAgent / Hive：只用于批量、长周期、历史聚合，不替代 graphData 在线实体解析。
+
+### 路由边界
+
+- `userId + 设备风险`：先 `user_to_device` graphData，再 Device SDK 设备补证。
+- `userId + 登录流水`：直接用户登录统一日志，不走 graphData / Device SDK。
+- `deviceId + 设备风险`：直接 Device SDK，不做实体转译。
+- `deviceId + 关联用户`：走 `device_to_user` graphData。
+- 关联关系不是风险结论。
+- 候选过多不默认批量深查。
+- 缺失设备返回 `missing_device_id`。
+- 缺失关联用户返回 `no_related_user / missing_user_id`。
+- 候选过多返回 `too_many_candidates`。
+
+### Runtime Error Semantics
+
+已吸收的运行态状态：
+
+- `graphdata_error`
+- `auth_required`
+- `permission_denied`
+- `no_related_entity`
+- `no_direct_relation`
+- `missing_device_id`
+- `no_related_user / missing_user_id`
+- `too_many_candidates`
+- `parse_error`
+
+这些运行态错误语义已文档化；`no_data` / `auth_required` / `permission_denied` 等真实接口返回形态仍未做真实运行验证。
+
+### 验证状态
+
+- v2.6.0 文本回归：10/10 pass。
+- graphData error semantics：已补充 8 个 error case。
+- release package 更新前一致性检查：已完成，未发现口径冲突。
+- 本 addendum 未真实查询、未新增接口、未批量、未修改核心 Skill。
 
 ## 5. 打包命令
 
@@ -168,6 +259,10 @@ tar --exclude='.git' \
 9. `skills/dennis_risk_agent_skills_v2_1_focused_deep/07_tools/dataagent/configs/query_intent_schema_v2.md`
 10. `skills/dennis_risk_agent_skills_v2_1_focused_deep/07_tools/dataagent/adapter_design/query_intent_to_dataagent_request_design_v1.md`
 11. `skills/dennis_risk_agent_skills_v2_1_focused_deep/07_tools/dataagent/pilot_design/protocol_attack_evidence_minimum_pilot_v1.md`
+12. `computer_use_poc/entity_resolution_user_device_layer_v2_6_0.md`
+13. `computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md`
+14. `computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md`
+15. `computer_use_poc/run_logs/entity_resolution_user_device_text_regression_run_v2_6_0.md`
 
 最小使用方式：
 
@@ -177,6 +272,7 @@ tar --exclude='.git' \
 3. 若做协议攻击试点，读取 pilot_design/protocol_attack_evidence_minimum_pilot_v1.md 和 readiness checklist。
 4. 若做 Data Agent 接入，读取 07_tools/dataagent/configs/ 与 adapter_design/。
 5. 当前包只支持设计、研判、query_intent 规划和 mock closed-loop，不真实调用 Data Agent。
+6. 若问题涉及 `userId ↔ deviceId` 入参不一致，先读取 v2.6.0 Entity Resolution addendum；该层只补齐实体，不给风险定性。
 ```
 
 ## 7. 包内边界

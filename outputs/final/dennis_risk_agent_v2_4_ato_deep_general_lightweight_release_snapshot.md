@@ -51,6 +51,55 @@ Dennis Risk Agent 是**通用业务风控专家 Agent**，不是 ATO 专用 Agen
 - DataAgent 作为 skill 被 Dennis 子 Agent 触发。
 - 当前是 webchat run mode，不是 session / thread mode 的自动多轮编排。
 
+### 2.4 User ↔ Device Entity Resolution v2.6.0
+
+已吸收 release package 的新增能力：
+
+- 在主 Agent intent routing 与具体 hand 之间新增 User ↔ Device Entity Resolution Layer。
+- 只做 `userId ↔ deviceId / did / deviceceid` 的实体转译。
+- 不直接查风险，不直接做风险定性。
+- 不替代 Device SDK、用户登录统一日志、档案中心、前端活跃画像或 DataAgent。
+- 只为后续 hand 补齐必要入参。
+
+双向解析主入口统一为 Weapon `graphData`：
+
+- `user_to_device`：`groupValue={userId}`，`groupKey=USER_ID`，`dimKey=DEVICE_ID`，解析 `pointInfoMap` 中 `DEVICE_ID` 节点和 `relationEdgeList` 中 `source=userId`、`target=DEVICE_ID` 的直连边。
+- `device_to_user`：`groupValue={deviceId}`，`groupKey=DEVICE_ID`，`dimKey=USER_ID`，解析 `pointInfoMap` 中 `USER_ID` 节点和 `relationEdgeList` 中 `source=deviceId`、`target=USER_ID` 的直连边。
+
+职责切分：
+
+- Device SDK hand / `riskData` 不作为实体解析主入口，只在拿到 deviceId 后做 hook / frida / root / jailbreak / proxy / simulator / repack 等设备侧风险补证。
+- 用户登录统一日志处理登录失败、登录流水、登录原因类问题，不应触发 graphData / Device SDK。
+- 档案中心用户分析 API 只作为近期关联设备补充排序来源，不作为 `user_to_device` 主入口。
+- DataAgent / Hive 只用于批量、长周期、历史聚合，不替代 graphData 在线实体解析。
+
+路由边界：
+
+- `userId + 设备风险`：先 `user_to_device` graphData，再 Device SDK 设备补证。
+- `userId + 登录流水`：直接用户登录统一日志，不走 graphData / Device SDK。
+- `deviceId + 设备风险`：直接 Device SDK，不做实体转译。
+- `deviceId + 关联用户`：走 `device_to_user` graphData。
+- 关联关系不是风险结论；候选过多不默认批量深查。
+
+运行态错误语义已文档化：
+
+- `graphdata_error`
+- `auth_required`
+- `permission_denied`
+- `no_related_entity`
+- `no_direct_relation`
+- `missing_device_id`
+- `no_related_user / missing_user_id`
+- `too_many_candidates`
+- `parse_error`
+
+验证状态：
+
+- v2.6.0 文本回归 10/10 pass。
+- graphData error semantics 已补充 8 个 error case。
+- release package 更新前一致性检查已完成，未发现口径冲突。
+- `no_data` / `auth_required` / `permission_denied` 等真实运行态还未做真实接口验证。
+
 ## 3. 当前不承诺能力
 
 当前版本不承诺：
@@ -62,6 +111,9 @@ Dennis Risk Agent 是**通用业务风控专家 Agent**，不是 ATO 专用 Agen
 - 自动 SQL 重跑。
 - 自动处罚、封禁、冻结、踢 token、上线策略。
 - 非 ATO 场景默认深度取证。
+- User ↔ Device Entity Resolution 自动批量深查。
+- graphData `no_data` / `auth_required` / `permission_denied` 真实运行态已验证。
+- 关联关系可直接作为风险结论。
 
 ## 4. 关键文件清单
 
@@ -155,4 +207,3 @@ runtime slim 主要降低 Dennis 侧默认加载成本，不一定改变 DataAge
 
 **一句话总结：**
 ATO 深度样板已跑通，通用轻量支持已验证，下一步应从“继续堆能力”转向“固化版本、可观测、再扩第二场景”。
-

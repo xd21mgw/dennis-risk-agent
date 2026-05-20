@@ -149,6 +149,8 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.4.8 Run 011 已验证统一登录日志高危接口 / 多账号登录详情 key extraction：高危接口偏服务端调用链视角，多账号登录偏客户端登录环境视角；凭证明文字段只输出 `present_redacted`。
 - v2.4.8 RC plan 已生成：`outputs/intermediate/dennis_risk_agent_v2_4_8_release_candidate_plan.md`，当前仅为 release candidate not final。
 - v2.5.0 已启动 Dennis Agent 5 — 设备 SDK 基建手脚设计，新增 `computer_use_poc/device_sdk_foundation_readonly_poc_v2_5_0.md` 和 `computer_use_poc/device_sdk_foundation_internal_agent_playbook_v2_5_0.md`。当前只做 `source_entry_resolution` + `browser_auth_preflight` 设计，不做真实页面执行，状态为 `design_pending_validation`。
+- Dennis Agent 5 设备 SDK 基建手脚 v2.5.2 已沉淀 API-direct readonly Android + iOS 单样本验证结果，状态为 `ready_for_formal_skill_deposition`。Android 样本 `ANDROID_fc1963b93f823ebd` 已验证 `/apiv2/riskData`、appList、klink、graphData 可串联；iOS 样本使用 raw UUID `3509C1CA-0DC3-4868-A5E8-9A88E83A8A81`，不加 `IOS_` 前缀，riskData / appList / klink / graphData 均成功。location 默认排除，不纳入正式采集；Harmony 仍 pending。v2.5.3 已补齐主 Agent 调度规则和回答接入 contract，状态为 `routing_answer_contract_completed`。v2.5.4 已新增 routing smoke / regression cases，覆盖应调用、不应调用、敏感边界和错误语义。v2.5.5 主 Agent 文本回归 12/12 通过，状态为 `routing_text_regression_passed`，可进入 release package update。
+- v2.6.0 已新增 Entity Resolution User ↔ Device Layer MVP：位于主 Agent intent routing 和具体 hand 之间，只负责 `userId ↔ deviceId / did / deviceceid` 双向实体转译，不查风险、不做风险定性、不替代 Device SDK、用户登录统一日志、档案中心或 DataAgent。当前仅支持用户与设备实体，其他实体类型暂不纳入。实体解析主入口统一使用 Weapon `graphData`：`user_to_device` 使用 `groupKey=USER_ID, dimKey=DEVICE_ID`，`device_to_user` 使用 `groupKey=DEVICE_ID, dimKey=USER_ID`。Device SDK `riskData` 本轮不作为实体解析主入口，只作为后续设备侧风险补证 hand；档案中心用户分析 API 的近期关联设备仅作为补充排序来源。v2.6.0 文本回归 10/10 通过，状态为 `entity_resolution_text_regression_passed`。已补齐 graphData 运行态错误语义：`graphdata_error`、`auth_required`、`permission_denied`、`no_related_entity`、`no_direct_relation`、`missing_device_id`、`no_related_user / missing_user_id`、`too_many_candidates`、`parse_error`，状态为 `graphData_runtime_error_semantics_documented`。当前 `final_release_package_pending`，本轮未更新 final release package。
 - v2.5.2 已新增前端活跃画像只读手脚设计，覆盖“埋点分析 → 用户洞查 → 用户细查详情”页面上方“用户属性及时长”区域。当前只做方法论、URL 模板、schema、test cases 和 run log 模板沉淀，不抓取真实数据，不解析下方行为记录，状态为 `design_only_pending_browser_validation`。
 - v2.5.3 已沉淀内部 Agent 返回的前端活跃画像 URL 直联预检结果：URL 可打开，登录态复用成功，无登录跳转 / 权限阻断，目标页面和“用户属性及时长”区域可见。该结果来自内部 Agent，不是 Codex 访问平台；下一步由内部 Agent 读取该区域并输出 observation sample。
 - v2.5.3 单点 observation 已由内部 Agent 验证：KUAISHOU + userId + 444946196 可读取“用户属性及时长”区域并形成 observation，前端活跃信号强；该 observation 只能证明前端活跃存在性，不能证明真人、本人与具体业务动作。
@@ -199,8 +201,9 @@ release_status: release_candidate_not_final
 - device_platform_verification。
 - audit_label_log_full_validation。
 - final_release_package_update。
-- device_sdk_foundation_source_entry_resolution。
-- device_sdk_foundation_browser_auth_preflight。
+- device_sdk_harmony_sample_validation。
+- device_sdk_ios_simulator_field_semantics_validation。
+- device_sdk_more_sample_stability_validation。
 - frontend_activity_profile_browser_validation。
 - frontend_activity_profile_dom_selector_validation。
 - frontend_activity_profile_real_observation_run。

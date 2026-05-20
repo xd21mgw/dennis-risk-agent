@@ -24,6 +24,62 @@
 
 `dennis_risk_agent_v2_4_startup_loading_order_checklist_v1.md` 建议作为初始化 / 配置期文件，不建议每轮问答常驻加载。
 
+## 2.1 v2.6.0 User ↔ Device Entity Resolution Addendum
+
+本 release 包已吸收 `computer_use_poc` 中的 v2.6.0 User ↔ Device Entity Resolution Layer。
+
+定位：
+
+- 位于主 Agent intent routing 和具体 hand 之间。
+- 只做 `userId ↔ deviceId / did / deviceceid` 的实体转译。
+- 不直接查风险。
+- 不直接做风险定性。
+- 不替代 Device SDK、用户登录统一日志、档案中心、前端活跃画像或 DataAgent。
+- 只为后续 hand 补齐必要入参。
+
+双向解析主入口统一为 Weapon `graphData`：
+
+- `user_to_device`：`groupValue={userId}`，`groupKey=USER_ID`，`dimKey=DEVICE_ID`，解析 `pointInfoMap` 中 `DEVICE_ID` 节点，以及 `relationEdgeList` 中 `source=userId`、`target=DEVICE_ID` 的直连边。
+- `device_to_user`：`groupValue={deviceId}`，`groupKey=DEVICE_ID`，`dimKey=USER_ID`，解析 `pointInfoMap` 中 `USER_ID` 节点，以及 `relationEdgeList` 中 `source=deviceId`、`target=USER_ID` 的直连边。
+
+职责切分：
+
+- Device SDK hand / `riskData` 不作为实体解析主入口，只在拿到 deviceId 后做 hook / frida / root / jailbreak / proxy / simulator / repack 等设备侧风险补证。
+- 用户登录统一日志处理登录失败、登录流水、登录原因类问题，不应触发 graphData / Device SDK。
+- 档案中心用户分析 API 只作为近期关联设备补充排序来源，不作为 `user_to_device` 主入口。
+- DataAgent / Hive 只用于批量、长周期、历史聚合，不替代 graphData 在线实体解析。
+
+路由边界：
+
+- `userId + 设备风险`：先 `user_to_device` graphData，再 Device SDK 设备补证。
+- `userId + 登录流水`：直接用户登录统一日志，不走 graphData / Device SDK。
+- `deviceId + 设备风险`：直接 Device SDK，不做实体转译。
+- `deviceId + 关联用户`：走 `device_to_user` graphData。
+- 关联关系不是风险结论。
+- 候选过多不默认批量深查。
+- 缺失设备返回 `missing_device_id`。
+- 缺失关联用户返回 `no_related_user / missing_user_id`。
+- 候选过多返回 `too_many_candidates`。
+
+已吸收的 runtime error semantics：
+
+- `graphdata_error`
+- `auth_required`
+- `permission_denied`
+- `no_related_entity`
+- `no_direct_relation`
+- `missing_device_id`
+- `no_related_user / missing_user_id`
+- `too_many_candidates`
+- `parse_error`
+
+验证状态：
+
+- v2.6.0 文本回归 10/10 pass。
+- graphData error semantics 已补充 8 个 error case。
+- release package 更新前一致性检查已完成，未发现口径冲突。
+- 仍未真实查询，未验证 graphData 在 `no_data` / `auth_required` / `permission_denied` 等运行态下的真实返回。
+
 ## 3. ATO 加载方式
 
 ATO 命中后应进入完整体，不退化成轻量 summary。

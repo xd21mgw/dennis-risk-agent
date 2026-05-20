@@ -72,6 +72,68 @@
 - 治理建议。
 - 短问话术。
 
+### 2.4 Computer Use / Entity Resolution Addendum
+
+v2.6.0 release package 吸收以下 `computer_use_poc` 增量文档：
+
+- `computer_use_poc/entity_resolution_user_device_layer_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md`
+- `computer_use_poc/entity_resolution_user_device_smoke_tests_v2_6_0.md`
+- `computer_use_poc/run_logs/entity_resolution_user_device_text_regression_run_v2_6_0.md`
+- `computer_use_poc/device_sdk_api_routing_rules_v2_5_3.md`
+
+该层的定位：
+
+- 位于主 Agent intent routing 和具体 hand 之间。
+- 只做 `userId ↔ deviceId / did / deviceceid` 实体转译。
+- 不直接查风险，不直接做风险定性。
+- 不替代 Device SDK、用户登录统一日志、档案中心、前端活跃画像或 DataAgent。
+- 只为后续 hand 补齐必要入参。
+
+双向解析主入口统一为 Weapon `graphData`：
+
+- `user_to_device`：`groupValue={userId}`，`groupKey=USER_ID`，`dimKey=DEVICE_ID`；解析 `pointInfoMap` 中 `DEVICE_ID` 节点，以及 `relationEdgeList` 中 `source=userId`、`target=DEVICE_ID` 的直连边。
+- `device_to_user`：`groupValue={deviceId}`，`groupKey=DEVICE_ID`，`dimKey=USER_ID`；解析 `pointInfoMap` 中 `USER_ID` 节点，以及 `relationEdgeList` 中 `source=deviceId`、`target=USER_ID` 的直连边。
+
+与其他 hand 的职责切分：
+
+- Device SDK hand / `riskData` 不作为实体解析主入口；只在拿到 deviceId 后做 hook / frida / root / jailbreak / proxy / simulator / repack 等设备侧风险补证。
+- 用户登录统一日志处理登录失败、登录流水、登录原因类问题，不应触发 graphData / Device SDK。
+- 档案中心用户分析 API 只作为近期关联设备补充排序来源，不作为 `user_to_device` 主入口。
+- DataAgent / Hive 只用于批量、长周期、历史聚合，不替代 graphData 在线实体解析。
+
+路由边界：
+
+- `userId + 设备风险`：先 `user_to_device` graphData，再 Device SDK 设备补证。
+- `userId + 登录流水`：直接用户登录统一日志，不走 graphData / Device SDK。
+- `deviceId + 设备风险`：直接 Device SDK，不做实体转译。
+- `deviceId + 关联用户`：走 `device_to_user` graphData。
+- 关联关系不是风险结论。
+- 候选过多不默认批量深查。
+- 缺失设备返回 `missing_device_id`。
+- 缺失关联用户返回 `no_related_user / missing_user_id`。
+- 候选过多返回 `too_many_candidates`。
+
+已吸收的 runtime error semantics：
+
+- `graphdata_error`
+- `auth_required`
+- `permission_denied`
+- `no_related_entity`
+- `no_direct_relation`
+- `missing_device_id`
+- `no_related_user / missing_user_id`
+- `too_many_candidates`
+- `parse_error`
+
+验证状态：
+
+- v2.6.0 文本回归 10/10 pass。
+- graphData error semantics 已补充 8 个 error case。
+- release package 更新前一致性检查已完成，未发现口径冲突。
+- 仍未真实查询，未验证 graphData 在 `no_data` / `auth_required` / `permission_denied` 等运行态下的真实返回。
+
 ## 3. 按需读取清单
 
 ### 3.1 非 ATO 深度 Skill 按需读取
@@ -133,6 +195,9 @@ Runtime Plus 不承诺：
 - 自动扩窗。
 - 自动多轮编排。
 - 自动处罚、冻结、封禁、踢 token、上线策略。
+- User ↔ Device Entity Resolution 自动批量深查。
+- 关联关系可直接作为风险结论。
+- graphData `no_data` / `auth_required` / `permission_denied` 真实运行态已验证。
 
 ## 8. 下一版集成建议
 
