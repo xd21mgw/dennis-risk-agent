@@ -12,6 +12,8 @@
 - v2.4.8 Run 008 ~ Run 011 已补充 saved state 复用、档案中心用户分析分页修正、审核 / 打标日志可访问性、统一登录日志 special event detail key extraction。
 - 当前 release 状态为 `release_candidate_not_final`。
 - 当前已验证单源消化和 focused_login_risk 多源 observation partial coverage；不代表多源联合风险研判或最终定性完成。
+- device_sdk_foundation 是 v2.5.0 计划接入的第三个 browser computer use source，当前仅完成 readonly POC / internal playbook 设计，状态为 `design_pending_validation`。
+- frontend_activity_profile 是 v2.5.2 计划接入的前端活跃画像只读 source，当前仅完成方法论、URL 模板、schema、test cases 和 run log 模板，状态为 `design_only_pending_browser_validation`。
 - Dennis Agent 输出必须保留“线索 / 证据 / 结论边界”三层区分。
 
 ## 1. 三方分工
@@ -124,6 +126,8 @@ limitations:
 source_observations:
   - platform: archives_center
   - platform: user_login_unified_log
+  - platform: device_sdk_foundation
+  - platform: frontend_activity_profile
 same_user_id_used:
 source_entry_resolutions:
   - source_name:
@@ -145,6 +149,118 @@ source_entry_resolutions:
 - 当前 POC 仅将页面默认 / backend default 的近 7 天作为实时页面可靠查询窗口；前端时间控件允许选择超过最近 7 天，但超窗“暂无数据”不得解释为历史无记录。
 - 本轮页面未显式展示具体 start_time / end_time，但查询结果显示存在默认近 7 天行为；不得写成 UI 明确展示最近 7 天。
 - 需要离线补证时建议 DataAgent / Hive。
+- `device_sdk_foundation` 后续用于补充设备侧画像、SDK 采集状态、设备风险标签、设备一致性和设备关系摘要；当前未完成 source entry / auth preflight 实跑，不得写成可用能力。
+- `frontend_activity_profile` 后续用于补充前端活跃痕迹，只读取“用户属性及时长”区域，不替代完整行为序列、后端日志、登录日志或设备 SDK。
+
+### 2.0.-3 frontend_activity_profile_observation_draft
+
+当前为 v2.5.2 design draft，pending browser validation。
+
+```yaml
+frontend_activity_profile_observation:
+  platform: track_analysis
+  module: 用户洞查 / 用户细查详情 / 用户属性及时长
+  app_name:
+  query_subject_type:
+  query_subject_value:
+  query_url:
+  query_status:
+  profile_card:
+    user_id:
+    register_time:
+    active_days_bucket:
+    fan_distribution:
+    device_attributes:
+  usage_duration:
+    chart_present:
+    time_range_detected:
+    active_days_observed:
+    total_usage_duration_observed:
+    daily_usage_points_observed:
+    peak_usage_day:
+    peak_usage_duration:
+  activity_judgement:
+    has_frontend_activity_signal:
+    activity_strength:
+    judgement_reason:
+    evidence_strength:
+    evidence_limitations:
+  next_evidence_to_collect:
+    login_unified_log:
+    device_sdk_profile:
+    backend_action_log:
+    frontend_event_sequence:
+    data_agent_hive_check:
+  raw_observation_reference:
+    screenshot_path:
+    url:
+    captured_at:
+```
+
+解释规则：
+
+- 有使用时长 / 活跃天数，只能说明存在前端活跃信号。
+- 不能直接证明是真人操作。
+- 不能直接证明是本人操作。
+- 不能直接证明没有自动化、脚本、群控。
+- 不能证明某个具体业务动作一定发生过。
+- 如果要判断具体链路，需要行为序列、后端日志、登录日志、设备 SDK 共同补证。
+- 本 source 当前不读取下方行为记录、行为回放、行为序列、单条事件详情、事件参数或页面路径明细。
+
+### 2.0.-2 device_sdk_foundation_observation_draft
+
+当前为 v2.5.0 design draft，pending validation。
+
+```yaml
+device_sdk_foundation_observation:
+  query:
+    input_device_id:
+    query_type:
+    time_range:
+  page_access:
+    page_accessible:
+    auth_required:
+    permission_blocked:
+    redirected_to_login:
+  device_basic_info:
+    device_id:
+    did:
+    device_type:
+    device_model:
+    os:
+    os_version:
+    app_version:
+    sdk_version:
+  device_risk_profile:
+    risk_tags:
+    risk_level:
+    root_or_jailbreak:
+    hook_detected:
+    emulator_detected:
+    multi_open_detected:
+    automation_detected:
+    tamper_detected:
+  relation_summary:
+    related_user_ids:
+    related_ips:
+    related_apps:
+    related_login_events:
+  field_visibility:
+    visible_fields:
+    missing_fields:
+  limitations:
+  readonly_safety_check:
+```
+
+解释规则：
+
+- 设备风险标签是设备侧线索，不是最终风险定性。
+- 设备关系聚集不能直接等同群控。
+- 设备异常不能直接等同协议上号。
+- 登录态阻断不能解释为设备无数据。
+- 权限阻断不能解释为设备无风险。
+- 未看到字段不能解释为字段不存在，需区分 `field_not_visible` / `permission_blocked` / `query_no_result`。
+- deviceId / did / sdkVersion / appVersion / riskTag / deviceModel / osVersion / ip / region 等风控证据字段可以保留；token / session / ticket / authorization / cookie 等认证凭证明文只输出 `present_redacted`。
 
 ### 2.0.-1 multi_source_e2e_entry_resolution_rule
 

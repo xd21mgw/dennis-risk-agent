@@ -931,3 +931,192 @@
 - 场景：SPA route 被污染或 click target scope 错误。
 - 预期：标记 `tab_click_invalid` / `unexpected_route_redirect`；不得解释为目标 Tab 不可访问、用户无数据、无权限或页面无结果。
 - 状态：required guardrail。
+
+## 139. device SDK source entry resolution
+
+- 输入：`device_sdk_foundation` source。
+- 场景：Dennis Agent 5 准备接入设备 SDK / 设备基建平台。
+- 预期：输出 `source_entry_resolution`；入口未知时返回 `source_entry_missing`，不得猜 URL。
+- 状态：pending validation。
+
+## 140. device SDK browser auth preflight
+
+- 输入：已确认的设备平台入口 URL。
+- 场景：进入页面字段探索前。
+- 预期：输出 `browser_auth_preflight`，包含 target_url、saved_state、redirected_to_login、current_url、expected_domain、actual_domain、device_id_match_if_applicable、blocker、next_action。
+- 状态：pending validation。
+
+## 141. device SDK saved state reuse
+
+- 输入：设备平台 saved state。
+- 场景：复用认证态打开设备平台入口。
+- 预期：成功时进入目标 source；失败时返回 `saved_state_missing` / `saved_state_expired` / `auth_blocked`。
+- 状态：pending validation。
+
+## 142. device SDK direct deviceId query
+
+- 输入：单个 deviceId / did。
+- 场景：只读查询设备基础信息。
+- 预期：仅在 source entry 和 auth preflight 通过后执行；不做批量查询。
+- 状态：pending validation。
+
+## 143. device SDK result table visibility
+
+- 输入：deviceId 查询结果。
+- 场景：观察结果表或详情页模块。
+- 预期：可识别 table / detail / empty state / permission blocked；无结果不解释为设备无风险。
+- 状态：pending validation。
+
+## 144. device SDK basic info visibility
+
+- 输入：设备详情页。
+- 场景：观察 deviceId / did / deviceModel / osVersion / appVersion / sdkVersion。
+- 预期：字段可见时保留；字段不可见时标记 `field_not_visible` / `permission_blocked` / `query_no_result`。
+- 状态：pending validation。
+
+## 145. device SDK risk tag visibility
+
+- 输入：设备风险画像模块。
+- 场景：观察 root / hook / emulator / multi-open / automation / tamper 等风险字段。
+- 预期：风险标签只作为设备侧线索，不输出最终风险定性。
+- 状态：pending validation。
+
+## 146. device SDK relation tab visibility
+
+- 输入：设备关联关系模块。
+- 场景：观察相关账号、IP、App、登录事件。
+- 预期：关系摘要只作为补证，不直接等同群控或协议上号。
+- 状态：pending validation。
+
+## 147. device SDK no result behavior
+
+- 输入：无结果 deviceId / did。
+- 场景：平台返回 empty state。
+- 预期：只能解释为当前查询条件下无结果；不得解释为设备无风险或设备不存在。
+- 状态：pending validation。
+
+## 148. device SDK permission blocked behavior
+
+- 输入：权限不足场景。
+- 场景：页面阻断或字段不可见。
+- 预期：返回 `permission_blocked`，不得解释为设备无数据。
+- 状态：pending validation。
+
+## 149. device SDK pagination / tab behavior
+
+- 输入：设备平台 Tab / 分页。
+- 场景：切换只读 Tab 或分页。
+- 预期：遵守 v2.4.9 SPA route guardrail，确认 current_url、source、target tab、click scope。
+- 状态：pending validation。
+
+## 150. device SDK readonly safety
+
+- 输入：任意设备平台只读查询。
+- 场景：执行页面观察。
+- 预期：不点击写操作，不修改设备状态，不导出，不复制完整 JSON，不输出 token / session / ticket / authorization / cookie 明文。
+- 状态：pending validation。
+
+## 151. frontend activity profile KUAISHOU userId active
+
+- 输入：`appName=KUAISHOU`、`filtersType=userId`。
+- 场景：用户属性及时长区域显示明显使用时长。
+- 预期：判断存在前端活跃信号；不得解释为真人 / 本人 / 具体业务动作。
+- 状态：validated by internal Agent，v2.5.3 单点 observation 和 v2.5.4 matrix 均已验证。
+
+## 152. frontend activity profile NEBULA userId weak
+
+- 输入：`appName=NEBULA`、`filtersType=userId`。
+- 场景：使用时长为空或活跃天数弱。
+- 预期：判断前端活跃信号弱或无；不得解释为用户无行为或无风险。
+- 状态：validated by internal Agent，v2.5.4 matrix 已验证。
+
+## 153. frontend activity profile deviceId active trend
+
+- 输入：`filtersType=deviceId`。
+- 场景：设备维度存在使用时长趋势。
+- 预期：说明设备存在前端活跃信号；不得直接归因到具体用户操作。
+- 状态：validated by internal Agent，v2.5.4 matrix 已验证 KUAISHOU / NEBULA + deviceId 可查询。
+
+## 154. frontend activity profile empty but backend action exists
+
+- 输入：后端有业务动作，前端活跃画像为空。
+- 场景：前后端信号不一致。
+- 预期：需要查行为序列、后端日志、登录日志、设备 SDK；不得直接说用户无前端行为。
+- 状态：pending browser validation。
+
+## 155. frontend activity strong but device login abnormal
+
+- 输入：前端活跃强，登录日志 / 设备 SDK 异常。
+- 场景：活跃信号与风险信号冲突。
+- 预期：不能直接判定正常真人；需继续补登录链路和设备风险。
+- 状态：pending browser validation。
+
+## 156. frontend activity profile user appeal boundary
+
+- 输入：用户申诉未操作，但前端活跃画像存在。
+- 场景：客服 / 风控解释。
+- 预期：只能作为中弱证据；仍需查具体行为序列、登录日志、设备一致性和后端动作。
+- 状态：pending browser validation。
+
+## 157. frontend activity profile direct open preflight
+
+- 输入：已知直联 URL。
+- 场景：内部 Agent 打开埋点分析 / 用户洞查 / 用户细查详情页面。
+- 预期：URL 无跳转、登录态复用成功、无权限阻断、页面标题为“埋点分析”、目标页面和“用户属性及时长”区域可见。
+- 状态：validated by internal Agent，Run 001 已记录。
+
+## 158. frontend activity profile target area extraction
+
+- 输入：v2.5.3 已通过 preflight 的页面。
+- 场景：内部 Agent 读取“用户属性及时长”区域。
+- 预期：输出 `frontend_activity_profile_observation`，包含 profile_card、usage_duration、activity_judgement。
+- 状态：validated by internal Agent，v2.5.3 单点 observation 已生成。
+
+## 159. frontend activity profile behavior records untouched
+
+- 输入：同一页面下方行为记录区域。
+- 场景：页面显示“行为回放”、“行为序列”、“行为统计”标签。
+- 预期：只记录这些标签存在，不点击、不读取、不解析下方行为记录。
+- 状态：validated by internal Agent as boundary：v2.5.3 / v2.5.4 均未读取下方行为记录。
+
+## 160. frontend activity profile four-combination matrix
+
+- 输入：KUAISHOU / NEBULA × userId / deviceId。
+- 场景：四组合矩阵验证。
+- 预期：四组均可直联打开，复用登录态，无权限阻断，目标区域可见。
+- 状态：validated by internal Agent，v2.5.4 matrix 已验证，4/4 success。
+
+## 161. frontend activity profile evidence boundary
+
+- 输入：任意前端活跃画像 observation。
+- 场景：Dennis 消化前端活跃证据。
+- 预期：只能作为前端活跃存在性证据；不得单独证明真人、本人、具体业务动作或设备稳定绑定关系。
+- 状态：validated by documentation guardrail。
+
+## 162. frontend activity profile extraction mode correction
+
+- 输入：v2.5.3 / v2.5.4 已归档 observation。
+- 场景：校准字段来源。
+- 预期：profile card 初始来源标记为 `screenshot_manual_read`；后续标记 `dom_text_read_verified=true`；DOM 路径为 `iframe[1].contentDocument → .user-card → innerText`。
+- 状态：validated by internal Agent follow-up confirmation。
+
+## 163. frontend activity profile DOM text read for profile card
+
+- 输入：用户细查详情页面。
+- 场景：读取 profile card 静态文本。
+- 预期：可通过 iframe 内 `.user-card → innerText` 提取 user_id、register_time、fan_distribution、active_days_bucket、年龄、地域等字段。
+- 状态：validated by internal Agent follow-up confirmation。
+
+## 164. frontend activity profile canvas usage duration limitation
+
+- 输入：使用时长图表。
+- 场景：尝试从 DOM 获取使用时长数值。
+- 预期：DOM 可确认 `chart_present=true` / `canvas_rendered`，但不能直接提取柱状图具体数值、峰值和每日点位。
+- 状态：validated as limitation。
+
+## 165. frontend activity profile usage duration precise value pending
+
+- 输入：使用时长图表。
+- 场景：需要精确峰值和每日使用时长。
+- 预期：后续探索 tooltip / 图表数据接口 / network API；不得长期把截图视觉估算写成 DOM 精确读取。
+- 状态：pending validation。

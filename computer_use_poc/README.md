@@ -145,6 +145,12 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.4.8 Run 010 已部分验证档案中心审核日志 / 打标日志可访问性：审核日志有结果，打标日志表头可见；二者只作为补充 source，不替代登录链路证据。
 - v2.4.8 Run 011 已验证统一登录日志高危接口 / 多账号登录详情 key extraction：高危接口偏服务端调用链视角，多账号登录偏客户端登录环境视角；凭证明文字段只输出 `present_redacted`。
 - v2.4.8 RC plan 已生成：`outputs/intermediate/dennis_risk_agent_v2_4_8_release_candidate_plan.md`，当前仅为 release candidate not final。
+- v2.5.0 已启动 Dennis Agent 5 — 设备 SDK 基建手脚设计，新增 `computer_use_poc/device_sdk_foundation_readonly_poc_v2_5_0.md` 和 `computer_use_poc/device_sdk_foundation_internal_agent_playbook_v2_5_0.md`。当前只做 `source_entry_resolution` + `browser_auth_preflight` 设计，不做真实页面执行，状态为 `design_pending_validation`。
+- v2.5.2 已新增前端活跃画像只读手脚设计，覆盖“埋点分析 → 用户洞查 → 用户细查详情”页面上方“用户属性及时长”区域。当前只做方法论、URL 模板、schema、test cases 和 run log 模板沉淀，不抓取真实数据，不解析下方行为记录，状态为 `design_only_pending_browser_validation`。
+- v2.5.3 已沉淀内部 Agent 返回的前端活跃画像 URL 直联预检结果：URL 可打开，登录态复用成功，无登录跳转 / 权限阻断，目标页面和“用户属性及时长”区域可见。该结果来自内部 Agent，不是 Codex 访问平台；下一步由内部 Agent 读取该区域并输出 observation sample。
+- v2.5.3 单点 observation 已由内部 Agent 验证：KUAISHOU + userId + 444946196 可读取“用户属性及时长”区域并形成 observation，前端活跃信号强；该 observation 只能证明前端活跃存在性，不能证明真人、本人与具体业务动作。
+- v2.5.4 四组合矩阵已由内部 Agent 验证：KUAISHOU / NEBULA × userId / deviceId 共 4 组全部成功，均可直联查询“用户属性及时长”区域。KUAISHOU 活跃信号强，NEBULA 使用时长几乎为零；deviceId 查询样例自动关联到同一用户，但不能单独证明稳定设备绑定关系。
+- v2.5.3 / v2.5.4 extraction_mode 已校准：初始 profile card 与使用时长字段来自 `screenshot_manual_read`；后续已验证 profile card 可通过 `iframe[1].contentDocument → .user-card → innerText` 做 DOM 文本读取。使用时长图表为 canvas 渲染，DOM 只能确认图表存在，峰值和每日点位仍为截图视觉估算，精确数值需后续 tooltip / 图表接口 / network API 验证。
 
 Auth preflight：
 
@@ -177,6 +183,14 @@ release_status: release_candidate_not_final
 - device_platform_verification。
 - audit_label_log_full_validation。
 - final_release_package_update。
+- device_sdk_foundation_source_entry_resolution。
+- device_sdk_foundation_browser_auth_preflight。
+- frontend_activity_profile_browser_validation。
+- frontend_activity_profile_dom_selector_validation。
+- frontend_activity_profile_real_observation_run。
+- frontend_activity_profile_user_attribute_duration_observation_sample。
+- frontend_activity_profile_behavior_sequence_hand。
+- frontend_activity_profile_usage_duration_precise_value_extraction。
 
 ## 6. SPA / agent-browser guardrail
 
