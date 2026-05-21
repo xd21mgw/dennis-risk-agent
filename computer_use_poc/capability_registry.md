@@ -30,6 +30,7 @@
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
+- 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。
 - `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
 - `ato_case_expansion_planning` 服务单个或少量 ATO case 的举一返三扩展设计，核心锚点是凭证 / token / OAuth / 登录态异常、改密 / 换绑 / 安全操作、基础设施和后置动作回连，不按相同昵称 / 简介扩展。
@@ -97,6 +98,7 @@ contract:
   output_contract: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md
   status_transition: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md
   user_interaction_examples: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md
+  real_case_pilot_checklist: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_real_case_pilot_checklist_v1.md
 should_trigger_when:
   - user_provides_5_to_20_ato_cases
   - user_asks_for_batch_attribution
@@ -113,6 +115,7 @@ boundaries:
   - no_auto_disposition
   - no_auto_strategy_launch
   - dataagent_only_for_future_hive_or_warehouse_analysis_when_scene_allows
+  - real_case_pilot_is_validation_stage_not_auto_disposition
   - case_aggregation_is_pattern_hypothesis_not_final_risk_conclusion
   - input_contract_required_before_evidence_card
   - output_contract_required_for_user_facing_result
@@ -131,6 +134,7 @@ templates:
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_real_case_pilot_checklist_v1.md
 ```
 
 ## ato_case_expansion_planning

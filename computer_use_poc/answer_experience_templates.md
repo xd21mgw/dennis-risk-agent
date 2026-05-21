@@ -347,6 +347,9 @@ D. 先不要执行，只优化计划
 - 先讲最能区分本质的证据，不堆字段。
 - 单源证据只能说“线索”或“证据”，不能说“最终定性”。
 - 多源一致时可以提高置信度，但仍保留边界。
+- 单例 case evidence card 中，strong / medium / weak / counter evidence 每条都必须携带 `evidence_source` 和 `source_quality`，字段口径与 ATO batch evidence source schema 一致。
+- `evidence_source` 必须包含 `source_name`、`source_type`、`source_tool_or_hand`、`source_platform`、`collected_at`、`evidence_time_range`、`raw_reference`。
+- `source_quality` 必须包含 `freshness_status`、`freshness_risk`、`permission_status`、`reliability_level`。
 - 风险研判必须显式说明 `data_freshness / data_window`：关键异常时间是否被当前在线日志可靠窗口覆盖。
 - 统一登录日志在线 API 按约 7 天可靠窗口处理；超窗时在线 API `no_data` / 无 LOGIN 事件只能作为数据缺口，不能作为“无登录”或“无异设备登录”的证据。
 - no_data 不仅不等于无风险，也不等于无登录；当异常时间超过在线窗口时，要标记 `login_log_window_incomplete`、`offline_hive_required`、`online_login_log_may_be_false_negative`。
@@ -362,6 +365,9 @@ D. 先不要执行，只优化计划
 - 结论不得超过 `partial_support` 或 `insufficient_support`，除非已有发布审计、离线登录日志或 token 使用链路补证。
 - 设备风险补证必须先确认 deviceId / did / deviceceid。若用户只给 userId，应先说明需要做 user_to_device entity resolution；若无法解析，返回 `missing_device_id`，不要假装已经完成 Device SDK 判断。
 - graphData `no_data` 不等于实体一定没有关联，只代表 Weapon 当前图谱在该查询条件下无结果。
+- blocked / partial source 必须显式展示 `permission_status`，并降低结论置信度。
+- `manual_input` 不能单独支撑 strong conclusion；`model_inference` 不能作为 raw evidence。
+- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
 
 ### 不应输出的内容
 

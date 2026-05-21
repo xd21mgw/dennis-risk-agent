@@ -139,6 +139,47 @@ ATO / 盗号研判必须先判断 `suspicious_event_time` 与 `query_time` 的�
   - 在线日志超窗场景：离线 Hive 登录日志、发布审计日志、token 使用 / passToken 链路、封禁 / 审核工单。
   - 合法自动化 / 合法矩阵：按 `06_templates/legal_operation_matrix_playbook_v2_3.md` 补授权主体、账号范围、工具来源、操作人、操作目的、调用接口、敏感动作、收益主体、业务登记信息、历史违规记录。
 
+### 5.1 单例 Case Evidence Source Metadata
+
+单例 ATO / 账号安全研判输出一张 evidence card 时，每条 strong / medium / weak / counter evidence 都必须带来源追踪字段，口径与 ATO batch evidence source schema 保持一致。
+
+每条证据必须包含：
+
+```yaml
+evidence_source:
+  source_name:
+  source_type:
+  source_tool_or_hand:
+  source_platform:
+  collected_at:
+  evidence_time_range:
+  raw_reference:
+source_quality:
+  freshness_status:
+  freshness_risk:
+  permission_status:
+  reliability_level:
+```
+
+`source_type` 枚举：
+
+- `internal_platform_api`
+- `browser_dom_read`
+- `screenshot_manual_read`
+- `dataagent_hive`
+- `manual_input`
+- `model_inference`
+- `historical_doc`
+
+边界：
+
+- `model_inference` 不能当作 raw evidence，只能作为 hypothesis / interpretation。
+- `manual_input` 不能单独支撑 strong conclusion，只能作为 clue 或弱证据。
+- 登录日志超窗 `no_data` 不能当作 counter evidence，必须标记 freshness / window risk。
+- blocked / partial source 必须显式标记 `permission_status`，并降低结论置信度。
+- 设备关联只能作为候选关联风险，不能直接定性作弊或盗号。
+- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
+
 ## 6. 输出格式
 
 ### 6.1 短答版

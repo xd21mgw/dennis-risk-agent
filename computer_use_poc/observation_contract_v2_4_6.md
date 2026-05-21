@@ -144,6 +144,67 @@ source_entry_resolutions:
     next_action:
 ```
 
+单例 case 研判可增加一张 evidence card，字段口径与 ATO batch evidence source schema 对齐：
+
+```yaml
+single_case_evidence_card:
+  case_id:
+  scene:
+  support_level:
+  strong_evidence:
+    - evidence_name:
+      evidence_summary:
+      evidence_source:
+        source_name:
+        source_type:
+        source_tool_or_hand:
+        source_platform:
+        collected_at:
+        evidence_time_range:
+        raw_reference:
+      source_quality:
+        freshness_status:
+        freshness_risk:
+        permission_status:
+        reliability_level:
+  medium_evidence:
+    - evidence_name:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  weak_evidence:
+    - evidence_name:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  counter_evidence:
+    - evidence_name:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  missing_evidence:
+  conclusion_boundary:
+```
+
+`source_type` 枚举：
+
+- `internal_platform_api`
+- `browser_dom_read`
+- `screenshot_manual_read`
+- `dataagent_hive`
+- `manual_input`
+- `model_inference`
+- `historical_doc`
+
+解释边界：
+
+- `model_inference` 不能当作 raw evidence。
+- `manual_input` 不能单独支撑 strong conclusion。
+- 登录日志超窗 `no_data` 不能写入 counter evidence，只能写入 freshness / window risk 或 missing evidence。
+- blocked / partial source 必须显式标记 `permission_status`，并降低结论置信度。
+- 设备关联只能作为候选关联风险，不能直接定性作弊或盗号。
+- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
+
 说明：
 
 - `user_login_unified_log` 后续用于补强档案中心 `focused_login_risk` 的登录链路证据。

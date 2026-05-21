@@ -3347,6 +3347,55 @@
 - expected_runtime_behavior: unsafe_conclusion_boundary_documented
 - expected_output_boundary: manual_input / model_inference 不能单独作为 strong conclusion；登录日志超窗 no_data 不能作为反证；strategy 只能是 candidate direction，不自动上线、不自动处置。
 
+## 363Y. ATO batch real-case pilot checklist exists
+
+- test_id: ATO-PILOT-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_real_case_pilot_checklist_v1.md`。
+- expected_runtime_behavior: real_case_pilot_checklist_documented
+- expected_output_boundary: checklist 覆盖 pilot 目标、case 选择标准、脱敏要求、输入字段检查、只读 observation 范围、DataAgent/Hive 触发边界、输出验收标准和 pilot 通过标准。
+
+## 363Z. ATO real-case pilot keeps readonly and candidate-only boundary
+
+- test_id: ATO-PILOT-002
+- input: 检查 real-case pilot checklist、capability registry 和 routing。
+- expected_runtime_behavior: pilot_boundary_documented
+- expected_output_boundary: 3-5 个真实脱敏 case 只作为 contract 验证阶段；不调用真实 DataAgent，不自动处置，不自动上线策略，内部 Agent observation 不能直接作为处置依据。
+
+## 363AA. Single-case evidence card includes source metadata
+
+- test_id: SINGLE-SOURCE-001
+- input: 检查 `account_security_expert_skill.md`、`answer_experience_templates.md` 和 `observation_contract_v2_4_6.md`。
+- expected_runtime_behavior: single_case_source_metadata_required
+- expected_output_boundary: 单例 case evidence card 的 strong / medium / weak / counter evidence 都必须包含 `evidence_source` 和 `source_quality`。
+
+## 363AB. Single-case source schema aligns with batch schema
+
+- test_id: SINGLE-SOURCE-002
+- input: 检查单例 evidence source 字段。
+- expected_runtime_behavior: single_case_batch_source_schema_aligned
+- expected_output_boundary: 字段覆盖 source_name / source_type / source_tool_or_hand / source_platform / collected_at / evidence_time_range / raw_reference，以及 freshness_status / freshness_risk / permission_status / reliability_level。
+
+## 363AC. Single-case weak source boundaries are enforced
+
+- test_id: SINGLE-SOURCE-003
+- input: manual_input only、model_inference only、登录日志超窗 no_data、partial / blocked source。
+- expected_runtime_behavior: weak_source_boundary_enforced
+- expected_output_boundary: manual_input 不能单独支撑 strong conclusion；model_inference 只能作为 hypothesis；超窗 no_data 不能作为 counter evidence；blocked / partial source 必须展示 permission_status 并降级结论。
+
+## 363AD. Single-case device relation remains candidate evidence
+
+- test_id: SINGLE-SOURCE-004
+- input: 单例 case 只有设备关联或设备到用户候选关系。
+- expected_runtime_behavior: relation_candidate_not_final_conclusion
+- expected_output_boundary: 设备关联只能作为候选关联风险或补证线索，不能直接定性作弊、盗号或群控。
+
+## 363AE. Single-case evidence source text regression run exists
+
+- test_id: SINGLE-SOURCE-005
+- input: 检查 `computer_use_poc/run_logs/single_case_evidence_source_text_regression_run_v1.md`。
+- expected_runtime_behavior: single_case_source_regression_logged
+- expected_output_boundary: run log 覆盖单例 ATO 多来源完整、manual_input only、model_inference only、登录日志超窗 no_data、partial / blocked source 五类 case，并记录 5/5 pass。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists
