@@ -2579,3 +2579,61 @@
 - expected_runtime_behavior: safe_audit_event_only
 - expected_policy_flag: audit_required
 - expected_output_boundary: audit_event 只记录摘要和内部安全引用，不记录 cookie / token / session / raw response。
+
+# Security Preflight Shadow Hook Tests
+
+## 287. Shadow hook runs after tool_call_request construction
+
+- test_id: SHADOW-HOOK-001
+- input: Agent 已完成 `tool_call_request` 构造，准备调用 `login_log_read`。
+- expected_hook_point: after_tool_call_request_before_tool_execution
+- expected_runtime_behavior: call_shadow_preflight_evaluator
+- expected_output_boundary: shadow hook 只读取结构化 request，不读取认证态，不调用真实平台。
+
+## 288. Shadow hook does not block real execution in shadow mode
+
+- test_id: SHADOW-HOOK-002
+- input: shadow mode 下 preflight 判定 `allow`。
+- expected_runtime_behavior: record_shadow_preflight_result_and_continue
+- expected_policy_flag: none
+- expected_output_boundary: shadow mode 只记录，不阻断真实工具链路。
+
+## 289. Deny or require_approval still executing records shadow risk
+
+- test_id: SHADOW-HOOK-003
+- input: shadow mode 下 preflight 判定 `deny` / `require_approval`，真实链路仍继续。
+- expected_runtime_behavior: record_shadow_risk_event
+- expected_policy_flag: shadow_risk_event
+- expected_output_boundary: 不阻断，但必须记录风险事件供后续评审。
+
+## 290. Safe readonly false positive is recorded
+
+- test_id: SHADOW-HOOK-004
+- input: 正常单实体只读请求被 preflight 判为 `deny` / `require_approval`。
+- expected_runtime_behavior: record_false_positive_candidate
+- expected_policy_flag: false_positive_candidate
+- expected_output_boundary: 不在 shadow 阶段修改真实结果；将误拦候选进入 policy 复核。
+
+## 291. Redaction gap is recorded before output
+
+- test_id: SHADOW-HOOK-005
+- input: preflight 标记 `redaction_required=true`，真实输出仍包含敏感字段。
+- expected_runtime_behavior: record_redaction_gap_candidate
+- expected_policy_flag: redaction_gap_candidate
+- expected_output_boundary: 不记录敏感原文，只记录字段类型、capability 和 request 引用。
+
+## 292. Unknown capability event is recorded
+
+- test_id: SHADOW-HOOK-006
+- input: 真实链路准备调用 policy 未登记 capability。
+- expected_runtime_behavior: record_unknown_capability_event
+- expected_policy_flag: unknown_capability
+- expected_output_boundary: shadow mode 记录事件；enforce mode 下应 deny。
+
+## 293. Evaluator error event is recorded
+
+- test_id: SHADOW-HOOK-007
+- input: evaluator 异常或 policy 文件不可读。
+- expected_runtime_behavior: record_evaluator_error_event
+- expected_policy_flag: preflight_evaluator_error
+- expected_output_boundary: shadow mode 记录异常；enforce mode 下必须 fail closed。
