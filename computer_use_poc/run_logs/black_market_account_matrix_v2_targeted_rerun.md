@@ -22,7 +22,7 @@
 |---|---|---|
 | 档案中心 | success | 可读取当前 profile、负向标签、封禁状态 |
 | Weapon | success | 可读取设备与风险标签摘要 |
-| 统一登录日志 | over_window_invalid_for_history | 超长窗口查询结果不得解释为历史无登录或日志清理 |
+| 统一登录日志 | invalid_over_window_query / login_log_window_incomplete / offline_hive_required | 超长窗口 `totalCount=0` 不作为 counter evidence，也不作为 log cleanup evidence |
 | 天司 / 天狮 | 2FA blocked | 不作为 no_data，不进入反证 |
 | 行为链 | not_reached | 关注 / 点赞 / 评论 / 私信对象聚集仍是最大缺口 |
 
@@ -116,16 +116,22 @@
 正确口径：
 
 - 统一登录日志在线 API 按约 7 天可靠窗口处理。
-- 超出可靠窗口的查询返回 0 / no_data，不代表历史无登录。
-- 超出可靠窗口的查询返回 0 / no_data，不能推断日志被清理。
+- 超出可靠窗口的查询返回 0 / no_data / `totalCount=0`，不代表历史无登录。
+- 超出可靠窗口的查询返回 0 / no_data / `totalCount=0`，不能推断日志被清理。
 - 对 `2024 年 7 月至今` 这类超长时间窗查询，应标记：
   - `invalid_over_window_query`
   - `login_log_window_incomplete`
   - `offline_hive_required`
 - 后续内部 Agent 在调用统一登录日志前必须做 `reliable_window_precheck`。
 - 如果 event_time 超过近 7 天，默认不要调用在线统一登录日志做验证；只在说明窗口缺口后建议 DataAgent / Hive 或离线日志补查。
-- 不得将 over-window no_data 写入 counter evidence。
-- 不得将 over-window no_data 写成日志清理证据。
+- 不得将 over-window no_data / `totalCount=0` 写入 counter evidence。
+- 不得将 over-window no_data / `totalCount=0` 写成 log cleanup evidence。
+
+区分边界：
+
+- profile cleanup / 头像昵称重置是档案中心负向标签、actionBan、三层封禁等资料治理证据。
+- login log cleanup 是另一类日志存储 / 日志可见性假设，本轮没有证据支持。
+- 不得用统一登录日志 over-window `totalCount=0` 推断 login log cleanup。
 
 ## 9. Evidence Strength
 
@@ -151,7 +157,29 @@
 
 结论：v2 targeted rerun 增强了 black_market_account_matrix 假设，尤其是资料三层同构被治理后重置、注册 IP cohort、Weapon 机器小号、设备/刷粉痕迹等信号。但行为链未触达、adminaction 含义未知、reviewLogs 为空，因此仍保持 medium-strong，不直接进入自动处置。
 
-## 11. Next Step
+## 11. Conclusion Boundary
+
+- 该结论只覆盖本轮 5 case targeted rerun，不推导到其他未查样本。
+- medium-strong 支持来自 profile 模板同构、profile cleanup 证据、注册 IP / 时间 cohort、Weapon 机器小号、设备 / 刷粉痕迹等多信号叠加。
+- 当前仍缺行为链对象聚集、adminaction 含义、reviewLogs 细节和天狮 / RCP 策略链路。
+- profile cleanup / 头像昵称重置可以作为资料治理证据，但不能和 login log cleanup 混淆。
+- 统一登录日志 over-window no_data / `totalCount=0` 只能作为 data gap，不作为反证，不作为日志清理证据。
+
+## 12. Data Quality Risks
+
+- unified_login_log_reliable_window_days≈7
+- over_window_no_data_not_counter_evidence: true
+- over_window_no_data_not_log_cleanup_evidence: true
+- adminaction_not_exposed_by_current_platforms: true
+- review_logs_empty_not_proof_of_no_audit: true
+
+说明：
+
+- 统一登录日志在线 API 只按近 7 天可靠窗口处理；超长窗口查询不具备历史完整性解释力。
+- adminaction=2011262 当前未被档案中心 API 直接暴露含义；负向记录中的“生态审-机审”“业务安全-机审处置”不能等价解释为 adminaction。
+- reviewLogs 为空只能说明当前读取路径未见审核日志明细，不能证明没有审核、没有资料清理动作或没有触发原因。
+
+## 13. Next Step
 
 1. 优先确认 adminaction=2011262 含义。
 2. 触达行为链：关注 / 粉丝 / 点赞 / 评论 / 私信对象聚集。
@@ -159,12 +187,12 @@
 4. 需要离线长周期登录 / 注册聚合时，再转 DataAgent / Hive。
 5. 后续调用统一登录日志前必须执行 reliable_window_precheck。
 
-## 12. Boundary
+## 14. Boundary
 
 - 不调用真实平台。
 - 不调用 DataAgent。
 - 不修改 release/dist。
 - 不输出敏感明文。
-- 不把统一登录日志 over-window no_data 写成 counter evidence。
-- 不把 over-window no_data 写成日志清理证据。
+- 不把统一登录日志 over-window no_data / `totalCount=0` 写成 counter evidence。
+- 不把 over-window no_data / `totalCount=0` 写成 log cleanup evidence。
 - 不自动处置，不自动封禁。
