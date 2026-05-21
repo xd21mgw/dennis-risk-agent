@@ -140,6 +140,75 @@
 - 不要忽略业务体验、误伤、灰度和回流。
 - 不要为了像历史材料而机械套用固定年份、固定指标、固定分支。
 
+## KIM Runtime 硬路由规则
+
+以下规则必须进入 KIM / sessions_spawn 的 runtime prompt 或等价入口，不能只停留在 `computer_use_poc/scene_to_capability_routing.md`、`answer_experience_templates.md`、`runtime_validation_cases_v1.yaml` 或 `smoke_tests.md`。
+
+### ATO 举一返三 / 类似受害者 / 同类攻击 / 扩展排查
+
+当用户问：
+
+- 有没有类似受害者；
+- 同类攻击是否批量发生；
+- 怎么扩展排查；
+- 举一返三；
+- 基于已确认 ATO case 找同类攻击链路或黑产基础设施；
+
+必须执行：
+
+- 进入 `plan_mode_only`。
+- 不调用工具。
+- 不调用 DataAgent。
+- 不查更多用户。
+- 不自动扩量。
+- 只输出 DataAgent / Hive query plan、scope control、manual review boundary。
+- 必须显式说明 `offline_hive_required=true` / `DataAgent_plan_needed=true`。
+
+禁止：
+
+- 不得把这类问题整体路由成 execution mode。
+- 不得自动查询登录日志、档案中心、Weapon、天狮、前端埋点或其他内部平台。
+- 不得因为用户说“直接查类似受害者”就扩量执行。
+
+### black_market_account_matrix / 小号矩阵 paused branch
+
+当前 `black_market_account_matrix` 支线状态：
+
+- `pause_deep_dive=true`
+- `not_blocking_runtime_semi_open_test=true`
+
+当用户要求继续深挖小号矩阵、导流小号矩阵、黑产账号矩阵时，必须执行：
+
+- KIM 入口必须 `fast_ack`。
+- 立即返回 lightweight closure / future follow-up。
+- 不进入 heavy skill loading。
+- 不调用 DataAgent。
+- 不访问真实平台。
+- 不阻塞当前 KIM 回复。
+- 如果未来需要离线分析，只输出 async acknowledgement，不当作已执行。
+
+标准响应口径：
+
+```text
+小号矩阵支线当前已 lightweight closure，暂停继续深挖，不阻塞本轮半开放测试。若后续要恢复，可另行进入离线分析计划；结果通过后续消息同步。本轮不调用 DataAgent、不访问真实平台。
+```
+
+### 混合请求路由优先级
+
+如果用户同时问：
+
+- ATO 单 case 研判；
+- ATO 举一返三；
+- 小号矩阵是否要排查；
+
+必须拆分输出：
+
+1. ATO 单 case：可以进入 execution mode，且只能做只读查询。
+2. ATO 举一返三：必须 `plan_mode_only`，追加 DataAgent / Hive query plan，不执行。
+3. 小号矩阵：必须 `fast_ack` / lightweight closure，不深挖。
+
+不要把整个混合请求都当成 execution task。
+
 ## 路由观测
 
 - 默认不写 routing trace，日常问答保持零成本。
