@@ -1,0 +1,217 @@
+sample_set_id:
+sample_set_type: black_market_account_matrix
+is_ato: false
+
+batch_scope:
+  case_count:
+  case_ids: []
+  user_id_refs: []
+
+execution_boundary:
+  readonly_only: true
+  platform_write_action: false
+  dataagent_called: false
+  no_sensitive_plaintext: true
+  full_ip_output: false
+  cookie_token_session_header_output: false
+  release_package_updated: false
+  auto_disposition: false
+
+platform_access_status:
+  archives_center:
+    status:
+    note:
+  weapon:
+    status:
+    note:
+  unified_login_log:
+    status:
+    note:
+  tianshi_or_strategy:
+    status:
+    note:
+  behavior_chain:
+    status:
+    note:
+
+per_case_observations:
+  - case_id:
+    user_id_ref:
+    profile_summary:
+      profile_found:
+      account_status:
+      profile_completeness:
+      default_profile_signal:
+    nickname:
+      value_or_pattern:
+      nickname_template_match:
+      nickname_template_evidence_strength: weak_or_background
+      default_nickname_boundary: "platform default nickname is not strong evidence by itself"
+      duplicate_nickname_signal:
+      duplicate_nickname_evidence_strength: medium_strong
+      duplicate_nickname_with_case_ids: []
+    intro_pattern_match:
+      value: false
+      pattern:
+      intro_empty_signal:
+      intro_empty_evidence_strength: weak_or_background
+      historical_intro_available:
+    registration_time:
+      observed:
+      value:
+      time_window_bucket:
+    registration_ip_masked:
+      observed:
+      value:
+      ip_prefix:
+      cluster_signal:
+      cluster_evidence_strength: strong
+    registration_age_bucket:
+      registration_time_cluster_evidence_strength: medium_strong
+    uid_segment:
+      value_or_bucket:
+      cluster_signal:
+    account_status_summary:
+      status:
+      banned_or_social_banned_signal:
+      adminaction_summary:
+    profile_risk_labels:
+      labels: []
+      label_summary:
+    relation_summary:
+      fans_count:
+      following_count:
+      works_count:
+      relation_pattern_signal:
+    related_device_count:
+    shared_device_signal:
+      value: false
+      shared_with_case_ids: []
+      note:
+    single_device_single_account_signal:
+      value:
+      evidence_role: shape_correction_not_low_risk_not_strong_risk
+      note:
+    device_id:
+      value_masked:
+      device_id_type:
+      output_policy: masked_or_ref_only
+    device_model:
+      reported_model:
+      hardware_model:
+      model_consistency:
+    device_risk_labels:
+      labels: []
+      machine_small_account_signal:
+      machine_small_account_evidence_strength: strong
+      no_sim_signal:
+      no_sim_evidence_strength: medium_strong
+      wifi_batch_name_signal:
+      wifi_batch_name_evidence_strength: medium_strong
+      ip_device_cluster_signal:
+      ip_device_cluster_evidence_strength: medium_strong
+      follower_boost_signal:
+      follower_boost_evidence_strength: medium_strong
+    login_network_summary:
+      login_ip_masked:
+      login_ip_prefix:
+      network_cluster_signal:
+      login_device_consistency:
+    strategy_or_adminaction_summary:
+      strategy_status:
+      adminaction_codes: []
+      social_ban_or_diversion_signal:
+      boundary_note:
+    behavior_summary:
+      behavior_chain_reached:
+      diversion_signal:
+      interaction_signal:
+      follower_or_like_signal:
+      missing_behavior_detail:
+    case_level_judgement:
+      support_level:
+      evidence_quality:
+      key_supporting_evidence: []
+      counter_evidence: []
+      missing_evidence: []
+
+batch_level_findings:
+  total_cases:
+  profile_read_success_count:
+  device_resolution_success_count:
+  login_log_read_success_count:
+  strategy_hit_read_success_count:
+  nickname_template_match_count:
+  nickname_template_strength: weak_or_background
+  nickname_template_boundary: "default platform nickname must not be used as standalone black-market evidence"
+  intro_pattern_match_count:
+  intro_pattern_strength: weak_or_background
+  default_or_empty_profile_count:
+  default_or_empty_profile_strength: weak_or_background
+  duplicate_nickname_count:
+  duplicate_nickname_strength: medium_strong
+  registration_age_cluster_signal:
+    value:
+    buckets: []
+    evidence_strength: medium_strong
+  registration_ip_cluster_signal:
+    value:
+    ip_prefixes: []
+    evidence_strength: strong
+  uid_segment_cluster_signal:
+    value:
+    uid_segments: []
+  single_device_single_account_count:
+  single_device_single_account_evidence_role: shape_correction_not_low_risk_not_strong_risk
+  shared_device_count:
+  device_risk_overlap_signal:
+    value:
+    overlapping_labels: []
+  common_adminaction_signal:
+    value:
+    adminaction_codes: []
+  diversion_or_social_risk_signal:
+    value:
+    evidence_summary:
+
+cross_case_key_insight:
+  primary_shape:
+  secondary_shape:
+  not_primary_shape:
+  common_profile_pattern:
+  common_registration_pattern:
+  common_device_pattern:
+  common_network_pattern:
+  common_behavior_pattern:
+  strongest_evidence: []
+  medium_strong_evidence: []
+  weak_or_background_evidence: []
+  counter_evidence: []
+  key_boundary:
+
+expansion_anchors:
+  same_nickname_exact_match: []
+  registration_ip_prefixes: []
+  registration_time_windows: []
+  wifi_name_patterns: []
+  device_risk_label_combinations: []
+  adminaction_or_social_ban_labels: []
+  profile_template_patterns: []
+
+missing_evidence:
+  behavior_chain:
+  strategy_or_adminaction:
+  intro_history:
+  relation_or_target_graph:
+  hive_scale_query:
+
+matrix_support_level:
+evidence_quality:
+whether_expand_more_cases:
+
+next_step_recommendation:
+  - do_not_auto_dispose
+  - run_hive_expansion_questions
+  - supplement_behavior_chain_observation
+  - build_strategy_candidate_rule_cards
+  - include_false_positive_and_counter_evidence_review
