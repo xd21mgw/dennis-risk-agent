@@ -1,0 +1,89 @@
+sample_set_id: ato_huawei_quicklogin_xiaomi_reset_20260520
+case_id:
+user_id_ref:
+readonly_only: true
+dataagent_called: false
+platform_write_action: false
+
+initial_login_observed:
+  observed: null
+  event_time:
+  phone_model:
+  reported_phone_model:
+  hardware_reported_model:
+  phone_model_consistency:
+  platform:
+  path:
+  login_type:
+  device_id_ref:
+  ip_summary_redacted:
+  token_or_session_fields_present_redacted:
+  evidence_source:
+  evidence_limitations:
+
+reset_event_observed:
+  observed: null
+  event_time:
+  phone_model:
+  reported_phone_model:
+  hardware_reported_model:
+  phone_model_consistency:
+  path:
+  reset_login_type:
+  device_id_ref:
+  ip_summary_redacted:
+  token_or_session_fields_present_redacted:
+  evidence_source:
+  evidence_limitations:
+
+chain_analysis:
+  initial_to_reset_time_delta:
+  same_user_confirmed:
+  device_transition_observed:
+  huawei_harmony_to_xiaomi_observed:
+  login_type_16_observed:
+  reset_login_type_99_observed:
+  token_or_session_link_observed:
+  did_mixing_signal:
+  ip_switch_signal:
+  phone_model_spoofing_or_mismatch_signal:
+  normal_recovery_flow_possible:
+  counter_evidence_present:
+  analysis_summary:
+
+related_evidence:
+  user_profile_summary:
+  login_log_summary:
+  strategy_hit_summary:
+  device_risk_summary:
+  archive_or_audit_summary:
+  post_reset_token_activity:
+  stolen_mark:
+  wind_control_kick:
+  other_readonly_observation:
+
+missing_evidence:
+  - initial_login_missing_or_unverified
+  - reset_event_missing_or_unverified
+  - token_session_link_missing
+  - device_relation_missing
+  - normal_recovery_countercheck_missing
+
+evidence_quality:
+  value: pending
+  reason:
+
+ato_chain_support_level:
+  value: pending
+  allowed_values:
+    - strong_support
+    - partial_support
+    - insufficient_support
+    - counter_evidence_present
+    - pending
+  reason:
+
+next_step_recommendation:
+  - start_with_single_case_readonly_observation
+  - do_not_expand_until_schema_verified
+  - do_not_infer_ato_from_model_or_path_only

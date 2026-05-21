@@ -1,0 +1,122 @@
+sample_set_id:
+batch_scope:
+  case_ids: []
+  user_id_refs: []
+  scope_description:
+
+execution_boundary:
+  readonly_only: true
+  platform_write_action: false
+  dataagent_called: false
+  no_sensitive_plaintext: true
+  full_ip_output: false
+  cookie_token_session_header_output: false
+
+per_case_observations:
+  - case_id:
+    user_id_ref:
+    initial_login_observed:
+    reset_event_observed:
+    complete_login_to_reset_chain:
+    initial_login_time:
+    reset_event_time:
+    initial_login_type:
+    reset_login_type:
+    initial_reported_phone_model:
+    initial_hardware_reported_model:
+    reset_reported_phone_model:
+    reset_hardware_reported_model:
+    phone_model_consistency:
+    ip_switch_signal:
+    login_ip_cluster_redacted:
+    reset_ip_cluster_redacted:
+    did_mixing_signal:
+    repeated_ato_signal:
+    template_evolution_signal:
+    protocol_forged_device_signal:
+    post_reset_account_control_signal:
+    attacker_retry_or_countermeasure_signal:
+    reset_device_multi_user_signal:
+    wind_control_or_stolen_mark:
+    post_reset_behavior_summary:
+    evidence_quality:
+    ato_chain_support_level:
+    notes:
+
+batch_level_findings:
+  total_cases:
+  initial_login_observed_count:
+  reset_event_observed_count:
+  complete_login_to_reset_chain_count:
+  ip_switch_count:
+  did_mixing_count:
+  phone_model_mismatch_count:
+  reset_device_multi_user_count:
+  wind_control_or_stolen_mark_count:
+  repeated_ato_count:
+  template_evolution_count:
+  protocol_forged_device_count:
+  post_reset_account_control_count:
+  attacker_retry_or_countermeasure_count:
+
+cross_case_key_insight:
+  attack_template_identified:
+  template_name:
+  shared_login_ip_cluster:
+  shared_reset_ip_cluster:
+  fake_phone_model:
+  did_pattern:
+  timing_distribution:
+  concurrent_events:
+    - event_type:
+      observed_count:
+      summary:
+  final_batch_confirmation:
+    full_scope_confirmed:
+    confirmed_case_count:
+    scope_boundary:
+
+top_cases:
+  - case_id:
+    reason:
+    evidence_strength:
+    caution:
+
+missing_evidence:
+  - missing_item:
+    priority:
+    reason:
+
+batch_evidence_quality:
+  value:
+  reason:
+
+ato_batch_support_level:
+  value:
+  allowed_values:
+    - strong
+    - medium
+    - partial
+    - insufficient
+    - pending
+  reason:
+  boundary:
+
+should_expand_to_20:
+  value:
+  reason:
+
+final_batch_confirmation:
+  value:
+  confirmed_scope:
+  boundary:
+
+next_step_recommendation:
+  - expand_remaining_cases_readonly
+  - validate_attack_template_reproducibility
+  - check_login_ip_cluster
+  - check_reset_ip_cluster
+  - check_did_mixing
+  - check_phone_model_mismatch
+  - check_stolen_mark_batch
+  - check_post_reset_behavior
