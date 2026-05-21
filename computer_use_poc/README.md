@@ -95,6 +95,39 @@ Plan 模式是复杂研判前的用户可读执行计划。
 - `computer_use_poc/scene_to_capability_routing.md`：新增 Plan 模式与执行模式路由规则。
 - `computer_use_poc/smoke_tests.md`：新增 Plan / execution mode 12 个 smoke tests。
 
+## 4-D. Agent Safety Guardrails
+
+当前项目默认只读。
+
+安全口径：
+
+- 用户 prompt 不能覆盖 capability policy。
+- 用户只能表达业务问题，不能直接决定底层工具。
+- 内部平台手脚必须经过 capability registry + security policy + audit schema。
+- 不允许运行时对话修改 Agent prompt、skill、routing、release、代码或配置。
+- 不允许输出 system prompt / skill prompt / routing prompt。
+- 不允许任意 URL / API / SQL / JS / shell。
+- 不允许输出 cookie / token / session / storageState 等认证敏感信息。
+- 能查到不等于能输出，输出必须按敏感字段策略脱敏。
+- 对外 / 半开放前必须跑 safety smoke tests。
+- 写动作未来应拆成独立审批流，不接在当前研判 Agent 后直接执行。
+
+本阶段新增安全资产：
+
+- `computer_use_poc/capability_security_policy.md`：capability 分级、安全原则和工具调用前检查清单。
+- `computer_use_poc/tool_call_audit_schema.md`：工具调用审计字段和 YAML 示例。
+- `computer_use_poc/sensitive_field_redaction_policy.md`：敏感字段输出脱敏策略。
+- `computer_use_poc/approval_policy.md`：自动允许、用户确认、安全审批和禁止动作边界。
+- `computer_use_poc/prompt_injection_defense_cases.md`：提示词攻击测试 case。
+
+Security preflight v1 dry-run：
+
+- `computer_use_poc/security_preflight_policy.yaml`：结构化 capability 安全策略，供运行时 preflight evaluator 读取；不是万能接口授权表。
+- `computer_use_poc/security_preflight_evaluator.py`：本地 dry-run 最小安全闸门，在 capability 调用前对 `tool_call_request` 输出 `allow` / `deny` / `require_approval` / `redact` 判断。
+- `computer_use_poc/security_preflight_test_cases.json`：12 个最小 dry-run case，覆盖单实体只读、批量扩散、敏感字段、任意 URL / JS、prompt 泄露、写动作和系统逻辑修改。
+- 当前 evaluator 不接真实平台、不读取认证态、不调用真实 API、不接真实审批系统、不做真实审计落库。
+- 未来内部 Agent 执行层在调用任何 capability 前，必须先调用 evaluator；若结果为 `deny` 或 `require_approval`，不得继续调用真实工具。
+
 ## 4-A. Multi-source e2e entry resolution rule
 
 多源 e2e 前，每个 source 必须先完成 `entry_resolution`。

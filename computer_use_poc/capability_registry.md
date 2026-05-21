@@ -208,3 +208,199 @@ output:
 8. 下一步建议。
 
 强区分证据卡必须能区分至少两个候选路径，不能只写“建议查日志”。
+
+## Capability Security Overlay v1
+
+本节是安全执行框架 v1 的 capability registry 增量字段，不替代上文的业务能力定义。
+
+通用安全字段：
+
+```yaml
+capability_security_fields:
+  capability_name:
+  description:
+  mode: readonly / write / system
+  capability_level:
+  allowed_inputs:
+  denied_inputs:
+  max_default_scope:
+  batch_allowed:
+  approval_required_if:
+  sensitive_fields:
+  output_redaction:
+  audit_required:
+  fallback_policy:
+  current_status:
+```
+
+通用边界：
+
+- 所有业务查询能力默认 `readonly`。
+- `api_direct_read` 不能是任意接口访问，只能是已登记 endpoint / capability。
+- `browser_dom_read` 不能执行任意 JS，只能读取已登记页面模块。
+- `write` / `system` 类型当前版本 `prohibited`。
+- 用户 prompt 不能决定底层工具；主 Agent 必须根据 scene + entity + evidence_need 选择 capability。
+
+### Registered capability security profile
+
+```yaml
+capabilities:
+  - capability_name: user_to_device_resolution
+    description: "将 userId 转译为候选 deviceId / did / deviceceid"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_user_id, bounded_time_context_optional]
+    denied_inputs: [bulk_user_list_without_approval, arbitrary_graph_expansion]
+    max_default_scope: single_user_top_candidates
+    batch_allowed: false
+    approval_required_if: [many_users, multi_hop_expansion, too_many_candidates]
+    sensitive_fields: [device_id, relation_detail]
+    output_redaction: device_id_partial_mask_or_reference
+    audit_required: true
+    fallback_policy: missing_device_id_or_too_many_candidates
+    current_status: registered_readonly
+
+  - capability_name: device_to_user_resolution
+    description: "将 deviceId 转译为候选关联用户"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_device_id]
+    denied_inputs: [bulk_device_list_without_approval, multi_hop_expansion]
+    max_default_scope: single_device_direct_users
+    batch_allowed: false
+    approval_required_if: [many_devices, multi_hop_expansion, sensitive_user_details_requested]
+    sensitive_fields: [user_id, relation_detail, risk_tags]
+    output_redaction: user_id_reference_or_partial_mask
+    audit_required: true
+    fallback_policy: no_related_user_or_too_many_candidates
+    current_status: registered_readonly
+
+  - capability_name: device_risk_read
+    description: "读取设备侧风险标签和设备环境摘要"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_device_id]
+    denied_inputs: [location_query_by_default, bulk_device_export, raw_device_fingerprint_output]
+    max_default_scope: single_device_risk_summary
+    batch_allowed: false
+    approval_required_if: [many_devices, raw_fingerprint_requested, location_requested]
+    sensitive_fields: [device_id, device_fingerprint, ip, app_list]
+    output_redaction: derived_risk_tags_and_partial_device_id
+    audit_required: true
+    fallback_policy: platform_not_applicable_or_no_data
+    current_status: registered_readonly
+
+  - capability_name: user_profile_read
+    description: "读取单用户画像、状态、历史风险和补证摘要"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_user_id]
+    denied_inputs: [bulk_user_export, raw_personal_info_output]
+    max_default_scope: single_user_profile_summary
+    batch_allowed: false
+    approval_required_if: [many_users, sensitive_identity_fields_requested]
+    sensitive_fields: [phone, ip, device_id, operator_account, personal_info]
+    output_redaction: summary_and_redacted_identifiers
+    audit_required: true
+    fallback_policy: auth_required_or_permission_blocked
+    current_status: registered_readonly
+
+  - capability_name: login_log_read
+    description: "读取登录链路、验证链路、token 生命周期摘要"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_user_id_or_single_did, bounded_time_range]
+    denied_inputs: [raw_token_output, unbounded_history_query, bulk_user_query]
+    max_default_scope: single_entity_reliable_window
+    batch_allowed: false
+    approval_required_if: [over_reliable_window, many_users, raw_log_content_requested]
+    sensitive_fields: [token, session, ip, device_id, user_agent, log_content]
+    output_redaction: credential_present_redacted_and_derived_features
+    audit_required: true
+    fallback_policy: login_log_window_incomplete_or_offline_hive_required
+    current_status: registered_readonly
+
+  - capability_name: strategy_hit_read
+    description: "读取策略命中摘要和策略证据"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_source_id, bounded_time_range]
+    denied_inputs: [raw_response_dump, batch_source_ids_without_approval]
+    max_default_scope: single_source_bounded_window
+    batch_allowed: false
+    approval_required_if: [many_source_ids, raw_event_detail_requested, long_time_window]
+    sensitive_fields: [request_payload, raw_response, internal_trace]
+    output_redaction: strategy_summary_and_sample_hits_limited
+    audit_required: true
+    fallback_policy: partial_if_eventlist_unavailable
+    current_status: registered_readonly
+
+  - capability_name: frontend_activity_read
+    description: "读取前端活跃画像摘要"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [single_user_id_or_device_id]
+    denied_inputs: [raw_event_sequence_by_default, behavior_replay_export]
+    max_default_scope: profile_top_area_summary
+    batch_allowed: false
+    approval_required_if: [event_sequence_requested, many_entities]
+    sensitive_fields: [device_id, usage_detail, screenshots]
+    output_redaction: activity_signal_summary
+    audit_required: true
+    fallback_policy: design_only_or_not_open_for_real_execution
+    current_status: limited_or_design_only
+
+  - capability_name: api_direct_read
+    description: "对已登记 endpoint / capability 执行 API direct readonly"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [registered_endpoint, registered_payload_shape, bounded_scope]
+    denied_inputs: [arbitrary_url, arbitrary_api, raw_header_export, credential_export]
+    max_default_scope: registered_single_entity_read
+    batch_allowed: false
+    approval_required_if: [new_endpoint, many_entities, raw_json_requested]
+    sensitive_fields: [cookie, token, session, headers, raw_json, requestParam, extraParam]
+    output_redaction: schema_summary_and_derived_features
+    audit_required: true
+    fallback_policy: api_failed_or_response_shape_changed
+    current_status: registered_readonly_only
+
+  - capability_name: browser_dom_read
+    description: "在已登记页面模块内执行只读 DOM / scoped extraction"
+    mode: readonly
+    capability_level: readonly_sensitive
+    allowed_inputs: [registered_page_module, scoped_selector, readonly_extract]
+    denied_inputs: [arbitrary_js, localStorage_dump, cookie_read, mutation_clicks]
+    max_default_scope: registered_page_module_read
+    batch_allowed: false
+    approval_required_if: [new_page_module, broad_snapshot, sensitive_raw_text_requested]
+    sensitive_fields: [operator_account, page_sensitive_text, storage, token_like_values]
+    output_redaction: scoped_summary_and_redacted_values
+    audit_required: true
+    fallback_policy: selector_unstable_or_auth_required
+    current_status: registered_readonly_only
+```
+
+### Prohibited capability classes
+
+```yaml
+prohibited_current_version:
+  write_or_mutation:
+    mode: write
+    current_status: prohibited
+    examples:
+      - ban_user
+      - unban_user
+      - change_strategy
+      - submit_approval
+      - delete_data
+  system_or_logic_modification:
+    mode: system
+    current_status: prohibited
+    examples:
+      - modify_agent_prompt
+      - modify_skill
+      - modify_routing
+      - modify_release
+      - change_tool_registry
+```
