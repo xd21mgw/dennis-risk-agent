@@ -118,6 +118,35 @@ codex
 - `ato_batch_pattern_summary_template_v1.md`：批量模式聚合。
 - `ato_batch_strategy_direction_template_v1.md`：候选策略方向。
 
+## 黑产账号矩阵 / 导流互动 Batch Analysis 样板
+
+当前已新增非 ATO 的黑产账号矩阵 batch analysis 管理目录：
+
+`eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/`
+
+用途：
+
+- 面向同一波黑产账号样本做账号矩阵、导流互动、互粉互动、养号账号池归因。
+- 聚合简介签名、联系方式归一化、adminaction、昵称模板、注册天数 cohort、UID 号段 cohort 和行为链路缺口。
+- 输出 evidence card、pattern summary 和候选策略方向。
+
+边界：
+
+- 不是 ATO。ATO 是账号控制权异常；本能力是账号矩阵 / 导流 / 互动作弊 / 黑产养号池归因。
+- 不调用真实 DataAgent。
+- 不执行真实内部平台查询。
+- 不做自动策略上线。
+- 不输出微信号、UID、device、IP 等敏感明文。
+
+推荐入口：
+
+- `black_market_account_matrix_case_schema_v1.md`
+- `black_market_account_matrix_registry_template_v1.csv`
+- `black_market_account_matrix_evidence_card_template_v1.md`
+- `black_market_account_matrix_pattern_summary_template_v1.md`
+- `black_market_account_matrix_strategy_direction_template_v1.md`
+- `black_market_account_matrix_dry_run_sample_v1.md`
+
 ## Skill 回写计划 Prompt
 
 ```text

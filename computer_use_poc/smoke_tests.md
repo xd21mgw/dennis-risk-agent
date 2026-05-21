@@ -3178,3 +3178,61 @@
 - input: 检查 `computer_use_poc/scene_to_capability_routing.md`。
 - expected_runtime_behavior: ato_batch_routing_documented
 - expected_output_boundary: 明确 5-20 ATO case 进入 `batch_case_analysis`，缺字段进入 missing evidence，DataAgent 仅作为未来 Hive/数仓补证能力。
+
+# Black Market Account Matrix Batch Structure Tests
+
+## 364. Black market account matrix directory exists
+
+- test_id: BM-MATRIX-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/`。
+- expected_runtime_behavior: directory_exists
+- expected_output_boundary: 目录独立于 ATO batch，不污染 ATO 账号控制权异常定义。
+
+## 365. Black market account matrix schema exists
+
+- test_id: BM-MATRIX-002
+- input: 检查 `black_market_account_matrix_case_schema_v1.md`。
+- expected_runtime_behavior: schema_documented
+- expected_output_boundary: schema 明确该能力不是 ATO，字段覆盖 intro_pattern、adminaction_code、nickname_pattern、registration_age_days、uid_segment、observed_behavior。
+
+## 366. Black market account matrix registry template is redacted
+
+- test_id: BM-MATRIX-003
+- input: 检查 `black_market_account_matrix_registry_template_v1.csv`。
+- expected_runtime_behavior: synthetic_redacted_rows_available
+- expected_output_boundary: 样例对微信号、UID、device、IP 做脱敏，不包含敏感明文。
+
+## 367. Black market evidence card template covers evidence layers
+
+- test_id: BM-MATRIX-004
+- input: 检查 `black_market_account_matrix_evidence_card_template_v1.md`。
+- expected_runtime_behavior: evidence_card_layers_documented
+- expected_output_boundary: 区分强证据、中证据、弱证据、反证、缺失证据。
+
+## 368. Black market pattern summary covers required dimensions
+
+- test_id: BM-MATRIX-005
+- input: 检查 `black_market_account_matrix_pattern_summary_template_v1.md`。
+- expected_runtime_behavior: pattern_dimensions_documented
+- expected_output_boundary: 覆盖 common intro pattern、common adminaction、nickname template、registration age cohort、uid segment cohort、behavior evidence missing、suspected attack / abuse path。
+
+## 369. Black market strategy direction remains candidate-only
+
+- test_id: BM-MATRIX-006
+- input: 检查 `black_market_account_matrix_strategy_direction_template_v1.md`。
+- expected_runtime_behavior: candidate_strategy_only
+- expected_output_boundary: 包含简介签名聚类、联系方式归一化、账号矩阵识别、行为链路补证、查杀分离 / AB 评估、误伤风险控制；不自动上线。
+
+## 370. Black market dry-run sample exists
+
+- test_id: BM-MATRIX-007
+- input: 检查 `black_market_account_matrix_dry_run_sample_v1.md`。
+- expected_runtime_behavior: dry_run_sample_available
+- expected_output_boundary: dry-run 明确非 ATO、不调用 DataAgent、不访问平台、不自动处置。
+
+## 371. Black market capability is registered and routed
+
+- test_id: BM-MATRIX-008
+- input: 检查 `capability_registry.md` 和 `scene_to_capability_routing.md`。
+- expected_runtime_behavior: capability_and_routing_documented
+- expected_output_boundary: `black_market_account_matrix_batch_analysis` 已登记，路由说明其服务导流互动 / 互粉互动 / 养号账号池，而非 ATO。

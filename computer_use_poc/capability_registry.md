@@ -16,6 +16,7 @@
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
+| `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
 | `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
 
 正式能力与平台适配器关系：
@@ -27,6 +28,7 @@
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
 - `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
+- `black_market_account_matrix_batch_analysis` 当前是非 ATO 的账号矩阵 / 导流互动 / 养号池归因样板，不应污染 ATO 的账号控制权异常定义。
 - `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
 
 ## batch_case_analysis
@@ -77,6 +79,59 @@ templates:
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_evidence_card_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_pattern_summary_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_strategy_direction_template_v1.md
+```
+
+## black_market_account_matrix_batch_analysis
+
+```yaml
+capability_name: black_market_account_matrix_batch_analysis
+chinese_name: 黑产账号矩阵 / 导流互动 batch case analysis
+layer: evidence_orchestration
+status: mvp_template_ready
+purpose: 面向同一波黑产账号样本，完成账号矩阵、导流互动、互粉互动、养号账号池的资料聚类、证据卡、模式摘要和候选策略方向
+not_ato_boundary:
+  - ato_is_account_control_abnormality
+  - this_capability_is_account_matrix_and_diversion_interaction_abuse
+input:
+  - account_matrix_registry
+  - account_ref
+  - uid_segment
+  - nickname_pattern
+  - intro_pattern
+  - adminaction_code
+  - registration_age_days
+  - observed_behavior
+output:
+  - account_matrix_evidence_cards
+  - common_intro_pattern_summary
+  - common_adminaction_summary
+  - nickname_template_summary
+  - registration_age_cohort
+  - uid_segment_cohort
+  - behavior_evidence_missing
+  - candidate_strategy_direction
+should_trigger_when:
+  - user_provides_black_market_account_matrix_samples
+  - user_asks_for_diversion_interaction_batch_analysis
+  - user_asks_for_mutual_follow_or_account_pool_attribution
+should_not_trigger_when:
+  - user_asks_for_ato_account_takeover_judgement
+  - user_asks_for_single_user_login_or_token_control_analysis
+  - user_requests_auto_strategy_launch
+boundaries:
+  - no_real_dataagent_call
+  - no_real_platform_query
+  - no_auto_disposition
+  - no_auto_strategy_launch
+  - contact_uid_device_ip_must_be_redacted
+  - profile_cluster_is_recall_signal_not_disposition_basis
+templates:
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_case_schema_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_registry_template_v1.csv
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_evidence_card_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_pattern_summary_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_strategy_direction_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/black_market_account_matrix_dry_run_sample_v1.md
 ```
 
 ## plan_mode
