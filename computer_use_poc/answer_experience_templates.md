@@ -31,6 +31,56 @@
 
 随后主体应输出只读查询计划，而不是完整专家认知模板。
 
+## 0A. KIM 入口计划 / 暂停分支响应契约
+
+### ATO 举一返三 plan-only
+
+适用问题：
+
+- “有没有类似受害者？”
+- “同类攻击是不是批量发生？”
+- “这个 ATO case 怎么扩展排查？”
+- “帮我基于这个盗号 case 举一返三。”
+
+响应要求：
+
+- route: `plan_mode_only`
+- 不进入 execution mode。
+- 不调用任何平台工具。
+- 不调用 DataAgent。
+- 不查询更多用户。
+- 不自动扩量。
+- 输出 `offline_hive_required=true` 和 `DataAgent_plan_needed=true`。
+
+标准短答：
+
+```text
+这个问题属于 ATO 举一返三扩展，不应在 KIM 入口直接查更多用户。我会只给离线扩量计划：围绕登录态 / token / OAuth / 改密 / 后置异常动作提取扩展锚点，并生成 DataAgent / Hive 查询问题。当前不调用 DataAgent、不访问真实平台、不自动扩量。
+```
+
+### 小号矩阵 lightweight closure fast ack
+
+适用问题：
+
+- “继续深挖小号矩阵。”
+- “小号矩阵这支线继续查。”
+- “导流小号矩阵还有没有更多样本？”
+
+响应要求：
+
+- route: `fast_ack_or_async_ack`
+- 先返回 `pause_deep_dive=true` / `not_blocking_runtime_semi_open_test=true`。
+- 不进入 heavy skill loading。
+- 不调用 DataAgent。
+- 不阻塞 KIM 当前回复。
+- 如果未来需要离线分析，只返回 async acknowledgement。
+
+标准短答：
+
+```text
+小号矩阵支线当前已 lightweight closure，暂停继续深挖，不阻塞本轮半开放测试。若后续要恢复，可另行进入离线分析计划；结果通过后续消息同步。本轮不调用 DataAgent、不访问真实平台。
+```
+
 ### 回答骨架
 
 ```text

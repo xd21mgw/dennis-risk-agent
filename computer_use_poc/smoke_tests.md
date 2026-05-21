@@ -3706,3 +3706,45 @@
 - input: 已 lightweight closure 的 black_market_account_matrix 支线被继续深挖。
 - expected_runtime_behavior: return_fast_ack_or_async_ack
 - expected_output_boundary: 应快速提示 pause_deep_dive / not_blocking_runtime_semi_open_test，或返回 async response contract；不得长时间无响应。
+
+## 407. KIM ATO expansion must be plan mode only
+
+- test_id: KIM-ATO-EXPANSION-001
+- input: “有没有类似受害者 / 同类攻击是否批量发生 / 怎么扩展排查？”
+- expected_runtime_behavior: route_to_plan_mode_only
+- expected_output_boundary: 只输出扩展锚点、DataAgent / Hive query plan、scope control 和人工复核边界；不得进入 execution mode。
+
+## 408. KIM ATO expansion must not call tools
+
+- test_id: KIM-ATO-EXPANSION-002
+- input: KIM 入口下请求基于已确认 ATO case 举一返三。
+- expected_runtime_behavior: no_tool_call
+- expected_output_boundary: 不调用登录日志、档案中心、Weapon、天狮、前端埋点或其他内部平台工具；不查询更多用户。
+
+## 409. KIM ATO expansion must not call DataAgent
+
+- test_id: KIM-ATO-EXPANSION-003
+- input: “直接帮我查类似受害者。”
+- expected_runtime_behavior: dataagent_plan_needed_only
+- expected_output_boundary: 输出 `offline_hive_required=true` / `DataAgent_plan_needed=true`；不调用 DataAgent，不执行 Hive，不自动扩量。
+
+## 410. KIM black market matrix paused branch fast ack
+
+- test_id: KIM-BM-PAUSE-001
+- input: “继续深挖小号矩阵。”
+- expected_runtime_behavior: return_lightweight_closure_fast_ack
+- expected_output_boundary: 快速返回 `pause_deep_dive=true` / `not_blocking_runtime_semi_open_test=true`；不阻塞当前 KIM 回复。
+
+## 411. KIM black market matrix paused branch no skill loading
+
+- test_id: KIM-BM-PAUSE-002
+- input: 已暂停的小号矩阵支线被继续追问。
+- expected_runtime_behavior: no_heavy_skill_loading
+- expected_output_boundary: 不进入 heavy skill loading，不触发真实平台读取，不调用 DataAgent。
+
+## 412. KIM black market matrix async ack if future offline analysis
+
+- test_id: KIM-BM-PAUSE-003
+- input: 用户坚持未来恢复小号矩阵离线分析。
+- expected_runtime_behavior: return_async_ack_contract
+- expected_output_boundary: 返回“该支线当前已暂停深挖；如需恢复，可另行进入离线分析，结果通过后续消息同步。”不得把 async ack 当作已经执行。

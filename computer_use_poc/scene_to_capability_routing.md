@@ -85,6 +85,7 @@
 - “帮我按证据强弱聚合这些 case。”
 - “基于这批 case 给一个策略方向草案。”
 - 用户提供 5-20 个 case，包含 user_id / event_time / abnormal_action / user_claim 等核心字段。
+- 用户提供 3-5 个真实脱敏 ATO case，希望先做小样本 pilot，验证 input/output contract、证据卡、source coverage 和人工复核边界。
 
 能力链路：
 
@@ -101,6 +102,14 @@ Input / output contract：
 - output contract: `ato_batch_output_contract_v1.md`。
 - status transition: `ato_batch_status_transition_v1.md`。
 - user interaction examples: `ato_batch_user_interaction_examples_v1.md`。
+- real-case pilot checklist: `ato_batch_real_case_pilot_checklist_v1.md`。
+
+真实脱敏 batch case 触发路径：
+
+- 3-5 个真实脱敏 case：先进入 real-case pilot，检查脱敏、必填字段、source metadata、只读 observation 范围和 manual review boundary。
+- pilot 通过后，才建议扩到 5-20 cases 的标准 batch analysis。
+- pilot 中如出现登录日志超窗、source gap、permission gap，只生成 missing evidence / Hive query plan，不自动调用 DataAgent。
+- pilot 输出仍是候选归因和候选策略方向，不是自动处置依据。
 
 缺字段降级路径：
 
@@ -162,6 +171,18 @@ Fallback：
 - no_data 不能作为无盗号反证。
 - 不调用真实 DataAgent，不访问真实平台，不自动处罚，不自动上线策略。
 
+KIM 入口强制规则：
+
+- 用户问“有没有类似受害者 / 同类攻击是否批量发生 / 怎么扩展排查 / 举一返三”时，必须进入 `plan_mode_only`。
+- 只输出 DataAgent / Hive query plan、扩展锚点、scope control 和人工复核边界。
+- 不进入 execution mode。
+- 不调用内部平台手脚。
+- 不调用 DataAgent。
+- 不查询更多用户。
+- 不自动扩量。
+- 输出必须显式包含 `offline_hive_required=true` / `DataAgent_plan_needed=true`。
+- 如果用户要求“直接查全量 / 直接拉类似受害者”，返回 `approval_required_or_plan_only`，不继续执行。
+
 ## 0C. 黑产账号矩阵 / 导流互动 Batch 路由
 
 用户体感目标：
@@ -212,6 +233,17 @@ Fallback：
 - over-window no_data 不得写入 counter evidence。
 - over-window no_data 不得解释为“账号日志已清理”。
 - 长周期登录 / 注册聚合需要转 DataAgent / Hive 或人工离线日志补查。
+
+KIM 入口 lightweight closure / async ack 规则：
+
+- `black_market_account_matrix` 当前已 lightweight closure，`pause_deep_dive=true`，`not_blocking_runtime_semi_open_test=true`。
+- 用户要求继续深挖小号矩阵时，先快速返回 closure 状态，不进入 heavy skill loading。
+- 不调用 DataAgent，不访问真实平台，不阻塞当前 KIM 回复。
+- 默认响应形态为 `fast_ack`：
+  - “该支线当前已暂停深挖，不阻塞本轮半开放测试；如需恢复，可另行进入离线分析计划。”
+- 如果未来确实需要离线分析，返回 `async_ack`：
+  - “该支线当前已暂停深挖；如需恢复，可另行进入离线分析，结果通过后续消息同步。”
+- 60s timeout 只能标记 `routing_latency_risk` 或 `async_response_contract_missing`，不能直接证明 DataAgent 被误调用。
 
 ## 0D. 专家认知先判模式 expert_reasoning_first
 
