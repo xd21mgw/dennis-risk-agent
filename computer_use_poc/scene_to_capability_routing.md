@@ -112,6 +112,36 @@ Fallback：
 - 不能把关联设备 / 关联账号直接写成团伙作弊。
 - 不能把 DataAgent 泛化成万能数据底座。
 
+### ATO 单/少量 case 举一返三扩展
+
+用户体感目标：
+
+- 用户给出 1 个或少量 ATO / 盗号 case，希望知道如何扩展发现同类受害账号、同类攻击链路和同类黑产基础设施。
+
+触发条件：
+
+- “从这个盗号 case 怎么举一返三？”
+- “帮我设计相似受害账号发现路径。”
+- “这个 ATO case 的同类攻击链路怎么扩？”
+- “基于这个 case 给 DataAgent / Hive 取数问题。”
+
+能力链路：
+
+1. `ato_case_expansion_planning`：从单 case evidence card 中抽取扩展锚点。
+2. 攻击链路锚点：异常登录、token refresh / switchUser / OAuth、新设备登录、改密 / 换绑 / 安全操作、后置敏感动作。
+3. 基础设施锚点：IP / 网段 / 代理、deviceId / did / deviceceid、UA / appVersion / sdkVersion、OAuth app / token source、地理位置跳变、设备环境异常。
+4. 后置动作锚点：异常发布、私信 / 关注 / 点赞对象、导流文案 / 外部联系方式、支付 / 交易动作、批量相似行为窗口。
+5. DataAgent / Hive 问题模板：只作为后续离线取数设计，不在本阶段执行。
+
+关键边界：
+
+- ATO 举一返三不是找相同昵称 / 简介；那属于账号矩阵 / 导流互动 batch。
+- ATO 扩展必须围绕账号控制权异常和攻击链路。
+- 后置行为不能直接等同 ATO 主因，必须回连到登录态 / 凭证 / 控制权变化证据。
+- 在线统一登录日志只按近 7 天可靠窗口处理，超窗标记 `offline_hive_required`。
+- no_data 不能作为无盗号反证。
+- 不调用真实 DataAgent，不访问真实平台，不自动处罚，不自动上线策略。
+
 ## 0C. 黑产账号矩阵 / 导流互动 Batch 路由
 
 用户体感目标：

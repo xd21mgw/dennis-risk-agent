@@ -3179,6 +3179,41 @@
 - expected_runtime_behavior: ato_batch_routing_documented
 - expected_output_boundary: 明确 5-20 ATO case 进入 `batch_case_analysis`，缺字段进入 missing evidence，DataAgent 仅作为未来 Hive/数仓补证能力。
 
+## 363A. ATO case expansion plan exists
+
+- test_id: ATO-EXPANSION-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_case_expansion_plan_v1.md`。
+- expected_runtime_behavior: expansion_plan_document_exists
+- expected_output_boundary: 文件说明单个或少量 ATO case 如何扩展发现同类受害账号、同类攻击链路和同类基础设施；不调用真实 DataAgent，不访问真实平台。
+
+## 363B. ATO expansion anchors are control-chain based
+
+- test_id: ATO-EXPANSION-002
+- input: 检查 ATO 举一返三扩展锚点。
+- expected_runtime_behavior: control_chain_anchor_documented
+- expected_output_boundary: 锚点分为攻击链路、基础设施、后置动作；明确 ATO 扩展不是找相同昵称 / 简介。
+
+## 363C. ATO post-action is not root cause
+
+- test_id: ATO-EXPANSION-003
+- input: ATO case 存在异常发布 / 私信 / 关注 / 支付等后置动作。
+- expected_runtime_behavior: post_action_boundary_documented
+- expected_output_boundary: 后置行为不能直接等同 ATO 主因，必须回连到凭证、登录态、改密、换绑或控制权变化证据。
+
+## 363D. ATO expansion DataAgent questions are templates only
+
+- test_id: ATO-EXPANSION-004
+- input: 检查 `ato_case_expansion_plan_v1.md` 的 DataAgent / Hive 问题。
+- expected_runtime_behavior: hive_question_templates_only
+- expected_output_boundary: 只输出 Hive 取数问题模板，不调用真实 DataAgent，不生成真实 observation。
+
+## 363E. ATO expansion respects login reliable window
+
+- test_id: ATO-EXPANSION-005
+- input: ATO case 异常时间超过统一登录日志近 7 天可靠窗口。
+- expected_runtime_behavior: mark_offline_hive_required
+- expected_output_boundary: 超窗不调用在线日志做历史验证；no_data 不能作为无盗号反证。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists

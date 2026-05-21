@@ -17,6 +17,7 @@
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
+| `ato_case_expansion_planning` | 对单个或少量 ATO case 设计举一返三扩展路径和 Hive 取数问题 | `ato_case_expansion_plan_v1.md` | plan only | documented | 围绕账号控制权异常和攻击链路扩展，不按昵称/简介扩展，不执行真实查询 |
 | `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
 | `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
 
@@ -30,6 +31,7 @@
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。
 - `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
+- `ato_case_expansion_planning` 服务单个或少量 ATO case 的举一返三扩展设计，核心锚点是凭证 / token / OAuth / 登录态异常、改密 / 换绑 / 安全操作、基础设施和后置动作回连，不按相同昵称 / 简介扩展。
 - `black_market_account_matrix_batch_analysis` 当前是非 ATO 的账号矩阵 / 导流互动 / 养号池归因样板，不应污染 ATO 的账号控制权异常定义。
 - `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
 
@@ -113,6 +115,49 @@ templates:
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_evidence_card_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_pattern_summary_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_strategy_direction_template_v1.md
+```
+
+## ato_case_expansion_planning
+
+```yaml
+capability_name: ato_case_expansion_planning
+chinese_name: ATO / 盗号 case 举一返三扩展方案
+layer: planning_and_methodology
+status: documented
+purpose: 针对单个或少量 ATO case，设计如何扩展发现同类受害账号、同类攻击链路和同类黑产基础设施
+input:
+  - single_or_few_ato_cases
+  - known_event_time
+  - abnormal_action
+  - available_evidence_card
+  - missing_evidence
+output:
+  - expansion_anchor_list
+  - query_scope_control
+  - candidate_account_discovery_plan
+  - evidence_card_backfill_plan
+  - pattern_summary_plan
+  - dataagent_hive_question_templates
+should_trigger_when:
+  - user_asks_how_to_expand_from_one_ato_case
+  - user_asks_for_similar_victim_discovery_plan
+  - user_asks_for_same_attack_chain_or_infra_expansion
+  - user_has_one_or_few_ato_cases_and_wants_hive_questions
+should_not_trigger_when:
+  - user_asks_for_black_market_profile_matrix_expansion
+  - user_asks_for_same_nickname_or_intro_cluster_as_ato
+  - user_requests_real_dataagent_execution
+  - user_requests_auto_disposition
+boundaries:
+  - no_real_dataagent_call
+  - no_real_platform_query
+  - no_auto_disposition
+  - no_auto_strategy_launch
+  - expansion_is_plan_not_observation
+  - post_action_is_not_ato_root_cause_without_control_change_evidence
+  - online_login_log_over_window_requires_offline_hive_required
+template:
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_case_expansion_plan_v1.md
 ```
 
 ## black_market_account_matrix_batch_analysis
