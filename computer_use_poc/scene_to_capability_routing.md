@@ -23,6 +23,7 @@
 | 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
 | 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
+| 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
 | ATO 批量 case 分析 | 5-20 个 ATO case 的批量归因、证据卡聚合、模式总结和策略方向草案 | `batch_case_analysis` → per-case evidence card → pattern summary → strategy direction draft | `eval/.../19_ato_batch_case_management/` templates；DataAgent only when future scene allows Hive/warehouse analysis | 缺关键字段时返回 missing evidence；规模过大先 Plan；真实查询另行授权 | 半自动归因，不自动策略上线，不自动处置 |
 | 黑产账号矩阵 / 导流互动 batch | 分析同波黑产账号矩阵、资料模板、导流互动、互粉互动和养号池 | `black_market_account_matrix_batch_analysis` → evidence cards → pattern summary → strategy direction draft | `eval/.../20_black_market_account_matrix_batch/` templates | 缺行为链路时输出 missing evidence；需要真实补证时另行授权 | 不是 ATO，不自动上线，不输出敏感联系方式 |
 
@@ -33,7 +34,44 @@
 - 候选过多返回 `too_many_candidates`，不默认深查。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 
-## 0A. ATO 批量 Case Analysis 路由
+## 0A. Batch Analysis 通用框架路由
+
+用户体感目标：
+
+- 用户希望把一批同类 case 归纳成标准 registry、单 case 证据卡、跨 case 模式摘要、缺失证据和候选策略方向。
+
+通用流程：
+
+1. case intake。
+2. case registry。
+3. entity normalization。
+4. single-case evidence card。
+5. cross-case pattern summary。
+6. missing evidence aggregation。
+7. strategy direction draft。
+8. manual review boundary。
+
+场景替换点：
+
+- risk definition。
+- scene-specific fields。
+- evidence priority。
+- pattern dimensions。
+- strategy direction boundary。
+
+场景对比：
+
+- ATO batch：风险本质是账号控制权异常，优先看凭证 / token / OAuth / 登录态、改密、换绑、异设备登录。
+- 黑产账号矩阵 batch：风险本质是账号池 / 导流互动 / 养号矩阵，优先看简介签名、联系方式归一化、adminaction、昵称模板、注册 cohort、UID 号段和行为链路。
+
+边界：
+
+- 不要把后置行为误当成风险本质。
+- Batch analysis 当前是半自动归因，不是自动策略上线。
+- DataAgent 仍只作为 Hive / 数仓取数分析能力，不是默认万能数据底座。
+- 内部 Agent 后续只作为真实只读 observation 执行层，不作为最终研判大脑。
+
+## 0B. ATO 批量 Case Analysis 路由
 
 用户体感目标：
 
@@ -74,7 +112,7 @@ Fallback：
 - 不能把关联设备 / 关联账号直接写成团伙作弊。
 - 不能把 DataAgent 泛化成万能数据底座。
 
-## 0B. 黑产账号矩阵 / 导流互动 Batch 路由
+## 0C. 黑产账号矩阵 / 导流互动 Batch 路由
 
 用户体感目标：
 
@@ -115,7 +153,7 @@ Fallback：
 - 策略方向只能是候选方向，不自动上线。
 - 简介签名聚类是召回入口，不是处置依据。
 
-## 0C. 专家认知先判模式 expert_reasoning_first
+## 0D. 专家认知先判模式 expert_reasoning_first
 
 用户体感目标：
 
@@ -186,7 +224,7 @@ Capability：
 - 不能把“设备列表无异常”当作排除盗号或 token 复用的充分条件。
 - 不能把“API 直调”直接等同协议破解；可能只是合法 token 被复用。
 
-## 0D. Plan 模式与执行模式路由规则
+## 0E. Plan 模式与执行模式路由规则
 
 核心原则：
 
@@ -276,7 +314,7 @@ ATO / 登录日志类 Plan 和执行结果都必须提示：在线统一登录�
 
 Plan 输出后，如果用户选择 A/B/C/D，再进入对应执行路径。不要在 Plan 阶段调用真实平台接口。
 
-## 0E. Agent Safety Routing Guardrails
+## 0F. Agent Safety Routing Guardrails
 
 核心原则：
 

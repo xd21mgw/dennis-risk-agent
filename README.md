@@ -118,6 +118,24 @@ codex
 - `ato_batch_pattern_summary_template_v1.md`：批量模式聚合。
 - `ato_batch_strategy_direction_template_v1.md`：候选策略方向。
 
+## Batch Analysis 通用框架
+
+当前已新增轻量通用 batch analysis framework：
+
+`eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md`
+
+用途：
+
+- 抽象 ATO batch 与黑产账号矩阵 batch 的共用流程。
+- 固化 case intake、case registry、entity normalization、single-case evidence card、cross-case pattern summary、missing evidence aggregation、strategy direction draft、manual review boundary。
+- 明确不同风险场景只替换 risk definition、scene-specific fields、evidence priority、pattern dimensions 和 strategy direction boundary。
+
+边界：
+
+- Batch analysis 当前是半自动归因，不是自动策略上线。
+- DataAgent 仍只作为 Hive / 数仓取数分析能力，不是默认万能数据底座。
+- 内部 Agent 后续只作为真实只读 observation 执行层，不作为最终研判大脑。
+
 ## 黑产账号矩阵 / 导流互动 Batch Analysis 样板
 
 当前已新增非 ATO 的黑产账号矩阵 batch analysis 管理目录：

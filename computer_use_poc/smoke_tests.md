@@ -3236,3 +3236,54 @@
 - input: 检查 `capability_registry.md` 和 `scene_to_capability_routing.md`。
 - expected_runtime_behavior: capability_and_routing_documented
 - expected_output_boundary: `black_market_account_matrix_batch_analysis` 已登记，路由说明其服务导流互动 / 互粉互动 / 养号账号池，而非 ATO。
+
+# Batch Analysis Framework Structure Tests
+
+## 372. Batch analysis framework exists
+
+- test_id: BATCH-FRAMEWORK-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md`。
+- expected_runtime_behavior: framework_document_exists
+- expected_output_boundary: 文件抽象 ATO batch 和黑产账号矩阵 batch 的共用流程。
+
+## 373. Batch framework covers common flow
+
+- test_id: BATCH-FRAMEWORK-002
+- input: 检查 batch framework 内容。
+- expected_runtime_behavior: common_flow_documented
+- expected_output_boundary: 覆盖 case intake、case registry、entity normalization、single-case evidence card、cross-case pattern summary、missing evidence aggregation、strategy direction draft、manual review boundary。
+
+## 374. Batch framework distinguishes scene-specific replacements
+
+- test_id: BATCH-FRAMEWORK-003
+- input: 检查 batch framework 的场景替换点。
+- expected_runtime_behavior: scene_specific_replace_documented
+- expected_output_boundary: 明确不同风险场景只替换 risk definition、scene-specific fields、evidence priority、pattern dimensions、strategy direction boundary。
+
+## 375. Batch framework separates ATO and account matrix definitions
+
+- test_id: BATCH-FRAMEWORK-004
+- input: 检查 ATO batch 与黑产账号矩阵 batch 对比。
+- expected_runtime_behavior: risk_definition_boundary_documented
+- expected_output_boundary: ATO 是账号控制权异常；黑产账号矩阵是账号池 / 导流互动 / 养号矩阵。
+
+## 376. Batch framework prevents post-action overfitting
+
+- test_id: BATCH-FRAMEWORK-005
+- input: 检查后置行为口径。
+- expected_runtime_behavior: post_action_boundary_documented
+- expected_output_boundary: 明确不要把发布、关注、点赞、活动参与等后置行为误当成风险本质。
+
+## 377. Batch framework keeps DataAgent and Internal Agent boundaries
+
+- test_id: BATCH-FRAMEWORK-006
+- input: 检查 DataAgent 和内部 Agent 边界。
+- expected_runtime_behavior: dataagent_internal_agent_boundary_documented
+- expected_output_boundary: DataAgent 只作为 Hive / 数仓取数分析能力；内部 Agent 只作为只读 observation 执行层，不作为最终研判大脑。
+
+## 378. Batch framework is registered and routed
+
+- test_id: BATCH-FRAMEWORK-007
+- input: 检查 `capability_registry.md` 和 `scene_to_capability_routing.md`。
+- expected_runtime_behavior: batch_framework_registered_and_routed
+- expected_output_boundary: `batch_analysis_framework` 已登记为 methodology/framework，不执行真实查询。

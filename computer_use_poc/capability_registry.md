@@ -15,6 +15,7 @@
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
+| `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
 | `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
 | `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
@@ -27,9 +28,42 @@
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
+- `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。
 - `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
 - `black_market_account_matrix_batch_analysis` 当前是非 ATO 的账号矩阵 / 导流互动 / 养号池归因样板，不应污染 ATO 的账号控制权异常定义。
 - `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
+
+## batch_analysis_framework
+
+```yaml
+capability_name: batch_analysis_framework
+chinese_name: Batch Analysis 通用框架
+layer: methodology
+status: documented
+purpose: 抽象不同 batch analysis 场景共用流程，避免每个场景重复设计 registry、evidence card、pattern summary 和 strategy draft
+common_flow:
+  - case_intake
+  - case_registry
+  - entity_normalization
+  - single_case_evidence_card
+  - cross_case_pattern_summary
+  - missing_evidence_aggregation
+  - strategy_direction_draft
+  - manual_review_boundary
+scene_specific_replace:
+  - risk_definition
+  - scene_specific_fields
+  - evidence_priority
+  - pattern_dimensions
+  - strategy_direction_boundary
+boundaries:
+  - framework_only
+  - no_real_dataagent_call
+  - no_real_platform_query
+  - no_auto_strategy_launch
+  - dataagent_only_for_hive_or_warehouse_analysis_when_scene_allows
+  - internal_agent_is_observation_executor_not_final_reasoning_brain
+```
 
 ## batch_case_analysis
 
