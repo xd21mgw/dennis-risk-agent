@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This plan fixes the remaining KIM E2E F failure after KIM routing patch v1.
+This plan fixes the remaining KIM E2E F failure after KIM routing patch v1. KIM is the first validation entry; the same mixed request decomposition rule should apply to APP, Web, and future entries through `multi_entry_runtime_guard_v1.md`.
 
 Patch v1 proves that the runtime task prefix works for single-purpose requests:
 
@@ -13,7 +13,7 @@ F still fails because a single Dennis task receives execution, plan-only, and fa
 
 ## 2. Mixed Request Definition
 
-A KIM mixed request is one user message that simultaneously contains:
+A mixed request is one user message from KIM / APP / Web that simultaneously contains:
 
 - ATO single-case fact judgement.
 - ATO expansion / similar victims / same attack batch / expansion planning.
@@ -29,7 +29,7 @@ Example:
 
 Mixed request must not be passed to Dennis as one execution task.
 
-The main agent / KIM route layer must decompose the request before spawning or calling Dennis. Only the ATO single-case execution slice may be sent to Dennis execution. ATO expansion and black_market_account_matrix paused branch must be handled by the main agent as plan-only / fast-ack text.
+The main agent / entry route layer must decompose the request before spawning or calling Dennis. Only the ATO single-case execution slice may be sent to Dennis execution. ATO expansion and black_market_account_matrix paused branch must be handled by the main agent as plan-only / fast-ack text.
 
 ## 4. Recommended Orchestration
 

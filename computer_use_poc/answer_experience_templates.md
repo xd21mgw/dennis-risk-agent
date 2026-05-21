@@ -31,7 +31,19 @@
 
 随后主体应输出只读查询计划，而不是完整专家认知模板。
 
-## 0A. KIM 入口计划 / 暂停分支响应契约
+## 0A. Multi-entry 入口计划 / 暂停分支响应契约
+
+适用入口：
+
+- KIM 群聊入口。
+- APP 入口。
+- Web 入口。
+- 未来其他半开放入口。
+
+统一原则：
+
+- 所有入口在调用 Dennis 前必须先经过 runtime guard。
+- KIM patch 是首个实现样例；APP / Web 应复用 `multi_entry_runtime_guard_v1.md` 的 mode 判定、mixed request decomposition 和字段分层策略。
 
 ### ATO 举一返三 plan-only
 
@@ -56,7 +68,7 @@
 标准短答：
 
 ```text
-这个问题属于 ATO 举一返三扩展，不应在 KIM 入口直接查更多用户。我会只给离线扩量计划：围绕登录态 / token / OAuth / 改密 / 后置异常动作提取扩展锚点，并生成 DataAgent / Hive 查询问题。当前不调用 DataAgent、不访问真实平台、不自动扩量。
+这个问题属于 ATO 举一返三扩展，不应在当前入口直接查更多用户。我会只给离线扩量计划：围绕登录态 / token / OAuth / 改密 / 后置异常动作提取扩展锚点，并生成 DataAgent / Hive 查询问题。当前不调用 DataAgent、不访问真实平台、不自动扩量。
 ```
 
 ### 小号矩阵 lightweight closure fast ack
@@ -75,7 +87,7 @@
 - 不进入 heavy skill loading。
 - 不调用 DataAgent。
 - 不访问档案中心 / Weapon / 登录日志 / browser。
-- 不阻塞 KIM 当前回复。
+- 不阻塞当前入口回复。
 - 如果未来需要离线分析，只返回 async acknowledgement。
 
 标准短答：
@@ -84,7 +96,7 @@
 小号矩阵支线当前已 lightweight closure，暂停继续深挖，不阻塞本轮半开放测试。若后续要恢复，可另行进入离线分析计划；结果通过后续消息同步。本轮不调用 DataAgent、不访问真实平台。
 ```
 
-### KIM 混合请求输出顺序
+### Multi-entry 混合请求输出顺序
 
 适用问题：
 
@@ -93,7 +105,7 @@
 关键约束：
 
 - 混合请求不应整体交给 Dennis 做一个 execution task。
-- main agent / KIM route 层应先拆分任务。
+- main agent / entry route 层应先拆分任务。
 - 只有 ATO 单 case execution slice 可以 spawn 给 Dennis。
 - ATO 举一返三和小号矩阵 fast_ack 应由 main agent 先输出，不等待 ATO execution 完成。
 

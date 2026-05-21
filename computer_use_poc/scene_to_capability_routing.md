@@ -35,6 +35,12 @@
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 
+Multi-entry runtime guard：
+
+- 适用入口包括 KIM、APP、Web 和未来其他入口。
+- 所有入口在调用 Dennis 或 `sessions_spawn` 前，都必须先做 intent classification、execution / plan / fast_ack 判定、mixed request decomposition、field output policy selection、DataAgent execution boundary 和 response length / channel constraint。
+- KIM routing patch 是首个验证样例；APP / Web 应遵守 `multi_entry_runtime_guard_v1.md`，不要重新复制 KIM-only patch。
+
 输出字段分层：
 
 - 所有场景输出必须按 `field_output_classification_policy_v1.md` 区分字段等级。
@@ -180,9 +186,9 @@ Fallback：
 - no_data 不能作为无盗号反证。
 - 不调用真实 DataAgent，不访问真实平台，不自动处罚，不自动上线策略。
 
-KIM 入口强制规则：
+Multi-entry 入口强制规则：
 
-- 用户问“有没有类似受害者 / 同类攻击是否批量发生 / 怎么扩展排查 / 举一返三”时，必须进入 `plan_mode_only`。
+- KIM / APP / Web 中，用户问“有没有类似受害者 / 同类攻击是否批量发生 / 怎么扩展排查 / 举一返三”时，必须进入 `plan_mode_only`。
 - 只输出 DataAgent / Hive query plan、扩展锚点、scope control 和人工复核边界。
 - 不进入 execution mode。
 - 不调用内部平台手脚。
@@ -244,22 +250,22 @@ Fallback：
 - over-window no_data 不得解释为“账号日志已清理”。
 - 长周期登录 / 注册聚合需要转 DataAgent / Hive 或人工离线日志补查。
 
-KIM 入口 lightweight closure / async ack 规则：
+Multi-entry lightweight closure / async ack 规则：
 
 - `black_market_account_matrix` 当前已 lightweight closure，`pause_deep_dive=true`，`not_blocking_runtime_semi_open_test=true`。
-- 用户要求继续深挖小号矩阵时，先快速返回 closure 状态，不进入 heavy skill loading。
+- KIM / APP / Web 中，用户要求继续深挖小号矩阵时，先快速返回 closure 状态，不进入 heavy skill loading。
 - 不调用 DataAgent，不访问档案中心 / Weapon / 登录日志 / browser / 其他真实平台，不阻塞当前 KIM 回复。
 - 默认响应形态为 `fast_ack`：
   - “该支线当前已暂停深挖，不阻塞本轮半开放测试；如需恢复，可另行进入离线分析计划。”
 - 如果未来确实需要离线分析，返回 `async_ack`：
   - “该支线当前已暂停深挖；如需恢复，可另行进入离线分析，结果通过后续消息同步。”
 - 60s timeout 只能标记 `routing_latency_risk` 或 `async_response_contract_missing`，不能直接证明 DataAgent 被误调用。
-- KIM fast_ack 必须包含 `pause_deep_dive=true`、`lightweight_closure=true`、`not_blocking_runtime_semi_open_test=true`、`batch_analysis_follow_up=true`、`async_ack_if_future_offline_analysis=true`。
+- fast_ack 必须包含 `pause_deep_dive=true`、`lightweight_closure=true`、`not_blocking_runtime_semi_open_test=true`、`batch_analysis_follow_up=true`、`async_ack_if_future_offline_analysis=true`。
 
-KIM 混合请求 orchestration 规则：
+Multi-entry 混合请求 orchestration 规则：
 
 1. mixed request 不应整体传给 Dennis 做一个 execution task。
-2. main agent / KIM route 层必须先拆分：
+2. main agent / entry route 层必须先拆分：
    - ATO 单 case：只读 execution，可 spawn 给 Dennis。
    - ATO 举一返三：`plan_mode_only`，由 main agent 先输出 query plan，不调用工具。
    - 小号矩阵：`fast_ack` / lightweight closure，由 main agent 先输出，不深挖。

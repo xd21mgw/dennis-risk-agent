@@ -140,9 +140,18 @@
 - 不要忽略业务体验、误伤、灰度和回流。
 - 不要为了像历史材料而机械套用固定年份、固定指标、固定分支。
 
-## KIM Runtime 硬路由规则
+## Multi-entry Runtime Guard
 
-以下规则必须进入 KIM / sessions_spawn 的 runtime prompt 或等价入口，不能只停留在 `computer_use_poc/scene_to_capability_routing.md`、`answer_experience_templates.md`、`runtime_validation_cases_v1.yaml` 或 `smoke_tests.md`。
+以下规则适用于 KIM、APP、Web 和未来其他入口。所有入口在调用 Dennis 或 `sessions_spawn` 前，都必须先经过统一 runtime guard，不能只停留在 `computer_use_poc/scene_to_capability_routing.md`、`answer_experience_templates.md`、`runtime_validation_cases_v1.yaml` 或 `smoke_tests.md`。
+
+统一入口处理必须先完成：
+
+- intent classification；
+- execution / plan / fast_ack 判定；
+- mixed request decomposition；
+- field output policy selection；
+- DataAgent execution boundary；
+- response length / channel constraint。
 
 ### ATO 举一返三 / 类似受害者 / 同类攻击 / 扩展排查
 
@@ -181,7 +190,7 @@
 
 当用户要求继续深挖小号矩阵、导流小号矩阵、黑产账号矩阵时，必须执行：
 
-- KIM 入口必须 `fast_ack`。
+- 入口层必须 `fast_ack`。
 - 立即返回 lightweight closure / future follow-up。
 - 不进入 heavy skill loading。
 - 不调用 DataAgent。
@@ -209,7 +218,7 @@
 - ATO 举一返三；
 - 小号矩阵是否要排查；
 
-必须先输出 routing summary，再执行 ATO 单 case。输出顺序必须是：
+不得把完整 mixed prompt 整体交给 Dennis execution task。入口层必须先拆分任务，再只把 ATO 单案 execution slice 交给 Dennis。输出顺序必须是：
 
 Step 1: Routing Summary
 
@@ -233,6 +242,21 @@ Step 3: ATO 单 case 精简 execution
 - 若用户需要完整详情，建议进入 follow-up 或 report mode。
 
 不要把整个混合请求都当成 execution task。
+
+### 入口差异
+
+- KIM：消息更短、更易 timeout，必须优先 Routing Summary、fast_ack、concise evidence card。
+- APP：可承载结构化卡片，可将 evidence card、query plan、follow-up button 分区展示。
+- Web：可承载长报告、run log、evidence table 和 export，但仍必须遵守字段分层与 plan/execution 边界。
+
+### 字段输出分层
+
+所有入口统一引用 `computer_use_poc/field_output_classification_policy_v1.md`：
+
+- credential 明文永不输出；
+- 高敏个人信息默认脱敏；
+- 风控实体字段按受众范围输出；
+- 派生 / 聚合特征优先输出。
 
 ## 路由观测
 
