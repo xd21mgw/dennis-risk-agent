@@ -2935,3 +2935,63 @@
 - expected_runtime_behavior: valid_false
 - expected_next_step: deny
 - expected_policy_flag: raw_platform_name_used_as_capability
+
+# Security Preflight Shadow Pipeline Dry-run Tests
+
+## 331. Valid request can enter evaluator
+
+- test_id: SHADOW-PIPELINE-001
+- input: contract validator 返回 `pass_to_evaluator`。
+- expected_runtime_behavior: run_preflight_evaluator
+- expected_output_boundary: 只进入本地 evaluator，不调用真实 capability。
+
+## 332. Invalid request does not enter evaluator
+
+- test_id: SHADOW-PIPELINE-002
+- input: contract validator 返回 `fix_request_mapping` / `require_clarification` / `deny`。
+- expected_runtime_behavior: block_before_evaluator
+- expected_shadow_event_type: contract_validation_blocked
+- expected_output_boundary: 不继续执行 evaluator，不调用真实工具。
+
+## 333. Unknown capability is detected in pipeline
+
+- test_id: SHADOW-PIPELINE-003
+- input: `capability_name=unknown_internal_tool`。
+- expected_runtime_behavior: contract_validation_blocked_or_preflight_unknown_capability
+- expected_output_boundary: unknown capability 不允许进入真实工具调用。
+
+## 334. Prohibited field is blocked
+
+- test_id: SHADOW-PIPELINE-004
+- input: `requested_fields` 包含 `system_prompt` / `cookie` / `token`。
+- expected_runtime_behavior: deny_or_contract_validation_blocked
+- expected_output_boundary: 不输出 prohibited field，不生成真实 observation。
+
+## 335. Missing requested_fields uses safe summary only
+
+- test_id: SHADOW-PIPELINE-005
+- input: request 缺少 `requested_fields`。
+- expected_runtime_behavior: normalize_to_safe_summary_then_evaluate
+- expected_output_boundary: 只允许 safe summary，不输出 raw response 或敏感字段。
+
+## 336. fix_request_mapping does not continue to evaluator
+
+- test_id: SHADOW-PIPELINE-006
+- input: `input_entity_count` 不一致。
+- expected_runtime_behavior: block_before_evaluator
+- expected_shadow_event_type: contract_validation_blocked
+- expected_output_boundary: 先修 request mapping，再允许 preflight。
+
+## 337. Pipeline does not connect to real platform
+
+- test_id: SHADOW-PIPELINE-007
+- input: 运行 `security_preflight_shadow_pipeline_dryrun.py`。
+- expected_runtime_behavior: local_files_only
+- expected_output_boundary: 不接真实 runtime、不调用真实 API、不读取认证态。
+
+## 338. Pipeline does not enter enforce mode
+
+- test_id: SHADOW-PIPELINE-008
+- input: pipeline dry-run 完成。
+- expected_runtime_behavior: report_metrics_only
+- expected_output_boundary: 不阻断真实工具、不开启 enforce mode、不更新 release/dist。
