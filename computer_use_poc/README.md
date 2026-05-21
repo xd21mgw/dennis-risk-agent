@@ -344,3 +344,29 @@ release_status: release_candidate_not_final
 - unexpected route redirect 不能解释为目标 Tab 不可访问、无结果、无权限或用户无数据。
 
 当前 agent-browser 是单 daemon / 单 Chrome 进程架构，`--session` 无法提供真正并行隔离；`--profile` 在 daemon 已运行时也不能可靠切换。当前阶段默认采用串行锁方案，同一时间只允许一个 agent-browser session 操作内部平台页面。
+
+## Runtime Semi-open Test
+
+当前内部半开放测试主线入口：
+
+- `computer_use_poc/runtime_semi_open_test_checklist_v1.md`
+- `computer_use_poc/runtime_validation_cases_v1.yaml`
+
+测试重点：
+
+- ATO single case analysis。
+- ATO batch summary。
+- ATO evidence card generation。
+- ATO case expansion planning。
+- readonly observation。
+- output redaction。
+- preflight evaluator / approval boundary / audit log。
+
+当前不纳入：
+
+- black_market_account_matrix 深挖。
+- 自动处置。
+- 写操作。
+- release 包更新。
+- 真实策略发布。
+- DataAgent 自动调用。
