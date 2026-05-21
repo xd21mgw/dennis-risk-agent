@@ -128,6 +128,14 @@ Security preflight v1 dry-run：
 - 当前 evaluator 不接真实平台、不读取认证态、不调用真实 API、不接真实审批系统、不做真实审计落库。
 - 未来内部 Agent 执行层在调用任何 capability 前，必须先调用 evaluator；若结果为 `deny` 或 `require_approval`，不得继续调用真实工具。
 
+Security Preflight Current Status：
+
+- 当前已完成本地 dry-run、shadow mode 设计、shadow hook 设计、request contract、validator、shadow metrics aggregator、shadow pipeline dry-run 和 normal business coverage。
+- 当前不进入 enforce mode。
+- runtime shadow hook、真实审批、审计落库、readonly runtime config apply 暂缓。
+- 后续准备真实半开放测试、接入真实 tool-call 链路或出现安全 bad case 时再恢复。
+- 当前覆盖矩阵见 `computer_use_poc/security_preflight_coverage_matrix.md`。
+
 ## 4-A. Multi-source e2e entry resolution rule
 
 多源 e2e 前，每个 source 必须先完成 `entry_resolution`。

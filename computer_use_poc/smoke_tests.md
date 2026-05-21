@@ -3053,3 +3053,33 @@
 - input: 运行 normal business pipeline。
 - expected_runtime_behavior: local_files_only
 - expected_output_boundary: 不接真实 runtime、不调用真实 API、不读取认证态、不进入 enforce mode。
+
+# Security Preflight Closure / Resume Criteria
+
+## 347. Current safety coverage is documented
+
+- test_id: SECURITY-CLOSURE-001
+- input: 查看 `security_preflight_coverage_matrix.md`。
+- expected_runtime_behavior: coverage_matrix_available
+- expected_output_boundary: 能说明已覆盖安全制度、policy、evaluator、request contract、validator、shadow design、metrics、pipeline 和 normal business coverage。
+
+## 348. No additional runtime safety work in current phase
+
+- test_id: SECURITY-CLOSURE-002
+- input: 当前阶段继续追加 enforce / runtime 接入。
+- expected_runtime_behavior: defer_to_future_security_phase
+- expected_output_boundary: 当前不继续新增 runtime hook、审批系统、审计落库或 enforce mode。
+
+## 349. Resume runtime security before real semi-open execution
+
+- test_id: SECURITY-CLOSURE-003
+- input: 准备真实半开放测试或接入真实 tool-call 链路。
+- expected_runtime_behavior: resume_security_preflight_runtime_work
+- expected_output_boundary: 恢复 runtime shadow hook、readonly runtime config、真实 request 样本回归和 redaction output check。
+
+## 350. Resume security work after bad case
+
+- test_id: SECURITY-CLOSURE-004
+- input: 出现 prompt injection、越权工具调用、敏感字段输出或批量扩散 bad case。
+- expected_runtime_behavior: reopen_security_preflight_workstream
+- expected_output_boundary: 回到 coverage matrix 的暂缓 TODO，优先补 runtime / policy / redaction 缺口。
