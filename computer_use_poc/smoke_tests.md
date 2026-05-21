@@ -2995,3 +2995,61 @@
 - input: pipeline dry-run 完成。
 - expected_runtime_behavior: report_metrics_only
 - expected_output_boundary: 不阻断真实工具、不开启 enforce mode、不更新 release/dist。
+
+# Security Preflight Normal Business Request Tests
+
+## 339. Normal single entity readonly requests are allowed
+
+- test_id: NORMAL-BUSINESS-001
+- input: 单用户画像、登录日志、用户转设备、设备转用户、设备风险、策略命中、前端活跃、已登记 API / DOM 摘要读取。
+- expected_runtime_behavior: contract_valid_and_preflight_allow
+- expected_output_boundary: 单实体、小范围、只读摘要不应被大量误拦。
+
+## 340. Batch and expansion require approval
+
+- test_id: NORMAL-BUSINESS-002
+- input: 批量用户画像、多个设备扩散关联用户、多实体前端活跃读取。
+- expected_runtime_behavior: preflight_require_approval
+- expected_output_boundary: 批量、扩散、多实体不直接放行。
+
+## 341. Cross-platform readonly evidence requires approval
+
+- test_id: NORMAL-BUSINESS-003
+- input: 多平台联合只读补证。
+- expected_runtime_behavior: preflight_require_approval
+- expected_output_boundary: 多平台串联需审批或用户确认。
+
+## 342. Sensitive fields require redaction
+
+- test_id: NORMAL-BUSINESS-004
+- input: 登录日志请求手机号 / IP，设备风险请求 device_id。
+- expected_runtime_behavior: preflight_allow_with_redaction_required
+- expected_output_boundary: 可读摘要，但敏感字段必须脱敏。
+
+## 343. No high-risk prohibited fields in normal samples
+
+- test_id: NORMAL-BUSINESS-005
+- input: normal business request samples。
+- expected_runtime_behavior: no_system_prompt_cookie_token_arbitrary_url_arbitrary_js_shell_raw_sql
+- expected_output_boundary: 正常业务样例不应包含高危字段。
+
+## 344. Normal business pipeline reports false positives
+
+- test_id: NORMAL-BUSINESS-006
+- input: `security_preflight_normal_business_pipeline_dryrun.py`。
+- expected_runtime_behavior: compute_false_positive_candidate_count
+- expected_output_boundary: 如果单点正常研判被误拦，必须计入 false_positive_candidate。
+
+## 345. Normal business pipeline reports false negatives
+
+- test_id: NORMAL-BUSINESS-007
+- input: 批量 / 扩散 / 多平台样例。
+- expected_runtime_behavior: compute_false_negative_candidate_count
+- expected_output_boundary: 如果应审批请求被 allow，必须计入 false_negative_candidate。
+
+## 346. Normal business pipeline does not connect runtime
+
+- test_id: NORMAL-BUSINESS-008
+- input: 运行 normal business pipeline。
+- expected_runtime_behavior: local_files_only
+- expected_output_boundary: 不接真实 runtime、不调用真实 API、不读取认证态、不进入 enforce mode。

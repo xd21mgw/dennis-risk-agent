@@ -36,6 +36,8 @@
   "dangerous_scopes": [
     "batch",
     "expansion",
+    "multi_entity",
+    "cross_platform",
     "multi_hop_expansion",
     "export",
     "write",

@@ -21,7 +21,7 @@ RUN_LOG_PATH = ROOT / "run_logs" / "security_preflight_dry_run_v1.md"
 
 
 DENY_SCOPES = {"write", "mutation", "system_modification"}
-APPROVAL_SCOPES = {"batch", "expansion", "multi_hop_expansion", "export"}
+APPROVAL_SCOPES = {"batch", "expansion", "multi_entity", "cross_platform", "multi_hop_expansion", "export"}
 
 
 def load_json(path: Path) -> Any:
