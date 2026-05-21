@@ -3403,3 +3403,61 @@
 - input: 检查 runtime validation scope。
 - expected_runtime_behavior: ato_sample_mainline
 - expected_output_boundary: ATO case/batch/expansion 是主线；black_market_account_matrix 标记 lightweight closure，不阻塞半开放测试。
+
+# SSO Session Runner RF-001 Tests
+
+## 390. sso_session_runner rejects target_url
+
+- test_id: SSO-RUNNER-001
+- input: `python3 computer_use_poc/sso_session_runner.py --platform_key user_login_unified_log --user_id 4910098437 --target_url https://example.com`
+- expected_runtime_behavior: argparse_rejects_unknown_argument
+- expected_output_boundary: wrapper 不接受 target_url，不扩大到任意 URL。
+
+## 391. sso_session_runner rejects illegal platform_key
+
+- test_id: SSO-RUNNER-002
+- input: `--platform_key evil_platform --user_id 4910098437`
+- expected_runtime_behavior: reject_invalid_choice
+- expected_output_boundary: 非白名单 platform_key 不执行。
+
+## 392. sso_session_runner rejects user_id injection
+
+- test_id: SSO-RUNNER-003
+- input: `--user_id "4910098437; rm -rf /"`
+- expected_runtime_behavior: reject_non_digit_user_id
+- expected_output_boundary: user_id 必须为 1-20 位纯数字。
+
+## 393. sso_session_runner rejects timestamp injection
+
+- test_id: SSO-RUNNER-004
+- input: `--from_timestamp "1710000000000; rm -rf /" --to_timestamp 1710000001000`
+- expected_runtime_behavior: reject_non_digit_timestamp
+- expected_output_boundary: from/to timestamp 必须为 1-20 位纯数字且成对出现。
+
+## 394. sso_session_runner builds user login URL with explicit window
+
+- test_id: SSO-RUNNER-005
+- input: `--platform_key user_login_unified_log --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
+- expected_runtime_behavior: construct_whitelisted_user_login_url
+- expected_output_boundary: URL 包含 `userId`、`did=`、`query=`、`from_timestamp`、`to_timestamp`；不调用真实平台。
+
+## 395. sso_session_runner defaults user login to reliable seven-day window
+
+- test_id: SSO-RUNNER-006
+- input: `--platform_key user_login_unified_log --user_id 4910098437`
+- expected_runtime_behavior: default_last_7_days_window
+- expected_output_boundary: metadata 包含 `reliable_window_days=7`；默认窗口不是历史全量。
+
+## 396. sso_session_runner marks over-window login query
+
+- test_id: SSO-RUNNER-007
+- input: `--platform_key user_login_unified_log --user_id 4910098437 --from_timestamp 1 --to_timestamp 9999999999999`
+- expected_runtime_behavior: mark_over_reliable_window
+- expected_output_boundary: 输出 `over_reliable_window=true`、`login_log_window_incomplete=true`、`offline_hive_required=true`；no_data 不作为 counter evidence 或 log cleanup evidence。
+
+## 397. sso_session_runner keeps non-login platform behavior unchanged
+
+- test_id: SSO-RUNNER-008
+- input: `--platform_key archives_center_profile --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
+- expected_runtime_behavior: ignore_timestamp_for_non_login_platform
+- expected_output_boundary: 非 user_login_unified_log 不拼接 from/to timestamp。

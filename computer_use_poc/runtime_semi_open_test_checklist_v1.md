@@ -37,7 +37,7 @@
 | readonly runtime config | 已生效 |
 | write/edit/gateway/cron/nodes/memory/subagents/web_fetch | 禁用 |
 | exec | 仅允许 `sso_session_runner` wrapper |
-| wrapper input | 只接受固定 `platform_key` + 必填纯数字 `user_id` |
+| wrapper input | 只接受固定 `platform_key` + 必填纯数字 `user_id`；`user_login_unified_log` 可选成对传入 `from_timestamp` / `to_timestamp` |
 | target_url | 不接受 |
 | sensitive auth output | 不输出 cookie / token / session / header |
 | preflight evaluator | fail closed |
@@ -45,6 +45,13 @@
 | require_approval | 无审批系统前默认不执行 |
 | tool call audit | schema 可落记录 |
 | output redaction check | 生效 |
+
+RF-001 补丁要求：
+
+- `user_login_unified_log` 必须带明确时间窗口，或默认近 7 天 reliable window。
+- `from_timestamp` / `to_timestamp` 必须为 1-20 位纯数字，且必须成对出现。
+- 超过近 7 天的窗口必须标记 `over_reliable_window` / `login_log_window_incomplete` / `offline_hive_required`。
+- over-window no_data / `totalCount=0` 不得作为 counter evidence，不得解释为日志被清理。
 
 ## 4. 核心 Validation Cases
 
