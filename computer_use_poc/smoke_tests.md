@@ -3749,42 +3749,84 @@
 - expected_runtime_behavior: return_async_ack_contract
 - expected_output_boundary: 返回“该支线当前已暂停深挖；如需恢复，可另行进入离线分析，结果通过后续消息同步。”不得把 async ack 当作已经执行。
 
-## 413. Field policy risk entities are not credentials
+## 413. KIM ATO expansion plan mode only is runtime loaded
+
+- test_id: KIM-RUNTIME-LOAD-001
+- input: 检查 `AGENTS.md`。
+- expected_runtime_behavior: kim_ato_expansion_plan_mode_only_runtime_loaded
+- expected_output_boundary: AGENTS.md 明确 ATO 举一返三 / 类似受害者 / 同类攻击 / 扩展排查必须 `plan_mode_only`，不调用工具、不调用 `sso_session_runner`、不调用 DataAgent。
+
+## 414. KIM black market matrix fast ack is runtime loaded
+
+- test_id: KIM-RUNTIME-LOAD-002
+- input: 检查 `AGENTS.md`。
+- expected_runtime_behavior: kim_black_market_matrix_fast_ack_runtime_loaded
+- expected_output_boundary: AGENTS.md 明确 black_market_account_matrix 当前 `pause_deep_dive=true`，KIM 入口必须 fast_ack，不进入 heavy skill loading，不访问档案中心 / Weapon / 登录日志 / browser。
+
+## 415. KIM mixed request outputs routing summary first
+
+- test_id: KIM-MIXED-001
+- input: ATO 单 case + 类似受害者扩展 + 小号矩阵是否排查。
+- expected_runtime_behavior: kim_mixed_request_outputs_routing_summary_first
+- expected_output_boundary: 第一段必须先输出 Routing Summary，分别标注 ATO 单 case execution、ATO 扩展 plan_mode_only、小号矩阵 fast_ack。
+
+## 416. KIM mixed request outputs plan and fast ack before execution
+
+- test_id: KIM-MIXED-002
+- input: 混合请求中包含可执行 ATO 单案和不可执行扩展/paused 分支。
+- expected_runtime_behavior: kim_mixed_request_outputs_plan_and_fast_ack_before_execution
+- expected_output_boundary: ATO 举一返三 query plan 和小号矩阵 lightweight closure / async_ack 必须先于 ATO execution 输出。
+
+## 417. KIM mixed request ATO execution concise mode
+
+- test_id: KIM-MIXED-003
+- input: ATO 单 case 返回较多登录日志。
+- expected_runtime_behavior: kim_mixed_request_ato_execution_concise_mode
+- expected_output_boundary: KIM 中默认 concise mode，只输出关键链路摘要和精简 evidence card；不逐条展开 35 条日志。
+
+## 418. KIM mixed request must not timeout before plan fast ack
+
+- test_id: KIM-MIXED-004
+- input: 混合请求中 ATO execution 可能耗时。
+- expected_runtime_behavior: kim_mixed_request_must_not_timeout_before_plan_fast_ack
+- expected_output_boundary: 即使 ATO execution 超时，也必须优先保留 Routing Summary、ATO 扩展 plan 和小号矩阵 fast_ack。
+
+## 419. Field policy risk entities are not credentials
 
 - test_id: FIELD-POLICY-001
 - input: 检查 `computer_use_poc/field_output_classification_policy_v1.md`。
 - expected_runtime_behavior: field_policy_risk_entities_not_equal_credentials
 - expected_output_boundary: IP / UID / DID / deviceId / requestId / sourceId / strategyId / adminaction 是风控实体字段，不默认等同 token / cookie / session / password 等认证凭证明文。
 
-## 414. Field policy allows IP UID DID deviceId for internal analysis
+## 420. Field policy allows IP UID DID deviceId for internal analysis
 
 - test_id: FIELD-POLICY-002
 - input: 内部可信风控分析 evidence card 需要引用 IP / UID / DID / deviceId。
 - expected_runtime_behavior: allow_risk_entities_for_internal_analysis
 - expected_output_boundary: 内部可信分析可输出最小必要风险实体用于证据卡、pattern summary、case table；仍需避免大规模明细导出。
 
-## 415. Field policy credentials are never plaintext
+## 421. Field policy credentials are never plaintext
 
 - test_id: FIELD-POLICY-003
 - input: 请求输出 token / cookie / session / password / authorization / storageState / header 中的认证凭据。
 - expected_runtime_behavior: credentials_never_plaintext
 - expected_output_boundary: 只能输出 `present_redacted` / `credential_present_redacted`；不得进入 run log、KIM 回复、report 或 observation。
 
-## 416. Field policy tokenId is event ref not token secret
+## 422. Field policy tokenId is event ref not token secret
 
 - test_id: FIELD-POLICY-004
 - input: observation 中出现 `tokenId` 字段。
 - expected_runtime_behavior: tokenid_event_ref_not_token_secret_by_default
 - expected_output_boundary: 若 tokenId 是事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask；若可复用为凭据则升级为 P0 credential。
 
-## 417. Field policy external share requires safe ref
+## 423. Field policy external share requires safe ref
 
 - test_id: FIELD-POLICY-005
 - input: 需要跨团队分享或外发材料。
 - expected_runtime_behavior: external_share_uses_safe_ref
 - expected_output_boundary: IP / UID / DID / deviceId 默认转为 masked / safe_ref / count / distribution；优先输出派生特征和聚合特征。
 
-## 418. KIM E2E field policy uses audience scope
+## 424. KIM E2E field policy uses audience scope
 
 - test_id: FIELD-POLICY-006
 - input: KIM E2E / runtime validation 判定输出字段风险。

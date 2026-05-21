@@ -47,6 +47,7 @@
 - route: `plan_mode_only`
 - 不进入 execution mode。
 - 不调用任何平台工具。
+- 不调用 `sso_session_runner`。
 - 不调用 DataAgent。
 - 不查询更多用户。
 - 不自动扩量。
@@ -70,8 +71,10 @@
 
 - route: `fast_ack_or_async_ack`
 - 先返回 `pause_deep_dive=true` / `not_blocking_runtime_semi_open_test=true`。
+- 输出 `lightweight_closure=true` / `batch_analysis_follow_up=true` / `async_ack_if_future_offline_analysis=true`。
 - 不进入 heavy skill loading。
 - 不调用 DataAgent。
+- 不访问档案中心 / Weapon / 登录日志 / browser。
 - 不阻塞 KIM 当前回复。
 - 如果未来需要离线分析，只返回 async acknowledgement。
 
@@ -80,6 +83,27 @@
 ```text
 小号矩阵支线当前已 lightweight closure，暂停继续深挖，不阻塞本轮半开放测试。若后续要恢复，可另行进入离线分析计划；结果通过后续消息同步。本轮不调用 DataAgent、不访问真实平台。
 ```
+
+### KIM 混合请求输出顺序
+
+适用问题：
+
+- 用户同时要求 ATO 单 case 研判、ATO 举一返三、小号矩阵是否继续排查。
+
+输出顺序：
+
+1. Routing Summary：先说明三段路由。
+   - ATO 单 case：execution mode，只读研判。
+   - ATO 举一返三：plan_mode_only，不执行工具。
+   - 小号矩阵：fast_ack / lightweight closure，不深挖。
+2. Plan/Fast-ack 前置输出：
+   - 先给 ATO 举一返三简版 query plan。
+   - 先给小号矩阵 lightweight closure / async_ack。
+3. ATO 单 case 精简 execution：
+   - 只输出关键链路摘要和精简 evidence card。
+   - 不逐条展开大量日志。
+   - 大日志详情只作为 internal observation。
+   - 如超时，优先保留 Step 1 / Step 2。
 
 ### 回答骨架
 

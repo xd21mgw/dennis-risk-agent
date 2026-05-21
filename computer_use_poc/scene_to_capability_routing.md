@@ -186,6 +186,7 @@ KIM 入口强制规则：
 - 只输出 DataAgent / Hive query plan、扩展锚点、scope control 和人工复核边界。
 - 不进入 execution mode。
 - 不调用内部平台手脚。
+- 不调用 `sso_session_runner`。
 - 不调用 DataAgent。
 - 不查询更多用户。
 - 不自动扩量。
@@ -247,12 +248,21 @@ KIM 入口 lightweight closure / async ack 规则：
 
 - `black_market_account_matrix` 当前已 lightweight closure，`pause_deep_dive=true`，`not_blocking_runtime_semi_open_test=true`。
 - 用户要求继续深挖小号矩阵时，先快速返回 closure 状态，不进入 heavy skill loading。
-- 不调用 DataAgent，不访问真实平台，不阻塞当前 KIM 回复。
+- 不调用 DataAgent，不访问档案中心 / Weapon / 登录日志 / browser / 其他真实平台，不阻塞当前 KIM 回复。
 - 默认响应形态为 `fast_ack`：
   - “该支线当前已暂停深挖，不阻塞本轮半开放测试；如需恢复，可另行进入离线分析计划。”
 - 如果未来确实需要离线分析，返回 `async_ack`：
   - “该支线当前已暂停深挖；如需恢复，可另行进入离线分析，结果通过后续消息同步。”
 - 60s timeout 只能标记 `routing_latency_risk` 或 `async_response_contract_missing`，不能直接证明 DataAgent 被误调用。
+- KIM fast_ack 必须包含 `pause_deep_dive=true`、`lightweight_closure=true`、`not_blocking_runtime_semi_open_test=true`、`batch_analysis_follow_up=true`、`async_ack_if_future_offline_analysis=true`。
+
+KIM 混合请求输出顺序：
+
+1. 先输出 Routing Summary：ATO 单 case 为 execution mode；ATO 举一返三为 plan_mode_only；小号矩阵为 fast_ack / lightweight closure。
+2. 再前置输出 ATO 举一返三简版 query plan，以及小号矩阵 lightweight closure / async_ack。
+3. 最后才做 ATO 单 case 精简 execution。
+4. KIM 中 ATO evidence card 默认 concise mode：只输出关键链路摘要，不逐条展开大量日志；大日志详情仅作为 internal observation。
+5. 如超过时间预算，优先保留 Routing Summary 和 Plan/Fast-ack 前置输出。
 
 ## 0D. 专家认知先判模式 expert_reasoning_first
 

@@ -152,16 +152,18 @@
 - 同类攻击是否批量发生；
 - 怎么扩展排查；
 - 举一返三；
+- 同一攻击模板是否还有更多账号；
 - 基于已确认 ATO case 找同类攻击链路或黑产基础设施；
 
 必须执行：
 
 - 进入 `plan_mode_only`。
 - 不调用工具。
+- 不调用 `sso_session_runner`。
 - 不调用 DataAgent。
 - 不查更多用户。
 - 不自动扩量。
-- 只输出 DataAgent / Hive query plan、scope control、manual review boundary。
+- 只输出扩展锚点、DataAgent / Hive query plan、scope control、manual review boundary。
 - 必须显式说明 `offline_hive_required=true` / `DataAgent_plan_needed=true`。
 
 禁止：
@@ -183,9 +185,15 @@
 - 立即返回 lightweight closure / future follow-up。
 - 不进入 heavy skill loading。
 - 不调用 DataAgent。
-- 不访问真实平台。
+- 不访问档案中心 / Weapon / 登录日志 / browser / 其他真实平台。
 - 不阻塞当前 KIM 回复。
 - 如果未来需要离线分析，只输出 async acknowledgement，不当作已执行。
+- 输出必须包含：
+  - `pause_deep_dive=true`
+  - `lightweight_closure=true`
+  - `not_blocking_runtime_semi_open_test=true`
+  - `batch_analysis_follow_up=true`
+  - `async_ack_if_future_offline_analysis=true`
 
 标准响应口径：
 
@@ -201,11 +209,28 @@
 - ATO 举一返三；
 - 小号矩阵是否要排查；
 
-必须拆分输出：
+必须先输出 routing summary，再执行 ATO 单 case。输出顺序必须是：
 
-1. ATO 单 case：可以进入 execution mode，且只能做只读查询。
-2. ATO 举一返三：必须 `plan_mode_only`，追加 DataAgent / Hive query plan，不执行。
-3. 小号矩阵：必须 `fast_ack` / lightweight closure，不深挖。
+Step 1: Routing Summary
+
+- ATO 单 case：execution mode，只读研判。
+- ATO 举一返三：plan_mode_only，不执行工具。
+- 小号矩阵：fast_ack / lightweight closure，不深挖。
+
+Step 2: Plan/Fast-ack 前置输出
+
+- 先给 ATO 举一返三的简版 query plan。
+- 先给小号矩阵 lightweight closure / async_ack。
+- 这两部分不得等 ATO execution 完成后才输出。
+
+Step 3: ATO 单 case 精简 execution
+
+- 只读查询。
+- 输出精简 evidence card。
+- 如日志较多，只输出关键链路摘要，不全量展开。
+- 大日志详情仅作为 internal observation，不放入 KIM 长回复。
+- 若超过时间预算，必须优先保留 Step 1 / Step 2 的输出。
+- 若用户需要完整详情，建议进入 follow-up 或 report mode。
 
 不要把整个混合请求都当成 execution task。
 

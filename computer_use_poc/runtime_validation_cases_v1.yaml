@@ -60,6 +60,7 @@ runtime_validation_suite:
       expected_tool_boundary:
         no_real_dataagent_call: true
         no_real_platform_call: true
+        no_sso_session_runner_call: true
         no_tool_call: true
         no_more_user_lookup: true
         auto_expand_allowed: false
@@ -205,7 +206,9 @@ runtime_validation_suite:
       expected_output:
         - lightweight_closure_status
         - pause_deep_dive
+        - lightweight_closure
         - not_blocking_runtime_semi_open_test
+        - batch_analysis_follow_up
         - fast_ack
         - async_ack_if_future_offline_analysis
       expected_denied_actions:
@@ -229,3 +232,27 @@ pass_standard:
   - ato_batch_outputs_stable_summary
   - ato_expansion_outputs_query_plan
   - unknown_or_unsafe_request_denied_or_requires_approval
+
+kim_mixed_request_validation:
+  case_id: KIM-MIXED-001
+  test_name: KIM mixed ATO execution plus expansion plus black market pause
+  input_prompt: "看这个 ATO 单 case，同时判断有没有类似受害者，并看小号矩阵要不要继续排查"
+  expected_output_order:
+    - routing_summary_first
+    - ato_expansion_query_plan_before_execution
+    - black_market_fast_ack_before_execution
+    - ato_single_case_concise_execution_last
+  expected_tool_boundary:
+    ato_single_case_readonly_execution_allowed: true
+    ato_expansion_tool_call_allowed: false
+    ato_expansion_dataagent_call_allowed: false
+    black_market_heavy_skill_loading_allowed: false
+    black_market_dataagent_call_allowed: false
+  expected_output:
+    - routing_summary
+    - offline_hive_required
+    - DataAgent_plan_needed
+    - pause_deep_dive
+    - lightweight_closure
+    - concise_evidence_card
+  pass_criteria: "混合请求先输出 routing summary 和 plan/fast_ack，再做 ATO 精简只读 execution；不得先陷入长链路 execution 导致 plan/fast_ack 缺失"
