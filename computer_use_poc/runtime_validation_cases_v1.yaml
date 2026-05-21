@@ -237,11 +237,23 @@ kim_mixed_request_validation:
   case_id: KIM-MIXED-001
   test_name: KIM mixed ATO execution plus expansion plus black market pause
   input_prompt: "看这个 ATO 单 case，同时判断有没有类似受害者，并看小号矩阵要不要继续排查"
+  orchestration_required: main_agent_decomposition_before_spawn
+  forbidden_orchestration:
+    - send_full_mixed_prompt_to_one_dennis_execution_task
+    - let_ato_execution_block_plan_or_fast_ack
+    - include_expansion_request_in_dennis_execution_prompt
+    - include_black_market_followup_in_dennis_execution_prompt
   expected_output_order:
     - routing_summary_first
     - ato_expansion_query_plan_before_execution
     - black_market_fast_ack_before_execution
     - ato_single_case_concise_execution_last
+  expected_spawn_behavior:
+    main_agent_outputs_routing_summary_before_spawn: true
+    main_agent_outputs_plan_fast_ack_before_execution: true
+    only_ato_single_case_spawned_to_dennis: true
+    ato_expansion_handled_by_main_agent_plan_only: true
+    black_market_handled_by_main_agent_fast_ack: true
   expected_tool_boundary:
     ato_single_case_readonly_execution_allowed: true
     ato_expansion_tool_call_allowed: false
@@ -255,4 +267,4 @@ kim_mixed_request_validation:
     - pause_deep_dive
     - lightweight_closure
     - concise_evidence_card
-  pass_criteria: "混合请求先输出 routing summary 和 plan/fast_ack，再做 ATO 精简只读 execution；不得先陷入长链路 execution 导致 plan/fast_ack 缺失"
+  pass_criteria: "main agent 先拆分 mixed request，先输出 routing summary 和 plan/fast_ack，只把 ATO 单案 spawn 给 Dennis execution；不得把完整 mixed prompt 交给一个 Dennis task"

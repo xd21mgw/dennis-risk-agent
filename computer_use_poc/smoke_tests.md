@@ -3791,91 +3791,119 @@
 - expected_runtime_behavior: kim_mixed_request_must_not_timeout_before_plan_fast_ack
 - expected_output_boundary: 即使 ATO execution 超时，也必须优先保留 Routing Summary、ATO 扩展 plan 和小号矩阵 fast_ack。
 
-## 419. Field policy risk entities are not credentials
+## 419. KIM mixed request must be decomposed before spawn
+
+- test_id: KIM-MIXED-005
+- input: ATO 单 case + 类似受害者扩展 + 小号矩阵是否排查。
+- expected_runtime_behavior: kim_mixed_request_must_be_decomposed_before_spawn
+- expected_output_boundary: main agent / KIM route 层必须先拆分请求；不得把完整 mixed prompt 作为一个 Dennis execution task。
+
+## 420. KIM mixed request main agent outputs routing summary
+
+- test_id: KIM-MIXED-006
+- input: 混合请求进入 KIM route。
+- expected_runtime_behavior: kim_mixed_request_main_agent_outputs_routing_summary
+- expected_output_boundary: Routing Summary 必须在任何工具调用或子任务 spawn 前输出，标明 ATO 单案 execution、ATO 举一返三 plan-only、小号矩阵 fast_ack。
+
+## 421. KIM mixed request only ATO execution spawned to Dennis
+
+- test_id: KIM-MIXED-007
+- input: 混合请求拆分后准备 sessions_spawn。
+- expected_runtime_behavior: kim_mixed_request_only_ato_execution_spawned_to_dennis
+- expected_output_boundary: 只将 ATO 单 case execution slice 交给 Dennis；spawn prompt 不包含举一返三或小号矩阵问题。
+
+## 422. KIM mixed request plan fastack not blocked by execution timeout
+
+- test_id: KIM-MIXED-008
+- input: ATO 单案 execution 可能超时。
+- expected_runtime_behavior: kim_mixed_request_plan_fastack_not_blocked_by_execution_timeout
+- expected_output_boundary: ATO 举一返三 query plan 和小号矩阵 fast_ack 由 main agent 先输出；ATO execution 超时不影响这两部分返回。
+
+## 423. Field policy risk entities are not credentials
 
 - test_id: FIELD-POLICY-001
 - input: 检查 `computer_use_poc/field_output_classification_policy_v1.md`。
 - expected_runtime_behavior: field_policy_risk_entities_not_equal_credentials
 - expected_output_boundary: IP / UID / DID / deviceId / requestId / sourceId / strategyId / adminaction 是风控实体字段，不默认等同 token / cookie / session / password 等认证凭证明文。
 
-## 420. Field policy allows IP UID DID deviceId for internal analysis
+## 424. Field policy allows IP UID DID deviceId for internal analysis
 
 - test_id: FIELD-POLICY-002
 - input: 内部可信风控分析 evidence card 需要引用 IP / UID / DID / deviceId。
 - expected_runtime_behavior: allow_risk_entities_for_internal_analysis
 - expected_output_boundary: 内部可信分析可输出最小必要风险实体用于证据卡、pattern summary、case table；仍需避免大规模明细导出。
 
-## 421. Field policy credentials are never plaintext
+## 425. Field policy credentials are never plaintext
 
 - test_id: FIELD-POLICY-003
 - input: 请求输出 token / cookie / session / password / authorization / storageState / header 中的认证凭据。
 - expected_runtime_behavior: credentials_never_plaintext
 - expected_output_boundary: 只能输出 `present_redacted` / `credential_present_redacted`；不得进入 run log、KIM 回复、report 或 observation。
 
-## 422. Field policy tokenId is event ref not token secret
+## 426. Field policy tokenId is event ref not token secret
 
 - test_id: FIELD-POLICY-004
 - input: observation 中出现 `tokenId` 字段。
 - expected_runtime_behavior: tokenid_event_ref_not_token_secret_by_default
 - expected_output_boundary: 若 tokenId 是事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask；若可复用为凭据则升级为 P0 credential。
 
-## 423. Field policy external share requires safe ref
+## 427. Field policy external share requires safe ref
 
 - test_id: FIELD-POLICY-005
 - input: 需要跨团队分享或外发材料。
 - expected_runtime_behavior: external_share_uses_safe_ref
 - expected_output_boundary: IP / UID / DID / deviceId 默认转为 masked / safe_ref / count / distribution；优先输出派生特征和聚合特征。
 
-## 424. KIM E2E field policy uses audience scope
+## 428. KIM E2E field policy uses audience scope
 
 - test_id: FIELD-POLICY-006
 - input: KIM E2E / runtime validation 判定输出字段风险。
 - expected_runtime_behavior: kim_e2e_field_policy_uses_audience_scope
 - expected_output_boundary: 不再用 `no_sensitive_plaintext` 一刀切覆盖所有风控实体字段；按 internal_trusted / KIM_semi_open / broad_semi_open / external_share 受众范围判定。
 
-## 425. ATO batch real-case pilot run exists
+## 429. ATO batch real-case pilot run exists
 
 - test_id: ATO-PILOT-RUN-001
 - input: 检查 `computer_use_poc/run_logs/ato_batch_real_case_pilot_run_v1.md`。
 - expected_runtime_behavior: real_case_pilot_run_logged
 - expected_output_boundary: run log 覆盖 7 个 ATO pilot case、source coverage、window gap、source gap、offline Hive/DataAgent query plan 和 readonly boundary。
 
-## 426. ATO pilot run marks window incomplete
+## 430. ATO pilot run marks window incomplete
 
 - test_id: ATO-PILOT-RUN-002
 - input: 检查 real-case pilot run log 的登录日志 source coverage。
 - expected_runtime_behavior: window_incomplete_marked
 - expected_output_boundary: 7/7 case 超出近 7 天在线可靠窗口；必须标记 `login_log_window_incomplete` / window gap。
 
-## 427. ATO pilot run marks source gap
+## 431. ATO pilot run marks source gap
 
 - test_id: ATO-PILOT-RUN-003
 - input: 档案中心、天狮 / 策略平台未检查。
 - expected_runtime_behavior: source_gap_marked
 - expected_output_boundary: `not_checked` 必须解释为 source gap，不得写成无风险、无策略命中或无档案异常。
 
-## 428. Weapon empty graph is not counter evidence
+## 432. Weapon empty graph is not counter evidence
 
 - test_id: ATO-PILOT-RUN-004
 - input: Weapon API-direct OK but nodes=0 / edges=0。
 - expected_runtime_behavior: weapon_empty_graph_not_counter_evidence
 - expected_output_boundary: Weapon nodes=0 / edges=0 只能表示信息密度低或当前图谱无结果，不能作为无设备风险反证。
 
-## 429. Login log totalCount zero is not counter evidence
+## 433. Login log totalCount zero is not counter evidence
 
 - test_id: ATO-PILOT-RUN-005
 - input: historical ATO case 在线登录日志 totalCount=0。
 - expected_runtime_behavior: login_log_totalcount_zero_not_counter_evidence
 - expected_output_boundary: 超窗 totalCount=0 / no_data 只能作为 data_gap，不能解释为无异常登录。
 
-## 430. ATO pilot run includes offline Hive DataAgent query plan
+## 434. ATO pilot run includes offline Hive DataAgent query plan
 
 - test_id: ATO-PILOT-RUN-006
 - input: 检查 offline Hive / DataAgent query plan。
 - expected_runtime_behavior: offline_hive_dataagent_query_plan_present
 - expected_output_boundary: query plan 覆盖全量登录日志、发布审计、扫码/OAuth、Token、封禁时间序列、直播/工具端日志；只给问题模板，不调用 DataAgent。
 
-## 431. ATO pilot run has no write and no DataAgent call
+## 435. ATO pilot run has no write and no DataAgent call
 
 - test_id: ATO-PILOT-RUN-007
 - input: 检查 run log 的 safety boundary。

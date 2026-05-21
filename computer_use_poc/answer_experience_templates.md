@@ -90,6 +90,13 @@
 
 - 用户同时要求 ATO 单 case 研判、ATO 举一返三、小号矩阵是否继续排查。
 
+关键约束：
+
+- 混合请求不应整体交给 Dennis 做一个 execution task。
+- main agent / KIM route 层应先拆分任务。
+- 只有 ATO 单 case execution slice 可以 spawn 给 Dennis。
+- ATO 举一返三和小号矩阵 fast_ack 应由 main agent 先输出，不等待 ATO execution 完成。
+
 输出顺序：
 
 1. Routing Summary：先说明三段路由。
@@ -104,6 +111,15 @@
    - 不逐条展开大量日志。
    - 大日志详情只作为 internal observation。
    - 如超时，优先保留 Step 1 / Step 2。
+
+标准 Routing Summary：
+
+```text
+Routing Summary:
+- ATO 单案：进入只读 execution，只输出精简 evidence card。
+- ATO 举一返三：plan_mode_only，本轮只输出 DataAgent / Hive query plan，offline_hive_required=true，DataAgent_plan_needed=true。
+- 小号矩阵：fast_ack / lightweight closure，pause_deep_dive=true，不进入深挖。
+```
 
 ### 回答骨架
 
