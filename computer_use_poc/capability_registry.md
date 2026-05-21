@@ -2,6 +2,31 @@
 
 本文记录 Dennis Risk Agent 在 `computer_use_poc` 阶段沉淀的能力类型。能力不等于平台手脚；部分能力只属于大脑认知层。
 
+## Current Formal Capability Index
+
+以下按 capability 而不是平台列出当前正式能力。平台只是适配器或数据来源，主 Agent 应先识别业务场景和证据需求，再选择 capability。
+
+| capability | purpose | primary adapters / sources | default_scope | status | key_boundary |
+|---|---|---|---|---|---|
+| `user_profile_read` | 读取用户基础画像、账号状态、历史风险、档案补证 | 档案中心 home/profile/risk/label/punish APIs 或 browser fallback | single_user readonly summary | formal_readonly | 不做自动风险定性，不输出敏感明文 |
+| `login_log_read` | 读取登录、验证、token 生命周期、登录失败原因 | 用户登录统一日志 API / UI fallback | single_user_or_did bounded window | formal_readonly | 在线窗口不完整时不得把 no_data 当强反证 |
+| `frontend_activity_read` | 读取前端活跃画像和使用时长信号 | 埋点分析“用户属性及时长”区域 | single_user_or_device profile summary | validated_but_not_default_real_execution | 只能说明前端活跃信号，不证明真人/本人/具体动作 |
+| `user_device_resolution` | 做 user ↔ device 双向实体转译 | Weapon graphData，档案中心近期设备作为补充排序 | single_entity candidates | formal_readonly | 关联关系是候选实体关系，不是风险结论 |
+| `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
+| `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
+| `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
+| `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
+
+正式能力与平台适配器关系：
+
+- `user_profile_read` 可由档案中心 API-first 或 browser fallback 实现。
+- `login_log_read` 优先 API direct read，UI hand 作为 fallback / 字段发现。
+- `user_device_resolution` 以 Weapon graphData 为主入口，不使用 Device SDK riskData 做实体解析主入口。
+- `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
+- `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
+- `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
+- `batch_case_analysis_planned` 仍是 planned 能力，不表示已开放批量执行。
+
 ## plan_mode
 
 ```yaml

@@ -1,5 +1,24 @@
 # Computer Use Readonly POC
 
+## 0. 推荐阅读顺序
+
+1. `README.md`：仓库总入口。
+2. `computer_use_poc/README.md`：当前 POC、只读手脚、安全框架、体验优先阶段主入口。
+3. `computer_use_poc/project_structure_index.md`：目录定位、主入口、历史过程文件说明。
+4. `computer_use_poc/capability_registry.md`：按 capability 理解当前正式能力。
+5. `computer_use_poc/scene_to_capability_routing.md`：按业务场景理解如何拆能力和 fallback。
+6. `computer_use_poc/smoke_tests.md`：文档级回归和存在性检查。
+
+## 0-A. 当前正式入口文件
+
+- `computer_use_poc/project_structure_index.md`
+- `computer_use_poc/capability_registry.md`
+- `computer_use_poc/scene_to_capability_routing.md`
+- `computer_use_poc/user_experience_golden_cases.md`
+- `computer_use_poc/answer_experience_templates.md`
+- `computer_use_poc/security_preflight_coverage_matrix.md`
+- `computer_use_poc/smoke_tests.md`
+
 ## 1. POC 目标
 
 验证 Dennis Risk Agent 体系中的 Dennis 子 Agent 是否可以调用 browser computer use / browser automation 环境，完成最小只读平台查询动作。

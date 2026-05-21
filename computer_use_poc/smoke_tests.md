@@ -3083,3 +3083,33 @@
 - input: 出现 prompt injection、越权工具调用、敏感字段输出或批量扩散 bad case。
 - expected_runtime_behavior: reopen_security_preflight_workstream
 - expected_output_boundary: 回到 coverage matrix 的暂缓 TODO，优先补 runtime / policy / redaction 缺口。
+
+# Project Structure / Capability Routing Existence Tests
+
+## 351. project_structure_index exists
+
+- test_id: STRUCTURE-001
+- input: 检查 `computer_use_poc/project_structure_index.md`。
+- expected_runtime_behavior: file_exists
+- expected_output_boundary: 文件说明 README、skills、computer_use_poc、run_logs、observations、outputs/release、outputs/dist、eval 等目录定位。
+
+## 352. capability_registry has formal capability index
+
+- test_id: STRUCTURE-002
+- input: 检查 `computer_use_poc/capability_registry.md`。
+- expected_runtime_behavior: formal_capability_index_exists
+- expected_output_boundary: 至少包含 `user_profile_read`、`login_log_read`、`frontend_activity_read`、`user_device_resolution`、`device_risk_read`、`strategy_hit_read`、`tianshi_eventlist_read`、`batch_case_analysis_planned`。
+
+## 353. scene_to_capability_routing has formal scene map
+
+- test_id: STRUCTURE-003
+- input: 检查 `computer_use_poc/scene_to_capability_routing.md`。
+- expected_runtime_behavior: formal_scene_to_capability_map_exists
+- expected_output_boundary: 覆盖账号安全、ATO、设备风险、用户关联设备、设备关联用户、策略命中、前端活跃、批量 case 分析。
+
+## 354. README has recommended reading order
+
+- test_id: STRUCTURE-004
+- input: 检查 `computer_use_poc/README.md` 顶部。
+- expected_runtime_behavior: recommended_reading_order_exists
+- expected_output_boundary: 顶部列出推荐阅读顺序和当前正式入口文件。

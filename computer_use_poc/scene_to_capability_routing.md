@@ -10,6 +10,28 @@
 - 不把 observation 包装成最终风险定性。
 - 新手脚后续必须说明服务哪个体验 Case，或新增哪个体验 Case。
 
+## 0. Formal Scene to Capability Map
+
+本节按业务场景拆能力。平台是 capability 的适配器，不是用户侧路由入口。
+
+| scene | 用户体感目标 | capability sequence | adapters / sources | fallback | boundary |
+|---|---|---|---|---|---|
+| 账号安全 / 单用户风险研判 | 快速判断用户是否有风险线索、证据强弱和缺口 | `user_profile_read` → `login_log_read` → `user_device_resolution` → `device_risk_read` → `strategy_hit_read` | 档案中心、统一登录日志、Weapon graphData、Device SDK、天狮 | 档案中心 API 302 时走 browser recoverable_preflight；登录日志超窗提示 Hive/offline required | 不因单一证据定性作弊/盗号 |
+| ATO / 盗号研判 | 解释是否更像盗号、token/OAuth 滥用、新设备接管或误操作 | `login_log_read` → `user_profile_read` → `user_device_resolution` → `device_risk_read` → `strategy_hit_read` | 统一登录日志、档案中心、Weapon、Device SDK、天狮 | 在线登录日志超窗时标记 `login_log_window_incomplete` / `offline_hive_required` | 在线 no_data 不能作为无异常登录强反证 |
+| 设备风险补证 | 判断设备侧是否存在 hook/root/frida/模拟器/代理等异常线索 | `device_risk_read` → `device_to_user` via `user_device_resolution` → `login_log_read` | Device SDK / Weapon riskData、Weapon graphData、统一登录日志 | web_ 前缀设备不适合作为移动端 did 主测对象；需移动端 did | 设备异常是设备侧补证，不直接定性用户作弊 |
+| 用户关联设备查询 | 给出用户关联设备候选和排序理由 | `user_device_resolution` | Weapon graphData 主入口，档案中心近期设备补充排序 | Weapon no_data 时可用登录日志设备分布、档案中心最近登录设备做候选 | graphData no_data 不等于用户没有设备 |
+| 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
+| 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
+| 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
+| 批量 case 分析 | 多 case 归类、优先级、证据卡和批量补证规划 | `batch_case_analysis_planned` → per-case readonly capabilities | 后续 case registry / DataAgent only when scene allows | 规模过大先 Plan，输出抽样/分层方案 | 不默认批量扩散，不绕过审批 |
+
+通用 fallback：
+
+- `auth_blocked` / `permission_blocked` / `api_failed` / `no_data` 必须区分。
+- API-first 失败时才考虑 browser / DOM fallback。
+- 候选过多返回 `too_many_candidates`，不默认深查。
+- DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
+
 ## 0A. 专家认知先判模式 expert_reasoning_first
 
 用户体感目标：
