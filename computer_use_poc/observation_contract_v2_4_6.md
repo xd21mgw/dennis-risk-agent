@@ -316,7 +316,8 @@ unified_log_api_pagination_discovery:
 
 - `logContent` 是 JSON string，允许 parse key 和非凭证明文 value。
 - 保留 userId、deviceId、did、userIp、userIpv6、serverIp、userAgent、appVer、sysVer、uri、method、status、actionType、result、reason、timestamp、dateTime、loginType、deviceModel、osVersion、sdkVersion 等风控字段。
-- token、loginToken、tokenId、accessToken、refreshToken、session、sessionId、ticket、authorization、cookie、rawAuthHeader 等凭证明文字段只输出 `present_redacted`。
+- token、loginToken、accessToken、refreshToken、session、sessionId、ticket、authorization、cookie、rawAuthHeader 等凭证明文字段只输出 `present_redacted`。
+- `tokenId` 若为 token 事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask，不输出可复用凭证明文。
 - 不输出完整 response，不输出完整 `logContent`。
 
 ### 2.0.-4 tianshi_strategy_hit_observation
@@ -986,7 +987,7 @@ user_login_unified_log:
 - 高危接口调用日志偏服务端调用链视角。
 - 多账号登录日志偏客户端登录环境视角。
 - 本轮只提取 JSON key，不输出 JSON value，不做风险定性。
-- `token` / `loginToken` / `tokenId` 等凭证明文字段如出现，只输出 `present_redacted`。
+- `token` / `loginToken` 等凭证明文字段如出现，只输出 `present_redacted`；`tokenId` 若为事件标识符，输出 `token_id_ref` 或 partial mask。
 - “查看详情”按钮可能是 `type=submit`，必须使用 scoped row click，并阻止默认 submit 行为，或采用已验证的 modal 打开方式。
 - modal 内容异步渲染时，若首次仅显示 `{` 或 innerHTML 为空，等待 3-5 秒后再提取 JSON key。
 

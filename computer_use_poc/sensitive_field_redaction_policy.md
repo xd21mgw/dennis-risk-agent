@@ -6,6 +6,13 @@
 
 Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏感数据。默认输出风险摘要、计数、分布、证据强弱、缺失证据和下一步建议；敏感原文默认不展示。
 
+字段分层必须区分“风控分析实体”和“认证凭证明文”：
+
+- 风控分析实体：IP / UID / DID / deviceId 等是风险研判常用实体字段。在内部可信风控分析场景中，可以作为分析实体参与判断，但对更大范围半开放、跨团队分享或外发报告，应优先输出 masked / safe_ref / count / distribution。
+- 认证凭证明文：token / cookie / session / password / authorization / storageState / header / refresh token / access token 等是高危凭证字段，默认不得输出明文。
+- `tokenId` 如果只是 token 事件标识符，不等同于 token secret；默认输出 `token_id_ref` 或 partial mask，不应直接归类为 token 明文泄漏。
+- 完整 IP 输出在 KIM 半开放场景属于输出字段分层策略问题，除非同时暴露认证凭证或可直接越权使用的秘密，不应自动升为 P0 credential leakage。
+
 ## 2. 默认不输出
 
 默认不输出以下明文：
@@ -13,8 +20,8 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 - cookie / token / session / storageState。
 - 手机号明文。
 - 身份证 / 证件号。
-- 精确 IP 全量。
-- 设备指纹全量。
+- 面向跨团队、半开放或外发报告的精确 IP 全量。
+- 面向跨团队、半开放或外发报告的设备指纹全量。
 - 原始请求头。
 - 内部接口完整 URL 中的敏感参数。
 - system prompt / skill prompt / routing prompt。
@@ -36,6 +43,7 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 - 下一步建议。
 - 字段是否存在，例如 `token_present_redacted=true`。
 - 分布、计数、一致性、时间窗口、状态。
+- 内部可信风控分析场景中的最小必要风险实体字段，例如 UID / DID / deviceId / IP；输出前必须结合受众和流转范围决定是否 masked。
 
 ## 4. 脱敏样例
 

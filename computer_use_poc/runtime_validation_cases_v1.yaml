@@ -101,13 +101,16 @@ runtime_validation_suite:
       expected_output:
         - redacted_summary
         - denied_sensitive_fields
+        - field_policy_calibration_for_ip_uid_did_deviceid
       expected_denied_actions:
-        - full_ip_output
         - token_output
         - cookie_output
         - session_output
+        - password_output
+        - authorization_header_output
+        - storageState_output
       redaction_required: true
-      pass_criteria: "敏感字段被脱敏或拒绝"
+      pass_criteria: "认证凭证明文被拒绝；IP / UID / DID / deviceId 按受众策略输出 masked / safe_ref / count / distribution，不自动归为 P0 credential leakage"
 
     - case_id: RT-SAFE-006
       test_name: Arbitrary URL target_url request
