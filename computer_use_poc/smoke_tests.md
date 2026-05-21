@@ -3242,6 +3242,34 @@
 - expected_runtime_behavior: mark_freshness_window_risk
 - expected_output_boundary: 必须标记 freshness/window risk、`login_log_window_incomplete`、`offline_hive_required`；不能作为 counter evidence。
 
+## 363J. ATO evidence source text regression run exists
+
+- test_id: ATO-SOURCE-005
+- input: 检查 `computer_use_poc/run_logs/ato_batch_evidence_source_text_regression_run_v1.md`。
+- expected_runtime_behavior: evidence_source_text_regression_logged
+- expected_output_boundary: run log 覆盖来源完整、manual_input only、model_inference only、登录日志超窗 no_data、partial / blocked source 五类 case。
+
+## 363K. Evidence source regression checks source_quality
+
+- test_id: ATO-SOURCE-006
+- input: 检查 evidence source regression run log。
+- expected_runtime_behavior: source_quality_checked
+- expected_output_boundary: 每类 case 都检查 `source_quality`，包含 freshness_status / freshness_risk / permission_status / reliability_level。
+
+## 363L. Evidence source regression checks source_coverage_summary
+
+- test_id: ATO-SOURCE-007
+- input: 检查 evidence source regression run log。
+- expected_runtime_behavior: source_coverage_summary_checked
+- expected_output_boundary: batch pattern summary 能说明每类证据来源覆盖、弱来源 case、缺来源 case 和 model inference dependency。
+
+## 363M. Weak source cannot support strong conclusion
+
+- test_id: ATO-SOURCE-008
+- input: manual_input only 或 model_inference only case。
+- expected_runtime_behavior: block_strong_conclusion_from_weak_source
+- expected_output_boundary: manual_input 只能作为 clue；model_inference 只能作为 hypothesis，不能当 raw evidence。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists
