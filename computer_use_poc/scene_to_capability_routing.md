@@ -143,6 +143,7 @@ Fallback：
 - 只有简介/昵称聚类但缺行为链路：输出 `behavior_evidence_missing`。
 - 联系方式未归一化：输出 `contact_normalization_required`。
 - adminaction code 缺上下文：输出 `adminaction_context_missing`。
+- 统一登录日志查询超出近 7 天可靠窗口：输出 `invalid_over_window_query` / `login_log_window_incomplete` / `offline_hive_required`；不得把 online no_data 当反证或日志清理证据。
 - 要求真实全量查数：进入 Plan / approval_required，不默认调用 DataAgent。
 
 边界：
@@ -152,6 +153,15 @@ Fallback：
 - 不输出微信号、UID、device、IP 等明文。
 - 策略方向只能是候选方向，不自动上线。
 - 简介签名聚类是召回入口，不是处置依据。
+
+统一登录日志窗口边界：
+
+- black_market_account_matrix batch 中如需读取登录日志，必须先做 `reliable_window_precheck`。
+- 只有在近 7 天可靠窗口内，统一登录日志在线 API 才作为有效 evidence source。
+- 超窗默认不直接查在线统一登录日志；如已发生超窗查询，返回 0 / no_data 只能标记为 `data_gap`。
+- over-window no_data 不得写入 counter evidence。
+- over-window no_data 不得解释为“账号日志已清理”。
+- 长周期登录 / 注册聚合需要转 DataAgent / Hive 或人工离线日志补查。
 
 ## 0D. 专家认知先判模式 expert_reasoning_first
 

@@ -27,6 +27,16 @@ platform_access_status:
   unified_login_log:
     status:
     note:
+    reliable_window_check:
+      reliable_window_days: 7
+      query_window_start:
+      query_window_end:
+      is_within_reliable_window:
+      over_window:
+      query_should_execute:
+      skip_reason:
+      evidence_interpretation:
+      fallback_recommendation:
   tianshi_or_strategy:
     status:
     note:
@@ -42,6 +52,33 @@ per_case_observations:
       account_status:
       profile_completeness:
       default_profile_signal:
+    profile_template_summary:
+      username_template_match:
+        value:
+        pattern:
+        evidence_strength: medium_strong
+      nickname_template_match:
+        value:
+        pattern:
+        evidence_strength: medium_strong
+      intro_template_match:
+        value:
+        pattern:
+        evidence_strength: strong_when_external_contact_present
+      external_contact_pattern:
+        value:
+        redacted_pattern:
+        evidence_strength: strong
+      profile_cleanup_hypothesis:
+        value:
+        hypothesis_note:
+      profile_cleanup_evidence_status:
+        value: needs_verification
+        required_evidence:
+          - profile_change_history
+          - adminaction_reason_detail
+          - audit_log_for_profile_cleanup
+          - original_profile_snapshot_or_before_after_diff
     nickname:
       value_or_pattern:
       nickname_template_match:
@@ -113,6 +150,16 @@ per_case_observations:
       follower_boost_signal:
       follower_boost_evidence_strength: medium_strong
     login_network_summary:
+      reliable_window_check:
+        reliable_window_days: 7
+        query_window_start:
+        query_window_end:
+        is_within_reliable_window:
+        over_window:
+        query_should_execute:
+        skip_reason:
+        evidence_interpretation:
+        fallback_recommendation:
       login_ip_masked:
       login_ip_prefix:
       network_cluster_signal:
@@ -148,6 +195,21 @@ batch_level_findings:
   intro_pattern_strength: weak_or_background
   default_or_empty_profile_count:
   default_or_empty_profile_strength: weak_or_background
+  original_profile_three_layer_isomorphism_signal:
+    value:
+    username_template_strength: medium_strong
+    nickname_template_strength: medium_strong
+    intro_template_strength: strong_when_external_contact_present
+    external_contact_pattern_strength: strong
+    note: "original username/nickname/intro pattern must be preserved separately from later default nickname or empty intro state"
+  profile_cleanup_hypothesis:
+    value:
+    evidence_status: needs_verification
+    required_evidence:
+      - profile_change_history
+      - adminaction_reason_detail
+      - audit_log_for_profile_cleanup
+      - original_profile_snapshot_or_before_after_diff
   duplicate_nickname_count:
   duplicate_nickname_strength: medium_strong
   registration_age_cluster_signal:
@@ -179,6 +241,9 @@ cross_case_key_insight:
   secondary_shape:
   not_primary_shape:
   common_profile_pattern:
+  original_profile_three_layer_pattern:
+  later_default_profile_state:
+  profile_cleanup_hypothesis_boundary:
   common_registration_pattern:
   common_device_pattern:
   common_network_pattern:
@@ -201,7 +266,12 @@ expansion_anchors:
 missing_evidence:
   behavior_chain:
   strategy_or_adminaction:
+  login_log_reliable_window:
   intro_history:
+  profile_change_history:
+  adminaction_reason_detail:
+  audit_log_for_profile_cleanup:
+  original_profile_snapshot_or_before_after_diff:
   relation_or_target_graph:
   hive_scale_query:
 

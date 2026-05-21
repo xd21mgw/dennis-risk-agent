@@ -3287,3 +3287,54 @@
 - input: 检查 `capability_registry.md` 和 `scene_to_capability_routing.md`。
 - expected_runtime_behavior: batch_framework_registered_and_routed
 - expected_output_boundary: `batch_analysis_framework` 已登记为 methodology/framework，不执行真实查询。
+
+# Unified Login Log Reliable Window Guardrail Tests
+
+## 379. unified_login_log_over_window_no_data_not_cleanup_evidence
+
+- test_id: LOGIN-WINDOW-001
+- input: 统一登录日志在线 API 查询 `2024-07` 至今，返回 0 / no_data。
+- expected_runtime_behavior: mark_invalid_over_window_query
+- expected_output_boundary: 不得解释为历史无登录，不得解释为账号日志被清理；必须标记 `login_log_window_incomplete` / `offline_hive_required`。
+
+## 380. login_log_reliable_window_precheck_required
+
+- test_id: LOGIN-WINDOW-002
+- input: 任意 `login_log_read` request。
+- expected_runtime_behavior: run_reliable_window_precheck_before_online_api
+- expected_output_boundary: `event_time` 或 `query_time_range` 超过近 7 天时，默认不调用在线统一登录日志做验证。
+
+## 381. user_login_log_over_window_query_should_skip_or_warn
+
+- test_id: LOGIN-WINDOW-003
+- input: `login_log_read` 请求超过 7 天可靠窗口。
+- expected_runtime_behavior: skip_or_warn_and_return_offline_hive_required
+- expected_output_boundary: 返回 `skipped_due_to_over_window` 或明确 warning；建议 DataAgent / Hive 或人工离线日志补查。
+
+## 382. over_window_no_data_not_counter_evidence
+
+- test_id: LOGIN-WINDOW-004
+- input: ATO / black_market_account_matrix 场景中，超窗统一登录日志返回 no_data。
+- expected_runtime_behavior: classify_as_data_gap
+- expected_output_boundary: 不写入 counter evidence，不用于降低风险结论。
+
+## 383. over_window_no_data_not_log_cleanup_evidence
+
+- test_id: LOGIN-WINDOW-005
+- input: 超长窗口统一登录日志返回 0，用户或 Agent 推断“日志可能被清理”。
+- expected_runtime_behavior: reject_log_cleanup_inference
+- expected_output_boundary: 明确 online no_data 只代表可靠窗口外数据不可用；不能证明日志被清理。
+
+## 384. one_device_one_account_does_not_exclude_distributed_matrix
+
+- test_id: BM-MATRIX-009
+- input: black_market_account_matrix 5 case 均为 1:1 单设备单账号。
+- expected_runtime_behavior: shape_correction_not_low_risk
+- expected_output_boundary: 1:1 单设备单账号不是低风险反证；可提示分布式养号矩阵形态。
+
+## 385. current_default_profile_can_be_cleanup_aftermath_not_original_profile
+
+- test_id: BM-MATRIX-010
+- input: 当前档案显示默认昵称 + 空简介，但原始截图显示用户名 / 昵称 / 简介三层同构。
+- expected_runtime_behavior: mark_profile_cleanup_hypothesis_needs_verification
+- expected_output_boundary: 当前默认资料可能是治理后 cleanup aftermath；不得覆盖原始 profile template evidence，需补 profile_change_history / audit log / before-after diff。
