@@ -50,8 +50,17 @@ RF-001 补丁要求：
 
 - `user_login_unified_log` 必须带明确时间窗口，或默认近 7 天 reliable window。
 - `from_timestamp` / `to_timestamp` 必须为 1-20 位纯数字，且必须成对出现。
+- `user_login_unified_log` 有效 URL 必须包含 `recallSource=2,0,1,3`；缺失该字段会导致真实 runtime 结果不可用或返回 `code=10045`。
+- `from_timestamp` / `to_timestamp` 与 `recallSource` 一起构成当前 wrapper 的有效在线登录日志映射。
 - 超过近 7 天的窗口必须标记 `over_reliable_window` / `login_log_window_incomplete` / `offline_hive_required`。
 - over-window no_data / `totalCount=0` 不得作为 counter evidence，不得解释为日志被清理。
+
+RF-001 结论更新：
+
+- `RF-001`: fixed
+- `RF-001-b recallSource missing`: fixed
+- `T1` / `T2` rerun: PASS / UNBLOCKED
+- 当前 8 个 validation test 可进入下一轮半开放测试。
 
 ## 4. 核心 Validation Cases
 

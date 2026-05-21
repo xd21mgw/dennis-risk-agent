@@ -3594,3 +3594,31 @@
 - input: `--platform_key archives_center_profile --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
 - expected_runtime_behavior: ignore_timestamp_for_non_login_platform
 - expected_output_boundary: 非 user_login_unified_log 不拼接 from/to timestamp。
+
+## 398. sso_session_runner requires recallSource for unified login url
+
+- test_id: SSO-RUNNER-009
+- input: `--platform_key user_login_unified_log --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
+- expected_runtime_behavior: construct_recall_source_whitelisted_login_url
+- expected_output_boundary: 有效 URL 必须包含 `recallSource=2,0,1,3`；缺失时属于 wrapper URL 映射缺口，可能触发 `code=10045`。
+
+## 399. missing recallSource may cause api 10045
+
+- test_id: SSO-RUNNER-010
+- input: unified login URL 缺少 `recallSource=2,0,1,3`
+- expected_runtime_behavior: report_url_mapping_incomplete
+- expected_output_boundary: 应标记为 `platform_url_mapping_incomplete`，不能把 `code=10045` 直接解释成时间窗口问题。
+
+## 400. user login with time window returns code0 when runtime auth valid
+
+- test_id: SSO-RUNNER-011
+- input: `user_login_unified_log` request with `userId`、`from_timestamp`、`to_timestamp` and URL-level `recallSource=2,0,1,3`
+- expected_runtime_behavior: construct_valid_login_url_and_return_code0
+- expected_output_boundary: 在真实 runtime auth 有效时应构造完整 URL：`userId`、`did=`、`query=`、`recallSource=2,0,1,3`、`from_timestamp`、`to_timestamp`。
+
+## 401. T1/T2 rerun becomes unblocked after RF-001 fix
+
+- test_id: RUNTIME-RF001-001
+- input: 检查 RF-001 补丁与 T1/T2 重跑结果。
+- expected_runtime_behavior: t1_t2_rerun_unblocked
+- expected_output_boundary: RF-001 fixed，RF-001-b recallSource missing fixed，T1 PASS，T2 PASS，8 个 validation test ready for next semi-open round。

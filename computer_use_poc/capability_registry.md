@@ -9,7 +9,7 @@
 | capability | purpose | primary adapters / sources | default_scope | status | key_boundary |
 |---|---|---|---|---|---|
 | `user_profile_read` | 读取用户基础画像、账号状态、历史风险、档案补证 | 档案中心 home/profile/risk/label/punish APIs 或 browser fallback | single_user readonly summary | formal_readonly | 不做自动风险定性，不输出敏感明文 |
-| `login_log_read` | 读取登录、验证、token 生命周期、登录失败原因 | 用户登录统一日志 API / UI fallback | single_user_or_did reliable window | formal_readonly | 必须先做 `reliable_window_precheck`；over-window no_data 是 data_gap，不是 counter_evidence |
+| `login_log_read` | 读取登录、验证、token 生命周期、登录失败原因 | 用户登录统一日志 API / UI fallback | single_user_or_did reliable window | formal_readonly | 必须先做 `reliable_window_precheck`；`recallSource=2,0,1,3` 必须出现在 online URL；over-window no_data 是 data_gap，不是 counter_evidence |
 | `frontend_activity_read` | 读取前端活跃画像和使用时长信号 | 埋点分析“用户属性及时长”区域 | single_user_or_device profile summary | validated_but_not_default_real_execution | 只能说明前端活跃信号，不证明真人/本人/具体动作 |
 | `user_device_resolution` | 做 user ↔ device 双向实体转译 | Weapon graphData，档案中心近期设备作为补充排序 | single_entity candidates | formal_readonly | 关联关系是候选实体关系，不是风险结论 |
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
@@ -25,6 +25,7 @@
 
 - `user_profile_read` 可由档案中心 API-first 或 browser fallback 实现。
 - `login_log_read` 优先 API direct read，UI hand 作为 fallback / 字段发现。
+- `login_log_read` 的 online URL 必须保留 `recallSource=2,0,1,3`；缺失可能导致 `code=10045`，这属于 wrapper URL 映射缺口，不应误判为登录行为不存在。
 - `user_device_resolution` 以 Weapon graphData 为主入口，不使用 Device SDK riskData 做实体解析主入口。
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。

@@ -33,6 +33,7 @@
 - API-first 失败时才考虑 browser / DOM fallback。
 - 候选过多返回 `too_many_candidates`，不默认深查。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
+- `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 
 ## 0A. Batch Analysis 通用框架路由
 
@@ -109,6 +110,7 @@ Input / output contract：
 - 缺 `device_id`：进入 `missing_evidence`，不直接调用设备风险补证。
 - case 数超过 v1 范围或候选过多：返回 `too_many_candidates`，先缩小范围或进入 Plan。
 - 非 ATO 类型：返回 `unsupported_case_type`，转对应 batch 场景，不强行纳入 ATO。
+- 若 ATO / 批量场景依赖统一登录日志，且 URL 缺少 `recallSource=2,0,1,3`，应先修正 wrapper 映射，再判断窗口和结果；不要把 `code=10045` 直接解释成数据缺失。
 
 可选后续补证：
 

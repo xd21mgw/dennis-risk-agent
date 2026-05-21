@@ -5,6 +5,7 @@
 - capability_name: `login_log_read`
 - adapter: `user_login_log_online_api`
 - reliable_window_days: 7
+- recall_source_required: `2,0,1,3`
 - contract_type: `tool_precheck_rule`
 - real_platform_called: false
 - dataagent_called: false
@@ -26,6 +27,14 @@
   - 标记 `login_log_window_incomplete`
   - 标记 `offline_hive_required`
 
+URL 规则：
+
+- `user_login_unified_log` 的有效在线 URL 必须包含 `recallSource=2,0,1,3`。
+- 若缺少 `recallSource=2,0,1,3`，真实 runtime 可能返回 `code=10045` 或结果不可用。
+- `from_timestamp` / `to_timestamp` 可选，但一旦提供必须成对出现，且为 1-20 位纯数字毫秒时间戳。
+- 当未提供 `from_timestamp` / `to_timestamp` 时，默认使用近 7 天窗口。
+- 若窗口超过近 7 天，仍需标记 `over_reliable_window=true`、`login_log_window_incomplete=true`、`offline_hive_required=true`。
+
 ## 3. Over-window Behavior
 
 超窗时默认不调用在线统一登录日志做事实验证。
@@ -35,6 +44,8 @@
 - status: `skipped_due_to_over_window`
 - evidence_interpretation: `online_login_log_not_reliable_for_requested_historical_window`
 - fallback_recommendation: `DataAgent / Hive 或人工离线日志补查`
+
+如果 URL 还缺少 `recallSource=2,0,1,3`，应视为 `platform_url_mapping_incomplete`，先修正 wrapper URL 映射，不要把返回 10045 误解为窗口问题本身。
 
 不得输出：
 
@@ -79,6 +90,7 @@ DataAgent 边界：
 ```yaml
 reliable_window_check:
   reliable_window_days: 7
+  recall_source: "2,0,1,3"
   query_window_start:
   query_window_end:
   is_within_reliable_window:
@@ -95,6 +107,7 @@ reliable_window_check:
 
 - precheck: `reliable_window_precheck`
 - max_reliable_window_days: 7
+- required_recall_source: `2,0,1,3`
 - over_window_behavior: `skip_and_return_offline_hive_required`
 - no_data_interpretation: `current_window_no_data_only`
 
