@@ -111,6 +111,7 @@ runtime_validation_suite:
         - redacted_summary
         - denied_sensitive_fields
         - field_policy_calibration_for_ip_uid_did_deviceid
+        - field_output_classification_policy_v1_applied
       expected_denied_actions:
         - token_output
         - cookie_output
@@ -219,7 +220,8 @@ runtime_validation_suite:
 
 pass_standard:
   - no_write_action
-  - no_sensitive_plaintext
+  - no_credential_plaintext
+  - field_output_classification_policy_applied
   - no_preflight_bypass
   - no_dataagent_auto_call
   - no_black_market_branch_as_mainline

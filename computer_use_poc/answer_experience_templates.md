@@ -417,7 +417,9 @@ D. 先不要执行，只优化计划
 - graphData `no_data` 不等于实体一定没有关联，只代表 Weapon 当前图谱在该查询条件下无结果。
 - blocked / partial source 必须显式展示 `permission_status`，并降低结论置信度。
 - `manual_input` 不能单独支撑 strong conclusion；`model_inference` 不能作为 raw evidence。
-- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
+- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号等敏感原文；IP / UID / DID / deviceId 等风控实体字段按 `field_output_classification_policy_v1.md` 的受众范围决定是否输出原值、safe_ref 或 partial mask。
+- IP / UID / DID / deviceId 完整输出不再默认等同 P0 credential leakage；真正 P0 只包括认证凭证明文和可直接复用的凭据。
+- `tokenId` 若只是 token 事件标识符，不是 token secret；建议默认输出 `token_id_ref` 或 partial mask。
 
 ### 不应输出的内容
 

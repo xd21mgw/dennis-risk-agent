@@ -203,7 +203,7 @@ single_case_evidence_card:
 - 登录日志超窗 `no_data` 不能写入 counter evidence，只能写入 freshness / window risk 或 missing evidence。
 - blocked / partial source 必须显式标记 `permission_status`，并降低结论置信度。
 - 设备关联只能作为候选关联风险，不能直接定性作弊或盗号。
-- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
+- `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号等敏感原文；IP / UID / DID / deviceId 等风控实体字段按 `field_output_classification_policy_v1.md` 的受众范围输出，跨团队或外发默认使用 safe_ref / partial mask。
 
 说明：
 
@@ -319,6 +319,12 @@ unified_log_api_pagination_discovery:
 - token、loginToken、accessToken、refreshToken、session、sessionId、ticket、authorization、cookie、rawAuthHeader 等凭证明文字段只输出 `present_redacted`。
 - `tokenId` 若为 token 事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask，不输出可复用凭证明文。
 - 不输出完整 response，不输出完整 `logContent`。
+
+字段输出分层：
+
+- IP / UID / DID / deviceId 是风控实体字段，不默认等同 P0 credential leakage。
+- token / cookie / session / password / authorization / storageState / header 等认证凭证明文才是 P0 credential class。
+- KIM E2E / runtime validation 必须按 `field_output_classification_policy_v1.md` 判定，不得用 `no_sensitive_plaintext` 一刀切覆盖所有风控实体字段。
 
 ### 2.0.-4 tianshi_strategy_hit_observation
 

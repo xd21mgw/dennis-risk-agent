@@ -6,6 +6,14 @@
 
 以下按 capability 而不是平台列出当前正式能力。平台只是适配器或数据来源，主 Agent 应先识别业务场景和证据需求，再选择 capability。
 
+全局输出字段分层：
+
+- 所有 capability 的输出必须遵守 `computer_use_poc/field_output_classification_policy_v1.md`。
+- token / cookie / session / password / authorization / storageState / header 等认证凭证明文永远不得明文输出。
+- IP / UID / DID / deviceId / requestId / sourceId / strategyId / adminaction 等是风控实体字段；内部可信分析可作为 evidence card、pattern summary、case table 的分析实体，KIM 半开放和跨团队分享需按受众范围选择原值、safe_ref、partial mask、count 或 distribution。
+- `tokenId` 若只是事件标识符，不等于 token secret；默认 `token_id_ref` 或 partial mask。
+- `no_sensitive_plaintext` 不能一刀切覆盖所有风控实体字段；KIM E2E / runtime validation 必须按字段分层判定。
+
 | capability | purpose | primary adapters / sources | default_scope | status | key_boundary |
 |---|---|---|---|---|---|
 | `user_profile_read` | 读取用户基础画像、账号状态、历史风险、档案补证 | 档案中心 home/profile/risk/label/punish APIs 或 browser fallback | single_user readonly summary | formal_readonly | 不做自动风险定性，不输出敏感明文 |

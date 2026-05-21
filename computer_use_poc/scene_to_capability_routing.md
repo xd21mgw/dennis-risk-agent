@@ -35,6 +35,15 @@
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 
+输出字段分层：
+
+- 所有场景输出必须按 `field_output_classification_policy_v1.md` 区分字段等级。
+- IP / UID / DID / deviceId 是风控实体字段，在内部可信风控分析中可作为 evidence 使用，不默认等同 P0 credential leakage。
+- token / cookie / session / password / authorization / storageState / header 等认证凭证明文永远禁止明文输出。
+- `tokenId` 若只是 token 事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask。
+- KIM 半开放默认按受众策略控制风险实体字段；更大范围半开放、跨团队分享或外发材料默认输出 safe_ref / partial mask / count / distribution。
+- 派生特征和聚合特征优先，例如 IP 网段、ASN、运营商、设备风险标签、同设备数量、注册 cohort、行为对象聚集和风险标签分布。
+
 ## 0A. Batch Analysis 通用框架路由
 
 用户体感目标：

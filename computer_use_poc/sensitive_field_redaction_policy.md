@@ -6,6 +6,8 @@
 
 Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏感数据。默认输出风险摘要、计数、分布、证据强弱、缺失证据和下一步建议；敏感原文默认不展示。
 
+统一字段分层以 `field_output_classification_policy_v1.md` 为准。
+
 字段分层必须区分“风控分析实体”和“认证凭证明文”：
 
 - 风控分析实体：IP / UID / DID / deviceId 等是风险研判常用实体字段。在内部可信风控分析场景中，可以作为分析实体参与判断，但对更大范围半开放、跨团队分享或外发报告，应优先输出 masked / safe_ref / count / distribution。
