@@ -3098,7 +3098,7 @@
 - test_id: STRUCTURE-002
 - input: 检查 `computer_use_poc/capability_registry.md`。
 - expected_runtime_behavior: formal_capability_index_exists
-- expected_output_boundary: 至少包含 `user_profile_read`、`login_log_read`、`frontend_activity_read`、`user_device_resolution`、`device_risk_read`、`strategy_hit_read`、`tianshi_eventlist_read`、`batch_case_analysis_planned`。
+- expected_output_boundary: 至少包含 `user_profile_read`、`login_log_read`、`frontend_activity_read`、`user_device_resolution`、`device_risk_read`、`strategy_hit_read`、`tianshi_eventlist_read`、`batch_case_analysis`、`batch_case_analysis_planned`。
 
 ## 353. scene_to_capability_routing has formal scene map
 
@@ -3113,3 +3113,68 @@
 - input: 检查 `computer_use_poc/README.md` 顶部。
 - expected_runtime_behavior: recommended_reading_order_exists
 - expected_output_boundary: 顶部列出推荐阅读顺序和当前正式入口文件。
+
+# ATO Batch Case Analysis Structure Tests
+
+## 355. ATO batch case management directory exists
+
+- test_id: ATO-BATCH-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/`。
+- expected_runtime_behavior: directory_exists
+- expected_output_boundary: 目录作为 5-20 个 ATO case 半自动批量归因入口，不移动历史文件。
+
+## 356. ATO batch case schema includes minimum fields
+
+- test_id: ATO-BATCH-002
+- input: 检查 `ato_batch_case_schema_v1.md`。
+- expected_runtime_behavior: schema_fields_documented
+- expected_output_boundary: 包含 `case_id`、`user_id`、`device_id`、`event_time`、`abnormal_action`、`user_claim`、`source_channel`、`available_evidence`、`missing_evidence`、`initial_risk_hint`、`current_status`、`manual_label`、`confidence`、`notes`。
+
+## 357. ATO batch registry template uses synthetic samples
+
+- test_id: ATO-BATCH-003
+- input: 检查 `ato_batch_case_registry_template_v1.csv`。
+- expected_runtime_behavior: synthetic_rows_5_to_10
+- expected_output_boundary: 提供 5-10 行脱敏合成样例，不包含真实 user_id / device_id / token / cookie / 手机号 / IP 明文。
+
+## 358. ATO batch workflow exists
+
+- test_id: ATO-BATCH-004
+- input: 检查 `ato_batch_workflow_v1.md`。
+- expected_runtime_behavior: workflow_documented
+- expected_output_boundary: 覆盖 case intake、entity parse、single case evidence card、cross-case pattern aggregation、missing evidence summary、strategy direction draft、manual review boundary。
+
+## 359. ATO batch evidence card template exists
+
+- test_id: ATO-BATCH-005
+- input: 检查 `ato_batch_evidence_card_template_v1.md`。
+- expected_runtime_behavior: evidence_card_template_documented
+- expected_output_boundary: 模板包含 strong / medium / weak / counter / missing evidence、freshness risk、permission/data gap、conclusion support level。
+
+## 360. ATO batch pattern summary template exists
+
+- test_id: ATO-BATCH-006
+- input: 检查 `ato_batch_pattern_summary_template_v1.md`。
+- expected_runtime_behavior: pattern_summary_template_documented
+- expected_output_boundary: 模板包含 common entity pattern、device/IP/login pattern、behavior path、shared missing evidence、suspected attack path、case clustering result、confidence level。
+
+## 361. ATO batch strategy direction template remains candidate-only
+
+- test_id: ATO-BATCH-007
+- input: 检查 `ato_batch_strategy_direction_template_v1.md`。
+- expected_runtime_behavior: candidate_strategy_template_documented
+- expected_output_boundary: 明确只能输出候选策略方向，不能自动上线；必须包含误伤风险、补证建议、AB / 查杀分离评估建议。
+
+## 362. ATO batch capability is registered
+
+- test_id: ATO-BATCH-008
+- input: 检查 `computer_use_poc/capability_registry.md`。
+- expected_runtime_behavior: batch_case_analysis_registered
+- expected_output_boundary: `batch_case_analysis` 状态为模板最小闭环，不调用真实 DataAgent，不自动处置。
+
+## 363. ATO batch routing is documented
+
+- test_id: ATO-BATCH-009
+- input: 检查 `computer_use_poc/scene_to_capability_routing.md`。
+- expected_runtime_behavior: ato_batch_routing_documented
+- expected_output_boundary: 明确 5-20 ATO case 进入 `batch_case_analysis`，缺字段进入 missing evidence，DataAgent 仅作为未来 Hive/数仓补证能力。

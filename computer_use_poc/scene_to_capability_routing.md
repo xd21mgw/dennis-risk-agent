@@ -23,7 +23,7 @@
 | 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
 | 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
-| 批量 case 分析 | 多 case 归类、优先级、证据卡和批量补证规划 | `batch_case_analysis_planned` → per-case readonly capabilities | 后续 case registry / DataAgent only when scene allows | 规模过大先 Plan，输出抽样/分层方案 | 不默认批量扩散，不绕过审批 |
+| ATO 批量 case 分析 | 5-20 个 ATO case 的批量归因、证据卡聚合、模式总结和策略方向草案 | `batch_case_analysis` → per-case evidence card → pattern summary → strategy direction draft | `eval/.../19_ato_batch_case_management/` templates；DataAgent only when future scene allows Hive/warehouse analysis | 缺关键字段时返回 missing evidence；规模过大先 Plan；真实查询另行授权 | 半自动归因，不自动策略上线，不自动处置 |
 
 通用 fallback：
 
@@ -32,7 +32,48 @@
 - 候选过多返回 `too_many_candidates`，不默认深查。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 
-## 0A. 专家认知先判模式 expert_reasoning_first
+## 0A. ATO 批量 Case Analysis 路由
+
+用户体感目标：
+
+- 用户给出 5-20 个 ATO / 盗号申诉 case，希望 Dennis Agent 不逐条散答，而是形成标准化 registry、单 case 证据卡、跨 case 共性模式、证据缺口和候选策略方向。
+
+触发条件：
+
+- “帮我把这 10 个 ATO case 做批量归因。”
+- “这些盗号申诉里共性路径是什么？”
+- “帮我按证据强弱聚合这些 case。”
+- “基于这批 case 给一个策略方向草案。”
+- 用户提供 5-20 个 case，包含 user_id / event_time / abnormal_action / user_claim 等核心字段。
+
+能力链路：
+
+1. `batch_case_analysis`：标准化 case registry。
+2. 单 case evidence card：输出 strong / medium / weak / counter / missing evidence。
+3. pattern summary：聚合 common entity、device/IP/login、behavior path、shared missing evidence。
+4. strategy direction draft：只输出候选策略方向、误伤风险、补证建议、AB / 查杀分离评估建议。
+
+可选后续补证：
+
+- 如果未来需要真实离线取数，DataAgent 只能作为 Hive / 数仓取数分析能力，并且必须明确查询范围、权限和审批边界。
+- 当前最小闭环不调用真实 DataAgent，不访问真实内部平台。
+
+Fallback：
+
+- 缺 `user_id` / `event_time` / `abnormal_action`：返回 `missing_required_input`。
+- 缺 `device_id`：进入 missing evidence，不直接调用设备风险补证。
+- 在线登录日志超窗：标记 `login_log_window_incomplete` / `offline_hive_required`。
+- case 数过多或要求扩散关联：进入 Plan / approval_required，不默认批量深查。
+
+边界：
+
+- 批量聚合是模式假设，不是最终风险定性。
+- 候选策略方向不是自动上线结论。
+- 不能把用户申诉、人工备注或 manual_label 当事实。
+- 不能把关联设备 / 关联账号直接写成团伙作弊。
+- 不能把 DataAgent 泛化成万能数据底座。
+
+## 0B. 专家认知先判模式 expert_reasoning_first
 
 用户体感目标：
 
@@ -103,7 +144,7 @@ Capability：
 - 不能把“设备列表无异常”当作排除盗号或 token 复用的充分条件。
 - 不能把“API 直调”直接等同协议破解；可能只是合法 token 被复用。
 
-## 0B. Plan 模式与执行模式路由规则
+## 0C. Plan 模式与执行模式路由规则
 
 核心原则：
 
@@ -193,7 +234,7 @@ ATO / 登录日志类 Plan 和执行结果都必须提示：在线统一登录�
 
 Plan 输出后，如果用户选择 A/B/C/D，再进入对应执行路径。不要在 Plan 阶段调用真实平台接口。
 
-## 0C. Agent Safety Routing Guardrails
+## 0D. Agent Safety Routing Guardrails
 
 核心原则：
 

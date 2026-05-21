@@ -89,6 +89,35 @@ codex
 3. 如果低于 80 分，写出需要回写哪个 Skill 文件。
 ```
 
+## ATO 批量 Case Analysis 最小闭环
+
+当前已新增 ATO 批量 case analysis 管理目录：
+
+`eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/`
+
+用途：
+
+- 面向 5-20 个 ATO / 盗号申诉 case 做半自动批量归因。
+- 把 case 标准化为 registry、单 case 证据卡、批量模式摘要和候选策略方向。
+- 重点输出证据聚合、缺口识别、模式总结和后续补证建议。
+
+边界：
+
+- 不调用真实 DataAgent。
+- 不执行真实内部平台查询。
+- 不做自动策略上线。
+- DataAgent 仅作为未来 Hive / 数仓取数分析能力，不是默认万能数据底座。
+- 批量分析是半自动归因，不是自动处置系统。
+
+推荐入口：
+
+- `ato_batch_case_schema_v1.md`：标准 case 字段。
+- `ato_batch_case_registry_template_v1.csv`：脱敏样例 registry。
+- `ato_batch_workflow_v1.md`：批量分析流程。
+- `ato_batch_evidence_card_template_v1.md`：单 case 证据卡。
+- `ato_batch_pattern_summary_template_v1.md`：批量模式聚合。
+- `ato_batch_strategy_direction_template_v1.md`：候选策略方向。
+
 ## Skill 回写计划 Prompt
 
 ```text

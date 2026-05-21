@@ -15,6 +15,7 @@
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
+| `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
 | `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
 
 正式能力与平台适配器关系：
@@ -25,7 +26,58 @@
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
-- `batch_case_analysis_planned` 仍是 planned 能力，不表示已开放批量执行。
+- `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
+- `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
+
+## batch_case_analysis
+
+```yaml
+capability_name: batch_case_analysis
+chinese_name: ATO 批量 case analysis / 批量归因最小闭环
+layer: evidence_orchestration
+status: mvp_template_ready
+purpose: 面向 5-20 个 ATO / 盗号申诉 case，完成 case 标准化、单 case 证据卡、跨 case 模式聚合、缺口识别和候选策略方向
+input:
+  - ato_batch_case_registry
+  - case_id
+  - user_id
+  - device_id
+  - event_time
+  - abnormal_action
+  - user_claim
+  - available_evidence
+  - missing_evidence
+output:
+  - standardized_case_registry
+  - single_case_evidence_cards
+  - cross_case_pattern_summary
+  - missing_evidence_summary
+  - candidate_strategy_direction
+should_trigger_when:
+  - user_provides_5_to_20_ato_cases
+  - user_asks_for_batch_attribution
+  - user_asks_for_common_pattern_summary
+  - user_asks_for_strategy_direction_draft_from_cases
+should_not_trigger_when:
+  - user_asks_for_single_case_execution
+  - user_requests_auto_strategy_launch
+  - user_requests_batch_platform_query_without_approval
+  - user_requests_real_dataagent_execution
+boundaries:
+  - no_real_dataagent_call
+  - no_real_platform_query
+  - no_auto_disposition
+  - no_auto_strategy_launch
+  - dataagent_only_for_future_hive_or_warehouse_analysis_when_scene_allows
+  - case_aggregation_is_pattern_hypothesis_not_final_risk_conclusion
+templates:
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_case_schema_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_case_registry_template_v1.csv
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_workflow_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_evidence_card_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_pattern_summary_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_strategy_direction_template_v1.md
+```
 
 ## plan_mode
 
