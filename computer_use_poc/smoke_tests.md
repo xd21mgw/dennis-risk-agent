@@ -3832,3 +3832,52 @@
 - input: KIM E2E / runtime validation 判定输出字段风险。
 - expected_runtime_behavior: kim_e2e_field_policy_uses_audience_scope
 - expected_output_boundary: 不再用 `no_sensitive_plaintext` 一刀切覆盖所有风控实体字段；按 internal_trusted / KIM_semi_open / broad_semi_open / external_share 受众范围判定。
+
+## 425. ATO batch real-case pilot run exists
+
+- test_id: ATO-PILOT-RUN-001
+- input: 检查 `computer_use_poc/run_logs/ato_batch_real_case_pilot_run_v1.md`。
+- expected_runtime_behavior: real_case_pilot_run_logged
+- expected_output_boundary: run log 覆盖 7 个 ATO pilot case、source coverage、window gap、source gap、offline Hive/DataAgent query plan 和 readonly boundary。
+
+## 426. ATO pilot run marks window incomplete
+
+- test_id: ATO-PILOT-RUN-002
+- input: 检查 real-case pilot run log 的登录日志 source coverage。
+- expected_runtime_behavior: window_incomplete_marked
+- expected_output_boundary: 7/7 case 超出近 7 天在线可靠窗口；必须标记 `login_log_window_incomplete` / window gap。
+
+## 427. ATO pilot run marks source gap
+
+- test_id: ATO-PILOT-RUN-003
+- input: 档案中心、天狮 / 策略平台未检查。
+- expected_runtime_behavior: source_gap_marked
+- expected_output_boundary: `not_checked` 必须解释为 source gap，不得写成无风险、无策略命中或无档案异常。
+
+## 428. Weapon empty graph is not counter evidence
+
+- test_id: ATO-PILOT-RUN-004
+- input: Weapon API-direct OK but nodes=0 / edges=0。
+- expected_runtime_behavior: weapon_empty_graph_not_counter_evidence
+- expected_output_boundary: Weapon nodes=0 / edges=0 只能表示信息密度低或当前图谱无结果，不能作为无设备风险反证。
+
+## 429. Login log totalCount zero is not counter evidence
+
+- test_id: ATO-PILOT-RUN-005
+- input: historical ATO case 在线登录日志 totalCount=0。
+- expected_runtime_behavior: login_log_totalcount_zero_not_counter_evidence
+- expected_output_boundary: 超窗 totalCount=0 / no_data 只能作为 data_gap，不能解释为无异常登录。
+
+## 430. ATO pilot run includes offline Hive DataAgent query plan
+
+- test_id: ATO-PILOT-RUN-006
+- input: 检查 offline Hive / DataAgent query plan。
+- expected_runtime_behavior: offline_hive_dataagent_query_plan_present
+- expected_output_boundary: query plan 覆盖全量登录日志、发布审计、扫码/OAuth、Token、封禁时间序列、直播/工具端日志；只给问题模板，不调用 DataAgent。
+
+## 431. ATO pilot run has no write and no DataAgent call
+
+- test_id: ATO-PILOT-RUN-007
+- input: 检查 run log 的 safety boundary。
+- expected_runtime_behavior: no_write_no_dataagent_call
+- expected_output_boundary: `platform_write_action=false`、`dataagent_called=false`、`hive_called=false`，且不输出 cookie/token/session/header。
