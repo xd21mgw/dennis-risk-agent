@@ -112,3 +112,96 @@ reliable_window_check:
 - no_data_interpretation: `current_window_no_data_only`
 
 该规则当前只沉淀为 tool contract，不接真实 runtime，不调用真实平台。
+
+## 8. Wrapper JSON Envelope Contract
+
+`sso_session_runner` / wrapper 输出必须保证机器可解析。
+
+stdout 规则：
+
+- stdout 必须只包含一个 JSON envelope。
+- 不得把认证日志、人类调试日志或 preflight 文本混入 stdout JSON 流。
+- sub-agent Python 可以直接对 stdout 执行 `json.loads(stdout)`。
+
+stderr / log 规则：
+
+- 人类可读诊断、认证日志、wrapper 运行日志进入 stderr 或独立 log file。
+- 不得输出 cookie / token / session / storageState / header 明文。
+
+envelope schema:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "success | failed | partial",
+  "ok": true,
+  "result": {
+    "dry_run_only": true,
+    "platform_key": "user_login_unified_log",
+    "constructed_url": "safe_ref_or_whitelisted_url"
+  },
+  "metadata": {
+    "reliable_window_days": 7,
+    "recall_source": "2,0,1,3",
+    "default_window_used": false,
+    "over_reliable_window": false,
+    "login_log_window_incomplete": false,
+    "offline_hive_required": false
+  },
+  "security": {
+    "sensitive_auth_output": false,
+    "dataagent_called": false,
+    "platform_write_action": false,
+    "real_platform_request_executed": false
+  },
+  "error": null,
+  "logs": []
+}
+```
+
+Failure envelope:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "failed",
+  "ok": false,
+  "result": null,
+  "metadata": {
+    "tool_call_allowed": false,
+    "dataagent_called": false,
+    "platform_write_action": false,
+    "real_platform_request_executed": false
+  },
+  "error": {
+    "message": "validation error"
+  },
+  "logs": []
+}
+```
+
+Partial envelope:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "partial",
+  "ok": true,
+  "result": {
+    "summary": "partial observation"
+  },
+  "metadata": {
+    "partial_reason": "auth_required | permission_blocked | over_reliable_window"
+  },
+  "security": {
+    "sensitive_auth_output": false
+  },
+  "error": null,
+  "logs": []
+}
+```
+
+Boundary:
+
+- `logs` must contain only non-sensitive summaries if used.
+- Raw auth state, credential headers, cookies, token values, session values and storageState must never appear in stdout, stderr, log file, run log or response.

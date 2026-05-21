@@ -133,6 +133,19 @@ Routing Summary:
 - 小号矩阵：fast_ack / lightweight closure，pause_deep_dive=true，不进入深挖。
 ```
 
+### KIM 长度约束
+
+适用问题：
+
+- evidence card、batch summary、策略命中明细或登录日志链路过长。
+
+响应要求：
+
+- KIM 中必须先输出 Routing Summary 或一句结论。
+- 超长 evidence table 转为摘要 + `safe_ref` / follow-up。
+- 不在 KIM 中输出长报告、全量日志表或大段 raw observation。
+- Web 可以承载长报告，但仍必须遵守字段分层、DataAgent 边界和敏感字段脱敏。
+
 ### 回答骨架
 
 ```text

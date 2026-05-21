@@ -31,6 +31,8 @@ Mixed request must not be passed to Dennis as one execution task.
 
 The main agent / entry route layer must decompose the request before spawning or calling Dennis. Only the ATO single-case execution slice may be sent to Dennis execution. ATO expansion and black_market_account_matrix paused branch must be handled by the main agent as plan-only / fast-ack text.
 
+This must be implemented as entry-layer routing logic, not only as a downstream Dennis prompt instruction. The routing layer must create an explicit decomposition record before `sessions_spawn`.
+
 ## 4. Recommended Orchestration
 
 ### Step 1: Main Agent Outputs Routing Summary

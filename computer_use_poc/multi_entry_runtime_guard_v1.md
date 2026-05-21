@@ -24,6 +24,29 @@ All entries must pass through the same runtime guard before calling Dennis:
 
 The guard must run before tool call, browser access, DataAgent call, or `sessions_spawn`.
 
+This guard is a main-agent routing contract, not only a prompt paragraph. The main agent entry layer must produce a normalized routing decision before any downstream task:
+
+```yaml
+routing_decision:
+  entry: kim | app | web | future
+  detected_intents:
+    - ato_single_case
+    - ato_expansion
+    - black_market_paused_branch
+  mode_by_intent:
+    ato_single_case: execution_readonly
+    ato_expansion: plan_mode_only
+    black_market_paused_branch: fast_ack
+  mixed_request_decomposed: true
+  dennis_spawn_allowed: true
+  dennis_spawn_slice: ato_single_case_only
+  dataagent_allowed: false
+  write_action_allowed: false
+  field_output_policy: field_output_classification_policy_v1
+```
+
+If this routing decision cannot be produced, the entry must fail closed to plan-only or clarification instead of spawning Dennis execution.
+
 ## 3. Core Routing Modes
 
 ### A. execution mode
@@ -89,6 +112,15 @@ The entry route layer must decompose it before Dennis execution:
 - black_market_account_matrix -> fast_ack / closure.
 
 Never pass the full mixed prompt to one Dennis execution task.
+
+Main-agent routing contract:
+
+- ATO single case -> `execution_readonly`.
+- ATO expansion / 举一返三 -> `plan_mode_only`.
+- black_market_account_matrix paused branch -> `fast_ack` / `async_ack`.
+- DataAgent request -> `plan_only` / `require_confirmation` unless explicitly authorized in a separate offline flow.
+- write / mutation / disposition request -> `deny` or `plan_only` with manual review boundary.
+- credential or high-sensitive raw output request -> `deny` / `redact`.
 
 Required output order:
 

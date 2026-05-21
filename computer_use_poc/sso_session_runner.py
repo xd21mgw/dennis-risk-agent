@@ -4,6 +4,10 @@
 This wrapper currently performs local argument validation and whitelisted URL
 construction only. It does not read auth state, call internal platforms, call
 DataAgent, or execute writes.
+
+stdout contract:
+    stdout contains exactly one machine-parseable JSON envelope.
+    human-readable diagnostics must go to stderr only.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ RELIABLE_WINDOW_DAYS = 7
 RELIABLE_WINDOW_MS = RELIABLE_WINDOW_DAYS * 24 * 60 * 60 * 1000
 ID_RE = re.compile(r"^[0-9]{1,20}$")
 TS_RE = re.compile(r"^[0-9]{1,20}$")
+RECALL_SOURCE = "2,0,1,3"
 
 PLATFORM_BASE = {
     "user_login_unified_log": "https://user-center-workbench.corp.kuaishou.com/rest/unified/log/search",
@@ -27,20 +32,40 @@ PLATFORM_BASE = {
 }
 
 
+def emit_envelope(envelope: dict[str, object]) -> None:
+    print(json.dumps(envelope, ensure_ascii=False, indent=2))
+
+
+def build_error_envelope(message: str, status: str = "failed") -> dict[str, object]:
+    return {
+        "schema_version": "sso_session_runner_envelope_v1",
+        "status": status,
+        "ok": False,
+        "result": None,
+        "metadata": {
+            "tool_call_allowed": False,
+            "dataagent_called": False,
+            "platform_write_action": False,
+            "real_platform_request_executed": False,
+        },
+        "error": {
+            "message": message,
+        },
+        "logs": [],
+    }
+
+
 def die(message: str) -> None:
-    print(
-        json.dumps(
-            {
-                "ok": False,
-                "error": message,
-                "tool_call_allowed": False,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        file=sys.stderr,
-    )
+    print(f"sso_session_runner validation failed: {message}", file=sys.stderr)
+    emit_envelope(build_error_envelope(message))
     raise SystemExit(2)
+
+
+class EnvelopeArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        print(f"sso_session_runner argument error: {message}", file=sys.stderr)
+        emit_envelope(build_error_envelope(message))
+        raise SystemExit(2)
 
 
 def validate_digits(value: str | None, field_name: str, pattern: re.Pattern[str]) -> str | None:
@@ -66,8 +91,8 @@ def build_user_login_url(user_id: str, from_ts: str | None, to_ts: str | None) -
         from_ts_int = int(from_ts or "0")
         to_ts_int = int(to_ts or "0")
 
-    if from_ts_int > to_ts_int:
-        die("from_timestamp must be <= to_timestamp")
+    if from_ts_int >= to_ts_int:
+        die("from_timestamp must be < to_timestamp")
 
     window_ms = to_ts_int - from_ts_int
     over_reliable_window = window_ms > RELIABLE_WINDOW_MS
@@ -76,12 +101,14 @@ def build_user_login_url(user_id: str, from_ts: str | None, to_ts: str | None) -
         "userId": user_id,
         "did": "",
         "query": "",
+        "recallSource": RECALL_SOURCE,
         "from_timestamp": str(from_ts_int),
         "to_timestamp": str(to_ts_int),
     }
-    url = f"{PLATFORM_BASE['user_login_unified_log']}?{urlencode(params)}"
+    url = f"{PLATFORM_BASE['user_login_unified_log']}?{urlencode(params, safe=',')}"
     metadata = {
         "reliable_window_days": RELIABLE_WINDOW_DAYS,
+        "recall_source": RECALL_SOURCE,
         "default_window_used": default_window_used,
         "over_reliable_window": over_reliable_window,
         "login_log_window_incomplete": over_reliable_window,
@@ -100,7 +127,7 @@ def build_archives_profile_url(user_id: str) -> tuple[str, dict[str, object]]:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = EnvelopeArgumentParser(
         description="Validate and construct whitelisted readonly SSO session URLs."
     )
     parser.add_argument("--platform_key", required=True, choices=sorted(PLATFORM_BASE))
@@ -123,17 +150,25 @@ def main(argv: list[str] | None = None) -> int:
         url, metadata = build_archives_profile_url(user_id or "")
 
     output = {
+        "schema_version": "sso_session_runner_envelope_v1",
+        "status": "success",
         "ok": True,
-        "dry_run_only": True,
-        "platform_key": args.platform_key,
-        "constructed_url": url,
+        "result": {
+            "dry_run_only": True,
+            "platform_key": args.platform_key,
+            "constructed_url": url,
+        },
         "metadata": metadata,
-        "sensitive_auth_output": False,
-        "dataagent_called": False,
-        "platform_write_action": False,
-        "real_platform_request_executed": False,
+        "security": {
+            "sensitive_auth_output": False,
+            "dataagent_called": False,
+            "platform_write_action": False,
+            "real_platform_request_executed": False,
+        },
+        "error": None,
+        "logs": [],
     }
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    emit_envelope(output)
     return 0
 
 
