@@ -3951,3 +3951,59 @@
 - input: 检查 run log 的 safety boundary。
 - expected_runtime_behavior: no_write_no_dataagent_call
 - expected_output_boundary: `platform_write_action=false`、`dataagent_called=false`、`hive_called=false`，且不输出 cookie/token/session/header。
+
+## 442. ATO pos001 browser smoke test run exists
+
+- test_id: ATO-BROWSER-SMOKE-001
+- input: 检查 `computer_use_poc/run_logs/ato_pos001_browser_smoke_test_run_v1.md`。
+- expected_runtime_behavior: browser_smoke_test_run_logged
+- expected_output_boundary: run log 记录 `archives_observation`、`strategy_or_event_observation`、source quality、evidence card update 和 readonly boundary。
+
+## 443. ATO pos001 archives observation status ok
+
+- test_id: ATO-BROWSER-SMOKE-002
+- input: 档案中心 browser observation。
+- expected_runtime_behavior: archives_observation_status_ok
+- expected_output_boundary: `archives_observation status: ok`；当前账号状态正常只能作为当前状态，不得作为 event_time 历史反证。
+
+## 444. ATO pos001 strategy observation status ok
+
+- test_id: ATO-BROWSER-SMOKE-003
+- input: 天狮 / 策略平台 browser same-origin fetch。
+- expected_runtime_behavior: strategy_or_event_observation_status_ok
+- expected_output_boundary: `strategy_or_event_observation status: ok`；可读取 event-day 策略命中，但不直接等同 ATO 证据。
+
+## 445. ATO pos001 browser observation smoke test pass
+
+- test_id: ATO-BROWSER-SMOKE-004
+- input: browser observation smoke test conclusion。
+- expected_runtime_behavior: browser_observation_smoke_test_pass
+- expected_output_boundary: 档案中心和天狮均可通过 agent-browser 路径补齐，browser observation 数据质量高于纯 API-direct 查询。
+
+## 446. ANTICRAWL_COMMON is not direct ATO evidence
+
+- test_id: ATO-BROWSER-SMOKE-005
+- input: event_time 当天存在 `ANTICRAWL_COMMON` 强置信阻止命中。
+- expected_runtime_behavior: anticrawl_common_not_direct_ato_evidence
+- expected_output_boundary: 策略命中是平台风控命中证据，不是 ATO 直接证据；只能作为 medium evidence 或上下文补证。
+
+## 447. Current account normal status is not counter evidence
+
+- test_id: ATO-BROWSER-SMOKE-006
+- input: 档案中心当前账号状态显示正常。
+- expected_runtime_behavior: current_account_normal_not_counter_evidence
+- expected_output_boundary: 当前正常状态可能是封禁解除、限时封禁恢复或 registry 滞后，不得写成 event_time 无异常反证。
+
+## 448. ACCOUNT LOGIN no hit is not counter evidence
+
+- test_id: ATO-BROWSER-SMOKE-007
+- input: ACCOUNT / LOGIN 类策略无命中。
+- expected_runtime_behavior: account_login_no_hit_not_counter_evidence
+- expected_output_boundary: ACCOUNT / LOGIN 无命中不能说明无盗号、无 token 滥用或无 Web/H5 session 异常。
+
+## 449. Offline Hive DataAgent still needed after browser smoke
+
+- test_id: ATO-BROWSER-SMOKE-008
+- input: pos_001 browser smoke test 后仍缺发布审计 / token / Web-H5 session / 封禁原因。
+- expected_runtime_behavior: offline_hive_dataagent_still_needed
+- expected_output_boundary: 仍需 offline Hive / DataAgent query plan；不能基于 browser smoke test 形成最终 ATO 结论。
