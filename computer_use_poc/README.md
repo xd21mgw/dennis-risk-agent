@@ -370,3 +370,20 @@ release_status: release_candidate_not_final
 - release 包更新。
 - 真实策略发布。
 - DataAgent 自动调用。
+
+## ATO Batch Input / Output Contract
+
+ATO 批量 case analysis 当前新增 v1 输入输出契约，入口位于：
+
+- `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_input_contract_v1.md`
+- `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md`
+- `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md`
+- `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md`
+
+核心口径：
+
+- 输入推荐规模为 5-20 cases。
+- 必填字段是 `case_id`、`user_id`、`event_time`、`abnormal_action`。
+- 输出固定包含 batch summary、case registry quality、per-case evidence cards、batch pattern summary、source coverage、missing evidence、candidate strategy direction、manual review boundary 和 next actions。
+- 每个核心结论必须引用 `evidence_source` / `source_quality`。
+- strategy 只能是 candidate direction，不自动上线，不自动处置。

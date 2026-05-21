@@ -87,10 +87,28 @@
 
 能力链路：
 
-1. `batch_case_analysis`：标准化 case registry。
-2. 单 case evidence card：输出 strong / medium / weak / counter / missing evidence。
-3. pattern summary：聚合 common entity、device/IP/login、behavior path、shared missing evidence。
-4. strategy direction draft：只输出候选策略方向、误伤风险、补证建议、AB / 查杀分离评估建议。
+1. `batch_case_analysis`：先执行 input contract check，确认必填字段、规模和 case type。
+2. 标准化 case registry / case table：只纳入 ATO 账号控制权异常 case。
+3. 单 case evidence card：输出 strong / medium / weak / counter / missing evidence。
+4. pattern summary：聚合 common entity、device/IP/login、behavior path、shared missing evidence。
+5. source coverage summary：展示 evidence_source / source_quality，标明 stale / partial / blocked source。
+6. strategy direction draft：只输出候选策略方向、误伤风险、补证建议、AB / 查杀分离评估建议。
+
+Input / output contract：
+
+- input contract: `ato_batch_input_contract_v1.md`。
+- output contract: `ato_batch_output_contract_v1.md`。
+- status transition: `ato_batch_status_transition_v1.md`。
+- user interaction examples: `ato_batch_user_interaction_examples_v1.md`。
+
+缺字段降级路径：
+
+- 缺 `user_id`：返回 `missing_user_id` / `needs_fields`，不生成事实结论。
+- 缺 `event_time`：返回 `missing_event_time`，不能判断登录日志窗口，也不能输出 ATO 强结论。
+- 缺 `abnormal_action`：返回 `missing_abnormal_action`，不能确认账号控制权异常后的后置动作。
+- 缺 `device_id`：进入 `missing_evidence`，不直接调用设备风险补证。
+- case 数超过 v1 范围或候选过多：返回 `too_many_candidates`，先缩小范围或进入 Plan。
+- 非 ATO 类型：返回 `unsupported_case_type`，转对应 batch 场景，不强行纳入 ATO。
 
 可选后续补证：
 

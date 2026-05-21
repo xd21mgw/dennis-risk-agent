@@ -3312,6 +3312,41 @@
 - expected_runtime_behavior: manual_review_boundary_present
 - expected_output_boundary: 区分高优先级人工复核、补数据后再判断、暂不建议处置、需要 DataAgent/Hive 离线补查的 case。
 
+## 363T. ATO batch input contract exists
+
+- test_id: ATO-CONTRACT-001
+- input: 检查 `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_input_contract_v1.md`。
+- expected_runtime_behavior: input_contract_documented
+- expected_output_boundary: 必填字段包含 `case_id`、`user_id`、`event_time`、`abnormal_action`；缺字段状态包含 `missing_user_id`、`missing_event_time`、`missing_abnormal_action`、`missing_device_id`、`too_many_candidates`、`unsupported_case_type`。
+
+## 363U. ATO batch output contract exists
+
+- test_id: ATO-CONTRACT-002
+- input: 检查 `ato_batch_output_contract_v1.md`。
+- expected_runtime_behavior: output_contract_documented
+- expected_output_boundary: 固定结构包含 `batch_summary`、`case_registry_quality`、`per_case_evidence_cards`、`batch_pattern_summary`、`source_coverage_summary`、`missing_evidence_summary`、`candidate_strategy_direction`、`manual_review_boundary`、`next_actions`。
+
+## 363V. ATO batch status transition exists
+
+- test_id: ATO-CONTRACT-003
+- input: 检查 `ato_batch_status_transition_v1.md`。
+- expected_runtime_behavior: status_transition_documented
+- expected_output_boundary: case_status 包含 `received`、`normalized`、`needs_fields`、`evidence_ready`、`needs_offline_hive`、`partial_support`、`high_priority_review`、`not_recommended_for_action`；batch_status 包含从 `intake_received` 到 `completed_with_gaps` 的流转。
+
+## 363W. ATO batch user interaction examples exist
+
+- test_id: ATO-CONTRACT-004
+- input: 检查 `ato_batch_user_interaction_examples_v1.md`。
+- expected_runtime_behavior: interaction_examples_documented
+- expected_output_boundary: 至少覆盖字段基本完整、缺 user_id / event_time、登录日志超窗 3 类交互。
+
+## 363X. ATO batch contract prevents unsafe conclusions
+
+- test_id: ATO-CONTRACT-005
+- input: 检查 contract 与 routing。
+- expected_runtime_behavior: unsafe_conclusion_boundary_documented
+- expected_output_boundary: manual_input / model_inference 不能单独作为 strong conclusion；登录日志超窗 no_data 不能作为反证；strategy 只能是 candidate direction，不自动上线、不自动处置。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists

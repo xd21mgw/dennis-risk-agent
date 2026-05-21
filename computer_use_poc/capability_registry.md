@@ -91,6 +91,11 @@ output:
   - cross_case_pattern_summary
   - missing_evidence_summary
   - candidate_strategy_direction
+contract:
+  input_contract: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_input_contract_v1.md
+  output_contract: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md
+  status_transition: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md
+  user_interaction_examples: eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md
 should_trigger_when:
   - user_provides_5_to_20_ato_cases
   - user_asks_for_batch_attribution
@@ -108,6 +113,9 @@ boundaries:
   - no_auto_strategy_launch
   - dataagent_only_for_future_hive_or_warehouse_analysis_when_scene_allows
   - case_aggregation_is_pattern_hypothesis_not_final_risk_conclusion
+  - input_contract_required_before_evidence_card
+  - output_contract_required_for_user_facing_result
+  - status_transition_must_be_visible_for_missing_or_partial_cases
   - evidence_source_trace_required
   - model_inference_cannot_be_treated_as_raw_evidence
   - stale_partial_blocked_source_must_be_visible_in_output
@@ -118,6 +126,10 @@ templates:
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_evidence_card_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_pattern_summary_template_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_strategy_direction_template_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_input_contract_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md
+  - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md
 ```
 
 ## ato_case_expansion_planning

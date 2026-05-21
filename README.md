@@ -117,6 +117,10 @@ codex
 - `ato_batch_evidence_card_template_v1.md`：单 case 证据卡。
 - `ato_batch_pattern_summary_template_v1.md`：批量模式聚合。
 - `ato_batch_strategy_direction_template_v1.md`：候选策略方向。
+- `ato_batch_input_contract_v1.md`：批量 case 输入契约，定义必填字段、缺字段状态和 5-20 cases 推荐规模。
+- `ato_batch_output_contract_v1.md`：批量分析固定输出结构，要求核心结论引用 evidence_source / source_quality。
+- `ato_batch_status_transition_v1.md`：case_status / batch_status 流转，防止缺字段或弱来源直接进入强结论。
+- `ato_batch_user_interaction_examples_v1.md`：3 类用户交互样例，覆盖字段完整、缺字段、登录日志超窗。
 - `ato_case_expansion_plan_v1.md`：单个或少量 ATO case 的举一返三扩展方案，围绕账号控制权异常、攻击链路和黑产基础设施扩展，而不是按相同昵称 / 简介扩展。
 
 ## Batch Analysis 通用框架
