@@ -3270,6 +3270,48 @@
 - expected_runtime_behavior: block_strong_conclusion_from_weak_source
 - expected_output_boundary: manual_input 只能作为 clue；model_inference 只能作为 hypothesis，不能当 raw evidence。
 
+## 363N. ATO batch minimal workflow dry-run exists
+
+- test_id: ATO-WORKFLOW-001
+- input: 检查 `computer_use_poc/run_logs/ato_batch_analysis_minimal_workflow_dry_run_v1.md`。
+- expected_runtime_behavior: minimal_workflow_dry_run_logged
+- expected_output_boundary: dry-run 覆盖 8-12 个脱敏模拟 ATO case，并明确不调用真实 DataAgent、不访问平台、不更新 release。
+
+## 363O. ATO workflow dry-run includes case_registry summary
+
+- test_id: ATO-WORKFLOW-002
+- input: 检查 minimal workflow dry-run。
+- expected_runtime_behavior: case_registry_summary_present
+- expected_output_boundary: 包含 case 数量、case 类型分布、核心实体字段覆盖和缺失字段情况。
+
+## 363P. ATO workflow dry-run includes evidence cards
+
+- test_id: ATO-WORKFLOW-003
+- input: 检查 minimal workflow dry-run 的单 case evidence card。
+- expected_runtime_behavior: evidence_card_summary_present
+- expected_output_boundary: 每个 case 包含 strong / medium / weak / counter / missing evidence，且证据带 evidence_source / source_quality。
+
+## 363Q. ATO workflow dry-run includes pattern and source coverage
+
+- test_id: ATO-WORKFLOW-004
+- input: 检查 minimal workflow dry-run 的 batch pattern summary 和 source coverage summary。
+- expected_runtime_behavior: pattern_and_source_coverage_present
+- expected_output_boundary: 包含 case 聚类、共性实体/设备/IP/登录/行为路径、共性缺口、可疑攻击路径、confidence level 和来源覆盖。
+
+## 363R. ATO workflow dry-run strategy direction remains candidate-only
+
+- test_id: ATO-WORKFLOW-005
+- input: 检查 minimal workflow dry-run 的 candidate strategy direction。
+- expected_runtime_behavior: candidate_strategy_only
+- expected_output_boundary: 策略方向包含误伤风险、补证建议、AB / 查杀分离 / 人工复核建议；不得输出自动上线结论。
+
+## 363S. ATO workflow dry-run includes manual review boundary
+
+- test_id: ATO-WORKFLOW-006
+- input: 检查 minimal workflow dry-run 的 manual review boundary。
+- expected_runtime_behavior: manual_review_boundary_present
+- expected_output_boundary: 区分高优先级人工复核、补数据后再判断、暂不建议处置、需要 DataAgent/Hive 离线补查的 case。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists
