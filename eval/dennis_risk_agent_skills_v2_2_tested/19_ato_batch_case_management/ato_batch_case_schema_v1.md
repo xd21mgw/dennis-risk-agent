@@ -25,7 +25,7 @@
 | `abnormal_action` | string | 是 | 异常动作，如发布、关注、换绑、改密、登录验证 | 只描述现象 |
 | `user_claim` | string | 否 | 用户申诉摘要 | 弱证据或线索，不作为强证据 |
 | `source_channel` | string | 否 | 来源渠道，如客服、申诉、人工抽样、历史回归 | 不代表可信等级 |
-| `available_evidence` | list/string | 否 | 当前已有证据摘要 | 仅记录已知材料，不伪造查询结果 |
+| `available_evidence` | list/string/object | 否 | 当前已有证据摘要与 source metadata | 仅记录已知材料，不伪造查询结果；必须说明证据来源 |
 | `missing_evidence` | list/string | 否 | 仍缺的关键证据 | 用于后续补证计划 |
 | `initial_risk_hint` | string | 否 | 初始风险线索，如疑似钓鱼、token 复用、OAuth 滥用 | 只是 hint，不是结论 |
 | `current_status` | enum/string | 是 | 当前处理状态 | 见状态枚举 |
@@ -46,6 +46,19 @@ ato_batch_case_minimum:
   source_channel:
   available_evidence:
     - evidence_item:
+      evidence_source:
+        source_name:
+        source_type:
+        source_tool_or_hand:
+        source_platform:
+        collected_at:
+        evidence_time_range:
+        raw_reference:
+      source_quality:
+        freshness_status:
+        freshness_risk:
+        permission_status:
+        reliability_level:
   missing_evidence:
     - missing_item:
   initial_risk_hint:
@@ -156,6 +169,37 @@ DataAgent 仍只作为 Hive / 数仓取数分析能力，不是默认万能数�
 | `execution_status` | 执行状态 | 见状态枚举 |
 | `conclusion_support` | 证据支持等级 | 由 Dennis Agent 基于 evidence 输出，不是人工最终定性 |
 | `provider_conclusion_hint` | Data Agent 结论性提示 | 只能作为 provider hint，不能替代 Dennis 判断 |
+
+### 4.1 available_evidence source metadata
+
+`available_evidence` 不允许只写“有登录异常”“有设备异常”这类无来源描述。每条 evidence 至少应包含：
+
+```yaml
+available_evidence:
+  - evidence_id:
+    evidence_item:
+    evidence_value:
+    evidence_source:
+      source_name:
+      source_type: internal_platform_api / browser_dom_read / screenshot_manual_read / dataagent_hive / manual_input / model_inference / historical_doc
+      source_tool_or_hand:
+      source_platform:
+      collected_at:
+      evidence_time_range:
+      raw_reference: internal_safe_reference_only
+    source_quality:
+      freshness_status: fresh / stale / over_reliable_window / unknown
+      freshness_risk: none / low / medium / high
+      permission_status: success / partial / permission_blocked / auth_blocked / unknown
+      reliability_level: high / medium / low / model_inference_only
+```
+
+边界：
+
+- `manual_input` 只能作为线索或弱证据，不能单独支撑 strong conclusion。
+- `model_inference` 不能当作原始证据。
+- `dataagent_hive` 只能表示已授权的 Hive / 数仓取数分析结果，不是万能数据底座。
+- raw_reference 只能是内部安全引用，不得包含 cookie / token / session / header 或敏感原文。
 
 ## 5. 枚举
 

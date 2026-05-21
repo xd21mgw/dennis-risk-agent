@@ -108,6 +108,9 @@ boundaries:
   - no_auto_strategy_launch
   - dataagent_only_for_future_hive_or_warehouse_analysis_when_scene_allows
   - case_aggregation_is_pattern_hypothesis_not_final_risk_conclusion
+  - evidence_source_trace_required
+  - model_inference_cannot_be_treated_as_raw_evidence
+  - stale_partial_blocked_source_must_be_visible_in_output
 templates:
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_case_schema_v1.md
   - eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_case_registry_template_v1.csv

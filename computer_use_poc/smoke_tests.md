@@ -3214,6 +3214,34 @@
 - expected_runtime_behavior: mark_offline_hive_required
 - expected_output_boundary: 超窗不调用在线日志做历史验证；no_data 不能作为无盗号反证。
 
+## 363F. ATO evidence card includes evidence_source
+
+- test_id: ATO-SOURCE-001
+- input: 检查 `ato_batch_evidence_card_template_v1.md`。
+- expected_runtime_behavior: evidence_source_metadata_required
+- expected_output_boundary: evidence card 包含 `evidence_source` 和 `source_quality`，字段覆盖 source_name / source_type / source_tool_or_hand / source_platform / collected_at / evidence_time_range / raw_reference。
+
+## 363G. ATO pattern summary includes source coverage
+
+- test_id: ATO-SOURCE-002
+- input: 检查 `ato_batch_pattern_summary_template_v1.md`。
+- expected_runtime_behavior: source_coverage_summary_required
+- expected_output_boundary: batch pattern summary 包含 `source_coverage_summary`，能说明每类核心证据来自哪些 source、哪些 case 只有弱来源、哪些 case 缺关键来源。
+
+## 363H. Model inference cannot be only source for strong conclusion
+
+- test_id: ATO-SOURCE-003
+- input: 证据来源只有 `model_inference`。
+- expected_runtime_behavior: downgrade_to_hypothesis_or_missing_evidence
+- expected_output_boundary: `model_inference` 不能当作原始证据，不能单独支撑 strong conclusion。
+
+## 363I. Login no_data beyond reliable window is freshness risk
+
+- test_id: ATO-SOURCE-004
+- input: 登录日志 no_data 且异常时间超过在线可靠窗口。
+- expected_runtime_behavior: mark_freshness_window_risk
+- expected_output_boundary: 必须标记 freshness/window risk、`login_log_window_incomplete`、`offline_hive_required`；不能作为 counter evidence。
+
 # Black Market Account Matrix Batch Structure Tests
 
 ## 364. Black market account matrix directory exists
