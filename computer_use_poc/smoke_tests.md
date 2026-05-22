@@ -4324,3 +4324,80 @@
 - input: `reviewer_final.reviewer_decision=pending`。
 - expected_runtime_behavior: deposition_blocked_until_review
 - expected_output_boundary: 不得触发任何 Skill / Prompt / routing / runtime summary / release / regression 修改；只有 `reviewer_decision=accepted` 后 Codex 才能根据 `codex_followup_prompt` 做落盘沉淀。
+
+## 495. Semi-open readiness review exists
+
+- test_id: SEMI-OPEN-READINESS-001
+- input: 检查 `outputs/intermediate/dennis_risk_agent_semi_open_release_readiness_review_v1.md`。
+- expected_runtime_behavior: readiness_review_documented
+- expected_output_boundary: 文档明确本次是全场景半开放 release readiness，不是 ATO-only；本轮不实际打包。
+
+## 496. Semi-open filelist candidate exists
+
+- test_id: SEMI-OPEN-READINESS-002
+- input: 检查 `outputs/intermediate/dennis_risk_agent_semi_open_release_filelist_candidate_v1.md`。
+- expected_runtime_behavior: filelist_candidate_documented
+- expected_output_boundary: 文件按 runtime entry、routing、capability、各非 ATO 场景、ATO deep sample、safety、question_collection、validation 等模块列出 include / exclude / review_needed。
+
+## 497. Semi-open exclusion list exists
+
+- test_id: SEMI-OPEN-READINESS-003
+- input: 检查 `outputs/intermediate/dennis_risk_agent_semi_open_release_exclusion_list_v1.md`。
+- expected_runtime_behavior: exclusion_list_documented
+- expected_output_boundary: 明确排除 auth state、cookie/token/session/header、真实 observation 原始数据、历史 run_logs 全量、outputs/dist、未审核 eval pilot、源码/Prompt/Case 全量资产等。
+
+## 498. Semi-open manifest patch plan exists
+
+- test_id: SEMI-OPEN-READINESS-004
+- input: 检查 `outputs/intermediate/dennis_risk_agent_semi_open_release_manifest_patch_plan_v1.md`。
+- expected_runtime_behavior: manifest_patch_plan_documented
+- expected_output_boundary: 说明后续实际打包时如何更新 release README、manifest、final_package_manifest 和 question_collection 映射。
+
+## 499. Semi-open test prompt matrix exists
+
+- test_id: SEMI-OPEN-READINESS-005
+- input: 检查 `outputs/intermediate/dennis_risk_agent_semi_open_test_prompt_matrix_v1.md`。
+- expected_runtime_behavior: full_scenario_prompt_matrix_documented
+- expected_output_boundary: prompt matrix 按系统能力分类，覆盖 ATO、反爬、协议、群控/设备、小号、活动、流量、导流、插件/破解包、安全抽取攻击和 question_collection。
+
+## 500. Semi-open readiness run log exists
+
+- test_id: SEMI-OPEN-READINESS-006
+- input: 检查 `computer_use_poc/run_logs/semi_open_release_readiness_review_run_v1.md`。
+- expected_runtime_behavior: readiness_run_logged
+- expected_output_boundary: run log 记录本轮未访问平台、未调用 DataAgent、未打包、未更新 outputs/dist，并记录全场景覆盖结论。
+
+## 501. Semi-open readiness is not ATO-only
+
+- test_id: SEMI-OPEN-READINESS-007
+- input: readiness review 能力范围。
+- expected_runtime_behavior: full_scenario_release_scope
+- expected_output_boundary: ATO 是深度样板，但非 ATO 能力必须作为正式半开放能力纳入，不得只作为附录。
+
+## 502. question_collection is full-scenario
+
+- test_id: SEMI-OPEN-READINESS-008
+- input: release manifest plan 中的 question_collection。
+- expected_runtime_behavior: question_collection_full_scenario
+- expected_output_boundary: question_collection 记录所有场景用户问题、质量风险信号、候选学习价值和人工审核状态，不只服务 ATO。
+
+## 503. DataAgent is not universal substrate
+
+- test_id: SEMI-OPEN-READINESS-009
+- input: readiness review 的 DataAgent 边界。
+- expected_runtime_behavior: dataagent_boundary_preserved
+- expected_output_boundary: DataAgent 定位为 Hive / 公司数仓取数分析；非 ATO 默认不调用 DataAgent；需要查数时生成 query plan 或等待确认。
+
+## 504. Semi-open readiness does not access platform or DataAgent
+
+- test_id: SEMI-OPEN-READINESS-010
+- input: 本轮 readiness review。
+- expected_runtime_behavior: documentation_only
+- expected_output_boundary: 不访问真实平台，不调用 DataAgent，不读取或打印 cookie/token/session/header/auth state，不更新 outputs/dist。
+
+## 505. Pending review does not modify brain in release readiness
+
+- test_id: SEMI-OPEN-READINESS-011
+- input: question_collection 候选进入 release。
+- expected_runtime_behavior: pending_review_no_auto_brain_update
+- expected_output_boundary: `reviewer_decision=pending` 不得自动改 Skill、Prompt、runtime summary、release 包或 regression。

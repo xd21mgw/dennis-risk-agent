@@ -54,7 +54,7 @@ capability_id: learning_candidate_capture
 chinese_name: 用户问题收集与学习候选队列
 layer: learning_candidate_infrastructure
 status: documented
-purpose: 收集半开放用户真实问题和反馈，识别高频需求、能力缺口、路由问题、证据模板缺口和安全绕过问题，生成 question_record / candidate_queue / case_learning_note 候选材料
+purpose: 收集半开放用户真实问题和反馈，识别全场景高频需求、能力缺口、路由问题、证据模板缺口和安全绕过问题，生成 question_record / candidate_queue / case_learning_note 候选材料
 input:
   - sanitized_user_question
   - answer_mode
@@ -67,6 +67,7 @@ output:
   - learning_candidate_queue_row
   - case_learning_note_candidate
 boundaries:
+  - full_scenario_capability_not_ato_only
   - not_a_risk_judgement_hand
   - no_real_platform_access
   - no_dataagent_call

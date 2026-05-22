@@ -186,6 +186,27 @@ Security Preflight Current Status：
 - `computer_use_poc/question_collection/question_collection_text_regression_cases_v1.yaml`
 - `computer_use_poc/question_collection/question_collection_text_regression_run_v1.md`
 
+## 4-F. Semi-open Release Readiness Review
+
+本阶段新增全场景半开放 release readiness review。
+
+核心口径：
+
+- 这是全场景半开放 release readiness，不是 ATO 专项测试。
+- ATO 是当前最完整的深度样板能力。
+- 非 ATO 场景是正式专家认知、回答话术、证据框架、查证计划和策略建议能力，不应只作为附录。
+- question_collection 是全场景问题观测与学习候选队列，不只服务 ATO。
+- 本轮只做本地文档、manifest、检查清单和打包计划，未实际打包，未更新 `outputs/dist`。
+
+readiness 资产：
+
+- `outputs/intermediate/dennis_risk_agent_semi_open_release_readiness_review_v1.md`
+- `outputs/intermediate/dennis_risk_agent_semi_open_release_filelist_candidate_v1.md`
+- `outputs/intermediate/dennis_risk_agent_semi_open_release_exclusion_list_v1.md`
+- `outputs/intermediate/dennis_risk_agent_semi_open_release_manifest_patch_plan_v1.md`
+- `outputs/intermediate/dennis_risk_agent_semi_open_test_prompt_matrix_v1.md`
+- `computer_use_poc/run_logs/semi_open_release_readiness_review_run_v1.md`
+
 ## 4-A. Multi-source e2e entry resolution rule
 
 多源 e2e 前，每个 source 必须先完成 `entry_resolution`。
