@@ -128,6 +128,36 @@ browser_session_check:
 - 目标平台不可用。
 - 目标 Tab 不存在。
 
+### 2.5.2 sso_session.py cookie 到 agent-browser Chrome 桥接
+
+当前半开放 runtime 中，`sso_session.py` / `sso_session_runner.py` 与 `agent-browser` Chrome session 是两个不同执行面。SSO API 能构造只读 URL 或验证 session，不代表 browser session 已经具备档案中心 / 天狮的可用登录态。
+
+桥接前置检查：
+
+```yaml
+browser_session_bridge:
+  api_sso_session_available:
+  browser_chrome_profile_available:
+  cookie_bridge_supported:
+  target_domain:
+  same_origin_fetch_possible:
+  browser_page_logged_in:
+  bridge_status: ready / cookie_bridge_missing / manual_login_required / unsupported
+  forbidden_output:
+    - cookie
+    - token
+    - session
+    - header
+```
+
+规则：
+
+- 不得在报告、run log、KIM 回复或调试日志中打印 cookie / token / session / header。
+- 如果无法把 SSO cookie 安全注入 agent-browser Chrome，返回 `cookie_bridge_missing` 或 `permission_or_runtime_gap`。
+- `cookie_bridge_missing` 不等于平台无数据，不等于用户无风险。
+- 不得反复重试 browser 登录导致 timeout；一次 preflight 失败后应快速降级为 partial evidence card。
+- 如果同源页面已登录，可使用 same-origin fetch / DOM read；如返回 HTML auth page，应标记 `auth_session_issue`，不得当 JSON 解析。
+
 #### 2.5.1 档案中心 independent login recoverable preflight
 
 档案中心可能先跳转到 `account.p.adm-corp.kuaishou.com` 独立登录页。该状态是 auth preflight，不是页面无数据。

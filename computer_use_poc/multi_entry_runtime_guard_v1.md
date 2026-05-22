@@ -55,6 +55,7 @@ Applies to:
 
 - ATO single-case fact judgement.
 - User provides clear `user_id`, event time window, and abnormal action.
+- Explicit single-entity query such as "帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中 / 判断这个具体 case".
 
 Behavior:
 
@@ -63,6 +64,8 @@ Behavior:
 - No disposition.
 - No automatic expansion.
 - No DataAgent unless explicitly authorized by a separate offline analysis flow.
+- If a source is blocked, timed out, or unavailable, output partial evidence card instead of empty methodology.
+- Required partial fields: `completed_sources`, `blocked_sources`, `timeout_sources`, `parse_error_sources`, `missing_evidence`, `source_quality`, `freshness_status`, `permission_status`, `next_action`.
 
 ### B. plan mode
 
@@ -73,6 +76,8 @@ Applies to:
 - Same attack batch check.
 - Expansion planning.
 - Strategy evaluation / kill-vs-review separation / batch expansion.
+- Strategy recommendation / monitoring metrics / grey release / false-positive control / governance design even when the prompt contains `user_id`.
+- 3+ `user_id` or `device_id` batch analysis unless the user has explicitly confirmed real batch execution cost and scope.
 
 Behavior:
 
@@ -81,6 +86,34 @@ Behavior:
 - Do not query more users.
 - Only output DataAgent / Hive query plan.
 - Must explicitly include `offline_hive_required=true` and `DataAgent_plan_needed=true`.
+- For batch prompts, output case registry requirements, pattern summary plan, evidence layering, missing evidence, and DataAgent/Hive query plan.
+
+### B2. evidence boundary mode
+
+Applies to principle questions:
+
+- "登录日志查不到异常登录，是不是可以排除盗号？"
+- "设备关联是否能直接判定作弊？"
+- "只有模型高风险分，能不能作为强证据？"
+- "只有用户反馈，没有平台证据，能不能判定账号被盗？"
+
+Behavior:
+
+- Pure analysis by default.
+- Do not call platform tools unless the user explicitly asks to query a concrete `user_id` / `device_id`.
+- Respond within short-answer budget.
+- Explain that `no_data`, `timeout`, `blocked`, model scores, user feedback and device association are not standalone strong evidence.
+
+### B3. non-ATO expert mode
+
+Applies to anti-crawler, protocol attack, traffic diversion, activity abuse, channel arbitrage, and generalized group-control questions without explicit platform lookup request.
+
+Behavior:
+
+- Expert analysis first.
+- Do not default to browser / Archives / Weapon.
+- Output attack-path hypothesis, evidence fields, low-cost validation plan and strategy direction.
+- If data is needed, produce readonly/API plan or DataAgent/Hive query plan, not execution by default.
 
 ### C. fast_ack / async_ack
 
@@ -138,6 +171,28 @@ If execution times out, parts 1-3 must still be returned.
 | KIM | Short message, latency sensitive, easy to timeout | Routing Summary first, fast_ack, concise evidence card |
 | APP | Can render structured cards and buttons | Separate cards for execution result, query plan, follow-up choices |
 | Web | Can carry longer reports and tables | Evidence table, run log link, exportable report, still obeying field policy |
+
+## 5A. Timeout, Browser, API Stability And Length Control
+
+Runtime fallback rules:
+
+- Browser auth blocked -> `permission_or_runtime_gap`.
+- 2FA -> `auth_factor_required`.
+- HTML / auth page returned to API or browser fetch -> `auth_session_issue`.
+- Cookie bridge missing -> `cookie_bridge_missing`.
+- JSON parse failure -> include `raw_response_type` and `parse_error`, then degrade to partial evidence.
+- Single source timeout must not become a bare timeout response.
+- Batch single-user failure must not block the whole batch plan or summary.
+
+Answer length:
+
+- Expert cognition answers default to about 500 Chinese characters.
+- Batch analysis defaults to about 800 Chinese characters.
+- KIM always prefers concise evidence card and safe_ref / follow-up for long details.
+
+Device SDK shorthand:
+
+- For "设备 SDK 指纹取数怎么看", answer directly with three layers: device risk labels, SDK fingerprint fields, and device-side corroboration boundary.
 
 ## 6. Field Output Classification
 

@@ -248,6 +248,115 @@ Step 3: ATO 单 case 精简 execution
 
 不要把整个混合请求都当成 execution task。
 
+## Semi-open Experience Patch v1
+
+半开放 Pilot 已上线且 P0=0。以下体验规则用于修复路由一致性、显式查询空研判、批量误执行、browser/auth 卡点和 timeout 体感。
+
+### 显式查询不空研判
+
+当用户明确说“帮我查 / 帮我看 / 看这个用户 / 看近期登录 / 看设备关联 / 看策略命中 / 看档案画像 / 判断这个具体 case / 这个 user_id 是否疑似 ATO / 这个 device_id 是否异常”时：
+
+- 默认进入 `single_entity_execution_mode`。
+- 能查则只读查；查不了必须输出 `permission_status` / `failure_reason`。
+- 必须输出 `completed_sources`、`blocked_sources`、`timeout_sources`、`missing_evidence`。
+- 不允许只给方法论或空研判。
+
+### ATO 单案优先在线只读 observation
+
+具体 `user_id` / `event_time` / `abnormal_action` 已存在时：
+
+- 默认 `single_entity_execution_mode`。
+- 优先在线只读 observation：登录日志、Weapon、档案中心、策略命中、前端行为。
+- 不默认走 DataAgent，不默认只给方法论。
+- timeout 默认 180s，复杂单用户 240s。
+- 失败时输出 partial evidence card。
+- DataAgent / Hive 只在超窗、3+ 批量、长窗口离线补查、复杂 SQL / Hive、发布链路 / token 长周期 / 跨表分析时，经用户确认后进入 query plan 或离线流程。
+
+### 证据边界问题默认纯分析
+
+以下问题默认进入 `evidence_boundary_mode`，30s 内纯分析，不自动查平台：
+
+- 登录日志 no_data 是否能排除盗号。
+- 设备关联是否能直接判定作弊。
+- 模型高风险分能否作为强证据。
+- 只有用户反馈能否判定盗号。
+- blocked / timeout / no_data 如何解释。
+
+边界：no_data / timeout / blocked 不是无风险强反证；设备关联只是候选风险；模型分是线索不是 raw evidence；用户反馈不是客观平台事实。
+
+### 策略设计优先 plan_mode
+
+只要主问题是灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案、怎么做、如何设计，即使包含 `user_id`，也默认 `strategy_recommendation_plan_mode`：
+
+- 不自动查平台。
+- 不主动问“是否直接调 API 查”。
+- 输出策略框架、灰度实验、误伤控制、监控指标、样本分层、取证字段。
+- 只有用户明确说“查这些用户 / 调平台 / 看登录日志 / 看 OAuth 授权记录”时才 execution。
+
+### 3+ 实体批量默认 batch plan_mode
+
+- 1-2 个实体：可进入 execution，timeout=180s。
+- 3+ `user_id` / `device_id` 或出现“这批 / 批量 / 多个 / 5个 / 100个 / pattern summary / 共性归因 / 分层判断”：默认 `batch_plan_mode`。
+- 不逐个在线查；输出 batch analysis plan、DataAgent/Hive query plan、case registry 字段、证据分层框架。
+- 用户确认成本后才允许 batch execution。
+
+### 非 ATO 不默认 browser
+
+反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析默认 `non_ato_expert_mode`：
+
+- 先专家分析，不默认 browser / 档案中心。
+- 输出攻击路径假设、取证字段、低成本补证计划。
+- 如需数据，优先 query plan / API 只读计划。
+
+### browser / 2FA / HTML 快速降级
+
+- browser auth blocked → `permission_or_runtime_gap`。
+- 2FA → `auth_factor_required`。
+- HTML / auth page → `auth_session_issue`。
+- cookie bridge missing → `cookie_bridge_missing`。
+- 不反复尝试，不裸 timeout；输出 partial evidence card。
+
+### timeout fallback
+
+任何 source timeout 都必须输出 partial evidence card：
+
+- `completed_sources`
+- `timeout_sources`
+- `blocked_sources`
+- `parse_error_sources`
+- `missing_evidence`
+- `current_confidence`
+- `source_quality`
+- `freshness_status`
+- `permission_status`
+- `next_action`
+- `whether_dataagent_required`
+
+timeout / no_data / blocked 不等于无风险。
+
+### API / SSO / JSON 稳定性
+
+- SSO 认证失败必须有重试上限。
+- JSON 解析失败输出 `raw_response_type` / `parse_error`。
+- HTML / 认证页快速识别为 `auth_session_issue`。
+- 批量中单个用户失败不阻断整体。
+- 每个 source 标记 `permission_status` / `freshness_status` / `reliability_level`。
+
+### 回答长度控制
+
+- 专家认知问答默认 500 字内。
+- 批量分析默认 800 字内。
+- 平台失败降级避免长模板。
+- 先给结论，再给证据，再给下一步。
+
+### 设备 SDK 问题默认三种解读
+
+用户问“设备 SDK 指纹取数怎么看”时，先直接给：
+
+1. 设备风险标签：root / hook / frida / 模拟器 / 双开 / 注入。
+2. SDK 指纹字段：did / oaid / android_id / boot_id / sensors / sim / lock / dev mode。
+3. 设备侧补证：账号风险旁证，不单独作为强定性。
+
 ### 入口差异
 
 - KIM：消息更短、更易 timeout，必须优先 Routing Summary、fast_ack、concise evidence card。

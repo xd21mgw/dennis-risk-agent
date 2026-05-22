@@ -146,6 +146,127 @@ Routing Summary:
 - 不在 KIM 中输出长报告、全量日志表或大段 raw observation。
 - Web 可以承载长报告，但仍必须遵守字段分层、DataAgent 边界和敏感字段脱敏。
 
+## 0B. Semi-open experience patch v1 响应模板
+
+### 显式查询 partial evidence card
+
+适用：用户明确要求查具体 `user_id` / `device_id` / 登录 / 设备 / 策略 / 档案画像，但部分 source 不可用。
+
+```text
+结论：当前只能形成 partial evidence card，不能空研判。
+
+已完成来源:
+- completed_sources:
+
+受阻来源:
+- blocked_sources:
+- timeout_sources:
+- parse_error_sources:
+
+证据分层:
+- strong:
+- medium:
+- weak:
+- counter:
+- missing_evidence:
+
+source quality:
+- freshness_status:
+- permission_status:
+- reliability_level:
+
+下一步:
+- next_action:
+- whether_dataagent_required:
+```
+
+边界：timeout / no_data / blocked 不是无风险反证；查不了要说明原因，不能只给方法论。
+
+### evidence boundary 短答模板
+
+适用：登录日志 no_data、设备关联、模型分、用户反馈、blocked/timeout/no_data 解释类原则问题。
+
+```text
+一句话：不能直接这么判。
+
+原因：
+- 这类信号属于线索 / 辅助证据 / 数据缺口，不是强结论。
+- no_data / timeout / blocked 不等于无风险。
+- 设备关联不等于作弊；模型分不等于 raw evidence；用户反馈不等于平台事实。
+
+最小补证：
+- 需要补哪些 source:
+- 哪些证据会增强判断:
+- 哪些反证能降低判断:
+```
+
+默认不查平台；用户明确要求查具体实体时才切到 execution。
+
+### strategy recommendation plan 模板
+
+适用：灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案，即使带 `user_id`。
+
+```text
+结论：这是策略 / 扩展设计问题，本轮不直接查平台。
+
+策略方向:
+- 候选规则 / 特征:
+- 适用范围:
+- 误伤风险:
+
+灰度验证:
+- 样本分层:
+- AB / 查杀分离:
+- 监控指标:
+
+补证计划:
+- 在线只读可查:
+- offline_hive_required:
+- DataAgent_plan_needed:
+```
+
+### non-ATO expert mode 模板
+
+适用：反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析。
+
+```text
+一句话判断:
+本质区分:
+可能攻击路径:
+最小取证字段:
+低成本补证计划:
+治理抓手:
+```
+
+默认不进 browser / 档案中心。需要数据时先给只读计划或 DataAgent/Hive query plan。
+
+### 设备 SDK 三层解读模板
+
+```text
+设备 SDK 指纹取数可以分三层看：
+1. 设备风险标签：root / hook / frida / 模拟器 / 双开 / 注入。
+2. SDK 指纹字段：did / oaid / android_id / boot_id / sensors / sim / lock / dev mode。
+3. 设备侧补证：只能作为账号风险旁证，不能单独作为强定性。
+```
+
+### 平台失败快速降级模板
+
+```text
+当前 source 未形成有效 observation：
+- failure_reason:
+- permission_status:
+- raw_response_type:
+- parse_error:
+- auth_factor_required:
+- auth_session_issue:
+- cookie_bridge_missing:
+
+解释边界：
+- 该失败不是无风险反证。
+- 不继续反复尝试，避免 timeout。
+- 当前结论降级为 partial / source_gap。
+```
+
 ### 回答骨架
 
 ```text

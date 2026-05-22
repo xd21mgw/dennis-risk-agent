@@ -41,6 +41,18 @@ Multi-entry runtime guard：
 - 所有入口在调用 Dennis 或 `sessions_spawn` 前，都必须先做 intent classification、execution / plan / fast_ack 判定、mixed request decomposition、field output policy selection、DataAgent execution boundary 和 response length / channel constraint。
 - KIM routing patch 是首个验证样例；APP / Web 应遵守 `multi_entry_runtime_guard_v1.md`，不要重新复制 KIM-only patch。
 
+Semi-open experience patch v1 路由补丁：
+
+- `explicit_query_not_empty_analysis`：用户明确说“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中 / 判断这个具体 case”等，默认 `single_entity_execution_mode` 或 partial evidence card；不能只输出方法论。
+- `single_entity_execution_mode`：ATO 单案有明确 `user_id` / `event_time` / `abnormal_action` 时，优先在线只读 observation，不默认绕 DataAgent；超窗、3+ 批量、长窗口离线补查、复杂 SQL/Hive 时才生成 DataAgent/Hive plan 并等待确认。
+- `evidence_boundary_mode`：登录日志 no_data、设备关联、模型分、用户反馈、blocked/timeout/no_data 解释类问题默认纯分析，不自动查平台。
+- `strategy_plan_mode_priority`：灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案类问题即使带 `user_id`，也默认 `strategy_recommendation_plan_mode`。
+- `batch_plan_mode`：3+ `user_id` / `device_id` 或“这批 / 批量 / 多个 / 5个 / 100个 / 共性归因 / 分层判断”默认 plan_mode，不逐个在线查。
+- `non_ato_browser_guard`：反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析先专家分析，不默认 browser / 档案中心。
+- `browser_session_bridge` / `auth_html_fast_fallback`：browser auth blocked、2FA、HTML/auth page、cookie bridge missing 均快速降级，不反复尝试。
+- `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
+- `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
+
 输出字段分层：
 
 - 所有场景输出必须按 `field_output_classification_policy_v1.md` 区分字段等级。

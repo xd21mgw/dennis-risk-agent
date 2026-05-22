@@ -47,6 +47,21 @@
 - `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
 - `learning_candidate_capture` 只负责用户问题收集、能力缺口识别和学习候选材料生成；Agent 可以自动记账，但不能自动改脑，所有 Skill / Prompt / routing / regression / release 改动都必须经过人工审核和 Codex 后续任务。
 
+## Semi-open Experience Patch v1 Modes
+
+这些 mode 是入口路由和回答体验约束，不一定对应新的平台 capability。
+
+| mode | trigger | default behavior | boundary |
+|---|---|---|---|
+| `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card | 不默认 DataAgent，不空研判 |
+| `evidence_boundary_mode` | no_data / timeout / blocked / 设备关联 / 模型分 / 用户反馈是否能定性 | 纯分析，30s 内短答 | 不自动查平台，不把弱信号当强证据 |
+| `strategy_recommendation_plan_mode` | 灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案 | 输出策略框架、补证字段、DataAgent/Hive query plan | 即使带 user_id 也不自动 execution |
+| `batch_plan_mode` | 3+ 用户 / 设备、批量、共性归因、分层判断 | 输出 batch plan、case registry 字段、证据分层框架 | 不逐个在线查，确认后才 batch execution |
+| `non_ato_expert_mode` | 反爬、协议、导流截流、活动作弊、渠道套利、群控泛化 | 专家分析 + 取证计划 + 策略建议 | 不默认 browser / 档案中心 |
+| `partial_evidence_card_fallback` | source timeout / blocked / parse error / auth issue | 输出 completed / blocked / timeout / missing evidence 和 next action | 不裸 timeout，不把失败当反证 |
+
+DataAgent/Hive 仅在超出在线可靠窗口、批量、长窗口、复杂 SQL、跨表分析或用户明确要求生成取数问题时进入 plan 或等待确认；不得泛化成默认执行底座。
+
 ## learning_candidate_capture
 
 ```yaml
