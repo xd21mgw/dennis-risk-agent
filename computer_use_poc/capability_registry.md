@@ -28,6 +28,7 @@
 | `ato_case_expansion_planning` | 对单个或少量 ATO case 设计举一返三扩展路径和 Hive 取数问题 | `ato_case_expansion_plan_v1.md` | plan only | documented | 围绕账号控制权异常和攻击链路扩展，不按昵称/简介扩展，不执行真实查询 |
 | `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
 | `batch_case_analysis_planned` | 多 case 批量研判的规划能力 | 后续 batch case registry / DataAgent only when scene allows | planned only | planned | 不默认批量扩散，不绕过审批，不替代单案证据闭环 |
+| `learning_candidate_capture` | 收集用户真实问题、识别能力缺口、生成候选队列和 case learning note | `computer_use_poc/question_collection/` schemas / templates | post-answer accounting only | documented | 不是风险研判手脚，不访问平台，不调用 DataAgent，不自动改 Skill / release |
 
 正式能力与平台适配器关系：
 
@@ -44,6 +45,58 @@
 - `ato_case_expansion_planning` 服务单个或少量 ATO case 的举一返三扩展设计，核心锚点是凭证 / token / OAuth / 登录态异常、改密 / 换绑 / 安全操作、基础设施和后置动作回连，不按相同昵称 / 简介扩展。
 - `black_market_account_matrix_batch_analysis` 当前是非 ATO 的账号矩阵 / 导流互动 / 养号池归因样板，不应污染 ATO 的账号控制权异常定义。
 - `batch_case_analysis_planned` 保留为更大范围批量研判的未来规划，不表示已开放批量执行。
+- `learning_candidate_capture` 只负责用户问题收集、能力缺口识别和学习候选材料生成；Agent 可以自动记账，但不能自动改脑，所有 Skill / Prompt / routing / regression / release 改动都必须经过人工审核和 Codex 后续任务。
+
+## learning_candidate_capture
+
+```yaml
+capability_id: learning_candidate_capture
+chinese_name: 用户问题收集与学习候选队列
+layer: learning_candidate_infrastructure
+status: documented
+purpose: 收集半开放用户真实问题和反馈，识别高频需求、能力缺口、路由问题、证据模板缺口和安全绕过问题，生成 question_record / candidate_queue / case_learning_note 候选材料
+input:
+  - sanitized_user_question
+  - answer_mode
+  - agent_observed_quality_risk_signals
+  - user_feedback
+  - suggested_scene
+  - suggested_capability
+output:
+  - question_record
+  - learning_candidate_queue_row
+  - case_learning_note_candidate
+boundaries:
+  - not_a_risk_judgement_hand
+  - no_real_platform_access
+  - no_dataagent_call
+  - no_sensitive_plaintext_output_or_storage
+  - no_cookie_token_session_header_recording
+  - no_auto_skill_update
+  - no_auto_prompt_update
+  - no_auto_routing_update
+  - no_auto_release_update
+  - reviewer_decision_pending_by_default
+recommended_followup_only_after_review:
+  - add_to_faq
+  - add_golden_case
+  - add_bad_case
+  - update_skill_summary
+  - update_routing
+  - update_evidence_template
+  - add_regression_case
+  - generate_dataagent_query_plan
+  - add_asset_extraction_guard_case
+templates:
+  - computer_use_poc/question_collection/README.md
+  - computer_use_poc/question_collection/question_record_schema_v1.md
+  - computer_use_poc/question_collection/question_learning_policy_v1.md
+  - computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv
+  - computer_use_poc/question_collection/user_feedback_capture_v1.md
+  - computer_use_poc/question_collection/case_learning_note_template_v1.md
+  - computer_use_poc/question_collection/question_collection_text_regression_cases_v1.yaml
+  - computer_use_poc/question_collection/question_collection_text_regression_run_v1.md
+```
 
 ## batch_analysis_framework
 

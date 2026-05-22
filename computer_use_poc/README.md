@@ -155,6 +155,37 @@ Security Preflight Current Status：
 - 后续准备真实半开放测试、接入真实 tool-call 链路或出现安全 bad case 时再恢复。
 - 当前覆盖矩阵见 `computer_use_poc/security_preflight_coverage_matrix.md`。
 
+## 4-E. Question Collection / Learning Candidate Queue
+
+`computer_use_poc/question_collection/` 是用户问题收集与学习候选队列模块。
+
+定位：
+
+- 收集半开放用户的真实问题和反馈。
+- 发现高频需求、能力缺口、路由问题、证据模板缺口和安全绕过问题。
+- 生成 `question_record`、`candidate_queue` 和 `case_learning_note` 候选材料。
+- `question_record` 拆分为 `agent_observed`、`agent_suggested`、`reviewer_final` 三层：Agent 只记录运行时信号和候选建议，最终质量评估与是否沉淀由 reviewer 决定。
+- 作为后续 FAQ、golden case、bad case、routing、evidence template、regression 的人工审核入口。
+
+边界：
+
+- Agent 可以自动“记账”，但不能自动“改脑”。
+- 该模块不会自动修改核心 Skill、Prompt、runtime summary、routing 或 release 包。
+- 高价值问题默认进入 `reviewer_decision=pending`，人工审核后才允许 Codex 执行沉淀任务。
+- 当前暂放 `computer_use_poc/question_collection/`；长期建议迁移到 `runtime/question_collection/` 或 `learning/question_collection/`。
+- 不访问真实内部平台，不调用 DataAgent，不保存 cookie / token / session / header。
+
+本阶段新增资产：
+
+- `computer_use_poc/question_collection/README.md`
+- `computer_use_poc/question_collection/question_record_schema_v1.md`
+- `computer_use_poc/question_collection/question_learning_policy_v1.md`
+- `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv`
+- `computer_use_poc/question_collection/user_feedback_capture_v1.md`
+- `computer_use_poc/question_collection/case_learning_note_template_v1.md`
+- `computer_use_poc/question_collection/question_collection_text_regression_cases_v1.yaml`
+- `computer_use_poc/question_collection/question_collection_text_regression_run_v1.md`
+
 ## 4-A. Multi-source e2e entry resolution rule
 
 多源 e2e 前，每个 source 必须先完成 `entry_resolution`。
@@ -379,6 +410,7 @@ ATO 批量 case analysis 当前新增 v1 输入输出契约，入口位于：
 - `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_output_contract_v1.md`
 - `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_status_transition_v1.md`
 - `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_user_interaction_examples_v1.md`
+- `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/ato_batch_real_case_pilot_checklist_v1.md`
 
 核心口径：
 
@@ -387,3 +419,4 @@ ATO 批量 case analysis 当前新增 v1 输入输出契约，入口位于：
 - 输出固定包含 batch summary、case registry quality、per-case evidence cards、batch pattern summary、source coverage、missing evidence、candidate strategy direction、manual review boundary 和 next actions。
 - 每个核心结论必须引用 `evidence_source` / `source_quality`。
 - strategy 只能是 candidate direction，不自动上线，不自动处置。
+- real-case pilot 推荐使用 3-5 个真实脱敏 case，先验证 input/output contract、证据卡、source coverage、manual review boundary，再决定是否扩到 5-20 cases。
