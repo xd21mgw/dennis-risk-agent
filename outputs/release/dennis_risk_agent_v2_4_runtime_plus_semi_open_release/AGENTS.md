@@ -12,17 +12,22 @@
 4. 边界与防过拟合
 5. Codex 可执行性
 
-## 必读文件
+## Runtime 必读文件
 
-开始任何任务前，先阅读：
+半开放 release runtime 不包含完整核心 Skill 原文目录。启动时不得依赖未随
+release 打包的完整 Skill / Prompt 原文。
 
-1. `skills/dennis_risk_agent_skills_v2_1_focused_deep/00_agent_core/agent_system_prompt_deep_v2_1.md`
-2. `skills/dennis_risk_agent_skills_v2_1_focused_deep/00_agent_core/expert_depth_standard_v2_1.md`
-3. `skills/dennis_risk_agent_skills_v2_1_focused_deep/00_agent_core/skill_registry_v2_1.md`
-4. `skills/dennis_risk_agent_skills_v2_1_focused_deep/00_agent_core/boundary_matrix_v2_1.md`
-5. `skills/dennis_risk_agent_skills_v2_1_focused_deep/08_eval/deep_skill_rubric_v2_1.md`
-6. `eval/dennis_risk_agent_skills_v2_2_tested/16_test_cases/json/dennis_50_test_cases_v2_2.json`
-7. `eval/dennis_risk_agent_skills_v2_2_tested/16_test_cases/golden_expectations/golden_expectation_rules_v2_2.md`
+开始任何任务前，优先阅读 release 包内实际存在的 runtime 文件：
+
+1. `skills/dennis_risk_agent_skills_v2_1_focused_deep/11_runtime_summaries/`
+2. `computer_use_poc/runtime_semi_open_user_guide_v1.md`
+3. `computer_use_poc/multi_entry_runtime_guard_v1.md`
+4. `computer_use_poc/capability_registry.md`
+5. `computer_use_poc/scene_to_capability_routing.md`
+6. `computer_use_poc/security_preflight_policy.yaml`
+7. `computer_use_poc/answer_experience_templates.md`
+8. `computer_use_poc/observation_contract_v2_4_6.md`
+9. `computer_use_poc/smoke_tests.md`
 
 ## 默认工作流
 

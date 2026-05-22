@@ -47,6 +47,14 @@
 | output redaction check | 生效 |
 | field output classification | 按 `field_output_classification_policy_v1.md` 区分风控实体字段、认证凭证明文、高敏个人信息和派生特征 |
 
+Readonly watchdog guard 口径：
+
+- release 包目录不强制整体 `555`，避免阻断 framework bootstrap。
+- 目录本身与 `models.json` 不纳入 watchdog 只读保护范围。
+- guard 只保护关键 `.md` / `.py` runtime、policy、routing、preflight、wrapper 文件不被 Agent 运行时修改。
+- guard 不得阻断 framework 正常启动、依赖加载、模型配置读取或 bootstrap 写入必要工作目录。
+- 半开放 runtime 禁止通过 Agent 对话修改 release、source、policy、evaluator、routing、Skill、Prompt 或 wrapper。
+
 RF-001 补丁要求：
 
 - `user_login_unified_log` 必须带明确时间窗口，或默认近 7 天 reliable window。
