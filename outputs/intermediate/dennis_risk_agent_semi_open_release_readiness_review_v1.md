@@ -105,6 +105,13 @@ Required semantics in manifest:
 - No automatic DataAgent call.
 - Not ATO-only.
 
+Runtime logging contract:
+
+- Current repository had no real runtime write integration at review time.
+- Runtime must append real user question records to `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`.
+- `question_learning_candidate_queue_v1.csv` remains a read-only template.
+- This is a non-blocking TODO for documentation readiness, but should be wired before real semi-open runtime use.
+
 ## 7. Safety / Asset Extraction Guard Inclusion
 
 Include runtime-facing summaries and policies:
@@ -200,6 +207,7 @@ No P0 blocker was found in this document review, but the package must not be bui
 - Add more non-ATO semi-open test prompts after first user trial.
 - Add APP / Web entry validation beyond KIM.
 - Add reviewer workflow for question_collection.
+- Wire question_collection runtime append-only logging to `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`.
 - Add release package manifest automation later.
 
 ## 15. Recommendation

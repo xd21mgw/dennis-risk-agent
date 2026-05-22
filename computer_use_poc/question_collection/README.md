@@ -36,6 +36,35 @@ Long term, migrate to one of:
 
 `agent_suggested` 不是最终判断；最终质量评估、最终 gap、最终 learning value 和最终沉淀动作只能由 `reviewer_final` 决定。
 
+## 2-A. Runtime Append-only Logging
+
+Runtime must not write real user questions into `question_learning_candidate_queue_v1.csv`.
+
+That CSV is a read-only template and demo queue.
+
+Correct runtime target:
+
+```text
+runtime_logs/question_collection/question_records_YYYYMMDD.jsonl
+```
+
+Runtime logging rules:
+
+- Append-only.
+- One `question_record` JSON object per line.
+- Use `agent_observed` / `agent_suggested` / `reviewer_final`.
+- Default `reviewer_final.reviewer_decision=pending`.
+- Never generate `accepted` decisions in live runtime.
+- Never overwrite template CSV in source tree or release package.
+- Never record cookie / token / session / header / auth state / phone plaintext.
+
+Contract files:
+
+- `runtime_append_only_logging_contract_v1.md`
+- `runtime_question_record_sample_v1.jsonl`
+- `runtime_logging_smoke_test_v1.md`
+- `runtime_question_record_collector_stub_v1.py`
+
 Core rule:
 
 - Agent can automatically keep records.
@@ -60,3 +89,7 @@ Core rule:
 - `case_learning_note_template_v1.md`: candidate learning note template.
 - `question_collection_text_regression_cases_v1.yaml`: text regression cases.
 - `question_collection_text_regression_run_v1.md`: dry-run regression log.
+- `runtime_append_only_logging_contract_v1.md`: runtime append-only logging contract.
+- `runtime_question_record_sample_v1.jsonl`: JSONL sample records.
+- `runtime_logging_smoke_test_v1.md`: append-only logging smoke tests.
+- `runtime_question_record_collector_stub_v1.py`: local-only append stub.

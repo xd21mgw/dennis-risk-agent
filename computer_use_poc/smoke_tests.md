@@ -4401,3 +4401,59 @@
 - input: question_collection 候选进入 release。
 - expected_runtime_behavior: pending_review_no_auto_brain_update
 - expected_output_boundary: `reviewer_decision=pending` 不得自动改 Skill、Prompt、runtime summary、release 包或 regression。
+
+## 506. Question collection append-only contract exists
+
+- test_id: QUESTION-LOGGING-001
+- input: 检查 `computer_use_poc/question_collection/runtime_append_only_logging_contract_v1.md`。
+- expected_runtime_behavior: append_only_logging_contract_documented
+- expected_output_boundary: 文档明确模板 CSV 只读，真实问题写 `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`，写入模式为 append-only。
+
+## 507. Question collection runtime sample JSONL exists
+
+- test_id: QUESTION-LOGGING-002
+- input: 检查 `computer_use_poc/question_collection/runtime_question_record_sample_v1.jsonl`。
+- expected_runtime_behavior: runtime_question_record_samples_available
+- expected_output_boundary: 至少 3 条单行 JSON，覆盖 ATO、协议攻击、资产抽取攻击；均包含 `agent_observed` / `agent_suggested` / `reviewer_final`，且 `reviewer_decision=pending`。
+
+## 508. Question collection logging smoke test exists
+
+- test_id: QUESTION-LOGGING-003
+- input: 检查 `computer_use_poc/question_collection/runtime_logging_smoke_test_v1.md`。
+- expected_runtime_behavior: runtime_logging_smoke_tests_documented
+- expected_output_boundary: 覆盖不写模板 CSV、append-only JSONL、pending review、敏感字段过滤、写入失败不影响主回答、目录可创建、JSONL 可逐行解析、多条追加不丢记录。
+
+## 509. Question collection collector stub is local-only
+
+- test_id: QUESTION-LOGGING-004
+- input: 检查 `computer_use_poc/question_collection/runtime_question_record_collector_stub_v1.py`。
+- expected_runtime_behavior: local_append_stub_available
+- expected_output_boundary: stub 只读 stdin / 本地 JSON 并 append 写 `runtime_logs/question_collection/`；不访问网络、不访问平台、不调用 DataAgent、不写模板 CSV。
+
+## 510. Runtime must not overwrite candidate queue template
+
+- test_id: QUESTION-LOGGING-005
+- input: 半开放 runtime 记录真实用户问题。
+- expected_runtime_behavior: template_csv_read_only
+- expected_output_boundary: 不得覆盖 `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv` 或 release 包内同名模板 CSV。
+
+## 511. Runtime reviewer decision defaults to pending
+
+- test_id: QUESTION-LOGGING-006
+- input: runtime question_record 缺少 `reviewer_final.reviewer_decision`。
+- expected_runtime_behavior: pending_by_default
+- expected_output_boundary: 写入前默认补为 `pending`；如果 runtime 试图写 `accepted`，必须拒绝。
+
+## 512. Runtime logging forbids high-sensitive fields
+
+- test_id: QUESTION-LOGGING-007
+- input: question_record 含 cookie / token / session / header / auth_state / phone / mobile / id_card 字段。
+- expected_runtime_behavior: redact_or_reject_sensitive_fields
+- expected_output_boundary: JSONL 中不得出现高敏字段明文；不得打印敏感原文作为错误重试。
+
+## 513. Runtime logging failure does not block answer
+
+- test_id: QUESTION-LOGGING-008
+- input: runtime_logs 目录不可写或写入失败。
+- expected_runtime_behavior: logging_failed_non_blocking
+- expected_output_boundary: 主回答不受影响；只记录或返回 `logging_failed` 状态，不回退写模板 CSV。

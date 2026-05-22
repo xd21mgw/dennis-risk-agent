@@ -80,7 +80,25 @@ question_collection:
     - no_auto_release_update
     - no_auto_dataagent_call
     - no_sensitive_credential_recording
+  runtime_logging:
+    target: runtime_logs/question_collection/question_records_YYYYMMDD.jsonl
+    mode: append_only
+    template_csv_is_read_only: true
 ```
+
+Release package must include:
+
+- `question_collection/runtime_append_only_logging_contract_v1.md`
+- `question_collection/runtime_question_record_sample_v1.jsonl`
+- `question_collection/runtime_logging_smoke_test_v1.md`
+
+Release README must explain:
+
+- real user questions write to `runtime_logs/question_collection/`
+- `question_learning_candidate_queue_v1.csv` is a template, not runtime target
+- runtime writes append-only JSONL
+- `reviewer_decision` remains `pending`
+- no automatic Skill / Prompt / release update
 
 ## 5. Full-scenario Runtime Summary Manifest Rule
 

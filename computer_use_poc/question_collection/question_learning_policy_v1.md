@@ -26,6 +26,30 @@ Enter candidate queue when the question is:
 - Triggering asset extraction or sensitive information risk.
 - A multi-turn interaction that becomes reusable as a case.
 
+## 2-A. Template Queue vs Runtime Append-only Log
+
+`question_learning_candidate_queue_v1.csv` is a template and demo candidate queue. It is not the runtime write target.
+
+Runtime records must be appended to:
+
+```text
+runtime_logs/question_collection/question_records_YYYYMMDD.jsonl
+```
+
+Runtime creates pending candidates only:
+
+- `reviewer_final.reviewer_decision=pending`
+- no automatic `accepted`
+- no automatic Skill / Prompt / routing / release / regression modification
+
+Reviewed queues can be generated later by human review or offline summary scripts. Runtime must not create final learning deposition by itself.
+
+See `runtime_append_only_logging_contract_v1.md`.
+
+## 2-B. Runtime Failure Boundary
+
+If runtime logging fails, the main user answer should continue. The failure should be recorded as `logging_failed` without printing sensitive raw content.
+
 ## 3. Low-value Questions
 
 Do not enter the formal candidate queue by default when:
