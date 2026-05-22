@@ -1,0 +1,184 @@
+{
+  "schema_version": "package_asset_scanner_rules_v1",
+  "description": "Path-level semi-open release package scanner rules. The scanner does not open files that match sensitive path patterns.",
+  "allowlist": [
+    {
+      "pattern": "computer_use_poc/field_output_classification_policy_v1.md",
+      "reason": "Runtime output policy is required."
+    },
+    {
+      "pattern": "computer_use_poc/sensitive_field_redaction_policy.md",
+      "reason": "Runtime redaction policy is required."
+    },
+    {
+      "pattern": "computer_use_poc/multi_entry_runtime_guard_v1.md",
+      "reason": "Runtime guard is required."
+    },
+    {
+      "pattern": "computer_use_poc/runtime_semi_open_user_guide_v1.md",
+      "reason": "Semi-open user guide is safe and required."
+    },
+    {
+      "pattern": "computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md",
+      "reason": "Tool contract is required."
+    },
+    {
+      "pattern": "computer_use_poc/sso_session_runner.py",
+      "reason": "Runtime wrapper is required for readonly validation."
+    },
+    {
+      "pattern": "*token*_policy*.md",
+      "reason": "Policy docs may include token in filename without containing credential values."
+    },
+    {
+      "pattern": "*token*_contract*.md",
+      "reason": "Contract docs may include token in filename without containing credential values."
+    },
+    {
+      "pattern": "*token*_summary*.md",
+      "reason": "Summary docs may include token in filename without containing credential values."
+    }
+  ],
+  "denylist": [
+    {
+      "pattern": ".git/**",
+      "severity": "fail",
+      "category": "git_metadata",
+      "reason": "Git metadata must not be packaged."
+    },
+    {
+      "pattern": "**/.git/**",
+      "severity": "fail",
+      "category": "git_metadata",
+      "reason": "Git metadata must not be packaged."
+    },
+    {
+      "pattern": "**/.ks_sso/**",
+      "severity": "fail",
+      "category": "auth_state",
+      "reason": "SSO auth state directory must not be packaged."
+    },
+    {
+      "pattern": "**/*auth*state*.json",
+      "severity": "fail",
+      "category": "auth_state",
+      "reason": "Auth state JSON files must not be packaged."
+    },
+    {
+      "pattern": "**/*storageState*.json",
+      "severity": "fail",
+      "category": "auth_state",
+      "reason": "storageState JSON files must not be packaged."
+    },
+    {
+      "pattern": "**/*auth_state*.md",
+      "severity": "warning",
+      "category": "auth_state_doc",
+      "reason": "Auth-state documentation should be reviewed before semi-open packaging."
+    },
+    {
+      "pattern": "**/*cookie*",
+      "severity": "fail",
+      "category": "credential_material",
+      "reason": "Cookie-bearing files must not be packaged."
+    },
+    {
+      "pattern": "**/*session*",
+      "severity": "fail",
+      "category": "credential_material",
+      "reason": "Session-bearing files must not be packaged unless explicitly reviewed."
+    },
+    {
+      "pattern": "**/outputs/dist/**",
+      "severity": "fail",
+      "category": "historical_dist",
+      "reason": "Historical dist packages must not be nested in release packages."
+    },
+    {
+      "pattern": "**/outputs/release/**",
+      "severity": "fail",
+      "category": "nested_release",
+      "reason": "Nested release packages indicate packaging recursion."
+    },
+    {
+      "pattern": "**/drafts/**",
+      "severity": "warning",
+      "category": "drafts",
+      "reason": "Drafts are development artifacts."
+    },
+    {
+      "pattern": "**/intermediate/**",
+      "severity": "warning",
+      "category": "intermediate",
+      "reason": "Intermediate artifacts are development assets."
+    },
+    {
+      "pattern": "**/run_logs/**",
+      "severity": "warning",
+      "category": "run_logs",
+      "reason": "Run logs should be selected and redacted, not included wholesale."
+    },
+    {
+      "pattern": "**/*regression_cases*.md",
+      "severity": "warning",
+      "category": "test_case_library",
+      "reason": "Full regression case libraries should not enter semi-open runtime packages."
+    },
+    {
+      "pattern": "**/prompt_injection_defense_cases.md",
+      "severity": "warning",
+      "category": "attack_case_library",
+      "reason": "Full prompt injection cases should not enter semi-open runtime packages."
+    },
+    {
+      "pattern": "**/asset_extraction_guard_regression_cases.md",
+      "severity": "warning",
+      "category": "attack_case_library",
+      "reason": "Full asset extraction cases should not enter semi-open runtime packages."
+    },
+    {
+      "pattern": "**/smoke_tests.md",
+      "severity": "warning",
+      "category": "full_test_suite",
+      "reason": "Prefer smoke test summary for semi-open packages."
+    },
+    {
+      "pattern": "**/SKILL.md",
+      "severity": "warning",
+      "category": "raw_skill_source",
+      "reason": "Raw skill prompts are core assets."
+    },
+    {
+      "pattern": "**/*prompt*.md",
+      "severity": "warning",
+      "category": "prompt_asset",
+      "reason": "Prompt source should be summarized unless runtime owner approves."
+    },
+    {
+      "pattern": "**/*poc*.md",
+      "severity": "warning",
+      "category": "poc_process_file",
+      "reason": "POC process files are development assets."
+    },
+    {
+      "pattern": "**/observations/**",
+      "severity": "warning",
+      "category": "raw_observation",
+      "reason": "Observation files may contain sensitive details and should be selected/redacted."
+    }
+  ],
+  "aggregate_rules": [
+    {
+      "category": "run_logs",
+      "max_count": 10,
+      "severity": "warning",
+      "reason": "More than 10 run logs suggests full run log inclusion rather than selected readiness summaries."
+    },
+    {
+      "category": "test_case_library",
+      "max_count": 5,
+      "severity": "warning",
+      "reason": "Multiple regression case files suggests full test library inclusion."
+    }
+  ]
+}

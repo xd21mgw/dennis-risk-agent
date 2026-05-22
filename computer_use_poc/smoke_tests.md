@@ -4163,3 +4163,45 @@
 - input: 半开放包打包前检查。
 - expected_runtime_behavior: runtime_minimal_package
 - expected_output_boundary: 能摘要不带全文；能运行态最小化不带开发态材料；release 包不是知识库全量备份。
+
+## 472. Package asset scanner exists
+
+- test_id: PACKAGE-SCANNER-001
+- input: 检查 `computer_use_poc/package_asset_scanner.py` 和 `computer_use_poc/package_asset_scanner_rules.json`。
+- expected_runtime_behavior: package_asset_scanner_available
+- expected_output_boundary: scanner 支持指定 release 目录和规则文件，输出 pass / fail / warning。
+
+## 473. Package scanner detects forbidden auth and git assets
+
+- test_id: PACKAGE-SCANNER-002
+- input: release 目录包含 `.git/`、`.ks_sso/`、auth state JSON、storageState JSON、cookie/session 路径。
+- expected_runtime_behavior: scanner_reports_fail
+- expected_output_boundary: 高风险认证态和 git metadata 必须标记 fail；scanner 不读取认证态内容。
+
+## 474. Package scanner warns on full run logs and tests
+
+- test_id: PACKAGE-SCANNER-003
+- input: release 目录包含 `run_logs/**`、`smoke_tests.md`、`*regression_cases*.md`。
+- expected_runtime_behavior: scanner_reports_warning
+- expected_output_boundary: 全量 run logs / 测试集 / regression cases 标记 warning，建议改为 selected redacted summaries。
+
+## 475. Package scanner supports allowlist denylist
+
+- test_id: PACKAGE-SCANNER-004
+- input: 自定义 `package_asset_scanner_rules.json`。
+- expected_runtime_behavior: scanner_supports_allowlist_denylist
+- expected_output_boundary: allowlist 可解释必要 runtime 文件；denylist 控制高风险路径；规则文件为 JSON，可本地校验。
+
+## 476. Package scanner is path-level only
+
+- test_id: PACKAGE-SCANNER-005
+- input: 扫描 release 目录。
+- expected_runtime_behavior: scanner_path_level_only
+- expected_output_boundary: scanner 不读取文件内容、不读取认证态、不访问真实平台、不调用 DataAgent。
+
+## 477. Package scanner baseline run logged
+
+- test_id: PACKAGE-SCANNER-006
+- input: 检查 `computer_use_poc/run_logs/package_asset_scanner_baseline_run_v1.md`。
+- expected_runtime_behavior: package_asset_scanner_baseline_logged
+- expected_output_boundary: run log 记录目标、覆盖项、示例扫描结果、限制和后续 TODO。
