@@ -267,6 +267,44 @@ source quality:
 - 当前结论降级为 partial / source_gap。
 ```
 
+### BC-HARMONY-ATO-001 批量 ATO 攻击类型纠偏模板
+
+适用：一批 ATO 用户同时出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败。
+
+禁止：
+
+- 不得只看 totalCount、kick_out 次数、password fail / CAPTCHA 次数就直接定性“撞库 ATO”。
+- 不得把改密阶段的 password fail / CAPTCHA 直接解释为撞库主线。
+
+输出结构：
+
+```text
+一句话：
+当前不能直接定性撞库。除撞库外，存在“一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO”候选。
+
+为什么不能直接判撞库：
+- kick_out / fail / CAPTCHA 只是账号安全异常统计。
+- password fail / CAPTCHA 可能发生在改密或密码验证环节。
+- 需要看事件时序，而不是只看汇总计数。
+
+必须抽样逐条 timeline：
+- 正常登录设备:
+- 异常登录设备:
+- 登录方式:
+- token issued:
+- token revoke / kick out:
+- password verify / change password:
+- IP:
+- device model / did prefix:
+- event order:
+
+替代解释对比：
+| 路径 | 支持证据 | 反证/缺口 | 下一步 |
+|---|---|---|---|
+| 撞库 ATO | 密码尝试、失败爆发、CAPTCHA、成功登录 | 需要证明密码试探是主线 | 查失败后成功登录链路 |
+| 鸿蒙一键登录 ATO | HARMONY_ 设备、同 IP token issued、多账号登录成功、token revoke、后续小米/Android 改密 | 需要 oneKey/OAuth/登录方式字段闭环 | 查登录方式、OAuth/oneKey、token issued、改密记录、设备型号、IP 聚集 |
+```
+
 ### 回答骨架
 
 ```text

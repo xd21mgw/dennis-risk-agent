@@ -59,6 +59,62 @@
 8. 如果存在商家、达人、MCN、机构、ISV、客服工具等批量登录、多账号代管或接口化运营，先引用 `06_templates/legal_operation_matrix_playbook_v2_3.md` 进入合法自动化/授权矩阵审计分支，校验授权主体、账号范围、操作人、工具来源、调用范围、敏感动作、收益主体、审计和配额；不得因为多账号登录或接口化登录直接定性盗号、群控或协议。
 9. 如果存在正常换机、多端登录、漫游、企业 MDM、可信旧设备确认、SDK 口径变化等反证，则降级判断。
 
+### 4.2 批量 ATO 攻击类型细分：撞库 vs 一键登录 / 鸿蒙授权接管
+
+批量 ATO 分析禁止只看 totalCount、kick_out 次数、password fail / CAPTCHA 次数后直接跳到“撞库 ATO”。
+
+#### 鸿蒙一键登录 ATO pattern
+
+触发信号：
+
+- 出现 `HARMONY_` 设备 ID 或鸿蒙设备前缀。
+- token issued / token 下发成功。
+- 多账号登录成功。
+- 同一 IP 集中登录多个用户。
+- token revoke / kick out。
+- 后续小米 / Android 设备改密或密码验证失败。
+- 用户原设备与新 HARMONY 设备明显不一致。
+
+判断：
+
+- 优先识别为“一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO”候选。
+- 不应直接归为撞库。
+- 大量 password fail / CAPTCHA 可能来自改密环节，而不一定是撞库尝试。
+
+#### 批量 ATO 逐条时序抽样规则
+
+当批量 ATO case 中出现以下任一情况，必须抽取 3-5 个代表用户做 timeline：
+
+- kick_out 密集。
+- password fail / CAPTCHA 密集。
+- 多设备切换。
+- 同 IP 集中。
+- 三方登录 / 一键登录 / OAuth / HARMONY 相关字段。
+
+timeline 必须包含：
+
+- 正常登录设备。
+- 异常登录设备。
+- 登录方式。
+- token issued。
+- token revoke / kick out。
+- password verify / change password。
+- IP。
+- device model / did prefix。
+- event order。
+
+#### 区分表
+
+| 类型 | 主线 | 关键证据 | 易误判点 |
+|---|---|---|---|
+| 撞库 ATO | 密码尝试、失败爆发、CAPTCHA、少量成功登录 | 同 IP/代理多账号密码试探，失败后成功登录，成功后敏感动作 | 不能只凭 kick_out 或改密失败定性 |
+| 一键登录 / 鸿蒙 ATO | 三方授权 / oneKey / OAuth / HARMONY token issued、设备切换、改密、token revoke | HARMONY_ 设备、token 下发成功、同源 IP 多账号登录、后续小米/Android 改密或密码验证失败 | 改密环节的 password fail / CAPTCHA 容易被误读成撞库 |
+
+标准结论口径：
+
+- “当前批量统计能说明存在账号安全异常，但不能直接定性撞库。”
+- “由于出现 HARMONY_ 设备、同源 IP token 下发、token revoke / kick out、后续小米 / Android 改密尝试，应优先验证一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO 链路。”
+
 ### 4.1 统一登录日志在线窗口限制
 
 ATO / 盗号研判必须先判断 `suspicious_event_time` 与 `query_time` 的时间差。

@@ -4,8 +4,9 @@
 
 ATO 是当前已经打通的深度 DataAgent 闭环样板。
 
-以下 runtime summaries 是**非 ATO 场景的专家认知底座**：
+以下 runtime summaries 是运行态专家认知底座：
 
+- `account_security_runtime_summary_v1.md`
 - `anti_crawler_runtime_summary_v1.md`
 - `protocol_attack_runtime_summary_v1.md`
 - `group_control_runtime_summary_v1.md`
@@ -112,17 +113,26 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 5. 真实 POC。
 6. runtime slim。
 
-## 7. 数据调用边界
+## 7. 账号安全 / ATO 运行态补充
+
+`account_security_runtime_summary_v1.md` 用于半开放 runtime 下的账号安全和 ATO 判断，尤其防止批量 ATO 只看统计汇总后误判攻击类型。
+
+关键要求：
+
+- 批量 ATO 不能只看 totalCount、kick_out 次数、password fail / CAPTCHA 次数。
+- 发现 `HARMONY_` 设备、token issued、同 IP 多账号登录、token revoke / kick out、后续小米 / Android 改密或密码验证失败时，应优先考虑一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO 候选。
+- 必须抽取 3-5 个代表用户做逐条时序，比较撞库 ATO 与一键登录 ATO 的替代解释。
+
+## 8. 数据调用边界
 
 - 非 ATO 场景默认不调 DataAgent。
 - 用户明确要求查数才生成 query plan。
 - 高成本查询必须确认。
 - SQL-only / partial / timeout 不能强结论。
 
-## 8. 结论
+## 9. 结论
 
 runtime summaries 的定位是：  
 **在不加载全量历史材料的前提下，把非 ATO 场景的完整风控认知带进运行态。**
 
 这样既能提升回答质量，也能控制 token 成本。
-

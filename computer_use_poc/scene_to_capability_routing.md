@@ -52,6 +52,7 @@ Semi-open experience patch v1 路由补丁：
 - `browser_session_bridge` / `auth_html_fast_fallback`：browser auth blocked、2FA、HTML/auth page、cookie bridge missing 均快速降级，不反复尝试。
 - `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
+- `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
 
 输出字段分层：
 
@@ -122,6 +123,7 @@ Semi-open experience patch v1 路由补丁：
 4. pattern summary：聚合 common entity、device/IP/login、behavior path、shared missing evidence。
 5. source coverage summary：展示 evidence_source / source_quality，标明 stale / partial / blocked source。
 6. strategy direction draft：只输出候选策略方向、误伤风险、补证建议、AB / 查杀分离评估建议。
+7. attack type discrimination：当汇总统计显示 kick_out / password fail / CAPTCHA 密集时，必须检查是否存在 HARMONY / oneKey / OAuth / token issued / token revoke / 改密链路；不得只凭统计汇总定性撞库。
 
 Input / output contract：
 
@@ -147,11 +149,19 @@ Input / output contract：
 - case 数超过 v1 范围或候选过多：返回 `too_many_candidates`，先缩小范围或进入 Plan。
 - 非 ATO 类型：返回 `unsupported_case_type`，转对应 batch 场景，不强行纳入 ATO。
 - 若 ATO / 批量场景依赖统一登录日志，且 URL 缺少 `recallSource=2,0,1,3`，应先修正 wrapper 映射，再判断窗口和结果；不要把 `code=10045` 直接解释成数据缺失。
+- 若批量 ATO 出现 `HARMONY_` 设备、同源 IP token issued、多账号登录成功、token revoke / kick out、后续小米 / Android 设备改密或密码验证失败，应进入一键登录 / 三方授权 / 鸿蒙一键登录 ATO 候选，不得直接归为撞库。
 
 可选后续补证：
 
 - 如果未来需要真实离线取数，DataAgent 只能作为 Hive / 数仓取数分析能力，并且必须明确查询范围、权限和审批边界。
 - 当前最小闭环不调用真实 DataAgent，不访问真实内部平台。
+
+批量 ATO timeline 抽样要求：
+
+- 触发条件：kick_out 密集、password fail / CAPTCHA 密集、多设备切换、同 IP 集中、三方登录 / 一键登录 / OAuth / HARMONY 相关字段。
+- 抽样数量：3-5 个代表用户。
+- 必查字段：正常登录设备、异常登录设备、登录方式、token issued、token revoke / kick out、password verify / change password、IP、device model / did prefix、event order。
+- 输出：必须包含“撞库 ATO vs 一键登录 / 鸿蒙 ATO”的替代解释对比。
 
 Fallback：
 

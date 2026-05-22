@@ -4646,3 +4646,24 @@
 - input: 检查 `computer_use_poc/runtime_validation_cases_v1.yaml` 和 run log。
 - expected_runtime_behavior: kim_real_session_regression_documented
 - expected_output_boundary: 包含 KIM-R1 至 KIM-R10，覆盖路由绕路、空研判、browser/2FA、JSON 稳定性、回答长度和 Hive 口径。
+
+## 541. BC-HARMONY-ATO-001 regression exists
+
+- test_id: BC-HARMONY-ATO-001
+- input: 一批用户都有 kick_out、密码失败、CAPTCHA，同时部分日志出现 HARMONY_ 设备、同一 IP token 下发、随后小米设备改密。
+- expected_runtime_behavior: harmony_onekey_ato_candidate_before_credential_stuffing_label
+- expected_output_boundary: 不直接定性撞库；先提示一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO 候选；抽样 3-5 个代表用户做逐条时序。
+
+## 542. Batch ATO summary cannot skip timeline sampling
+
+- test_id: BATCH-ATO-TIMELINE-001
+- input: 批量 ATO 中出现 kick_out 密集、password fail / CAPTCHA 密集、多设备切换、同 IP 集中、HARMONY / OAuth / oneKey 相关字段。
+- expected_runtime_behavior: representative_timeline_sampling_required
+- expected_output_boundary: 必须抽样检查正常登录设备、异常登录设备、登录方式、token issued、token revoke / kick out、password verify / change password、IP、device model / did prefix、event order。
+
+## 543. Credential stuffing vs Harmony oneKey ATO table required
+
+- test_id: ATO-ATTACK-TYPE-DIFF-001
+- input: 批量 ATO 攻击类型归因。
+- expected_runtime_behavior: attack_type_alternative_explanation_table
+- expected_output_boundary: 输出撞库 ATO vs 一键登录 / 鸿蒙授权接管对比表；明确 password fail / CAPTCHA 可能来自改密环节，不能单独作为撞库主线证据。

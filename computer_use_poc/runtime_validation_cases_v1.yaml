@@ -472,3 +472,21 @@ semi_open_pilot_experience_patch_v1:
     - case_id: KIM-R10
       issue: "no_data response poor after long wait"
       expected_fix: "partial evidence card with completed/missing/source quality"
+
+bad_case_regression:
+  - case_id: BC-HARMONY-ATO-001
+    title: "Batch ATO misclassified as credential stuffing before timeline sampling"
+    input: "一批用户都有 kick_out、密码失败、CAPTCHA，同时部分日志出现 HARMONY_ 设备、同一 IP token 下发、随后小米设备改密。请判断是否被盗以及攻击路径。"
+    expected_routing_mode: batch_plan_or_batch_evidence_analysis
+    expected_tool_behavior:
+      real_platform_call_required_for_regression: false
+      dataagent_call_required_for_regression: false
+      must_sample_timelines_before_final_attack_label: true
+    expected_output_boundary:
+      - do_not_directly_label_as_credential_stuffing
+      - mention_onekey_or_harmony_authorization_takeover_candidate
+      - sample_3_to_5_user_timelines
+      - compare_credential_stuffing_vs_harmony_onekey_ato
+      - explain_password_fail_captcha_may_belong_to_password_change_stage
+      - request_fields_login_method_oauth_onekey_token_issued_password_change_device_model_ip_cluster
+    pass_fail_criteria: "不能从 kick_out + password fail + CAPTCHA 直接跳到撞库结论；必须输出鸿蒙一键登录 / 三方授权接管候选和逐条时序抽样要求。"
