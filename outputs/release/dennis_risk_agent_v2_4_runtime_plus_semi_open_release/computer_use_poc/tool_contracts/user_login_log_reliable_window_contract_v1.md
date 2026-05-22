@@ -1,0 +1,207 @@
+# User Login Log Reliable Window Contract v1
+
+## 1. Contract Scope
+
+- capability_name: `login_log_read`
+- adapter: `user_login_log_online_api`
+- reliable_window_days: 7
+- recall_source_required: `2,0,1,3`
+- contract_type: `tool_precheck_rule`
+- real_platform_called: false
+- dataagent_called: false
+
+该 contract 固化统一登录日志在线 API 的可靠窗口口径，避免把超窗查询的 `no_data` / `0 result` 误解释为历史无登录或日志被清理。
+
+## 2. Reliable Window Rule
+
+`login_log_read` 在调用前必须执行 `reliable_window_precheck`。
+
+判断规则：
+
+- 当 `event_time` 或 `query_time_range` 落在近 7 天可靠窗口内：
+  - `query_should_execute=true`
+  - 在线统一登录日志可作为当前窗口内登录 evidence。
+- 当 `event_time` 或 `query_time_range` 超过近 7 天可靠窗口：
+  - `query_should_execute=false`
+  - 返回 `skipped_due_to_over_window`
+  - 标记 `login_log_window_incomplete`
+  - 标记 `offline_hive_required`
+
+URL 规则：
+
+- `user_login_unified_log` 的有效在线 URL 必须包含 `recallSource=2,0,1,3`。
+- 若缺少 `recallSource=2,0,1,3`，真实 runtime 可能返回 `code=10045` 或结果不可用。
+- `from_timestamp` / `to_timestamp` 可选，但一旦提供必须成对出现，且为 1-20 位纯数字毫秒时间戳。
+- 当未提供 `from_timestamp` / `to_timestamp` 时，默认使用近 7 天窗口。
+- 若窗口超过近 7 天，仍需标记 `over_reliable_window=true`、`login_log_window_incomplete=true`、`offline_hive_required=true`。
+
+## 3. Over-window Behavior
+
+超窗时默认不调用在线统一登录日志做事实验证。
+
+必须返回：
+
+- status: `skipped_due_to_over_window`
+- evidence_interpretation: `online_login_log_not_reliable_for_requested_historical_window`
+- fallback_recommendation: `DataAgent / Hive 或人工离线日志补查`
+
+如果 URL 还缺少 `recallSource=2,0,1,3`，应视为 `platform_url_mapping_incomplete`，先修正 wrapper URL 映射，不要把返回 10045 误解为窗口问题本身。
+
+不得输出：
+
+- “历史无登录”
+- “无异设备登录”
+- “账号日志被清理”
+- “在线 API no_data 支持无风险”
+- “在线 API no_data 可作为 counter evidence”
+
+## 4. no_data Interpretation
+
+在线 API `no_data` 只能解释为：
+
+- 当前可靠窗口内，当前查询条件下未见在线日志结果。
+
+在线 API `no_data` 不能解释为：
+
+- 历史无登录。
+- 账号无风险。
+- 无异设备登录。
+- 日志被清理。
+- ATO / 黑产矩阵的反证。
+
+## 5. Long-period Login Analysis
+
+需要长周期登录分析时，应转：
+
+- DataAgent / Hive 数仓取数分析。
+- 人工离线日志补查。
+- 已授权的离线审计链路。
+
+DataAgent 边界：
+
+- DataAgent 只作为 Hive / 数仓取数分析能力。
+- 不作为万能风控执行器。
+- 不自动处置，不自动封禁。
+
+## 6. Observation Fields
+
+所有涉及 `login_log_read` 的 observation 建议包含：
+
+```yaml
+reliable_window_check:
+  reliable_window_days: 7
+  recall_source: "2,0,1,3"
+  query_window_start:
+  query_window_end:
+  is_within_reliable_window:
+  over_window:
+  query_should_execute:
+  skip_reason:
+  evidence_interpretation:
+  fallback_recommendation:
+```
+
+## 7. MCP / Tool Rule Patch
+
+如果后续存在 MCP / tools 配置，应为 `user_login_log_read` 增加：
+
+- precheck: `reliable_window_precheck`
+- max_reliable_window_days: 7
+- required_recall_source: `2,0,1,3`
+- over_window_behavior: `skip_and_return_offline_hive_required`
+- no_data_interpretation: `current_window_no_data_only`
+
+该规则当前只沉淀为 tool contract，不接真实 runtime，不调用真实平台。
+
+## 8. Wrapper JSON Envelope Contract
+
+`sso_session_runner` / wrapper 输出必须保证机器可解析。
+
+stdout 规则：
+
+- stdout 必须只包含一个 JSON envelope。
+- 不得把认证日志、人类调试日志或 preflight 文本混入 stdout JSON 流。
+- sub-agent Python 可以直接对 stdout 执行 `json.loads(stdout)`。
+
+stderr / log 规则：
+
+- 人类可读诊断、认证日志、wrapper 运行日志进入 stderr 或独立 log file。
+- 不得输出 cookie / token / session / storageState / header 明文。
+
+envelope schema:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "success | failed | partial",
+  "ok": true,
+  "result": {
+    "dry_run_only": true,
+    "platform_key": "user_login_unified_log",
+    "constructed_url": "safe_ref_or_whitelisted_url"
+  },
+  "metadata": {
+    "reliable_window_days": 7,
+    "recall_source": "2,0,1,3",
+    "default_window_used": false,
+    "over_reliable_window": false,
+    "login_log_window_incomplete": false,
+    "offline_hive_required": false
+  },
+  "security": {
+    "sensitive_auth_output": false,
+    "dataagent_called": false,
+    "platform_write_action": false,
+    "real_platform_request_executed": false
+  },
+  "error": null,
+  "logs": []
+}
+```
+
+Failure envelope:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "failed",
+  "ok": false,
+  "result": null,
+  "metadata": {
+    "tool_call_allowed": false,
+    "dataagent_called": false,
+    "platform_write_action": false,
+    "real_platform_request_executed": false
+  },
+  "error": {
+    "message": "validation error"
+  },
+  "logs": []
+}
+```
+
+Partial envelope:
+
+```json
+{
+  "schema_version": "sso_session_runner_envelope_v1",
+  "status": "partial",
+  "ok": true,
+  "result": {
+    "summary": "partial observation"
+  },
+  "metadata": {
+    "partial_reason": "auth_required | permission_blocked | over_reliable_window"
+  },
+  "security": {
+    "sensitive_auth_output": false
+  },
+  "error": null,
+  "logs": []
+}
+```
+
+Boundary:
+
+- `logs` must contain only non-sensitive summaries if used.
+- Raw auth state, credential headers, cookies, token values, session values and storageState must never appear in stdout, stderr, log file, run log or response.

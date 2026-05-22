@@ -1,0 +1,422 @@
+[
+  {
+    "case_id": "REQ-CONTRACT-001",
+    "description": "完整合法 user_profile_read",
+    "input_request": {
+      "request_id": "req_contract_001",
+      "operator": "contract_test",
+      "user_input_summary": "单用户基础画像摘要",
+      "normalized_intent": "user_profile_summary",
+      "scene": "account_profile",
+      "capability_name": "user_profile_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["risk_summary", "account_status"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": true,
+    "expected_recommended_next_step": "pass_to_evaluator"
+  },
+  {
+    "case_id": "REQ-CONTRACT-002",
+    "description": "完整合法 login_log_read",
+    "input_request": {
+      "request_id": "req_contract_002",
+      "operator": "contract_test",
+      "user_input_summary": "单用户登录日志摘要",
+      "normalized_intent": "login_log_check",
+      "scene": "login_investigation",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["login_summary", "event_type_counts"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": true,
+    "expected_recommended_next_step": "pass_to_evaluator"
+  },
+  {
+    "case_id": "REQ-CONTRACT-003",
+    "description": "缺 capability_name",
+    "input_request": {
+      "request_id": "req_contract_003",
+      "operator": "contract_test",
+      "user_input_summary": "缺能力名",
+      "normalized_intent": "unknown",
+      "scene": "contract_validation",
+      "input_entities": [],
+      "input_entity_count": 0,
+      "requested_fields": ["risk_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "deny"
+  },
+  {
+    "case_id": "REQ-CONTRACT-004",
+    "description": "unknown capability",
+    "input_request": {
+      "request_id": "req_contract_004",
+      "operator": "contract_test",
+      "user_input_summary": "未知能力",
+      "normalized_intent": "unknown_tool_call",
+      "scene": "contract_validation",
+      "capability_name": "unknown_internal_tool",
+      "input_entities": [],
+      "input_entity_count": 0,
+      "requested_fields": ["risk_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "deny"
+  },
+  {
+    "case_id": "REQ-CONTRACT-005",
+    "description": "requested_scope 缺失",
+    "input_request": {
+      "request_id": "req_contract_005",
+      "operator": "contract_test",
+      "user_input_summary": "缺 scope",
+      "normalized_intent": "login_log_check",
+      "scene": "login_investigation",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["login_summary"],
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-006",
+    "description": "requested_scope 非法",
+    "input_request": {
+      "request_id": "req_contract_006",
+      "operator": "contract_test",
+      "user_input_summary": "非法 scope",
+      "normalized_intent": "login_log_check",
+      "scene": "login_investigation",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["login_summary"],
+      "requested_scope": "entire_company",
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-007",
+    "description": "requested_fields 缺失",
+    "input_request": {
+      "request_id": "req_contract_007",
+      "operator": "contract_test",
+      "user_input_summary": "缺 fields",
+      "normalized_intent": "user_profile_summary",
+      "scene": "account_profile",
+      "capability_name": "user_profile_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": true,
+    "expected_recommended_next_step": "pass_to_evaluator"
+  },
+  {
+    "case_id": "REQ-CONTRACT-008",
+    "description": "input_entities 缺失",
+    "input_request": {
+      "request_id": "req_contract_008",
+      "operator": "contract_test",
+      "user_input_summary": "缺实体",
+      "normalized_intent": "user_profile_summary",
+      "scene": "account_profile",
+      "capability_name": "user_profile_read",
+      "input_entity_count": 0,
+      "requested_fields": ["risk_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "require_clarification"
+  },
+  {
+    "case_id": "REQ-CONTRACT-009",
+    "description": "input_entity_count 不一致",
+    "input_request": {
+      "request_id": "req_contract_009",
+      "operator": "contract_test",
+      "user_input_summary": "实体数量不一致",
+      "normalized_intent": "user_profile_summary",
+      "scene": "account_profile",
+      "capability_name": "user_profile_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 2,
+      "requested_fields": ["risk_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-010",
+    "description": "direct_tool_requested_by_user 类型错误",
+    "input_request": {
+      "request_id": "req_contract_010",
+      "operator": "contract_test",
+      "user_input_summary": "bool 类型错误",
+      "normalized_intent": "login_log_check",
+      "scene": "login_investigation",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["login_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": "false",
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-011",
+    "description": "attempts_to_override_policy 类型错误",
+    "input_request": {
+      "request_id": "req_contract_011",
+      "operator": "contract_test",
+      "user_input_summary": "bool 类型错误",
+      "normalized_intent": "login_log_check",
+      "scene": "login_investigation",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["login_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": "no",
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-012",
+    "description": "请求 prohibited field",
+    "input_request": {
+      "request_id": "req_contract_012",
+      "operator": "contract_test",
+      "user_input_summary": "请求 system prompt / cookie / token",
+      "normalized_intent": "prompt_or_credential_exfiltration",
+      "scene": "unsafe_sensitive_output",
+      "capability_name": "login_log_read",
+      "input_entities": [
+        {
+          "entity_type": "user_id",
+          "entity_value": "user_123",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["system_prompt", "cookie", "token"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent_7d",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": true,
+      "requested_raw_output": true,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "deny"
+  },
+  {
+    "case_id": "REQ-CONTRACT-013",
+    "description": "敏感实体未标记 is_sensitive",
+    "input_request": {
+      "request_id": "req_contract_013",
+      "operator": "contract_test",
+      "user_input_summary": "手机号实体未标敏感",
+      "normalized_intent": "user_profile_summary",
+      "scene": "account_profile",
+      "capability_name": "user_profile_read",
+      "input_entities": [
+        {
+          "entity_type": "phone",
+          "entity_value": "phone_1234",
+          "is_sensitive": false,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["risk_summary"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": false,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": false,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "fix_request_mapping"
+  },
+  {
+    "case_id": "REQ-CONTRACT-014",
+    "description": "底层平台名被当 capability_name",
+    "input_request": {
+      "request_id": "req_contract_014",
+      "operator": "contract_test",
+      "user_input_summary": "底层平台名 capability",
+      "normalized_intent": "raw_platform_access",
+      "scene": "unsafe_tool_request",
+      "capability_name": "weapon_graphData_raw",
+      "input_entities": [
+        {
+          "entity_type": "device_id",
+          "entity_value": "device_abc",
+          "is_sensitive": true,
+          "source": "user_input",
+          "confidence": "high"
+        }
+      ],
+      "input_entity_count": 1,
+      "requested_fields": ["raw_graph_payload"],
+      "requested_scope": "single_entity",
+      "requested_time_range": "recent",
+      "direct_tool_requested_by_user": true,
+      "attempts_to_override_policy": false,
+      "requested_raw_output": true,
+      "source_agent": "dennis_main_agent",
+      "runtime_mode": "shadow_mode"
+    },
+    "expected_valid": false,
+    "expected_recommended_next_step": "deny"
+  }
+]

@@ -388,3 +388,54 @@ tar --exclude='.git' \
 - 自动治理执行器。
 
 所有真实数据资产映射、权限、调用、审计和回放能力由未来内部平台补充。
+
+## 8. Semi-open Runtime Plus Release Record
+
+本仓库已完成全场景半开放测试 release pack 的 readiness review，并开始组装新的半开放包。
+
+本次 release 记录：
+
+- release name: `dennis_risk_agent_v2_4_runtime_plus_semi_open_release`
+- release path: `outputs/release/dennis_risk_agent_v2_4_runtime_plus_semi_open_release/`
+- tarball path: `outputs/dist/dennis_risk_agent_v2_4_runtime_plus_semi_open_release.tar.gz`
+- snapshot path: `outputs/final/dennis_risk_agent_v2_4_runtime_plus_semi_open_release_snapshot.md`
+- package type: full-scenario semi-open test package
+
+纳入范围：
+
+- ATO / 盗号 deep sample。
+- 非 ATO runtime summaries：反爬、协议攻击、群控 / 设备风险、小号 / 账号农场、活动反作弊、流量反作弊、导流 / 截流、插件 / 破解包。
+- 通用证据卡 / 查证计划 / 策略推荐。
+- DataAgent query plan boundary。
+- safety / asset extraction guard。
+- question_collection 全场景用户问题观测与候选学习队列。
+- runtime validation cases / semi-open test prompt matrix / user guide / smoke tests。
+
+question_collection 记录方式：
+
+- `question_learning_candidate_queue_v1.csv` 只是模板，不承接真实用户问题。
+- 真实问题必须 append-only 写入 `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`。
+- `question_record` 采用 `agent_observed` / `agent_suggested` / `reviewer_final` 三层结构。
+- `reviewer_decision` 默认 `pending`，runtime 不自动写 `accepted`。
+
+已执行的 exclusion 原则：
+
+- 不纳入 `auth_states/`、`.ks_sso/`、cookie / token / session / header / auth state。
+- 不纳入真实 observation 原始数据。
+- 不纳入 outputs/dist 旧包。
+- 不纳入历史 POC 全量 run logs。
+- 不纳入未审核 eval pilot 文件。
+- 不纳入完整源码 / 完整 Prompt / 完整 Skill / 完整 case 全量资产。
+
+scanner 结果摘要：
+
+- 以 path-level package scanner 为准。
+- 结果：`warning`，`fail=0`，`warning=63`，`pass=6`，`total=69`。
+- 未发现 hard-excluded 路径。
+- warning 主要来自 selected POC / run log / prompt matrix / runtime summary 资产，属于预期，需要在 release README 和 manifest 中说明其为选定摘要、模板、样例或运行态边界文件，而不是全量历史资产。
+
+当前非阻塞 TODO：
+
+- 半开放 runtime 实际写入 `runtime_logs/question_collection/` 的联调仍待后续接入。
+- APP / Web 入口的实际部署验证仍可继续补齐。
+- 非 ATO 场景的更多 runtime summaries 可按实际使用反馈继续扩展。

@@ -1,0 +1,9 @@
+case_id,user_id,device_id,event_time,abnormal_action,user_claim,source_channel,available_evidence,missing_evidence,initial_risk_hint,current_status,manual_label,confidence,notes
+ATO_BATCH_DEMO_001,user_demo_001,device_demo_a,2026-05-10 12:53:16,非本人发布违规作品,用户称登录设备只有本人且曾访问助力页面,appeal_sample,用户申诉文本;人工备注,发布审计日志;token使用链路;OAuth授权记录,疑似token_cookie复用,standardized,pending_review,low,合成样例不代表真实用户
+ATO_BATCH_DEMO_002,user_demo_002,device_demo_b,2026-05-11 09:20:00,异常关注导流账号,用户称未关注相关账号,customer_service_sample,客服记录;异常关注描述,关注接口IP/UA;登录日志;设备风险补证,疑似授权滥用或本机被控,standardized,pending_review,low,用于验证行为路径聚合
+ATO_BATCH_DEMO_003,user_demo_003,,2026-05-12 18:45:00,账号被登录验证后发布,用户称收到验证但未操作,manual_sample,人工备注;策略命中摘要,设备ID;登录成功链路;发布审计日志,疑似新设备接管,missing_entity,pending_review,unknown,缺device_id时不得直接走设备风险补证
+ATO_BATCH_DEMO_004,user_demo_004,device_demo_d,2026-05-13 21:10:00,异常换绑手机号,用户称手机号被换绑后无法登录,appeal_sample,申诉摘要;账号状态变化,换绑审计日志;短信验证链路;登录日志,疑似ATO换绑,standardized,pending_review,medium,候选强区分证据是换绑前后登录链路
+ATO_BATCH_DEMO_005,user_demo_005,device_demo_e,2026-05-14 07:30:00,异常改密后发布,用户称未改密且作品非本人,manual_sample,改密现象描述;发布现象描述,改密审计;发布接口来源;token刷新链路,疑似凭证接管,standardized,pending_review,low,需要区分新设备登录和token复用
+ATO_BATCH_DEMO_006,user_demo_006,device_demo_f,2026-05-15 15:05:00,异常直播开播,用户称未直播,appeal_sample,申诉文本;账号操作摘要,直播开播审计;设备/IP;前端活跃信号,疑似账号被控或家庭共用设备,standardized,pending_review,low,反证可能是常用设备本人操作
+ATO_BATCH_DEMO_007,user_demo_007,device_demo_g,2026-05-16 23:40:00,批量点赞和关注,用户称账号突然关注大量陌生账号,customer_service_sample,客服记录;行为数量摘要,关注/点赞接口来源;设备共用关系;OAuth授权,疑似OAuth授权滥用,standardized,pending_review,low,适合聚合导流行为路径
+ATO_BATCH_DEMO_008,user_demo_008,device_demo_h,2026-05-17 10:18:00,发布后账号封禁,用户称曾点击外部活动链接,appeal_sample,申诉文本;封禁现象,发布审计;封禁/审核工单;登录日志窗口完整性,疑似活动页钓鱼,standardized,pending_review,low,策略方向只能作为候选建议
