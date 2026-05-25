@@ -490,3 +490,127 @@ bad_case_regression:
       - explain_password_fail_captcha_may_belong_to_password_change_stage
       - request_fields_login_method_oauth_onekey_token_issued_password_change_device_model_ip_cluster
     pass_fail_criteria: "不能从 kick_out + password fail + CAPTCHA 直接跳到撞库结论；必须输出鸿蒙一键登录 / 三方授权接管候选和逐条时序抽样要求。"
+  - case_id: BC-FIELD-SEMANTIC-001
+    title: "Device model field value POST misread as HTTP method POST"
+    input: "客户端版本降级疑似协议上号，日志里 mods=['POST', 'v1_like_string']，同时有旧版本高频、did 不一致和前端行为缺失。请判断是不是攻击者用 HTTP POST 直调后端 API。"
+    expected_routing_mode: evidence_boundary_or_protocol_analysis
+    expected_tool_behavior:
+      real_platform_call_required_for_regression: false
+      dataagent_call_required_for_regression: false
+      field_semantics_must_be_checked_before_conclusion: true
+    expected_output_boundary:
+      - do_not_interpret_mod_or_mods_as_http_method
+      - explain_POST_in_mod_field_as_device_model_or_placeholder_or_spoofed_value_anomaly
+      - only_method_request_method_http_method_requestMethod_can_support_http_method_evidence
+      - POST_alone_is_not_protocol_login_evidence
+      - protocol_login_requires_combined_evidence
+      - request_fields_version_mix_old_version_frequency_did_mismatch_device_diff_frontend_missing_request_chain
+    pass_fail_criteria: "不能把 mods=['POST'] 写成 HTTP POST 直调；必须先校准字段语义，并将 POST 归为设备型号字段异常或伪造值异常。"
+  - case_id: EVIDENCE-TYPE-SEPARATION-001
+    title: "ATO evidence card must separate raw evidence, inference, user claim, hypothesis, and missing evidence"
+    input: "用户反馈账号被盗后发布违规内容，但没有实际查到钓鱼页访问记录。请判断是否 ATO。"
+    expected_routing_mode: single_case_evidence_boundary_or_execution
+    expected_tool_behavior:
+      real_platform_call_required_for_regression: false
+      dataagent_call_required_for_regression: false
+    expected_output_boundary:
+      - user_feedback_is_user_claim_weak
+      - violation_publish_is_behavior_event_weak
+      - phishing_page_visit_is_missing_evidence_if_not_observed
+      - do_not_write_phishing_entry_confirmed
+      - output_strong_medium_weak_counter_missing_evidence
+      - every_evidence_item_has_evidence_type_and_strength
+    pass_fail_criteria: "不得把用户反馈或违规发布写成 ATO 强证据；未查到的钓鱼页访问必须进入 missing_evidence。"
+  - case_id: SINGLE-CASE-EVIDENCE-CARD-001
+    title: "Explicit single case ATO judgment must return evidence card"
+    input: "这个用户说账号被盗后发布违规内容，user_id=4972532542，帮我从风控角度判断。"
+    expected_routing_mode: single_entity_execution_mode
+    expected_tool_behavior:
+      readonly_observation_allowed: true
+      partial_card_required_on_blocked_source: true
+    expected_output_boundary:
+      - evidence_card_required
+      - user_claim_not_strong_evidence
+      - device_mismatch_is_medium_evidence_needs_corroboration
+      - track_analysis_or_archives_blocked_mark_missing_source
+    pass_fail_criteria: "必须输出 conclusion/confidence/strong/medium/weak/counter/missing/completed/blocked/source_quality/next_action。"
+  - case_id: TRACK-ANALYSIS-STATS-FIRST-001
+    title: "Track-analysis should read stats layer before behavior sequence"
+    input: "需要判断某 user_id/device_id 前端行为是否正常，track-analysis 可打开用户细查页但明细行为序列不可用。"
+    expected_routing_mode: frontend_activity_profile_partial_observation
+    expected_tool_behavior:
+      stats_layer_first: true
+      behavior_sequence_required: false
+    expected_output_boundary:
+      - read_monthly_active_days_device_type_region_register_time_fan_distribution_profile
+      - detail_sequence_unavailable_mark_partial_source
+      - explain_stats_support_or_weaken_conclusion
+    pass_fail_criteria: "不强依赖明细行为序列；明细不可用时输出 partial_source 和统计层解释。"
+  - case_id: TRACK-SPA-LOOP-001
+    title: "Track-analysis browser loop must stop after 3 failed attempts"
+    input: "track-analysis 用户细查需要选择设备下拉框，但连续 3 次无法成功。"
+    expected_routing_mode: partial_evidence_fallback
+    expected_tool_behavior:
+      stop_after_failed_attempts: 3
+      do_not_continue_clicking_or_screenshotting: true
+    expected_output_boundary:
+      - operation_loop_detected
+      - platform_access_partial
+      - browser_overuse
+      - partial_evidence_card
+      - manual_or_hive_dataagent_followup_plan
+    pass_fail_criteria: "连续 3 次失败后停止 browser 操作，不裸 timeout。"
+  - case_id: DEVICE-MISMATCH-ATO-001
+    title: "Publishing device mismatch is medium evidence, not standalone ATO proof"
+    input: "发布色导视频设备与日常使用设备不一致，用户反馈是盗号。请判断。"
+    expected_routing_mode: single_case_evidence_boundary_or_execution
+    expected_output_boundary:
+      - device_mismatch_medium_evidence
+      - user_claim_weak_evidence
+      - require_login_device_behavior_publish_audit_corroboration
+      - no_standalone_strong_ato_conclusion
+    pass_fail_criteria: "发布设备与日常设备不一致只能提升可疑度，不能单独强判盗号。"
+  - case_id: USER-CLAIM-WEAK-EVIDENCE-001
+    title: "User claim is weak evidence"
+    input: "用户反馈是盗号，平台暂未查到其他证据。能否定性 ATO？"
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - user_claim_is_weak_signal
+      - no_strong_conclusion_without_platform_or_audit_evidence
+      - missing_evidence_list_required
+    pass_fail_criteria: "用户反馈不能单独支撑 ATO 强结论。"
+  - case_id: PARTIAL-EVIDENCE-BROWSER-BLOCKED-001
+    title: "Browser blocked or looped source must return partial evidence card"
+    input: "档案中心或 track-analysis blocked/loop，无法继续浏览。"
+    expected_routing_mode: partial_evidence_fallback
+    expected_output_boundary:
+      - completed_sources
+      - blocked_or_timeout_sources
+      - missing_evidence
+      - source_quality
+      - next_action
+    pass_fail_criteria: "browser blocked/loop 不得裸 timeout，不得作为无风险反证。"
+  - case_id: GC-PROTOCOL-DOWNGRADE-001
+    title: "Good case for protocol downgrade evidence combination"
+    input: "客户端降版本，异常 mod/加密样式字符串，同一 user_id 多版本混用，旧版本请求量远高于正常版本，did 与正常设备不一致，多用户共享类似异常版本和异常 mod。请判断。"
+    expected_routing_mode: protocol_attack_analysis
+    expected_output_boundary:
+      - downgrade_itself_not_final_risk
+      - distinguish_normal_version_fluctuation_suspicious_downgrade_high_suspicion_protocol
+      - combined_evidence_required
+      - no_single_field_conclusion
+    pass_fail_criteria: "客户端降版本本身不是风险结论；高疑似协议上号必须依赖组合证据。"
+  - case_id: CONTEXT-CONTAMINATION-CROSS-TASK-001
+    title: "Macro traffic dashboard analysis must not inherit unrelated prior micro-case conclusions"
+    input: "给出一份流量反作弊大盘报告，包括钛合金 TOP10w 下降、openshare 作者暴增、版权投诉上升、DAU 作弊用户数上升。历史上下文中存在协议上号、鸿蒙 ATO、号商农场 BSSID、赌博众包等 case。请做专家研判。"
+    expected_routing_mode: traffic_dashboard_analysis
+    expected_tool_behavior:
+      real_platform_call_required_for_regression: false
+      dataagent_call_required_for_regression: false
+    expected_output_boundary:
+      - analyze_current_dashboard_metrics_first
+      - historical_cases_as_hypothesis_only
+      - missing_join_key_explicit
+      - required_validation_explicit
+      - no_same_gang_or_full_attack_chain_conclusion_without_join_key
+    pass_fail_criteria: "不得强行关联历史 case；若提出关联必须标 hypothesis 并列缺少账号池/IP/接口/BSSID/设备交集。"

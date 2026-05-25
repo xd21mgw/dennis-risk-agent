@@ -4744,3 +4744,73 @@
 - input: 检查 `computer_use_poc/run_logs/semi_open_user_feedback_loop_patch_v1.md`。
 - expected_runtime_behavior: feedback_loop_patch_documented
 - expected_output_boundary: 记录 schema / writer / queue append / feedback inference / smoke test result；明确仍需 main agent runtime 接入。
+
+## 555. Evidence type separation regression exists
+
+- test_id: EVIDENCE-TYPE-SEPARATION-001
+- input: 用户反馈账号被盗后发布违规内容，但没有实际查到钓鱼页访问记录。
+- expected_runtime_behavior: evidence_type_separation_required
+- expected_output_boundary: 用户反馈=`user_claim/weak`；违规发布=`behavior_event/weak`；钓鱼页访问=`missing_evidence`；不得写“钓鱼入口已确认”。
+
+## 556. Single case evidence card is mandatory
+
+- test_id: SINGLE-CASE-EVIDENCE-CARD-001
+- input: 明确 user_id 单案研判 / 用户说“帮我查”。
+- expected_runtime_behavior: evidence_card_required_for_single_entity_execution
+- expected_output_boundary: 输出 conclusion、confidence、strong/medium/weak/counter/missing evidence、completed_sources、blocked_or_timeout_sources、source_quality、next_action。
+
+## 557. Track-analysis stats-first regression exists
+
+- test_id: TRACK-ANALYSIS-STATS-FIRST-001
+- input: track-analysis 可打开用户细查页但明细行为序列不可用。
+- expected_runtime_behavior: frontend_activity_stats_layer_first
+- expected_output_boundary: 先读月活跃天数、设备类型、地区、注册时间、粉丝分布、用户画像/设备画像；明细不可用标 `partial_source`。
+
+## 558. Track-analysis SPA loop stops after 3 attempts
+
+- test_id: TRACK-SPA-LOOP-001
+- input: 设备下拉框连续 3 次无法成功。
+- expected_runtime_behavior: operation_loop_detected_and_stopped
+- expected_output_boundary: 停止 browser 操作；标记 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`；返回 partial evidence card。
+
+## 559. Device mismatch ATO evidence strength calibrated
+
+- test_id: DEVICE-MISMATCH-ATO-001
+- input: 发布设备与日常设备不一致，用户反馈盗号。
+- expected_runtime_behavior: device_mismatch_medium_evidence
+- expected_output_boundary: 设备不一致是 medium evidence；需要登录 / 设备 / 行为 / 发布审计补证；不能单独强判盗号。
+
+## 560. User claim weak evidence regression exists
+
+- test_id: USER-CLAIM-WEAK-EVIDENCE-001
+- input: 只有用户反馈盗号，没有平台证据。
+- expected_runtime_behavior: user_claim_weak_signal
+- expected_output_boundary: 用户反馈只能作为 `user_claim` / weak，不支撑 strong conclusion。
+
+## 561. Browser blocked partial evidence regression exists
+
+- test_id: PARTIAL-EVIDENCE-BROWSER-BLOCKED-001
+- input: 档案中心 / track-analysis / 天狮 browser blocked、2FA、HTML auth 或 loop。
+- expected_runtime_behavior: partial_evidence_card_on_browser_blocked
+- expected_output_boundary: 输出 completed_sources、blocked_or_timeout_sources、missing_evidence、source_quality、next_action；不裸 timeout。
+
+## 562. Protocol downgrade good case exists
+
+- test_id: GC-PROTOCOL-DOWNGRADE-001
+- input: 客户端降版本 + 异常 mod + 多版本混用 + 旧版本高频 + did 不一致 + 多用户共享类似异常版本。
+- expected_runtime_behavior: protocol_downgrade_combined_evidence
+- expected_output_boundary: 降版本本身不是风险结论；输出正常波动 / 可疑降级 / 高疑似协议直调三层；不单字段定性。
+
+## 563. Context contamination cross-task regression exists
+
+- test_id: CONTEXT-CONTAMINATION-CROSS-TASK-001
+- input: 流量反作弊大盘 + 历史微观 case 上下文。
+- expected_runtime_behavior: current_dashboard_first_no_unsupported_correlation
+- expected_output_boundary: 区分 `current_metric_evidence` / `historical_context` / `hypothesis` / `missing_join_key` / `required_validation`；无 join key 不写同一团伙或完整攻击链。
+
+## 564. Observation schema included in release manifest checklist
+
+- test_id: OBSERVATION-SCHEMA-MANIFEST-001
+- input: 检查下一版 release manifest / smoke test。
+- expected_runtime_behavior: observation_schema_release_manifest_coverage
+- expected_output_boundary: `computer_use_poc/observation_schema.md` 应纳入下一版 release manifest 或 package completeness check。

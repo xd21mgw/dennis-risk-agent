@@ -305,6 +305,130 @@ source quality:
 | 鸿蒙一键登录 ATO | HARMONY_ 设备、同 IP token issued、多账号登录成功、token revoke、后续小米/Android 改密 | 需要 oneKey/OAuth/登录方式字段闭环 | 查登录方式、OAuth/oneKey、token issued、改密记录、设备型号、IP 聚集 |
 ```
 
+### BC-FIELD-SEMANTIC-001 字段语义误读纠偏模板
+
+适用：客户端版本降级、疑似协议上号、设备字段异常的 case 中，日志出现 `mod='POST'` 或 `mods=['POST', ...]`。
+
+禁止：
+
+- 不得把 `mod` / `mods` / `model` / `device_model` 当成 HTTP method。
+- 不得将 `mod='POST'` 解释为攻击者使用 HTTP POST 直调后端 API。
+- 不得把 `POST` 单字段作为协议上号证据。
+
+输出结构：
+
+```text
+一句话：
+这里的 POST 出现在设备型号字段中，不能解释为 HTTP method=POST。它只能说明设备型号字段异常、占位符异常或伪造值异常。
+
+字段语义校准：
+- mod / mods / model / device_model: 设备型号或设备上报字段
+- method / request_method / http_method / requestMethod: 才能作为请求方法字段
+
+为什么不能直接判协议直调：
+- POST 单字段不证明请求方法。
+- 设备型号异常只是中弱证据。
+- 协议上号需要版本、did、设备、前端行为和请求链路共同闭合。
+
+协议上号需要补查：
+- 异常 mod / 非真实机型 / 加密样式字符串
+- 多版本混用
+- 旧版本高频
+- did 不一致
+- 正常设备与降级设备差异
+- 前端行为缺失或请求链路异常
+```
+
+### Track-analysis stats-first partial source 模板
+
+适用：需要判断 user_id / device_id 的前端行为是否正常，track-analysis 用户细查页可打开，但明细行为序列不可用或 SPA 控件复杂。
+
+原则：
+
+- 首选直达 `USER_PROFILE_QUERY`。
+- 先读统计层 evidence，不把明细行为序列作为必需前置。
+- 明细不可用时标 `partial_source`，不裸 timeout。
+
+可用统计层字段：
+
+- 月活跃天数
+- 设备类型
+- 地区
+- 注册时间
+- 粉丝分布
+- 用户画像 / 设备画像
+- 使用时长趋势
+
+输出结构：
+
+```text
+track-analysis 当前只形成 partial_source：
+- completed_sources: stats_layer
+- missing_sources: event_sequence_detail
+- blocked_or_timeout_sources: device_dropdown / date_picker / import_data
+
+统计层能说明：
+- 是否存在前端活跃信号
+- 活跃强度
+- 设备 / 地区 / 注册时间是否与其他来源冲突
+
+统计层不能说明：
+- 具体业务动作已经发生
+- 本人操作
+- 真人操作
+```
+
+### Browser / SPA loop 降级模板
+
+适用：档案中心、track-analysis、天狮等 SPA 平台连续失败。
+
+```yaml
+operation_loop_detected: true
+failed_action:
+failed_attempt_count: 3
+platform_access_partial: true
+browser_overuse: true
+blocked_or_timeout_sources:
+completed_sources:
+missing_evidence:
+next_action:
+  - manual_platform_check
+  - offline_hive_or_dataagent_query_plan
+  - rerun_with_auth_or_selector_fix
+```
+
+解释边界：
+
+- 同一动作失败超过 3 次必须停止。
+- 不继续截图 / 点击 / 下拉 / 导入。
+- browser loop 不是无风险反证。
+- 返回 partial evidence card。
+
+### CONTEXT-CONTAMINATION-CROSS-TASK-001 大盘上下文污染纠偏模板
+
+适用：流量反作弊大盘分析时，历史上下文中存在微观 case，但当前大盘没有提供账号池、IP、BSSID、接口、设备或时间窗口交叉验证。
+
+输出必须分层：
+
+```yaml
+current_metric_evidence:
+  - 当前大盘指标本身说明什么
+historical_context:
+  - 历史 case 只作为背景
+hypothesis:
+  - 可能关联路径，必须标待验证
+missing_join_key:
+  - user_id / device_id / IP / BSSID / interface / surface / 时间窗口 / 策略命中 / 数据源返回
+required_validation:
+  - 需要怎样 join / 分层 / 查数
+```
+
+禁止：
+
+- 没有 join key 就写“同一团伙”。
+- 没有交叉验证就写“认证层到内容层完整攻击链”。
+- 自动把历史 IP、BSSID、Cgxw、ATO case 带入当前大盘。
+
 ### 回答骨架
 
 ```text
@@ -618,12 +742,17 @@ D. 先不要执行，只优化计划
 ### 证据表达规则
 
 - 按证据类型说话：登录证据、设备证据、档案证据、策略证据、前端活跃证据。
+- 按 evidence_type 说话：`raw_evidence`、`behavior_event`、`user_claim`、`inference`、`hypothesis`、`missing_evidence` 必须分开。
 - 先讲最能区分本质的证据，不堆字段。
 - 单源证据只能说“线索”或“证据”，不能说“最终定性”。
 - 多源一致时可以提高置信度，但仍保留边界。
 - 单例 case evidence card 中，strong / medium / weak / counter evidence 每条都必须携带 `evidence_source` 和 `source_quality`，字段口径与 ATO batch evidence source schema 一致。
+- 单例 case evidence card 中，每条 strong / medium / weak / counter evidence 还必须携带 `evidence_type` 和 `strength`。
 - `evidence_source` 必须包含 `source_name`、`source_type`、`source_tool_or_hand`、`source_platform`、`collected_at`、`evidence_time_range`、`raw_reference`。
 - `source_quality` 必须包含 `freshness_status`、`freshness_risk`、`permission_status`、`reliability_level`。
+- 用户声称被盗只能写 `evidence_type=user_claim`、`strength=weak`。
+- 违规内容发布只能写 `evidence_type=behavior_event`，最多说明异常行为发生，不能证明被盗。
+- 钓鱼页访问、OAuth 授权、前端行为、token 链路、发布审计未查到时必须进入 `missing_evidence`，不得写“已确认”。
 - 风险研判必须显式说明 `data_freshness / data_window`：关键异常时间是否被当前在线日志可靠窗口覆盖。
 - 统一登录日志在线 API 按约 7 天可靠窗口处理；超窗时在线 API `no_data` / 无 LOGIN 事件只能作为数据缺口，不能作为“无登录”或“无异设备登录”的证据。
 - no_data 不仅不等于无风险，也不等于无登录；当异常时间超过在线窗口时，要标记 `login_log_window_incomplete`、`offline_hive_required`、`online_login_log_may_be_false_negative`。
@@ -655,6 +784,56 @@ D. 先不要执行，只优化计划
 - “异常发布当天零登录记录。”
 - “无异设备登录，因此不像盗号。”
 - “登录设备只有本人，排除 ATO。”
+- “钓鱼入口已确认。”除非已经有 raw evidence。
+- “用户反馈非本人 + 违规发布 = 盗号强证据。”
+
+### 单案 evidence card 强制模板
+
+明确 `user_id` / `device_id` / case 查询、用户说“帮我查 / 帮我看 / 判断这个具体 case”时，必须输出 evidence card 或 partial evidence card。
+
+```yaml
+evidence_card:
+  conclusion:
+  confidence:
+  strong_evidence:
+    - evidence_name:
+      evidence_type:
+      strength:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  medium_evidence:
+    - evidence_name:
+      evidence_type:
+      strength:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  weak_evidence:
+    - evidence_name:
+      evidence_type:
+      strength:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  counter_evidence:
+    - evidence_name:
+      evidence_type:
+      strength:
+      evidence_summary:
+      evidence_source:
+      source_quality:
+  missing_evidence:
+    - evidence_name:
+      evidence_type: missing_evidence
+      reason:
+  completed_sources:
+  blocked_or_timeout_sources:
+  source_quality:
+  next_action:
+```
+
+平台卡住、权限不足、browser loop、HTML/auth page、2FA、timeout 时也要输出 partial evidence card，不得裸 timeout。
 
 ### 示例回答
 

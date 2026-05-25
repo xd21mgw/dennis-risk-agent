@@ -170,16 +170,22 @@ single_case_evidence_card:
   medium_evidence:
     - evidence_name:
       evidence_summary:
+      evidence_type:
+      strength:
       evidence_source:
       source_quality:
   weak_evidence:
     - evidence_name:
       evidence_summary:
+      evidence_type:
+      strength:
       evidence_source:
       source_quality:
   counter_evidence:
     - evidence_name:
       evidence_summary:
+      evidence_type:
+      strength:
       evidence_source:
       source_quality:
   missing_evidence:
@@ -198,6 +204,11 @@ single_case_evidence_card:
 
 解释边界：
 
+- 每条 strong / medium / weak / counter evidence 必须显式标注 `evidence_type` 和 `strength`。
+- `evidence_type` 推荐枚举：`raw_evidence`、`behavior_event`、`user_claim`、`inference`、`hypothesis`、`missing_evidence`。
+- `user_claim` 只能作为用户主张 / weak signal，不能单独支撑 strong conclusion。
+- `behavior_event` 只能证明行为发生。违规内容发布、封禁、投诉等不能自动证明 ATO。
+- 未实际查到的钓鱼页访问、OAuth 授权、前端行为、token 链路、发布审计必须写入 `missing_evidence`，不得写成“已确认”。
 - `model_inference` 不能当作 raw evidence。
 - `manual_input` 不能单独支撑 strong conclusion。
 - 登录日志超窗 `no_data` 不能写入 counter evidence，只能写入 freshness / window risk 或 missing evidence。

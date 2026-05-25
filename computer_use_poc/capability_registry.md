@@ -53,12 +53,13 @@
 
 | mode | trigger | default behavior | boundary |
 |---|---|---|---|
-| `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card | 不默认 DataAgent，不空研判 |
+| `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card；每条证据带 `evidence_type` / `strength` | 不默认 DataAgent，不空研判；不把 user_claim / behavior_event / inference 写成 raw_evidence |
 | `evidence_boundary_mode` | no_data / timeout / blocked / 设备关联 / 模型分 / 用户反馈是否能定性 | 纯分析，30s 内短答 | 不自动查平台，不把弱信号当强证据 |
 | `strategy_recommendation_plan_mode` | 灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案 | 输出策略框架、补证字段、DataAgent/Hive query plan | 即使带 user_id 也不自动 execution |
 | `batch_plan_mode` | 3+ 用户 / 设备、批量、共性归因、分层判断 | 输出 batch plan、case registry 字段、证据分层框架 | 不逐个在线查，确认后才 batch execution |
 | `non_ato_expert_mode` | 反爬、协议、导流截流、活动作弊、渠道套利、群控泛化 | 专家分析 + 取证计划 + 策略建议 | 不默认 browser / 档案中心 |
 | `partial_evidence_card_fallback` | source timeout / blocked / parse error / auth issue | 输出 completed / blocked / timeout / missing evidence 和 next action | 不裸 timeout，不把失败当反证 |
+| `browser_spa_loop_guard` | track-analysis / 档案中心 / 天狮同一 SPA 操作失败超过 3 次 | 停止该 source，标 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`，输出 partial evidence card | 不无限点击 / 截图 / 下拉 / 导入 |
 
 DataAgent/Hive 仅在超出在线可靠窗口、批量、长窗口、复杂 SQL、跨表分析或用户明确要求生成取数问题时进入 plan 或等待确认；不得泛化成默认执行底座。
 

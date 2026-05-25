@@ -4,7 +4,7 @@
 
 本 playbook 面向 Dennis 子 Agent / browser computer use 执行。
 
-当前只支持设计“前端活跃画像只读观察”，聚焦页面上方“用户属性及时长”区域。
+当前只支持设计“前端活跃画像只读观察”，聚焦页面上方统计层信息和“用户属性及时长”区域。
 
 支持的查询对象：
 
@@ -62,13 +62,23 @@ source_entry_resolution
 
 ## 4. 页面读取范围
 
-只读取上方“用户属性及时长”区域：
+优先读取统计层 evidence，不把明细行为序列作为必需前置。
+
+首选：
+
+- 使用 `sequence_list` URL 直达 `USER_PROFILE_QUERY`。
+- 先读取页面可见统计层字段。
+
+统计层字段包括：
 
 - 用户 ID / 设备 ID
 - 注册时间
 - 月活跃天数
 - 粉丝分布
 - 设备属性
+- 设备类型
+- 地区
+- 用户画像 / 设备画像
 - 使用时长趋势图
 - 每日使用时长
 - 活跃天数与使用时长派生判断
@@ -81,6 +91,8 @@ source_entry_resolution
 - 行为回放。
 - 行为序列。
 
+明细行为序列只是可选补证。如果明细数据未同步、日期选择器复杂、设备下拉框不可用、导入数据耗时或 SPA 控件反复失败，应快速降级为 `partial_source`，不得无限尝试。
+
 ## 5. 输出 interpretation
 
 允许输出：
@@ -88,6 +100,8 @@ source_entry_resolution
 - 是否存在前端活跃信号。
 - 活跃强度：none / weak / medium / strong / unknown。
 - 判断依据：活跃天数、使用时长趋势、日使用时长点位。
+- 统计层字段如何支撑或削弱当前风险假设。
+- 与登录日志 / 后端请求 / 设备画像的交叉验证建议。
 - 证据边界：不能证明真人 / 本人 / 具体动作。
 
 禁止输出：
@@ -133,3 +147,38 @@ source_entry_resolution
 - 不改变 DataAgent / Hive 边界。
 - 不引入自动处置。
 - 不引入自动风险定性。
+
+## 9. SPA Loop Guard
+
+track-analysis / browser SPA 操作必须设置最大尝试边界。
+
+停止条件：
+
+- 同一动作连续失败超过 3 次。
+- 同一下拉框 / 日期选择器 / 导入数据按钮连续不可用。
+- 连续截图显示同一失败 UI，没有新增字段产出。
+- 页面进入 auth HTML / 2FA / 权限阻断 / session issue。
+
+停止后输出：
+
+```yaml
+browser_spa_loop_guard:
+  operation_loop_detected: true
+  failed_action:
+  failed_attempt_count:
+  platform_access_partial: true
+  browser_overuse_prevented: true
+  query_status: partial_source
+  completed_sources:
+  blocked_or_timeout_sources:
+  next_action:
+    - use_stats_layer_if_available
+    - offline_hive_or_dataagent_query_plan
+    - manual_platform_check
+```
+
+禁止：
+
+- 无限操作设备下拉框、日期选择器、导入数据按钮。
+- 把明细行为序列不可用解释为没有前端行为。
+- 因 track-analysis partial source 阻断整体证据卡。

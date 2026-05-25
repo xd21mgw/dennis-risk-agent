@@ -40,6 +40,8 @@ selector_profile:
 time_range_policy:
 api_direct_post_profile:
 api_inventory_profile:
+browser_spa_loop_guard:
+evidence_card:
 ```
 
 ## 2. 字段说明
@@ -83,6 +85,8 @@ api_inventory_profile:
 | time_range_policy | 时间范围策略 | record_actual_page_value |
 | api_direct_post_profile | API direct POST 读取档案中心用户分析日志的结构 | endpoint, request_shape, response_shape, pagination_profile |
 | api_inventory_profile | 档案中心 API inventory 覆盖矩阵 | module, endpoint, validation_status, fallback_strategy |
+| browser_spa_loop_guard | browser / SPA 操作循环保护 | operation_loop_detected, failed_attempt_count, browser_overuse |
+| evidence_card | 单案证据卡 | conclusion, confidence, strong/medium/weak/counter/missing evidence |
 
 ## 3. 输出边界
 
@@ -94,6 +98,8 @@ api_inventory_profile:
 - cookie、token、session、KIM code、password、access token、refresh token、完整认证票据不得读取、不得输出、不得沉淀。
 - 不生成封禁、解封、冻结、审批、策略上线等处置结论。
 - 如页面无法确认字段含义，应写入 `failure_reason` 或 `risk_relevant_observations` 的“不确定”说明。
+- 同一 browser / SPA 操作失败超过 3 次，必须写入 `browser_spa_loop_guard.operation_loop_detected=true` 并停止该 source。
+- 单案研判 observation 应包含 `evidence_card` 或说明为何只能输出 partial evidence card。
 - `USER_NOT_FOUND` 时 `expected_failure=true`、`safe_to_continue=false`，但 `readonly_safety_check` 仍可为 `PASSED`。
 
 ## 3.1 状态枚举

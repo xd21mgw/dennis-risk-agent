@@ -115,6 +115,30 @@ timeline 必须包含：
 - “当前批量统计能说明存在账号安全异常，但不能直接定性撞库。”
 - “由于出现 HARMONY_ 设备、同源 IP token 下发、token revoke / kick out、后续小米 / Android 改密尝试，应优先验证一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO 链路。”
 
+### 4.3 协议上号字段语义纠偏：mod / mods 不等于 HTTP method
+
+账号安全场景中遇到客户端版本降级、疑似协议上号、设备字段异常时，必须先区分字段语义。
+
+- `mod` / `mods` / `model` / `device_model` 应按设备型号或设备上报字段理解。
+- `POST` 出现在 `mod` / `mods` 字段里，只能说明设备型号字段异常、占位符异常或伪造值异常。
+- 不得将 `mod='POST'` 或 `mods=['POST', ...]` 解释为 `HTTP method=POST`。
+- 只有字段明确为 `method` / `request_method` / `http_method` / `requestMethod` 时，才能作为请求方法证据。
+- `POST` 不能单独作为协议上号或接口直调证据。
+
+协议上号判断必须依赖组合证据：
+
+- 异常 `mod` / 非真实机型 / 加密样式字符串。
+- 多版本混用。
+- 旧版本高频。
+- `did` 不一致。
+- 正常设备与降级设备差异。
+- 前端行为缺失或请求链路异常。
+
+标准表达：
+
+- “当前 `POST` 出现在设备型号字段中，不能推出攻击者使用 HTTP POST 直调后端。”
+- “它更像设备上报字段异常或伪造值异常，需要结合版本降级、did 不一致、前端行为缺失和请求链路异常再判断。”
+
 ### 4.1 统一登录日志在线窗口限制
 
 ATO / 盗号研判必须先判断 `suspicious_event_time` 与 `query_time` 的时间差。
@@ -231,10 +255,39 @@ source_quality:
 
 - `model_inference` 不能当作 raw evidence，只能作为 hypothesis / interpretation。
 - `manual_input` 不能单独支撑 strong conclusion，只能作为 clue 或弱证据。
+- `user_claim` 只能作为用户主张 / weak signal。用户声称“被盗”“非本人发布”不能直接证明 ATO。
+- `behavior_event` 只能证明行为发生。违规内容发布只能证明违规内容或异常动作发生，不能证明账号被盗。
+- 未实际查到的钓鱼页访问、OAuth 授权、前端行为、token 链路、发布审计等，必须写入 `missing_evidence`，不得写成“已确认”。
+- 单案 evidence card 中每条证据必须标注 `evidence_type` 和 `strength`。
 - 登录日志超窗 `no_data` 不能当作 counter evidence，必须标记 freshness / window risk。
 - blocked / partial source 必须显式标记 `permission_status`，并降低结论置信度。
 - 设备关联只能作为候选关联风险，不能直接定性作弊或盗号。
 - `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号 / IP 明文等敏感内容。
+
+`evidence_type` 推荐枚举：
+
+- `raw_evidence`: 平台日志、审计、策略命中、设备画像、前端观察等可追溯事实。
+- `behavior_event`: 发布、改密、换绑、私信、关注、支付等业务动作事实。
+- `user_claim`: 用户反馈、客服记录、人工备注。
+- `inference`: 基于多条证据的解释。
+- `hypothesis`: 待验证假设。
+- `missing_evidence`: 应查但未查到 / blocked / timeout / 超窗。
+
+单案明确查询或 `single_entity_execution_mode` 必须输出 evidence card。字段至少包含：
+
+- `conclusion`
+- `confidence`
+- `strong_evidence`
+- `medium_evidence`
+- `weak_evidence`
+- `counter_evidence`
+- `missing_evidence`
+- `completed_sources`
+- `blocked_or_timeout_sources`
+- `source_quality`
+- `next_action`
+
+平台 blocked / timeout / loop 时也必须输出 partial evidence card，不能裸 timeout。
 
 ## 6. 输出格式
 

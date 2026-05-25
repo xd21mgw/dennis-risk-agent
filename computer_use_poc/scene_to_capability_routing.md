@@ -53,6 +53,11 @@ Semi-open experience patch v1 路由补丁：
 - `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
 - `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
+- `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。
+- `single_case_evidence_card_required`：明确单个 user_id / case 查询必须输出 evidence card；平台 blocked / timeout / loop 时输出 partial evidence card，不裸 timeout。
+- `track_analysis_stats_first`：track-analysis 用户细查优先读统计层字段（月活跃天数、设备类型、地区、注册时间、粉丝分布、用户画像/设备画像），明细行为序列只是可选补证。
+- `browser_spa_loop_guard`：档案中心 / track-analysis / 天狮同一 browser 动作失败超过 3 次必须停止，标记 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`。
+- `macro_dashboard_context_isolation`：流量反作弊大盘分析必须先基于当前大盘指标；历史 case 只能是 hypothesis，缺 join key 时不得写“同一团伙 / 完整攻击链 / 基础设施共用”。
 
 输出字段分层：
 

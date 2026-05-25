@@ -225,6 +225,45 @@ spa_tab_click_preflight:
   next_action:
 ```
 
+### 2.7 SPA operation loop guard
+
+Browser / SPA sources such as 档案中心、track-analysis、天狮 / RCP must stop repeated UI operations.
+
+Loop detection:
+
+- Same action fails more than 3 times.
+- Same dropdown / date picker / import button remains unavailable after 3 attempts.
+- Repeated screenshots show the same failed UI state.
+- No new structured field is extracted across repeated attempts.
+
+Required output:
+
+```yaml
+spa_operation_loop_guard:
+  operation_loop_detected:
+  source_name:
+  failed_action:
+  failed_attempt_count:
+  platform_access_partial:
+  browser_overuse:
+  stop_reason:
+  next_action:
+```
+
+If `operation_loop_detected=true`:
+
+- Stop browser operations for that source.
+- Do not continue screenshots / clicks.
+- Mark `platform_access_partial` or `partial_source`.
+- Return partial evidence card.
+- Suggest Hive / DataAgent query plan or manual source check if needed.
+
+Forbidden:
+
+- Infinite dropdown / date picker / import button retries.
+- Naked timeout without partial evidence.
+- Treating browser loop as no-risk or no-data evidence.
+
 ## 3. 允许进入页面字段探索的条件
 
 只有满足以下条件，才能开始读取字段：

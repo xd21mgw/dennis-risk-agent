@@ -97,6 +97,24 @@ url_template_inputs:
     fixed: detail
 ```
 
+## 6-A. Stats-first Usage Rule
+
+For semi-open runtime and internal Agent browser observation, use the direct `sequence_list` URL to reach `USER_PROFILE_QUERY`, then read stats-layer evidence first.
+
+Stats-layer evidence includes:
+
+- 月活跃天数
+- 设备类型
+- 地区
+- 注册时间
+- 粉丝分布
+- 用户画像 / 设备画像
+- 使用时长趋势
+
+Behavior sequence / event detail is optional follow-up evidence. If behavior detail is unavailable, unsynced, blocked by date picker, blocked by device dropdown, or requires slow import, mark `partial_source` and return a partial evidence card.
+
+Do not loop on complex SPA controls.
+
 ## 7. 待验证项
 
 - `sid` 是否必需。

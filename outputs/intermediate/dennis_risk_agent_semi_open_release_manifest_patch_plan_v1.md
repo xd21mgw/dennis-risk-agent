@@ -33,6 +33,9 @@ Manifest sections should include:
 2. Full-scenario capability registry.
 3. Scene routing.
 4. Response templates and evidence contracts.
+   - `computer_use_poc/observation_schema.md`
+   - `computer_use_poc/observation_contract_v2_4_6.md`
+   - `computer_use_poc/answer_experience_templates.md`
 5. ATO deep sample.
 6. Non-ATO runtime summaries:
    - anti-crawler
