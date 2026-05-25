@@ -5349,3 +5349,59 @@
 - input: 策略树解释、前端活跃链路、设备 SDK 深查。
 - expected_runtime_behavior: future_package_boundary_kept
 - expected_output_boundary: D/E/F 暂不默认触发；策略树标记 future_strategy_tree_capability。
+
+## 635. Dennis capability architecture overview exists
+
+- test_id: ARCH-OVERVIEW-001
+- input: 检查 `computer_use_poc/dennis_agent_capability_architecture_v1.md`。
+- expected_runtime_behavior: capability_architecture_overview_exists
+- expected_output_boundary: 文档存在，且包含“四层架构”。
+
+## 636. Dennis capability architecture layer names
+
+- test_id: ARCH-OVERVIEW-002
+- input: 检查 `dennis_agent_capability_architecture_v1.md`。
+- expected_runtime_behavior: capability_architecture_layers_named
+- expected_output_boundary: 文档包含“意图识别与任务路由层”、“研判大脑 / 分析编排层”、“证据取数 / 平台手脚层”、“能力契约 / 安全治理层”。
+
+## 637. Dennis capability architecture package ownership
+
+- test_id: ARCH-OVERVIEW-003
+- input: 检查 A/B/C/D/E/F 归属表。
+- expected_runtime_behavior: package_layer_ownership_documented
+- expected_output_boundary: A/B 归入第二层；C 归入第三层 + 第四层；D 标记未来策略配置理解；E/F 归入第三层后置证据能力。
+
+## 638. Dennis capability architecture B calls C
+
+- test_id: ARCH-OVERVIEW-004
+- input: 检查 B/C 关系说明。
+- expected_runtime_behavior: b_orchestrates_c_not_flat_peer
+- expected_output_boundary: 文档明确 B 是编排能力，C 是被 B 调用的取证能力；B 和 C 不是同级平铺调用关系。
+
+## 639. Dennis capability architecture governance layer
+
+- test_id: ARCH-OVERVIEW-005
+- input: 检查 contract/schema/routing/regression 说明。
+- expected_runtime_behavior: governance_layer_documented
+- expected_output_boundary: 文档明确 contract/schema/routing/regression 是第四层治理能力，不是业务取证能力。
+
+## 640. Dennis expert capability view exists
+
+- test_id: EXPERT-VIEW-001
+- input: 检查 `computer_use_poc/dennis_agent_expert_capability_view_v1.md`。
+- expected_runtime_behavior: expert_capability_view_exists
+- expected_output_boundary: 文档存在，并说明专家能力视角适合汇报、复盘、组内分享。
+
+## 641. Dennis expert capability view core chain
+
+- test_id: EXPERT-VIEW-002
+- input: 检查 `dennis_agent_expert_capability_view_v1.md`。
+- expected_runtime_behavior: expert_view_core_chain_documented
+- expected_output_boundary: 文档包含“大脑”、“手脚”、“证据”、“输出”，并说明安全防护层贯穿全链路。
+
+## 642. Dennis expert capability view maps to four-layer architecture
+
+- test_id: EXPERT-VIEW-003
+- input: 检查专家能力视角与四层架构对应表。
+- expected_runtime_behavior: expert_view_four_layer_mapping_documented
+- expected_output_boundary: 文档说明大脑对应意图识别与研判编排，手脚对应证据取数 / 平台手脚，证据对应 observation schema / evidence summary，输出对应策略同学交付，安全防护对应能力契约 / 安全治理层。
