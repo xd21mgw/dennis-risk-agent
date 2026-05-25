@@ -16,6 +16,8 @@ The guard is entry-agnostic. KIM is the first validated entry, not the only targ
 All entries must pass through the same runtime guard before calling Dennis:
 
 - intent classification.
+- task fingerprint classification.
+- context boundary decision.
 - execution / plan / fast_ack mode decision.
 - mixed request decomposition.
 - field output policy selection.
@@ -46,6 +48,65 @@ routing_decision:
 ```
 
 If this routing decision cannot be produced, the entry must fail closed to plan-only or clarification instead of spawning Dennis execution.
+
+## 2A. Task Fingerprint And Context Boundary Guard
+
+Before using previous conversation context, the entry layer must build a `task_fingerprint`.
+
+```yaml
+task_fingerprint:
+  task_type: single_case_analysis | interface_alert_analysis | batch_analysis | strategy_design | methodology | validation_followup
+  subject_type: user | device | interface | campaign | channel | batch | general
+  subject_ids:
+    - "<UID | DID | IP | interface | rule_id | batch_id | safe_ref>"
+  time_window:
+  risk_domain:
+  user_intent:
+```
+
+Then assign `context_mode`:
+
+```yaml
+context_mode: fresh_context | same_task_continuation | same_batch_continuation | methodology_mode
+```
+
+Context mode rules:
+
+- `fresh_context`: new subject, new task type, new risk domain, new time window, or unclear relation. Do not inherit previous evidence.
+- `same_task_continuation`: same task fingerprint and same subject/time window. Evidence inheritance is allowed with provenance.
+- `same_batch_continuation`: same batch id or same case set and same risk domain. Batch-level evidence inheritance is allowed with provenance.
+- `methodology_mode`: user asks concepts, methodology, strategy principles, or evaluation framework. Inherit domain knowledge and templates only, not case evidence.
+
+Default inheritance policy:
+
+| context object | default inheritance |
+|---|---|
+| domain_knowledge | allowed |
+| methodology | allowed |
+| response_template | allowed |
+| previous_case_evidence | denied unless same_task/same_batch fingerprint matches |
+| previous_tool_observation | denied unless same_task/same_batch fingerprint matches |
+| previous_entity_ids | denied unless explicitly re-mentioned or same_task/same_batch fingerprint matches |
+| previous_final_judgement | denied unless same_task/same_batch fingerprint matches and is cited as previous judgement |
+
+Historical cases can be used only as general pattern or hypothesis. They must not be used as current evidence.
+
+Response-time provenance check:
+
+- Factual evidence must come from `current_input` or `current_task_observation`.
+- Do not cite UID / DID / IP / BSSID / interface / platform observation outside current task scope.
+- Missing join key means no "same gang", "same attack chain", "same batch risk", or "shared infrastructure" conclusion.
+- If historical case is referenced, label it as "historical experience / similar pattern", not evidence for the current task.
+
+Required output labels when historical context is relevant:
+
+```yaml
+current_task_evidence:
+historical_context:
+hypothesis:
+missing_join_key:
+required_validation:
+```
 
 ## 3. Core Routing Modes
 

@@ -4814,3 +4814,52 @@
 - input: 检查下一版 release manifest / smoke test。
 - expected_runtime_behavior: observation_schema_release_manifest_coverage
 - expected_output_boundary: `computer_use_poc/observation_schema.md` 应纳入下一版 release manifest 或 package completeness check。
+
+## 565. Generic context boundary guard exists
+
+- test_id: CONTEXT-BOUNDARY-GUARD-001
+- input: 检查 `multi_entry_runtime_guard_v1.md`。
+- expected_runtime_behavior: task_fingerprint_and_context_mode_required
+- expected_output_boundary: 包含 `task_type` / `subject_type` / `subject_ids` / `time_window` / `risk_domain` / `user_intent`，以及 `fresh_context` / `same_task_continuation` / `same_batch_continuation` / `methodology_mode`。
+
+## 566. Previous ATO case then new interface alert should be fresh
+
+- test_id: PREVIOUS_ATO_CASE_THEN_NEW_INTERFACE_ALERT
+- input: 上一轮 ATO，下一轮新接口告警。
+- expected_runtime_behavior: fresh_context_for_new_interface_alert
+- expected_output_boundary: 不继承上一轮 ATO UID/IP/设备 observation；只作为 hypothesis 或 historical_context。
+
+## 567. Previous device case then strategy design should use methodology mode
+
+- test_id: PREVIOUS_DEVICE_CASE_THEN_STRATEGY_DESIGN
+- input: 上一轮设备 case，下一轮策略灰度设计。
+- expected_runtime_behavior: methodology_mode_no_case_evidence_inheritance
+- expected_output_boundary: 只继承方法论和模板，不把上一设备 case 作为当前事实。
+
+## 568. Previous batch then new single case should be fresh unless joined
+
+- test_id: PREVIOUS_BATCH_THEN_NEW_SINGLE_CASE
+- input: 上一轮 batch 结论，下一轮新 user_id 单案。
+- expected_runtime_behavior: fresh_single_case_context
+- expected_output_boundary: batch pattern 只能作为 hypothesis；无 join key 不写同批或同攻击链。
+
+## 569. Same alert continuation may inherit with provenance
+
+- test_id: SAME_ALERT_CONTINUE_VALIDATION_CAN_INHERIT
+- input: 同一 interface alert、同一 time_window 的继续验证。
+- expected_runtime_behavior: same_task_continuation_allows_evidence_with_provenance
+- expected_output_boundary: 允许继承上一轮 scope，但必须标注 previous scope / provenance。
+
+## 570. Short follow-up with new subject should fresh context
+
+- test_id: SHORT_FOLLOWUP_WITH_NEW_SUBJECT_SHOULD_FRESH
+- input: 上一轮 user ATO，下一轮“看下 device_id=...”
+- expected_runtime_behavior: fresh_context_due_to_subject_change
+- expected_output_boundary: 不继承上一 user ATO evidence；独立路由 device case。
+
+## 571. Methodology question should not inherit case evidence
+
+- test_id: METHODOLOGY_QUESTION_SHOULD_NOT_INHERIT_CASE_EVIDENCE
+- input: 上一轮具体 case，下一轮问“怎么区分协议攻击和群控？”
+- expected_runtime_behavior: methodology_mode
+- expected_output_boundary: 继承领域知识和回答模板，不引用上一轮实体或平台 observation 作为证据。

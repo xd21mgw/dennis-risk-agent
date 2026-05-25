@@ -58,6 +58,34 @@ Semi-open experience patch v1 路由补丁：
 - `track_analysis_stats_first`：track-analysis 用户细查优先读统计层字段（月活跃天数、设备类型、地区、注册时间、粉丝分布、用户画像/设备画像），明细行为序列只是可选补证。
 - `browser_spa_loop_guard`：档案中心 / track-analysis / 天狮同一 browser 动作失败超过 3 次必须停止，标记 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`。
 - `macro_dashboard_context_isolation`：流量反作弊大盘分析必须先基于当前大盘指标；历史 case 只能是 hypothesis，缺 join key 时不得写“同一团伙 / 完整攻击链 / 基础设施共用”。
+- `context_boundary_guard`：任何入口都必须先生成 task fingerprint，再决定 `fresh_context` / `same_task_continuation` / `same_batch_continuation` / `methodology_mode`。只有 same task / same batch 且 fingerprint 匹配时，才允许继承上一轮 evidence。
+
+Context Boundary Guard：
+
+```yaml
+task_fingerprint:
+  task_type: single_case_analysis | interface_alert_analysis | batch_analysis | strategy_design | methodology | validation_followup
+  subject_type: user | device | interface | campaign | channel | batch | general
+  subject_ids:
+  time_window:
+  risk_domain:
+  user_intent:
+context_mode: fresh_context | same_task_continuation | same_batch_continuation | methodology_mode
+```
+
+继承策略：
+
+- `domain_knowledge` / `methodology` / `response_template` 默认可继承。
+- `previous_case_evidence` / `previous_tool_observation` / `previous_entity_ids` / `previous_final_judgement` 默认不可继承。
+- 只有 `same_task_continuation` / `same_batch_continuation` 且 fingerprint 匹配时，才允许继承 evidence，并且必须标注 provenance。
+- 历史 case 只能作为 general pattern / hypothesis，不能作为 current evidence。
+
+response-time provenance check：
+
+- 输出事实证据必须来自 `current_input` 或 `current_task_observation`。
+- 不得引用当前任务 scope 外的 UID / DID / IP / BSSID / interface / 平台 observation。
+- 缺 join key 不得写“同一团伙 / 同一攻击链 / 同一批风险 / 基础设施共用”。
+- 如引用历史 case，必须标注为“历史经验 / 相似模式”。
 
 输出字段分层：
 

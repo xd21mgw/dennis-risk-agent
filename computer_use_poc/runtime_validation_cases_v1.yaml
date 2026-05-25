@@ -614,3 +614,77 @@ bad_case_regression:
       - required_validation_explicit
       - no_same_gang_or_full_attack_chain_conclusion_without_join_key
     pass_fail_criteria: "不得强行关联历史 case；若提出关联必须标 hypothesis 并列缺少账号池/IP/接口/BSSID/设备交集。"
+
+context_boundary_guard_regression:
+  - case_id: PREVIOUS_ATO_CASE_THEN_NEW_INTERFACE_ALERT
+    previous_context: "上一轮分析了鸿蒙 ATO 单案，包含 user_id、IP、HARMONY 设备和 token 事件。"
+    current_input: "现在这个接口告警请求量上升，帮我判断是不是协议攻击。"
+    expected_task_fingerprint:
+      task_type: interface_alert_analysis
+      subject_type: interface
+      context_mode: fresh_context
+    expected_output_boundary:
+      - do_not_inherit_previous_ato_user_ip_device_as_current_evidence
+      - historical_ato_case_can_only_be_hypothesis_if_relevant
+      - require_current_interface_metrics_frontend_backend_join_request_sequence
+    pass_fail_criteria: "不能把上一轮 ATO 证据带入新接口告警作为事实。"
+  - case_id: PREVIOUS_DEVICE_CASE_THEN_STRATEGY_DESIGN
+    previous_context: "上一轮分析了某 device_id 的风险标签和关联账号。"
+    current_input: "我们应该怎么设计设备风险策略的灰度验证和误伤控制？"
+    expected_task_fingerprint:
+      task_type: strategy_design
+      subject_type: general
+      context_mode: methodology_mode
+    expected_output_boundary:
+      - inherit_methodology_only
+      - do_not_use_previous_device_case_as_current_evidence
+      - output_strategy_framework_metrics_false_positive_control
+    pass_fail_criteria: "策略设计只继承方法论，不继承上一设备 case 事实。"
+  - case_id: PREVIOUS_BATCH_THEN_NEW_SINGLE_CASE
+    previous_context: "上一轮分析了 20 个 ATO batch case，结论为某攻击模板成立。"
+    current_input: "这个新 user_id=12345 是不是同一类 ATO？"
+    expected_task_fingerprint:
+      task_type: single_case_analysis
+      subject_type: user
+      context_mode: fresh_context
+    expected_output_boundary:
+      - previous_batch_pattern_as_hypothesis_only
+      - require_current_user_observation
+      - no_same_batch_or_same_attack_conclusion_without_join_key
+    pass_fail_criteria: "不能把新单案直接归入上一批；必须查当前 user 或列 required_validation。"
+  - case_id: SAME_ALERT_CONTINUE_VALIDATION_CAN_INHERIT
+    previous_context: "上一轮正在分析 interface=openshare_upload_alert，time_window=2026-05-25 10:00-11:00。"
+    current_input: "继续验证刚才这个 openshare 告警，把前后端链路补证字段列出来。"
+    expected_task_fingerprint:
+      task_type: validation_followup
+      subject_type: interface
+      context_mode: same_task_continuation
+    expected_output_boundary:
+      - evidence_inheritance_allowed_with_provenance
+      - cite_previous_scope
+      - list_current_validation_fields
+    pass_fail_criteria: "同一告警继续验证可继承上一轮 scope，但必须标 provenance。"
+  - case_id: SHORT_FOLLOWUP_WITH_NEW_SUBJECT_SHOULD_FRESH
+    previous_context: "上一轮分析 user_id=111 的 ATO。"
+    current_input: "看下 device_id=ANDROID_new_001"
+    expected_task_fingerprint:
+      task_type: single_case_analysis
+      subject_type: device
+      context_mode: fresh_context
+    expected_output_boundary:
+      - short_followup_new_subject_is_fresh
+      - do_not_inherit_previous_user_ato_evidence
+      - route_device_case_independently
+    pass_fail_criteria: "短 follow-up 但主体变化，必须 fresh context。"
+  - case_id: METHODOLOGY_QUESTION_SHOULD_NOT_INHERIT_CASE_EVIDENCE
+    previous_context: "上一轮有具体账号、IP、设备和策略命中 observation。"
+    current_input: "怎么区分协议攻击和群控？"
+    expected_task_fingerprint:
+      task_type: methodology
+      subject_type: general
+      context_mode: methodology_mode
+    expected_output_boundary:
+      - inherit_domain_knowledge_and_templates_only
+      - do_not_mention_previous_case_entities_as_evidence
+      - answer_general_methodology
+    pass_fail_criteria: "方法论问题不得继承上一轮 case evidence。"

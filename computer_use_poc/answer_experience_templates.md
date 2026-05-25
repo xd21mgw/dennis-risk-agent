@@ -429,6 +429,56 @@ required_validation:
 - 没有交叉验证就写“认证层到内容层完整攻击链”。
 - 自动把历史 IP、BSSID、Cgxw、ATO case 带入当前大盘。
 
+### Context Boundary Guard 通用模板
+
+适用：任何新问题、跨任务追问、短 follow-up、方法论问题、从 batch 切到 single case、从 case 切到策略设计、从设备 case 切到接口告警。
+
+第一步先生成 task fingerprint：
+
+```yaml
+task_fingerprint:
+  task_type: single_case_analysis | interface_alert_analysis | batch_analysis | strategy_design | methodology | validation_followup
+  subject_type: user | device | interface | campaign | channel | batch | general
+  subject_ids:
+  time_window:
+  risk_domain:
+  user_intent:
+context_mode: fresh_context | same_task_continuation | same_batch_continuation | methodology_mode
+```
+
+继承策略：
+
+```yaml
+inheritance_policy:
+  domain_knowledge: allowed
+  methodology: allowed
+  response_template: allowed
+  previous_case_evidence: denied_by_default
+  previous_tool_observation: denied_by_default
+  previous_entity_ids: denied_by_default
+  previous_final_judgement: denied_by_default
+```
+
+只有 `same_task_continuation` / `same_batch_continuation` 且 task fingerprint 匹配时，才允许继承 evidence。
+
+输出事实证据前做 provenance check：
+
+```yaml
+current_task_evidence:
+historical_context:
+hypothesis:
+missing_join_key:
+required_validation:
+```
+
+禁止：
+
+- 新接口告警继承上一轮 ATO case 的 UID / IP / 设备观察。
+- 新策略设计继承上一轮设备 case 的结论作为当前事实。
+- 新单案继承上一批 batch 的最终判断。
+- 方法论问题继承任一历史 case 的 evidence。
+- 缺 join key 时写同一团伙、同一攻击链、同一批风险。
+
 ### 回答骨架
 
 ```text
