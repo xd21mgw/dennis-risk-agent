@@ -25,13 +25,57 @@ Agent records quality risk signals and generates candidate learning records; fin
 | `user_input_original` | string | optional | text | Raw user input if safe to retain | redact cookie/token/session/header/phone |
 | `user_input_sanitized` | string | yes | text | Safe retained version | use safe_ref for sensitive entities |
 | `answer_mode` | string | yes | see enum | How agent answered | no platform execution implied |
-| `user_feedback` | string/list | optional | feedback option ids / text | User feedback if provided | sanitize before storing |
+| `user_feedback` | object/string/list | optional | see section 2-A | User feedback if provided or linked later | sanitize before storing |
 | `sensitive_risk` | string | yes | see enum | Sensitive data risk | do not store credential plaintext |
 | `agent_observed` | object | yes | see section 3 | Runtime-observable quality and safety signals | not final judgment |
 | `agent_suggested` | object | yes | see section 4 | Candidate scene / capability / gap / action | not final judgment |
 | `reviewer_final` | object | yes | see section 5 | Human final review result | only accepted can trigger Codex follow-up |
 | `codex_followup_prompt` | string | optional | text | Future Codex task draft | must not include credentials |
 | `notes` | string | optional | text | Safe notes | no secrets |
+
+## 2-A. Observation User Feedback Field
+
+`semi_open_pilot_logs/YYYY-MM-DD.md` observation records should include a `user_feedback` object. It may be empty at initial observation time and later linked by a separate feedback block.
+
+```yaml
+user_feedback:
+  feedback_type: none | useful | too_generic | off_target | wrong_intent | needs_data | timeout_bad_experience | worth_learning | unsafe_or_overexposed
+  feedback_text: ""
+  inferred_from_message: false
+  confidence: 0.0
+  linked_previous_record_id: ""
+  should_enter_candidate_queue: false
+```
+
+Field meaning:
+
+| field | type | rule |
+|---|---|---|
+| `feedback_type` | string | inferred feedback type or `none` when no feedback yet |
+| `feedback_text` | string | sanitized feedback text only |
+| `inferred_from_message` | boolean | true when inferred from a follow-up user message |
+| `confidence` | number | 0-1 inference confidence |
+| `linked_previous_record_id` | string | previous observation id when feedback is separate |
+| `should_enter_candidate_queue` | boolean | true for high-value or risk feedback, never true for plain `useful` by default |
+
+## 2-B. Feedback Record Schema
+
+`feedback_record` is appended when a user sends a follow-up feedback message after an answer. It links back to the previous observation rather than overwriting the old markdown block.
+
+Required fields:
+
+| field | type | required | rule |
+|---|---|---|---|
+| `timestamp` | string | yes | ISO-8601 timestamp |
+| `source_channel` | string | yes | KIM / APP / Web / other |
+| `feedback_message` | string | yes | raw message only if safe; sanitize before write |
+| `linked_previous_record_id` | string | recommended | previous observation id |
+| `inferred_feedback_type` | string | yes | inferred from mapping rules |
+| `confidence` | number | yes | 0-1 confidence |
+| `should_enter_candidate_queue` | boolean | yes | true for non-useful high-value feedback |
+| `sanitized_feedback_text` | string | yes | no cookie/token/session/header/phone plaintext |
+
+High-value feedback can be appended to the runtime candidate queue. The source-tree `question_learning_candidate_queue_v1.csv` remains a template and must not be overwritten by runtime.
 
 ## 3. agent_observed
 

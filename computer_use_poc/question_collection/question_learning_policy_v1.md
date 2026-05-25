@@ -36,6 +36,18 @@ Runtime records must be appended to:
 runtime_logs/question_collection/question_records_YYYYMMDD.jsonl
 ```
 
+Semi-open pilot feedback candidates are appended to:
+
+```text
+runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+The source-tree template CSV remains read-only and should not receive real user feedback rows.
+
+Later user feedback is appended as `feedback_record` blocks linked to the previous observation id. If feedback is `too_generic`, `off_target`, `wrong_intent`, `needs_data`, `timeout_bad_experience`, `worth_learning`, or `unsafe_or_overexposed`, it should enter the runtime candidate queue with `review_status=pending`.
+
+Plain `useful` feedback is recorded in pilot logs but does not enter the candidate queue by default.
+
 Runtime creates pending candidates only:
 
 - `reviewer_final.reviewer_decision=pending`

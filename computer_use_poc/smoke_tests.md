@@ -4667,3 +4667,80 @@
 - input: 批量 ATO 攻击类型归因。
 - expected_runtime_behavior: attack_type_alternative_explanation_table
 - expected_output_boundary: 输出撞库 ATO vs 一键登录 / 鸿蒙授权接管对比表；明确 password fail / CAPTCHA 可能来自改密环节，不能单独作为撞库主线证据。
+
+## 544. BC-FIELD-SEMANTIC-001 regression exists
+
+- test_id: BC-FIELD-SEMANTIC-001
+- input: 客户端版本降级疑似协议上号，日志里 `mods=['POST', ...]`，同时有旧版本高频、did 不一致和前端行为缺失。
+- expected_runtime_behavior: field_semantics_checked_before_protocol_conclusion
+- expected_output_boundary: 不得把 `mod` / `mods` / `model` / `device_model` 当成 HTTP method；`POST` 出现在设备型号字段中只能作为设备字段异常或伪造值异常。
+
+## 545. HTTP method evidence requires explicit method field
+
+- test_id: FIELD-SEMANTIC-METHOD-001
+- input: 日志字段包括 `mod='POST'`，但没有 `method` / `request_method` / `http_method` / `requestMethod`。
+- expected_runtime_behavior: http_method_not_inferred_from_device_model_field
+- expected_output_boundary: 只有明确请求方法字段才能作为 HTTP method 证据；`POST` 不能单独作为协议上号证据。
+
+## 546. Protocol login requires combined evidence
+
+- test_id: PROTOCOL-LOGIN-COMBINED-EVIDENCE-001
+- input: 设备型号字段异常、版本降级、did 不一致、前端行为缺失混合出现。
+- expected_runtime_behavior: protocol_login_combined_evidence_required
+- expected_output_boundary: 协议上号判断必须组合异常 mod / 非真实机型 / 加密样式字符串、多版本混用、旧版本高频、did 不一致、正常设备与降级设备差异、前端行为缺失或请求链路异常。
+
+## 547. Semi-open user feedback loop writer exists
+
+- test_id: FEEDBACK-LOOP-001
+- input: 检查 `computer_use_poc/question_collection/pilot_observation_writer.py`。
+- expected_runtime_behavior: local_feedback_writer_available
+- expected_output_boundary: 支持 `observation_record` 和 `feedback_record`；写入 `semi_open_pilot_logs/YYYY-MM-DD.md`；不访问真实平台、不调用 DataAgent。
+
+## 548. Too generic feedback enters candidate queue
+
+- test_id: FEEDBACK-LOOP-002
+- input: 用户反馈“太泛了”。
+- expected_runtime_behavior: feedback_type_too_generic
+- expected_output_boundary: 追加 feedback block；进入 runtime candidate queue；priority=P2；review_status=pending。
+
+## 549. Wrong intent feedback enters candidate queue
+
+- test_id: FEEDBACK-LOOP-003
+- input: 用户反馈“不是这个意思 / 你理解错了 / 意图不对”。
+- expected_runtime_behavior: feedback_type_wrong_intent
+- expected_output_boundary: 标记 routing_gap / intent_mismatch；进入 runtime candidate queue；priority=P1；不自动改 Skill。
+
+## 550. Follow-up query should route instead of direct exec
+
+- test_id: FEEDBACK-LOOP-004
+- input: 上一轮是风控查询上下文，用户只回复“查一下吧 / 继续 / 看下 / 可以 / 试一下”。
+- expected_runtime_behavior: needs_data_followup_query
+- expected_output_boundary: 标记 `needs_data` / `followup_query`；交给 dennis-risk-agent 或正确 routing；main agent 不直接 exec。
+
+## 551. Worth learning feedback enters candidate queue
+
+- test_id: FEEDBACK-LOOP-005
+- input: 用户反馈“这个值得沉淀 / 记录下 / 后面修”。
+- expected_runtime_behavior: feedback_type_worth_learning
+- expected_output_boundary: 进入 runtime candidate queue；review_status=pending；不得自动生成 accepted。
+
+## 552. Useful feedback does not enter candidate queue by default
+
+- test_id: FEEDBACK-LOOP-006
+- input: 用户反馈“有用 / 可以 / 这个对 / 这个结论准”。
+- expected_runtime_behavior: feedback_type_useful
+- expected_output_boundary: 写入 feedback record；默认不进入 candidate queue。
+
+## 553. Feedback sanitizes sensitive text
+
+- test_id: FEEDBACK-LOOP-007
+- input: 用户反馈中包含 cookie / token / session / header / 手机号。
+- expected_runtime_behavior: sensitive_feedback_redacted
+- expected_output_boundary: 不写敏感明文；只写 redacted 文本；不输出 cookie/token/session/header。
+
+## 554. Semi-open feedback loop run log exists
+
+- test_id: FEEDBACK-LOOP-008
+- input: 检查 `computer_use_poc/run_logs/semi_open_user_feedback_loop_patch_v1.md`。
+- expected_runtime_behavior: feedback_loop_patch_documented
+- expected_output_boundary: 记录 schema / writer / queue append / feedback inference / smoke test result；明确仍需 main agent runtime 接入。

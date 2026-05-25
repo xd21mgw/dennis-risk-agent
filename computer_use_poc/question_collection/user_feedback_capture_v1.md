@@ -6,6 +6,8 @@ User feedback helps Dennis Agent identify whether an answer was useful, too gene
 
 Feedback is written into `question_record.user_feedback`. It can raise `learning_value` or push a question into the candidate queue, but it cannot directly modify Skill, Prompt, routing, runtime summary, release package, or regression assets.
 
+In semi-open runtime, later user messages can also be captured as `feedback_record` blocks linked to the previous observation id. The runtime must append these blocks; it must not rewrite historical observation text in place.
+
 ## 2. Minimal Feedback Options
 
 | value | label | meaning | suggested record impact |
@@ -20,6 +22,24 @@ Feedback is written into `question_record.user_feedback`. It can raise `learning
 | 8 | need_login_log | Login log evidence is missing. | Recommend login log read only when within reliable window, otherwise offline Hive plan. |
 | 9 | need_strategy_hit | Strategy hit evidence is missing. | Recommend strategy hit evidence plan. |
 | 10 | need_dataagent_hive | Offline aggregation or long-window analysis is needed. | Generate DataAgent / Hive query plan; do not call DataAgent automatically. |
+
+## 2-A. Free-text Feedback Inference Rules
+
+| user wording | inferred feedback_type | candidate queue |
+|---|---|---|
+| 有用 / 可以 / 这个对 / 这个结论准 | `useful` | no by default |
+| 太泛了 / 都是方法论 / 没啥信息 | `too_generic` | yes |
+| 不是这个意思 / 你理解错了 / 意图不对 | `wrong_intent` | yes |
+| 答偏 | `off_target` | yes |
+| 你没查数据 / 能不能实际查一下 / 查一下吧 | `needs_data` | yes |
+| 等太久 / 卡住了 / 怎么还没结果 | `timeout_bad_experience` | yes |
+| 这个值得沉淀 / 记录下 / 后面修 | `worth_learning` | yes |
+| 你不该输出这个 / 这个太敏感 | `unsafe_or_overexposed` | yes |
+
+Follow-up continuation rule:
+
+- If the previous turn is a risk-query context and the user only replies `查一下吧` / `继续` / `看下` / `可以` / `试一下`, record `needs_data` with issue tag `followup_query`.
+- The main agent should not directly execute from that short reply. It should route the follow-up to `dennis-risk-agent` or the correct execution / plan mode.
 
 ## 3. Recording Rules
 
@@ -53,6 +73,41 @@ If feedback includes `too_generic` or `off_target`, Dennis Agent should consider
 - `recommended_action=need_human_review`, `add_bad_case`, `update_routing`, or `update_evidence_template`
 
 These are candidate signals. Final quality assessment and final action must be written under `reviewer_final`.
+
+Runtime candidate queue append target:
+
+```text
+runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+Do not append real runtime feedback into the source-tree template:
+
+```text
+computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+Runtime candidate queue fields:
+
+- `candidate_id`
+- `timestamp`
+- `source_channel`
+- `linked_log_id`
+- `user_prompt`
+- `agent_answer_summary`
+- `feedback_type`
+- `feedback_text`
+- `issue_tags`
+- `suggested_fix_area`
+- `priority`
+- `review_status`
+- `notes`
+
+Priority rules:
+
+- `P0`: safety leakage, write action, sensitive output, severe overreach.
+- `P1`: wrong intent, should-have-queried-but-did-not, wrong judgment, timeout blocking core task.
+- `P2`: too generic, too long, poor format, missing evidence plan.
+- `P3`: wording polish, template compression.
 
 If feedback includes `needs_data` or `need_dataagent_hive`, Dennis Agent should:
 

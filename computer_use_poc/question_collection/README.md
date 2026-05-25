@@ -64,11 +64,50 @@ Contract files:
 - `runtime_question_record_sample_v1.jsonl`
 - `runtime_logging_smoke_test_v1.md`
 - `runtime_question_record_collector_stub_v1.py`
+- `pilot_observation_writer.py`
 
 Core rule:
 
 - Agent can automatically keep records.
 - Agent cannot automatically change the brain.
+
+## 2-B. Semi-open User Feedback Loop
+
+Current pilot feedback flow:
+
+```text
+用户后续消息
+→ 识别 feedback_type
+→ 关联最近 observation record
+→ 追加 feedback block 到 semi_open_pilot_logs/YYYY-MM-DD.md
+→ 高价值反馈追加 runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+→ reviewer_final 继续保持 pending
+```
+
+`pilot_observation_writer.py` supports two local input types:
+
+- `observation_record`: appends a normal observation block and includes `user_feedback`.
+- `feedback_record`: appends a linked feedback block.
+
+High-value feedback types enter the runtime candidate queue:
+
+- `too_generic`
+- `off_target`
+- `wrong_intent`
+- `needs_data`
+- `timeout_bad_experience`
+- `worth_learning`
+- `unsafe_or_overexposed`
+
+`useful` feedback is recorded in the pilot log but does not enter the candidate queue by default.
+
+The runtime candidate queue path is:
+
+```text
+runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+The source-tree `question_learning_candidate_queue_v1.csv` remains a demo template and must not be overwritten by runtime.
 
 ## 3. Boundaries
 
@@ -93,3 +132,4 @@ Core rule:
 - `runtime_question_record_sample_v1.jsonl`: JSONL sample records.
 - `runtime_logging_smoke_test_v1.md`: append-only logging smoke tests.
 - `runtime_question_record_collector_stub_v1.py`: local-only append stub.
+- `pilot_observation_writer.py`: local-only pilot observation / feedback writer with candidate queue append.

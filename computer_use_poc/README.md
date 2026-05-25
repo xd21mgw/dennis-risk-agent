@@ -175,6 +175,7 @@ Security Preflight Current Status：
 - 当前暂放 `computer_use_poc/question_collection/`；长期建议迁移到 `runtime/question_collection/` 或 `learning/question_collection/`。
 - 不访问真实内部平台，不调用 DataAgent，不保存 cookie / token / session / header。
 - 半开放 runtime 真实问题必须 append-only 写入 `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`；`question_learning_candidate_queue_v1.csv` 只是只读模板，不能被覆盖写入。
+- 半开放用户后续反馈通过 `pilot_observation_writer.py` 追加写入 `semi_open_pilot_logs/YYYY-MM-DD.md`；高价值反馈追加到 `runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`，不覆盖模板 CSV。
 
 本阶段新增资产：
 
@@ -190,6 +191,7 @@ Security Preflight Current Status：
 - `computer_use_poc/question_collection/runtime_question_record_sample_v1.jsonl`
 - `computer_use_poc/question_collection/runtime_logging_smoke_test_v1.md`
 - `computer_use_poc/question_collection/runtime_question_record_collector_stub_v1.py`
+- `computer_use_poc/question_collection/pilot_observation_writer.py`
 
 ## 4-F. Semi-open Release Readiness Review
 

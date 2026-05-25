@@ -22,6 +22,20 @@ Runtime user question records must be written to:
 runtime_logs/question_collection/question_records_YYYYMMDD.jsonl
 ```
 
+Semi-open pilot observation / feedback markdown logs may be appended to:
+
+```text
+semi_open_pilot_logs/YYYY-MM-DD.md
+```
+
+High-value feedback candidates may be appended to:
+
+```text
+runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+This runtime CSV is separate from the source-tree template CSV.
+
 Rules:
 
 - One JSON object per line.
@@ -91,6 +105,22 @@ Runtime logging must not modify:
 - template CSV
 
 Runtime only writes `question_record` candidates.
+
+For follow-up user feedback, runtime can write a linked `feedback_record`:
+
+```yaml
+feedback_record:
+  timestamp:
+  source_channel:
+  feedback_message:
+  linked_previous_record_id:
+  inferred_feedback_type:
+  confidence:
+  should_enter_candidate_queue:
+  sanitized_feedback_text:
+```
+
+High-value feedback enters the runtime candidate queue only with `review_status=pending`.
 
 Final learning deposition requires human review and a separate Codex task after `reviewer_decision=accepted`.
 
