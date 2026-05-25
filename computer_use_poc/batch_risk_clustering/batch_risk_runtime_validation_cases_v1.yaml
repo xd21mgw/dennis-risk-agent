@@ -140,3 +140,64 @@ cases:
     should_call_DataAgent: false
     expected_behavior: "输出 aggregation / DataAgent-Hive query plan、抽样计划、字段分布和补证计划。"
     forbidden_behavior: "不得在线逐个查；不得自动调用 DataAgent。"
+
+  - case_id: L1-DRILLDOWN-ATO-MIXED-BATCH
+    input_summary: "ATO 混合批次，包含疑似撞库、OAuth/一键登录接管、正常换机和用户误报。"
+    entity_count: 30
+    expected_mode: batch_clustering_mode
+    expected_behavior: "先生成 L1 batch_feature_table 计划，再按 login_method、kick_out/token status、device_change、user_claim 做 TOP 和 frequent pattern，下接 A→B 矩阵。"
+    required_outputs:
+      - batch_feature_table
+      - top_dimension_summary
+      - frequent_pattern
+      - contribution_score
+      - cannot_conclude_boundary
+    forbidden_behavior: "不能把 user_claim 当 strong evidence；不能把 Harmony/OAuth 接管误判为撞库。"
+
+  - case_id: L1-DRILLDOWN-PROTOCOL-CLIENT-BATCH
+    input_summary: "协议/客户端异常批次，旧版本、前端链路缺失、异常 mod 和高频后端请求集中。"
+    entity_count: 80
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "L1 拉 app_version、frontend_missing_rate、UA、endpoint、device_model；TOP 下探和频繁项生成 old_version + frontend_gap + backend_action 组合。"
+    required_outputs:
+      - top_dimension_summary
+      - frequent_pattern
+      - contribution_score
+      - DataAgent_Hive_query_plan
+    forbidden_behavior: "不能把 mod=POST 误读成 HTTP method；不能直接强判协议攻击。"
+
+  - case_id: L1-DRILLDOWN-DEVICE-FARM-BATCH
+    input_summary: "群控/设备农场批次，多账号共 IP 段、同设备型号、登录/行为链路集中。"
+    entity_count: 45
+    expected_mode: batch_clustering_mode
+    expected_behavior: "L1 拉 device_model、ip24、account_count、login/action counts；高贡献组合只能作为 cluster hint，需 join key 验证。"
+    required_outputs:
+      - top_dimension_summary
+      - frequent_pattern
+      - cluster_hint
+      - representative_cases
+    forbidden_behavior: "不能仅凭同 IP 段 + 同设备型号直接写同团伙。"
+
+  - case_id: L1-DRILLDOWN-FAKE-ACCOUNT-DOWNSTREAM
+    input_summary: "虚假账号 / 下游作恶批次，fake_account_tag、注册画像异常、下游 bad action 集中。"
+    entity_count: 120
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "L1 使用虚假账号标签 / 大盘 / 下游作恶表组，输出 tag precision 边界、downstream time alignment 和 baseline plan。"
+    required_outputs:
+      - account_risk_data_source_registry
+      - batch_feature_table
+      - frequent_pattern
+      - required_validation
+    forbidden_behavior: "不能只凭高召回假号标签直接处置。"
+
+  - case_id: L1-DRILLDOWN-HIGH-CONTRIBUTION-BUSINESS-EXPLANATION
+    input_summary: "某渠道 reward_claim + low_retention + device_reuse 高贡献，但同期有新活动投放和监控口径变化。"
+    entity_count: 200
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "输出 high contribution but business_explanation_exists，降级为 require_review，要求 denominator 和同周期对照。"
+    required_outputs:
+      - contribution_score
+      - business_explanation
+      - denominator_status
+      - require_review
+    forbidden_behavior: "不能因为高贡献组合直接强判渠道作假或套利。"

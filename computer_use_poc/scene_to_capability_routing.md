@@ -24,7 +24,7 @@
 | 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
 | 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
-| 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性判断同团伙 |
+| 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → L1 feature query plan → TOP drilldown → frequent pattern contribution → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性或高贡献组合判断同团伙 |
 | ATO 批量 case 分析 | 5-20 个 ATO case 的批量归因、证据卡聚合、模式总结和策略方向草案 | `batch_case_analysis` → per-case evidence card → pattern summary → strategy direction draft | `eval/.../19_ato_batch_case_management/` templates；DataAgent only when future scene allows Hive/warehouse analysis | 缺关键字段时返回 missing evidence；规模过大先 Plan；真实查询另行授权 | 半自动归因，不自动策略上线，不自动处置 |
 | 黑产账号矩阵 / 导流互动 batch | 分析同波黑产账号矩阵、资料模板、导流互动、互粉互动和养号池 | `black_market_account_matrix_batch_analysis` → evidence cards → pattern summary → strategy direction draft | `eval/.../20_black_market_account_matrix_batch/` templates | 缺行为链路时输出 missing evidence；需要真实补证时另行授权 | 不是 ATO，不自动上线，不输出敏感联系方式 |
 
@@ -179,15 +179,19 @@ response-time provenance check：
 核心输出：
 
 1. threshold mode。
-2. cluster summary。
-3. 不可预测矩阵 / 异常相关性矩阵。
-4. 3-5 个代表样本 evidence card。
-5. attack path hypotheses。
-6. missing evidence / source_gap。
-7. DataAgent-Hive query plan if needed。
-8. strategy / monitoring / grey release / manual review suggestions。
-9. relation_family / evidence_basis / denominator_status / relationship_strength / reverse_check_result / confounder_risk / cannot_conclude_boundary。
-10. representative_cases / pattern_summary / required_validation / candidate_strategy_direction。
+2. L1 wide table / profile shallow query plan。
+3. batch_feature_table schema。
+4. top_dimension_summary。
+5. frequent_pattern / contribution_score。
+6. cluster summary。
+7. 不可预测矩阵 / 异常相关性矩阵。
+8. 3-5 个代表样本 evidence card。
+9. attack path hypotheses。
+10. missing evidence / source_gap。
+11. DataAgent-Hive query plan if needed。
+12. strategy / monitoring / grey release / manual review suggestions。
+13. relation_family / evidence_basis / denominator_status / relationship_strength / reverse_check_result / confounder_risk / cannot_conclude_boundary。
+14. representative_cases / pattern_summary / required_validation / candidate_strategy_direction。
 
 边界：
 

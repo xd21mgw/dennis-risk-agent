@@ -5188,3 +5188,73 @@
 - input: 设置 DENNIS_AGENT_HOME 后写 observation log 和 candidate queue。
 - expected_runtime_behavior: dennis_agent_home_unified_paths
 - expected_output_boundary: observation log 写入 `$DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md`；candidate queue 写入 `$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`；输出包含 log_path_resolution 和 candidate_queue_path_resolution。
+
+## 612. Batch L1 feature query contract exists
+
+- test_id: BATCH-L1-001
+- input: 检查 `batch_l1_feature_query_contract_v1.md`。
+- expected_runtime_behavior: batch_l1_feature_query_contract_exists
+- expected_output_boundary: 明确定义 `batch_feature_table`，覆盖 user、device、IP、登录、行为、前端链路、策略命中、内容行为、渠道和 baseline 字段族。
+
+## 613. Account risk source registry exists
+
+- test_id: BATCH-L1-002
+- input: 检查 `account_risk_data_source_registry_v1.md`。
+- expected_runtime_behavior: account_risk_data_source_registry_exists
+- expected_output_boundary: 包含账号类 1-6 表组，表名去重，字段包括能力域、粒度、时效、字段丰富度、适用场景和注意事项。
+
+## 614. TOP dimension drilldown exists
+
+- test_id: BATCH-L1-003
+- input: 检查 `batch_top_dimension_drilldown_template_v1.md`。
+- expected_runtime_behavior: top_dimension_summary_schema_exists
+- expected_output_boundary: 定义 `top_dimension_summary`，覆盖 app_version、ip24、device_model、login_type、strategy_hit、abnormal_action、frontend_missing_rate、channel、fake_account_tag。
+
+## 615. Frequent pattern contribution exists
+
+- test_id: BATCH-L1-004
+- input: 检查 `batch_frequent_pattern_contribution_template_v1.md`。
+- expected_runtime_behavior: frequent_pattern_contribution_score_exists
+- expected_output_boundary: 定义 `frequent_pattern` 和 `contribution_score`；高贡献组合只能作为 cluster hint / candidate feature hint。
+
+## 616. L1 workflow connected to A pack
+
+- test_id: BATCH-L1-005
+- input: 检查 A 包 README / methodology / response template。
+- expected_runtime_behavior: l1_layer_connected_to_batch_workflow
+- expected_output_boundary: 工作流包含 批量输入 → L1 宽表/画像浅查 → TOP维度下探 → 频繁项/贡献度 → A→B有向相关 → cluster hint → 代表抽样 → cluster evidence card → 举一反三/策略建议。
+
+## 617. L1 ATO mixed batch regression
+
+- test_id: BATCH-L1-REG-ATO-MIXED
+- input: ATO 混合批次。
+- expected_runtime_behavior: l1_drilldown_ato_mixed_batch
+- expected_output_boundary: login_method、kick_out/token status、device_change、user_claim 进入 L1/TOP/频繁项；user_claim 不得作为 strong evidence。
+
+## 618. L1 protocol client anomaly regression
+
+- test_id: BATCH-L1-REG-PROTOCOL-CLIENT
+- input: 旧版本 + 前端链路缺失 + 异常 mod + 后端高频。
+- expected_runtime_behavior: l1_drilldown_protocol_client_batch
+- expected_output_boundary: 输出 old_version + frontend_gap + backend_action 组合，但不得直接强判协议攻击；`mod=POST` 不得误读成 HTTP method。
+
+## 619. L1 device farm regression
+
+- test_id: BATCH-L1-REG-DEVICE-FARM
+- input: 同 IP 段 + 同设备型号 + 多账号。
+- expected_runtime_behavior: l1_drilldown_device_farm_batch
+- expected_output_boundary: 只能作为 cluster hint，必须补 join key / denominator / time alignment。
+
+## 620. L1 fake account downstream regression
+
+- test_id: BATCH-L1-REG-FAKE-ACCOUNT
+- input: 虚假账号标签 + 下游作恶 + 注册画像异常。
+- expected_runtime_behavior: l1_drilldown_fake_account_downstream
+- expected_output_boundary: 使用 fake account registry；高召回标签必须标 false_positive_risk，不能直接处置。
+
+## 621. L1 high contribution with business explanation
+
+- test_id: BATCH-L1-REG-HIGH-CONTRIBUTION-BUSINESS
+- input: 渠道高贡献组合但存在活动投放和监控口径变化。
+- expected_runtime_behavior: high_contribution_requires_review
+- expected_output_boundary: 输出 business_explanation、denominator_required、require_review；不得强判套利或渠道作假。

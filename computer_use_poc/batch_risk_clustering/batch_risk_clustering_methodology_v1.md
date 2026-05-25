@@ -10,14 +10,38 @@ It must not turn similarity into a gang conclusion without join keys or shared i
 
 1. Validate batch schema and threshold mode.
 2. Normalize entities and time windows.
-3. Build cluster candidates by dimension.
-4. Build abnormal correlation matrix.
-5. Compare with baseline if available; mark `baseline_missing` if not.
-6. Select representative samples.
-7. Build evidence cards.
-8. Produce pattern summary and hypotheses.
-9. Separate current evidence, historical similar pattern and missing evidence.
-10. Produce follow-up plan and strategy / monitoring suggestions.
+3. Generate L1 wide table / profile shallow query plan.
+4. Use `batch_feature_table` to run TOP dimension drilldown.
+5. Run frequent pattern / contribution analysis.
+6. Build cluster candidates by dimension.
+7. Build abnormal A -> B correlation matrix.
+8. Compare with baseline if available; mark `baseline_missing` if not.
+9. Select representative samples.
+10. Build cluster evidence cards.
+11. Produce pattern summary and hypotheses.
+12. Separate current evidence, historical similar pattern and missing evidence.
+13. Produce follow-up plan and strategy / monitoring suggestions.
+
+## 2A. L1 Batch Feature Layer
+
+Use `batch_l1_feature_query_contract_v1.md` before abnormal matrix construction.
+
+L1 layer output:
+
+- `batch_feature_table`.
+- `top_dimension_summary`.
+- `frequent_pattern`.
+- `contribution_score`.
+
+DataAgent/Hive can later extract and aggregate this layer. Dennis Agent only plans, interprets, clusters and recommends.
+
+L1 results feed:
+
+- abnormal A -> B directed correlation matrix.
+- cluster hints.
+- representative case sampling.
+- cluster evidence cards.
+- expansion / strategy / monitoring candidates.
 
 ## 3. Entity Cluster
 
@@ -167,6 +191,12 @@ Abnormal correlation is one of the core methods:
 
 Without baseline, output `baseline_missing`.
 
+Inputs from the L1 layer:
+
+- TOP dimension concentration can create A -> B candidate relations.
+- Frequent patterns with high contribution become candidate matrix rows.
+- Contribution score can prioritize validation, but cannot upgrade to final risk judgement by itself.
+
 ## 11. Evidence Boundaries
 
 - current batch facts must come from `current_input` or `current_task_observation`.
@@ -174,3 +204,5 @@ Without baseline, output `baseline_missing`.
 - no_data 不能作为无风险反证.
 - blocked/timeout/partial source 必须 source_gap.
 - 不能仅凭相似性判断同团伙.
+- 高频组合 / 高贡献度 only creates cluster hint or candidate feature hint.
+- 身份证、手机号、实名信息 and credential-like fields are controlled auxiliary evidence and must not be output in plaintext.

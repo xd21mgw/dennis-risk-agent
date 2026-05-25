@@ -182,6 +182,10 @@ threshold_policy:
   500_plus_entities: alert_batch_or_population_analysis_mode
 requires:
   - batch input schema
+  - account risk data source registry
+  - batch L1 feature query contract
+  - top dimension drilldown
+  - frequent pattern contribution analysis
   - evidence source metadata
   - representative sampling
   - abnormal correlation matrix
@@ -203,6 +207,17 @@ boundaries:
   - DataAgent only for Hive / warehouse query planning when needed
   - no_data cannot be no-risk counter evidence
   - blocked_timeout_partial_source_must_be_source_gap
+workflow:
+  - batch_input
+  - L1_wide_table_profile_shallow_query_plan
+  - batch_feature_table
+  - top_dimension_summary
+  - frequent_pattern_contribution_score
+  - A_to_B_directed_abnormal_correlation
+  - cluster_hint
+  - representative_sampling
+  - cluster_evidence_card
+  - expansion_and_strategy_recommendation
 required_output_fields_for_10_plus:
   - batch_clustering_mode
   - relation_family
@@ -216,7 +231,15 @@ required_output_fields_for_10_plus:
   - pattern_summary
   - required_validation
   - candidate_strategy_direction
+  - batch_feature_table
+  - top_dimension_summary
+  - frequent_pattern
+  - contribution_score
 templates:
+  - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
+  - computer_use_poc/batch_risk_clustering/batch_l1_feature_query_contract_v1.md
+  - computer_use_poc/batch_risk_clustering/batch_top_dimension_drilldown_template_v1.md
+  - computer_use_poc/batch_risk_clustering/batch_frequent_pattern_contribution_template_v1.md
   - computer_use_poc/batch_risk_clustering/README.md
   - computer_use_poc/batch_risk_clustering/batch_risk_case_schema_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_threshold_policy_v1.md

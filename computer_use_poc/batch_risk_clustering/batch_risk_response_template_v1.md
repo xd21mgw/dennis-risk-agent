@@ -46,6 +46,37 @@ risk_hypothesis:
 cannot_conclude:
 ```
 
+## 3A. L1 宽表 / 画像浅查摘要
+
+```text
+batch_feature_table:
+- entity_count:
+- source_families:
+- coverage:
+- missing_fields:
+- baseline_status:
+- sensitivity_flags:
+
+top_dimension_summary:
+- dimension_name:
+- top_value:
+- coverage_ratio:
+- baseline_status:
+- denominator_status:
+- risk_interpretation:
+- business_explanation:
+- next_drilldown:
+
+frequent_pattern:
+- pattern_id:
+- feature_combination:
+- coverage_ratio:
+- contribution_score:
+- cluster_hint:
+- candidate_feature_hint:
+- required_validation:
+```
+
 ## 4. 不可预测矩阵 / 异常相关性矩阵
 
 ```text
@@ -120,6 +151,18 @@ hypothesis_to_validate:
 ```
 
 DataAgent is only Hive / warehouse query planning unless separately authorized.
+
+L1 DataAgent/Hive query plan:
+
+```text
+l1_query_plan:
+- source_registry_groups:
+- requested_fields:
+- join_keys:
+- baseline_plan:
+- expected_output: batch_feature_table
+- not_execute_now: true
+```
 
 ## 9. 举一返三
 
