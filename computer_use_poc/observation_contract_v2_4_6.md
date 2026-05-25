@@ -490,6 +490,13 @@ C 包 schema reference：
 
 v2.5.8 E2E 多手脚只读验证中，Dennis 消费多个 observation 时必须显式列出每个 evidence source 的状态。
 
+B 包 schema reference：
+
+- 多源证据编排 contract 已沉淀到 `computer_use_poc/multi_evidence_orchestration_contracts/`。
+- 最终 evidence summary 模板以 `computer_use_poc/multi_evidence_orchestration_contracts/03_evidence_summary_template_v1.yaml` 为准，本节保留历史兼容摘要。
+- B 包默认最小三源为天狮 `fastQueryHbase`、统一登录日志、档案中心；天狮 `eventList` 仅在具体请求字段 / eventType 明细问题中触发。
+- behavior / device / offline aggregate 字段可保留为 `not_checked`，不得伪造成已查。
+
 ```yaml
 e2e_multi_evidence_summary:
   source_status:

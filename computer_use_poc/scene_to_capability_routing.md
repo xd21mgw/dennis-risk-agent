@@ -18,6 +18,7 @@
 |---|---|---|---|---|---|
 | 账号安全 / 单用户风险研判 | 快速判断用户是否有风险线索、证据强弱和缺口 | `user_profile_read` → `login_log_read` → `user_device_resolution` → `device_risk_read` → `strategy_hit_read` | 档案中心、统一登录日志、Weapon graphData、Device SDK、天狮 | 档案中心 API 302 时走 browser recoverable_preflight；登录日志超窗提示 Hive/offline required | 不因单一证据定性作弊/盗号 |
 | ATO / 盗号研判 | 解释是否更像盗号、token/OAuth 滥用、新设备接管或误操作 | `login_log_read` → `user_profile_read` → `user_device_resolution` → `device_risk_read` → `strategy_hit_read` | 统一登录日志、档案中心、Weapon、Device SDK、天狮 | 在线登录日志超窗时标记 `login_log_window_incomplete` / `offline_hive_required` | 在线 no_data 不能作为无异常登录强反证 |
+| 风险用户综合研判 / E2E 多源研判 | 判断用户是否风险、为什么被阻止 / 验证，并给出证据强弱和缺口 | `multi_evidence_orchestration_contracts` → default three-source planner → C package when strategy detail needed | 天狮 fastQueryHbase、统一登录日志、档案中心；eventList 条件触发 | 任一 source blocked 时输出 partial evidence summary | 不因天狮命中、历史封禁或单一登录信号给 definitive conclusion |
 | 设备风险补证 | 判断设备侧是否存在 hook/root/frida/模拟器/代理等异常线索 | `device_risk_read` → `device_to_user` via `user_device_resolution` → `login_log_read` | Device SDK / Weapon riskData、Weapon graphData、统一登录日志 | web_ 前缀设备不适合作为移动端 did 主测对象；需移动端 did | 设备异常是设备侧补证，不直接定性用户作弊 |
 | 用户关联设备查询 | 给出用户关联设备候选和排序理由 | `user_device_resolution` | Weapon graphData 主入口，档案中心近期设备补充排序 | Weapon no_data 时可用登录日志设备分布、档案中心最近登录设备做候选 | graphData no_data 不等于用户没有设备 |
 | 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
@@ -44,6 +45,16 @@
 - 用户问“策略树为什么触发 / 节点条件是什么 / 命中路径是什么 / 版本或实验灰度是什么”：C 包不处理，标记 `future_strategy_tree_capability=true`，归入未来 D 包。
 - 跨天趋势、大范围统计、批量聚合和分母估计不使用 `eventList`，应转 DataAgent / Hive query plan 或要求缩小窗口。
 - `source_id` 缺失时不直接查；时间窗口缺失时可以用已有 evidence 定位小窗口，但不得默认跨天大查。
+
+## 0.2 Multi Evidence Orchestration B Package Routing
+
+多源证据编排 B 包位于 `computer_use_poc/multi_evidence_orchestration_contracts/`，用于风险用户综合研判 / E2E 多源研判的 planner 和 evidence summary。
+
+- 用户问“这个用户是不是风险用户 / 今天为什么被阻止或验证 / 这个 case 怎么判断”：进入 B 包 planner，默认生成三源计划：天狮 `fastQueryHbase`、统一登录日志、档案中心。
+- 用户只问“是否命中策略 / 是否被风控打到”：直接进入 C 包 `fastQueryHbase`，不强行展开完整三源。
+- 用户问“具体某次请求字段 / eventType 明细 / IP / 错误码 / sideEffectOps”：通过 B 包编排调用 C 包 `eventList`，同时保留小窗口、source_id 非空、不跨天、抽样边界。
+- 用户问“策略树 / 节点条件 / 命中路径 / 策略版本 / 灰度实验”：标记未来 D 包，不由 B/C 强答。
+- D/E/F 暂作为后续能力：B v1 不默认触发策略树、前端活跃或设备 SDK 手脚。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 

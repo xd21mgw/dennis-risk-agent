@@ -416,6 +416,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.5.8 已新增真实 E2E 多手脚只读验证模板：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。本轮只验证天狮策略命中、用户登录统一日志、档案中心三手脚最小闭环，不强制拉前端活跃画像、设备 SDK 或 DataAgent / Hive；当前为模板和 run log 模板，不是实际执行结果。
 - v2.5.8.1 已归档云端内部 Agent 真实 E2E 三源成功运行：测试问题为“帮我看下 4231737183 今天是不是风险用户，为什么被阻止/验证？”。`tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check` 三源均成功。档案中心先跳转 `account.p.adm-corp.kuaishou.com` 独立登录页，但账号 / 用户名已预填，点击“下一步”后成功进入档案中心，沉淀为 `archives_independent_login_preflight_required_but_recoverable`。该运行证明 Dennis Agent 可完成多手脚查询计划、多 observation 收集、跨证据汇总和边界说明；仍不代表自动风险定性或自动处置。
 - v2.5.9 已新增天狮 `eventList API-read` 请求级细查 POC：内部 Agent 已验证在已认证 rcp 浏览器会话中，`POST /v2/rest/event/eventList` 可用。该能力作为 `fastQueryHbase` 的补充：`fastQueryHbase` 负责策略命中概览，`eventList` 负责具体请求 / 事件明细细查。`eventList` 必须依赖已认证 browser context，查询窗口应尽量小、原则上不能跨天；命中策略事件 100% 记录，非命中事件存在抽样，`eventList no_data` 不代表无风险或行为未发生。
+- B 包已新增多源证据编排 contract：`computer_use_poc/multi_evidence_orchestration_contracts/`。该包把 v2.5.7 / v2.5.8 / v2.5.8.1 的多源 E2E 研判雏形升级为 planner / C 包双接口编排 / evidence summary template / regression，不新增真实平台查询。默认最小三源为天狮 `fastQueryHbase`、统一登录日志、档案中心；天狮 `eventList` 只在需要具体请求字段或 eventType 明细时触发。
 - C 包已新增天狮 / 策略平台能力契约：`computer_use_poc/tianshi_strategy_platform_contracts/`。该包把 v2.5.5 `fastQueryHbase` 和 v2.5.9 `eventList API-read` 沉淀为 contract / schema / routing / observation / regression，不新增真实平台查询，不更新 release package。C 包只覆盖天狮查询类能力契约，不解析策略树、策略节点、条件表达式、命中路径、策略版本、实验 / 灰度或策略语义；这些边界归入未来 D 包。
 
 Auth preflight：

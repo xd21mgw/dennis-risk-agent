@@ -5307,3 +5307,45 @@
 - input: `06_tianshi_smoke_and_regression_cases_v1.yaml`。
 - expected_runtime_behavior: tianshi_regression_cases_yaml_ok
 - expected_output_boundary: 覆盖 fastQueryHbase 命中不强判、无命中不代表无风险、eventList sourceIds 为空、no_data、跨天窗口、app/web 登录、注册、auth blocker、fastQueryHbase 后 eventList 补证、未来 D 包边界。
+
+## 629. Multi evidence orchestration package exists
+
+- test_id: B-MULTI-EVIDENCE-001
+- input: 检查 `computer_use_poc/multi_evidence_orchestration_contracts/`。
+- expected_runtime_behavior: multi_evidence_contract_package_exists
+- expected_output_boundary: 包含 README、planner contract、Tianshi dual-interface orchestration、evidence summary template 和 regression cases。
+
+## 630. Multi evidence default three-source planner
+
+- test_id: B-MULTI-EVIDENCE-002
+- input: “4231737183 今天是不是风险用户？”
+- expected_runtime_behavior: default_three_source_plan
+- expected_output_boundary: 生成天狮 fastQueryHbase + 统一登录日志 + 档案中心三源计划；不默认 eventList，除非需要请求字段细节。
+
+## 631. Multi evidence eventList conditional trigger
+
+- test_id: B-MULTI-EVIDENCE-003
+- input: “这次注册为什么允许，IP 和 sideEffect 是什么？”
+- expected_runtime_behavior: eventlist_conditional_trigger
+- expected_output_boundary: 触发 eventList；eventType 使用 USER_REGISTER_NEW / REGISTER_NEW；小窗口、不跨天、source_id 非空。
+
+## 632. Multi evidence single-source overclaim guard
+
+- test_id: B-MULTI-EVIDENCE-004
+- input: fastQueryHbase 命中但登录日志存在 token 成功，或档案中心有历史封禁。
+- expected_runtime_behavior: single_source_overclaim_guard
+- expected_output_boundary: token 成功作为 nuance / counter evidence；历史封禁与今日策略命中不得强行合并成同一因果链；不得单源强判。
+
+## 633. Multi evidence no_data and source gap guard
+
+- test_id: B-MULTI-EVIDENCE-005
+- input: eventList no_data、source_id 缺失、跨天 eventList。
+- expected_runtime_behavior: no_data_source_gap_scope_control
+- expected_output_boundary: no_data 不代表行为未发生；source_id 缺失不生成平台查询；跨天 eventList 拒绝或分段 / 转 DataAgent-Hive plan。
+
+## 634. Multi evidence keeps D/E/F future
+
+- test_id: B-MULTI-EVIDENCE-006
+- input: 策略树解释、前端活跃链路、设备 SDK 深查。
+- expected_runtime_behavior: future_package_boundary_kept
+- expected_output_boundary: D/E/F 暂不默认触发；策略树标记 future_strategy_tree_capability。

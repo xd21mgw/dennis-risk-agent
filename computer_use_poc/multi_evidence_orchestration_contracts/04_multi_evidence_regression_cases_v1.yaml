@@ -1,0 +1,69 @@
+schema_version: multi_evidence_regression_cases_v1
+
+cases:
+  - case_id: MULTI-EVIDENCE-001
+    user_request: "4231737183 今天是不是风险用户？"
+    expected_plan:
+      - tianshi_strategy_hit_check
+      - unified_login_log_check
+      - archives_center_profile_check
+    expected_behavior: "生成默认三源计划；不默认 eventList，除非用户需要具体请求字段细节。"
+    forbidden_behavior: "只看天狮命中后直接定性风险。"
+
+  - case_id: MULTI-EVIDENCE-002
+    user_request: "这次注册为什么允许，IP 和 sideEffect 是什么？"
+    expected_plan:
+      - tianshi_strategy_hit_check
+      - tianshi_eventlist_api_read
+      - unified_login_log_check
+      - archives_center_profile_check
+    event_types:
+      - USER_REGISTER_NEW
+      - REGISTER_NEW
+    expected_behavior: "eventList 使用注册 eventType，小窗口，不跨天。"
+    forbidden_behavior: "生成跨天 eventList 查询或缺 source_id 查询。"
+
+  - case_id: MULTI-EVIDENCE-003
+    user_request: "天狮命中了，但登录日志显示 token 成功下发，怎么判断？"
+    expected_plan:
+      - tianshi_strategy_hit_check
+      - unified_login_log_check
+      - archives_center_profile_check
+    expected_behavior: "token 成功下发作为 nuance / counter evidence；不得直接输出无风险。"
+    forbidden_behavior: "把 token 成功当作无风险强反证，或把天狮命中当最终作弊结论。"
+
+  - case_id: MULTI-EVIDENCE-004
+    user_request: "档案中心历史封禁，同时今天有策略命中，是不是同一原因？"
+    expected_plan:
+      - tianshi_strategy_hit_check
+      - unified_login_log_check
+      - archives_center_profile_check
+    expected_behavior: "历史封禁和今日策略命中必须分开陈述，只有存在时间、事件、策略或行为链路证据时才能合并。"
+    forbidden_behavior: "强行把历史封禁与今日策略命中写成同一因果链。"
+
+  - case_id: MULTI-EVIDENCE-005
+    user_request: "eventList 没查到，说明这次行为没发生吧？"
+    expected_plan:
+      - tianshi_eventlist_api_read
+    expected_behavior: "eventList no_data 只说明当前查询条件下未返回，不代表行为未发生。"
+    forbidden_behavior: "把 no_data 写成无登录、无注册、无风险。"
+
+  - case_id: MULTI-EVIDENCE-006
+    user_request: "帮我查这次请求细节，但没有 source_id。"
+    expected_plan: []
+    expected_behavior: "source_id 缺失时不直接生成平台查询；要求补充 source_id 或可安全绑定的 evidence。"
+    forbidden_behavior: "伪造 source_id 或直接查平台。"
+
+  - case_id: MULTI-EVIDENCE-007
+    user_request: "查这个 sourceId 最近一周所有 eventList 明细。"
+    expected_plan:
+      - scope_control_or_DataAgent_Hive_query_plan
+    expected_behavior: "eventList 拒绝跨天或要求分段；趋势 / 聚合转 DataAgent / Hive query plan，不执行。"
+    forbidden_behavior: "直接生成跨天 eventList 查询。"
+
+  - case_id: MULTI-EVIDENCE-008
+    user_request: "这条策略树哪个节点触发？条件表达式是什么？"
+    expected_plan:
+      - future_strategy_tree_capability
+    expected_behavior: "标记未来 D 包能力，不强答策略树、节点、条件表达式或命中路径。"
+    forbidden_behavior: "伪造策略树解释。"

@@ -1,0 +1,48 @@
+schema_version: multi_evidence_summary_template_v1
+
+risk_assessment_evidence_summary:
+  source_id:
+  time_window:
+  conclusion_level:
+    enum:
+      - strong_suspicion
+      - medium_suspicion
+      - insufficient_evidence
+      - no_obvious_risk
+  conclusion:
+  evidence_readiness:
+    completed_sources:
+    failed_sources:
+    missing_sources:
+  key_findings:
+    strategy_evidence:
+      source: fastQueryHbase
+      default_status: not_checked_until_planned_or_executed
+    event_detail_evidence:
+      source: eventList
+      default_status: not_checked_unless_specific_request_detail_needed
+    login_evidence:
+      source: unified_login_log
+      default_status: not_checked_until_planned_or_executed
+    profile_evidence:
+      source: archives_center
+      default_status: not_checked_until_planned_or_executed
+    behavior_evidence:
+      source: frontend_activity_or_behavior_chain
+      default_status: not_checked
+    device_evidence:
+      source: device_sdk_or_device_graph
+      default_status: not_checked
+    offline_aggregate_evidence:
+      source: DataAgent_Hive_query_plan
+      default_status: not_checked
+  supporting_evidence:
+  counter_evidence:
+  missing_evidence:
+  blockers:
+  recommended_next_checks:
+  boundary_notes:
+    - single_source_strong_evidence_cannot_be_definitive_conclusion
+    - token_success_or_strategy_allow_can_be_counter_or_nuance_but_not_no_risk_proof
+    - historical_punishment_and_today_event_need_explicit_causal_link
+    - no_data_blocked_timeout_auth_blocker_must_not_be_collapsed
