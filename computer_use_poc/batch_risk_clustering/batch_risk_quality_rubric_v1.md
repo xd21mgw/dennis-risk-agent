@@ -8,7 +8,7 @@ Total: 100 points. A batch risk clustering answer is usable at 80+, strong at 90
 |---|---:|---|
 | 1. Threshold and mode selection | 10 | Does it choose the correct mode for entity count and user intent? |
 | 2. Correct clustering | 12 | Does it split heterogeneous cases instead of collapsing them into one risk conclusion? |
-| 3. Directional abnormal correlation matrix | 12 | Does it output A -> B relations, coverage, enrichment, baseline status and follow-up? |
+| 3. Directional abnormal correlation matrix | 12 | Does it output relation family, A -> B direction, baseline policy, strength grading, reverse/confounder checks and cannot-conclude boundary? |
 | 4. Evidence type separation | 12 | Does it separate raw evidence, derived evidence, model inference, user claim, missing evidence and blocked evidence? |
 | 5. Similarity boundary | 8 | Does it avoid same-gang judgement from similarity alone? |
 | 6. Historical context boundary | 8 | Does it prevent historical case evidence from contaminating current batch facts? |
@@ -70,16 +70,51 @@ Full score requires:
 
 Full score requires each important relation to include:
 
+- `relation_family`.
 - `relation_direction`.
 - observed pattern.
-- baseline comparison or `baseline_missing`.
+- evidence basis.
+- baseline status.
+- denominator status.
 - enrichment signal.
 - coverage ratio.
 - directionality.
+- reverse check result.
+- confounder risk.
+- false-positive risk.
+- relationship strength.
 - attack path hypothesis.
 - evidence level.
 - required follow-up.
-- false-positive risk.
+- cannot-conclude boundary.
+
+Matrix-specific scoring:
+
+| subdimension | points | requirement |
+|---|---:|---|
+| relation family | 2 | Uses infrastructure, toolchain, entry-path, behavior-chain, business-arbitrage, or strategy-feedback correctly. |
+| baseline policy | 2 | Uses historical / control / strategy-population baseline when available; marks `baseline_missing` or `only_current_batch_available` when not. |
+| relationship strength | 2 | Chooses strong / medium / weak / hypothesis_only / not_enough_evidence according to evidence and baseline. |
+| reverse and confounder checks | 2 | Includes reverse_check, time alignment, denominator, confounder, selection bias, business explanation and source quality. |
+| denominator discipline | 2 | Does not claim strong enrichment without denominator; emits `denominator_required` when missing. |
+| cannot-conclude boundary | 2 | States what cannot be concluded from the matrix row. |
+
+Required baseline policy:
+
+- strong enrichment requires historical normal baseline or same-period control group, plus raw evidence and pseudo-correlation checks.
+- only current batch available -> `batch_internal_concentration`, not strong enrichment.
+- baseline_missing -> hypothesis_only or weak unless very strong raw evidence join key exists.
+- strategy recall batch -> `selection_bias_risk` is mandatory.
+
+Automatic matrix failures:
+
+- Uses `baseline_missing` and still claims strong enrichment.
+- Uses only current batch and calls it strong abnormal enrichment.
+- Omits denominator status.
+- Omits reverse/confounder checks.
+- Omits `cannot_conclude_boundary`.
+- Treats `mod=POST` as HTTP method without field dictionary.
+- Fails to mark strategy recall batch selection bias.
 
 ### 4. Evidence type separation
 

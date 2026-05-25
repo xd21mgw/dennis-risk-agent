@@ -5055,3 +5055,59 @@
 - input: 50+ 批量归因需要离线补证。
 - expected_runtime_behavior: dataagent_hive_boundary
 - expected_output_boundary: DataAgent 被限定为 Hive / 数仓取数分析能力，不自动调用，不泛化为万能数据底座。
+
+## 593. Abnormal correlation matrix relation families exist
+
+- test_id: BATCH-RISK-017
+- input: 检查 `abnormal_correlation_matrix_v1.md`。
+- expected_runtime_behavior: abnormal_correlation_relation_families
+- expected_output_boundary: 包含 infrastructure、toolchain、entry-path、behavior-chain、business-arbitrage、strategy-feedback relation families。
+
+## 594. baseline_missing cannot be strong enrichment
+
+- test_id: BATCH-RISK-018
+- input: abnormal matrix row with `baseline_missing`。
+- expected_runtime_behavior: baseline_missing_strength_downgrade
+- expected_output_boundary: baseline_missing 不得 strong enrichment；只能 hypothesis_only / weak，除非有非常强 raw evidence join key。
+
+## 595. only_current_batch is internal concentration only
+
+- test_id: BATCH-RISK-019
+- input: abnormal matrix row with `only_current_batch_available`。
+- expected_runtime_behavior: only_current_batch_internal_concentration
+- expected_output_boundary: 只能输出 `batch_internal_concentration`，不能写 strong enrichment。
+
+## 596. reverse confounder denominator checks required
+
+- test_id: BATCH-RISK-020
+- input: 检查 abnormal matrix row schema。
+- expected_runtime_behavior: reverse_confounder_denominator_required
+- expected_output_boundary: 必须包含 reverse_check / confounder_check / denominator_check / time_alignment_check / source_quality_check。
+
+## 597. relationship strength grading exists
+
+- test_id: BATCH-RISK-021
+- input: 检查 abnormal matrix strength grading。
+- expected_runtime_behavior: relationship_strength_grading_exists
+- expected_output_boundary: 包含 strong_abnormal_correlation、medium_abnormal_correlation、weak_signal、hypothesis_only、not_enough_evidence。
+
+## 598. abnormal matrix standard table template exists
+
+- test_id: BATCH-RISK-022
+- input: 检查 abnormal matrix 标准输出表格。
+- expected_runtime_behavior: standard_matrix_output_template_exists
+- expected_output_boundary: 表格至少包含 relation_family、relation_direction、baseline_status、denominator_status、relationship_strength、required_followup、cannot_conclude_boundary。
+
+## 599. mod POST is not HTTP method by default
+
+- test_id: BATCH-RISK-023
+- input: protocol downgrade sample with `mod=POST`。
+- expected_runtime_behavior: field_semantics_guard
+- expected_output_boundary: `mod=POST` 不得误判为 HTTP method；必须标记字段语义待确认。
+
+## 600. strategy recall batch marks selection bias
+
+- test_id: BATCH-RISK-024
+- input: strategy recall / strategy hit batch。
+- expected_runtime_behavior: strategy_recall_selection_bias
+- expected_output_boundary: 必须标记 `selection_bias_risk`，不得把策略召回集合内的相关性直接当总体富集。

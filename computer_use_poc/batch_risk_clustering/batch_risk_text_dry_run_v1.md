@@ -106,7 +106,8 @@ Strengths:
 
 - Threshold policy is adequate.
 - Golden samples force multi-cluster reasoning.
-- Abnormal correlation matrix is directional and includes baseline handling.
+- Abnormal correlation matrix is now a risk explanation layer, not just field A -> field B.
+- Matrix rows require relation_family, baseline_status, denominator_status, relationship_strength, reverse_check, confounder_check and cannot_conclude_boundary.
 - Evidence card template covers raw / derived / inference / claim / missing / blocked / historical.
 - Representative sampling covers positive, boundary, false positive, high impact and source gap.
 
@@ -116,6 +117,13 @@ Gaps to consider before release:
 - Pattern summary could add a fixed “baseline_missing_count” field.
 - Strategy recommendations could require an explicit “do not auto launch” line in every batch output.
 - Golden samples should eventually become machine-checkable YAML, but markdown is sufficient for text-level review.
+
+Post-deepening matrix checks:
+
+- ATO Harmony/OAuth sample should output `entry-path correlation` and `medium_abnormal_correlation`, not strong, until OAuth grant and token raw evidence exist.
+- Protocol downgrade sample should output `toolchain correlation`; `mod=POST` must remain field-semantics pending, not HTTP method.
+- Activity arbitrage sample should output `business-arbitrage correlation`; without channel denominator it is `batch_internal_concentration`, not strong enrichment.
+- Strategy recall sample should output `strategy-feedback correlation` and `selection_bias_risk`.
 
 ## Dry-run Decision
 
