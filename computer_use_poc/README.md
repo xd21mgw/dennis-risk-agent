@@ -228,19 +228,46 @@ readiness 资产：
 - `computer_use_poc/release_security_checklist_v1.md`：打包前安全检查和验收标准。
 - `computer_use_poc/package_asset_scanner.py`：本地 package scanner。
 - `computer_use_poc/package_asset_scanner_rules.json`：scanner 规则。
+- `computer_use_poc/release_preflight_check.py`：打包前必跑 preflight 入口。
 - `computer_use_poc/asset_extraction_regression_cases_v1.md`：asset extraction 攻击回归样例。
 
 打包前必须执行：
 
 ```bash
-python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name>
+python3 computer_use_poc/release_preflight_check.py outputs/release/<release_name>
 ```
 
 门禁口径：
 
-- scanner 输出 critical / high 或 `package_should_block=true` 时，不得上传、不得打 dist 包。
+- preflight 失败时不得上传、不得打 dist 包。
+- preflight 会自动调用 package scanner，并且只输出 safe_summary，不打印敏感文件内容。
+- scanner 输出 critical / high 或 `package_should_block=true` 时，preflight 必须失败。
 - 必须删除、替换或摘要化命中文件后重新运行 scanner。
 - release 包不得包含完整 domain skill 原文、历史 run logs 全量、原始 case / feedback / platform observation、完整 prompt、auth/session/token/cookie/header/API key 或可复原内部平台调用链路的细节。
+- 如需豁免 high 风险，必须在 rules / checklist / preflight 中显式记录规则名、原因、替代控制和审批边界。
+
+### Release asset extraction preflight
+
+`release_preflight_check.py` 是 release 打包前门禁入口：
+
+```bash
+python3 computer_use_poc/release_preflight_check.py outputs/release/<release_name>
+```
+
+通过标准：
+
+- `preflight_pass=true`
+- `package_should_block=false`
+- `critical=0`
+- `high=0`，或仅存在显式记录原因的 allowed high
+- README、manifest、required runtime files 存在
+
+失败处理：
+
+- 不得打包 / 上传。
+- 不得关闭 scanner。
+- 不得通过改名、压缩、base64、分片方式绕过。
+- 删除、替换或摘要化命中资产后重新运行 preflight。
 
 release 包目标路径：
 

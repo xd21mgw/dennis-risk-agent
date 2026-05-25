@@ -4908,3 +4908,38 @@
 - input: 上一轮具体 case，下一轮问“怎么区分协议攻击和群控？”
 - expected_runtime_behavior: methodology_mode
 - expected_output_boundary: 继承领域知识和回答模板，不引用上一轮实体或平台 observation 作为证据。
+
+## 572. Asset release preflight blocks risky mock
+
+- test_id: ASSET-PREFLIGHT-001
+- input: `python3 computer_use_poc/release_preflight_check.py computer_use_poc/test_fixtures/package_asset_scanner_risky_mock`
+- expected_runtime_behavior: release_preflight_blocks_risky_assets
+- expected_output_boundary: exit 1；`preflight_pass=false`；`package_should_block=true`；不输出敏感内容原文。
+
+## 573. Asset release preflight passes safe mock
+
+- test_id: ASSET-PREFLIGHT-002
+- input: `python3 computer_use_poc/release_preflight_check.py computer_use_poc/test_fixtures/package_asset_scanner_safe_mock`
+- expected_runtime_behavior: release_preflight_passes_minimal_safe_release
+- expected_output_boundary: exit 0；`preflight_pass=true`；`package_should_block=false`；仅输出 safe_summary。
+
+## 574. Asset release preflight fails closed on scanner error
+
+- test_id: ASSET-PREFLIGHT-003
+- input: `python3 computer_use_poc/release_preflight_check.py computer_use_poc/test_fixtures/package_asset_scanner_missing_mock`
+- expected_runtime_behavior: release_preflight_fail_closed
+- expected_output_boundary: exit 1；`preflight_pass=false`；`package_should_block=true`；输出 failure_reason，不输出 scanner 原始 stdout / stderr。
+
+## 575. Credential-like fields block package
+
+- test_id: ASSET-PREFLIGHT-004
+- input: mock package containing simulated cookie / token / session / header / API key markers.
+- expected_runtime_behavior: scanner_sets_package_should_block
+- expected_output_boundary: critical / high 命中；`package_should_block=true`；preflight exit 1。
+
+## 576. Preflight output is safe summary only
+
+- test_id: ASSET-PREFLIGHT-005
+- input: risky mock fixture with simulated sensitive markers.
+- expected_runtime_behavior: preflight_safe_summary_only
+- expected_output_boundary: preflight 输出 counts、blocking rule counts、required_files 状态；不得打印 matched_text、完整文件内容、完整 Skill 原文、完整 run_logs、测试原始样本内容。

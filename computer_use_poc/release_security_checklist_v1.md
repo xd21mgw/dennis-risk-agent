@@ -5,6 +5,12 @@
 每次生成 release 目录后、打 dist 包和上传前，必须执行：
 
 ```bash
+python3 computer_use_poc/release_preflight_check.py outputs/release/<release_name>
+```
+
+preflight 会自动调用 package scanner：
+
+```bash
 python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name>
 ```
 
@@ -13,6 +19,33 @@ python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name>
 ```bash
 python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name> --json
 ```
+
+不得跳过 `release_preflight_check.py` 直接打包。scanner 是底层检查器，preflight 是打包前门禁入口。
+
+## 1A. Preflight 通过标准
+
+必须同时满足：
+
+- `preflight_pass=true`。
+- `package_should_block=false`。
+- `critical=0`。
+- `high=0`，除非 high 规则在 preflight / rules / checklist 中显式记录豁免原因。
+- 无 cookie / token / session / header / API key。
+- 无完整 `domain_skills` / full prompt / sensitive run logs。
+- 无 auth state / sso-state / browser cookie。
+- release 目录包含 README、manifest 和 required runtime files。
+- preflight 输出仅为 safe_summary，不打印敏感文件内容、完整 Skill 原文、完整 run_logs 或测试原始样本。
+
+## 1B. Preflight 失败标准
+
+出现任一情况即失败：
+
+- `package_should_block=true`。
+- scanner 运行异常、超时、无 JSON 输出或 JSON 解析失败。
+- 命中 critical。
+- 命中未豁免 high。
+- release 目录缺失 manifest / README / required runtime files。
+- 输出包含 cookie / token / session / header / API key、完整 Skill 原文、完整 run_logs 或其他敏感内容原文。
 
 ## 2. Critical / High 命中处理
 
