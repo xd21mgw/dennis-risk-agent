@@ -40,12 +40,23 @@ cannot_conclude:
 ## 4. 不可预测矩阵 / 异常相关性矩阵
 
 ```text
+relation_family:
 relation_direction:
+observed_pattern:
+evidence_basis:
+baseline_status:
+denominator_status:
 coverage_ratio:
 enrichment_signal:
-baseline_status:
+directionality:
+reverse_check_result:
+confounder_risk:
+false_positive_risk:
+relationship_strength:
+attack_path_hypothesis:
 possible_explanation:
 required_followup:
+cannot_conclude_boundary:
 ```
 
 ## 5. 代表样本证据卡

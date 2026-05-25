@@ -260,12 +260,21 @@ source quality:
 - risk_hypothesis:
 
 不可预测矩阵 / 异常相关性矩阵:
+- relation_family:
 - relation_direction:
+- observed_pattern:
+- evidence_basis:
+- baseline_status:
+- denominator_status:
 - coverage_ratio:
 - enrichment_signal:
-- baseline_status:
+- relationship_strength:
+- reverse_check_result:
+- confounder_risk:
+- false_positive_risk:
 - possible_explanation:
 - required_followup:
+- cannot_conclude_boundary:
 
 代表样本证据卡:
 - case_id:
