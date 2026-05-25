@@ -109,6 +109,37 @@ runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 
 The source-tree `question_learning_candidate_queue_v1.csv` remains a demo template and must not be overwritten by runtime.
 
+Runtime path resolution is stable and does not depend on arbitrary CWD:
+
+1. `--candidate-queue <path>` wins when explicitly provided.
+2. If `DENNIS_AGENT_HOME` is set, writer uses:
+   `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
+3. Otherwise, writer resolves the `dennis-risk-agent` repo root from `pilot_observation_writer.py` and writes under that root.
+4. Only if repo-root detection fails, writer falls back to current CWD and reports `path_resolution=fallback_cwd`.
+
+Recommended live configuration:
+
+```bash
+export DENNIS_AGENT_HOME=/path/to/dennis-risk-agent
+```
+
+The writer also supports:
+
+```bash
+python3 computer_use_poc/question_collection/pilot_observation_writer.py \
+  --candidate-queue /absolute/path/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+Writer output always includes `candidate_queue_path` and `path_resolution`.
+
+Runtime candidate queue schema uses the 13-column header:
+
+```text
+candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes
+```
+
+If the runtime CSV is missing, writer creates parent directories and writes the header. If an existing runtime CSV has an incompatible header, writer preserves it as a timestamped `schema_mismatch_backup` file and starts a new file with the 13-column header. It does not copy demo rows into runtime output.
+
 ## 3. Boundaries
 
 - Does not access real internal platforms.
@@ -123,7 +154,7 @@ The source-tree `question_learning_candidate_queue_v1.csv` remains a demo templa
 
 - `question_record_schema_v1.md`: question_record schema.
 - `question_learning_policy_v1.md`: candidate queue decision policy.
-- `question_learning_candidate_queue_v1.csv`: queue template and examples.
+- `question_learning_candidate_queue_v1.csv`: queue template and examples using the 13-column runtime schema; not a runtime write target.
 - `user_feedback_capture_v1.md`: lightweight feedback options.
 - `case_learning_note_template_v1.md`: candidate learning note template.
 - `question_collection_text_regression_cases_v1.yaml`: text regression cases.

@@ -15,6 +15,7 @@ import argparse
 import csv
 import datetime as dt
 import json
+import os
 import re
 import sys
 import tempfile
@@ -23,7 +24,7 @@ from typing import Any
 
 
 DEFAULT_LOG_DIR = Path("semi_open_pilot_logs")
-DEFAULT_CANDIDATE_QUEUE = Path("runtime_logs/question_collection/question_learning_candidate_queue_v1.csv")
+DEFAULT_CANDIDATE_QUEUE_RELATIVE = Path("runtime_logs/question_collection/question_learning_candidate_queue_v1.csv")
 
 CANDIDATE_QUEUE_HEADER = [
     "candidate_id",
@@ -54,8 +55,8 @@ HIGH_VALUE_FEEDBACK = {
 FOLLOWUP_QUERY_TERMS = {"查一下吧", "继续", "看下", "可以", "试一下"}
 
 SENSITIVE_PATTERNS = [
-    (re.compile(r"(?i)(cookie|session|token|header|authorization|auth_state|storageState)\s*[:=]\s*[^,\s]+"), r"\1=[REDACTED]"),
-    (re.compile(r"(?i)(access_token|refresh_token|session_id|auth_token)\s*[:=]\s*[^,\s]+"), r"\1=[REDACTED]"),
+    (re.compile(r"(?i)(cookie|session|token|header|authorization|auth_state|storageState)\s*[:=]\s*[^,\s]+"), "[CREDENTIAL_REDACTED]"),
+    (re.compile(r"(?i)(access_token|refresh_token|session_id|auth_token)\s*[:=]\s*[^,\s]+"), "[CREDENTIAL_REDACTED]"),
     (re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"), "[PHONE_REDACTED]"),
 ]
 
@@ -97,6 +98,30 @@ def sanitize_record(record: dict[str, Any]) -> dict[str, Any]:
         else:
             sanitized[key] = value
     return sanitized
+
+
+def find_repo_root_from_script() -> Path | None:
+    """Locate the repository root from this script path without using CWD."""
+    script_path = Path(__file__).resolve()
+    for parent in script_path.parents:
+        if (parent / "computer_use_poc" / "question_collection").is_dir():
+            return parent
+    return None
+
+
+def resolve_candidate_queue_path(candidate_queue_arg: str | None) -> tuple[Path, str]:
+    if candidate_queue_arg:
+        return Path(candidate_queue_arg).expanduser().resolve(), "explicit_arg"
+
+    env_home = os.environ.get("DENNIS_AGENT_HOME")
+    if env_home:
+        return (Path(env_home).expanduser().resolve() / DEFAULT_CANDIDATE_QUEUE_RELATIVE), "dennis_agent_home"
+
+    repo_root = find_repo_root_from_script()
+    if repo_root:
+        return (repo_root / DEFAULT_CANDIDATE_QUEUE_RELATIVE), "script_repo_root"
+
+    return (Path.cwd() / DEFAULT_CANDIDATE_QUEUE_RELATIVE), "fallback_cwd"
 
 
 def infer_feedback_type(message: str, linked_previous_record_id: str | None = None) -> tuple[str, float, list[str]]:
@@ -179,6 +204,18 @@ def ensure_candidate_queue_header(path: Path) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(CANDIDATE_QUEUE_HEADER)
+        return
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        existing_header = next(reader, [])
+    if existing_header != CANDIDATE_QUEUE_HEADER:
+        timestamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+        backup = path.with_name(f"{path.stem}.schema_mismatch_backup_{timestamp}{path.suffix}")
+        path.replace(backup)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(CANDIDATE_QUEUE_HEADER)
 
 
 def append_candidate_queue(record: dict[str, Any], candidate_queue: Path) -> None:
@@ -244,7 +281,13 @@ def normalize_feedback_record(data: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-def process_record(data: dict[str, Any], log_dir: Path, candidate_queue: Path, dry_run: bool = False) -> dict[str, Any]:
+def process_record(
+    data: dict[str, Any],
+    log_dir: Path,
+    candidate_queue: Path,
+    path_resolution: str,
+    dry_run: bool = False,
+) -> dict[str, Any]:
     record_type = data.get("record_type")
     if not record_type:
         record_type = "feedback_record" if ("feedback_message" in data or "message" in data) else "observation_record"
@@ -257,7 +300,13 @@ def process_record(data: dict[str, Any], log_dir: Path, candidate_queue: Path, d
         record = normalize_feedback_record(data)
 
     if dry_run:
-        return {"status": "dry_run", "record_type": record_type, "record": record}
+        return {
+            "status": "dry_run",
+            "record_type": record_type,
+            "record": record,
+            "candidate_queue_path": str(candidate_queue),
+            "path_resolution": path_resolution,
+        }
 
     path = append_markdown_log(record_type, record, log_dir)
     candidate_appended = False
@@ -268,12 +317,13 @@ def process_record(data: dict[str, Any], log_dir: Path, candidate_queue: Path, d
         "status": "appended",
         "record_type": record_type,
         "log_path": str(path),
-        "candidate_queue_path": str(candidate_queue) if candidate_appended else "",
+        "candidate_queue_path": str(candidate_queue),
+        "path_resolution": path_resolution,
         "candidate_appended": candidate_appended,
     }
 
 
-def run_self_test() -> dict[str, Any]:
+def run_self_test(candidate_queue: Path, path_resolution: str) -> dict[str, Any]:
     cases = [
         ("too_generic", {"record_type": "feedback_record", "source_channel": "KIM", "feedback_message": "太泛了", "linked_previous_record_id": "obs_001"}),
         ("wrong_intent", {"record_type": "feedback_record", "source_channel": "KIM", "feedback_message": "不是这个意思", "linked_previous_record_id": "obs_002"}),
@@ -285,23 +335,34 @@ def run_self_test() -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp)
         log_dir = base / "semi_open_pilot_logs"
-        queue = base / "runtime_logs/question_collection/question_learning_candidate_queue_v1.csv"
         results = []
         for name, payload in cases:
-            result = process_record(payload, log_dir, queue, dry_run=False)
+            result = process_record(payload, log_dir, candidate_queue, path_resolution, dry_run=False)
             results.append({"case": name, **result})
-        queue_text = queue.read_text(encoding="utf-8")
+        with candidate_queue.open("r", encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        self_test_rows = {
+            row.get("linked_log_id"): row
+            for row in rows
+            if row.get("linked_log_id") in {"obs_001", "obs_002", "obs_003", "obs_004", "obs_005", "obs_006"}
+        }
+        queue_text = "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in self_test_rows.values())
         log_text = "\n".join(path.read_text(encoding="utf-8") for path in log_dir.glob("*.md"))
         assertions = {
-            "too_generic_candidate": "too_generic" in queue_text,
-            "wrong_intent_candidate": "wrong_intent" in queue_text,
-            "needs_data_candidate": "needs_data" in queue_text,
-            "worth_learning_candidate": "worth_learning" in queue_text,
-            "useful_not_candidate": "useful" not in queue_text,
-            "sensitive_redacted": "abc" not in log_text and "secret" not in log_text and "13800138000" not in log_text,
+            "too_generic_candidate": self_test_rows.get("obs_001", {}).get("feedback_type") == "too_generic",
+            "wrong_intent_candidate": self_test_rows.get("obs_002", {}).get("feedback_type") == "wrong_intent",
+            "needs_data_candidate": self_test_rows.get("obs_003", {}).get("feedback_type") == "needs_data",
+            "worth_learning_candidate": self_test_rows.get("obs_004", {}).get("feedback_type") == "worth_learning",
+            "useful_not_candidate": "obs_005" not in self_test_rows,
+            "sensitive_redacted": "abc" not in log_text and "secret" not in log_text and "13800138000" not in log_text and "Bearer" not in queue_text,
+            "candidate_queue_path_present": all(result.get("candidate_queue_path") for result in results),
+            "path_resolution_present": all(result.get("path_resolution") for result in results),
+            "runtime_header_13_columns": list(rows[0].keys()) == CANDIDATE_QUEUE_HEADER if rows else False,
         }
         return {
             "status": "pass" if all(assertions.values()) else "fail",
+            "candidate_queue_path": str(candidate_queue),
+            "path_resolution": path_resolution,
             "assertions": assertions,
             "results": results,
         }
@@ -311,17 +372,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Append semi-open pilot observation or feedback records.")
     parser.add_argument("--input", help="Path to JSON input. Reads stdin when omitted.")
     parser.add_argument("--log-dir", default=str(DEFAULT_LOG_DIR), help="Append-only markdown pilot log directory.")
-    parser.add_argument("--candidate-queue", default=str(DEFAULT_CANDIDATE_QUEUE), help="Runtime candidate queue CSV path.")
+    parser.add_argument("--candidate-queue", help="Explicit runtime candidate queue CSV path.")
     parser.add_argument("--dry-run", action="store_true", help="Print normalized record without writing.")
     parser.add_argument("--self-test", action="store_true", help="Run local smoke tests in a temporary directory.")
     args = parser.parse_args()
 
     try:
+        candidate_queue, path_resolution = resolve_candidate_queue_path(args.candidate_queue)
         if args.self_test:
-            print(json.dumps(run_self_test(), ensure_ascii=False, indent=2, sort_keys=True))
+            print(json.dumps(run_self_test(candidate_queue, path_resolution), ensure_ascii=False, indent=2, sort_keys=True))
             return 0
         data = load_json(args.input)
-        result = process_record(data, Path(args.log_dir), Path(args.candidate_queue), dry_run=args.dry_run)
+        result = process_record(data, Path(args.log_dir), candidate_queue, path_resolution, dry_run=args.dry_run)
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     except Exception as exc:  # noqa: BLE001 - CLI should fail closed with structured error.

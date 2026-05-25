@@ -77,6 +77,28 @@ Required fields:
 
 High-value feedback can be appended to the runtime candidate queue. The source-tree `question_learning_candidate_queue_v1.csv` remains a template and must not be overwritten by runtime.
 
+Runtime candidate queue path resolution:
+
+1. explicit `--candidate-queue <path>`
+2. `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`
+3. repo root detected from `pilot_observation_writer.py`
+4. current CWD fallback with `path_resolution=fallback_cwd`
+
+Writer result must include:
+
+| field | type | rule |
+|---|---|---|
+| `candidate_queue_path` | string | absolute resolved runtime queue path |
+| `path_resolution` | string | `explicit_arg` / `dennis_agent_home` / `script_repo_root` / `fallback_cwd` |
+
+Runtime candidate queue CSV schema:
+
+```text
+candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes
+```
+
+The template CSV may contain demo rows only. Runtime rows must be written to `runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`, not the source-tree template.
+
 ## 3. agent_observed
 
 `agent_observed` records signals that can be observed during the current conversation. These signals are not final quality assessment and do not decide deposition.

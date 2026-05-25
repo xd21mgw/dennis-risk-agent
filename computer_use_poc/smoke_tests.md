@@ -5111,3 +5111,52 @@
 - input: strategy recall / strategy hit batch。
 - expected_runtime_behavior: strategy_recall_selection_bias
 - expected_output_boundary: 必须标记 `selection_bias_risk`，不得把策略召回集合内的相关性直接当总体富集。
+
+## 601. Feedback writer stable candidate queue path
+
+- test_id: FEEDBACK-WRITER-PATH-001
+- input: 从不同 CWD 调用 `pilot_observation_writer.py --self-test`。
+- expected_runtime_behavior: stable_candidate_queue_path_resolution
+- expected_output_boundary: 默认优先 `DENNIS_AGENT_HOME`，否则从脚本路径定位 repo root；输出包含 `candidate_queue_path` 和 `path_resolution`；仅 repo-root 失败时允许 `fallback_cwd`。
+
+## 602. Feedback writer explicit candidate queue
+
+- test_id: FEEDBACK-WRITER-PATH-002
+- input: `pilot_observation_writer.py --self-test --candidate-queue /tmp/dennis_feedback_queue_test/question_learning_candidate_queue_v1.csv`。
+- expected_runtime_behavior: explicit_candidate_queue_path
+- expected_output_boundary: 写入指定路径，`path_resolution=explicit_arg`，不污染 source-tree template CSV。
+
+## 603. Feedback writer DENNIS_AGENT_HOME path
+
+- test_id: FEEDBACK-WRITER-PATH-003
+- input: `DENNIS_AGENT_HOME=/tmp/dennis_agent_home_test pilot_observation_writer.py --self-test`。
+- expected_runtime_behavior: dennis_agent_home_candidate_queue_path
+- expected_output_boundary: 写入 `/tmp/dennis_agent_home_test/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`，`path_resolution=dennis_agent_home`。
+
+## 604. Feedback writer auto init
+
+- test_id: FEEDBACK-WRITER-AUTO-INIT-001
+- input: runtime queue parent directory does not exist。
+- expected_runtime_behavior: candidate_queue_auto_init
+- expected_output_boundary: 自动创建 parent directory；CSV 不存在时只写新版 13 列 header，不复制 demo 数据。
+
+## 605. Feedback writer candidate decisions
+
+- test_id: FEEDBACK-WRITER-CANDIDATE-001
+- input: too_generic / wrong_intent / needs_data / worth_learning / useful。
+- expected_runtime_behavior: high_value_feedback_candidate_queue
+- expected_output_boundary: too_generic、wrong_intent、needs_data、worth_learning 进入 candidate queue；useful 只写 pilot log，不进入 candidate queue。
+
+## 606. Feedback writer sensitive redaction
+
+- test_id: FEEDBACK-WRITER-REDACTION-001
+- input: feedback text includes cookie/token/session/header/API key/phone-like string。
+- expected_runtime_behavior: sensitive_feedback_redaction
+- expected_output_boundary: semi_open_pilot_logs 和 candidate queue 均不得保留敏感原文；只能输出 redacted marker。
+
+## 607. Feedback writer runtime queue schema
+
+- test_id: FEEDBACK-WRITER-SCHEMA-001
+- input: runtime candidate queue missing or old schema。
+- expected_runtime_behavior: runtime_candidate_queue_schema_v2
+- expected_output_boundary: runtime queue 使用 13 列 header：candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes；旧 schema 保留为 schema_mismatch_backup 后新建 13 列文件。

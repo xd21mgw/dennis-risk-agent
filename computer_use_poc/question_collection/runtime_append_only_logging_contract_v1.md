@@ -36,6 +36,23 @@ runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 
 This runtime CSV is separate from the source-tree template CSV.
 
+Candidate queue path resolution must be stable:
+
+1. `pilot_observation_writer.py --candidate-queue <path>` uses the explicit path.
+2. `DENNIS_AGENT_HOME` uses `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
+3. If the env var is absent, the writer resolves the repo root from the script path.
+4. Only if repo-root detection fails, the writer may use CWD and must report `path_resolution=fallback_cwd`.
+
+Writer output must include `candidate_queue_path` and `path_resolution` for debugging.
+
+Runtime candidate queue CSV uses this 13-column schema:
+
+```text
+candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes
+```
+
+If `runtime_logs/question_collection/` does not exist, the writer creates it. If the runtime CSV does not exist, it writes only the header. It must not copy demo rows from the template CSV. If an existing runtime CSV has an incompatible header, the writer preserves it as a timestamped schema mismatch backup and creates a new file with the 13-column header.
+
 Rules:
 
 - One JSON object per line.
