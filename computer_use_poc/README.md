@@ -218,6 +218,30 @@ readiness 资产：
 
 当前正在准备的半开放 release 包以 `v2.4 Runtime Plus` 为基底，面向全场景半开放测试，而不是 ATO-only。
 
+## 4-H. Release Security / Asset Extraction Guard
+
+重新打包、上传或生成 dist 前，必须先完成 release 瘦身安全检查。
+
+入口文件：
+
+- `computer_use_poc/asset_extraction_policy_v1.md`：release 资产分级、禁止进入 release 的内容、允许内容和输出降级原则。
+- `computer_use_poc/release_security_checklist_v1.md`：打包前安全检查和验收标准。
+- `computer_use_poc/package_asset_scanner.py`：本地 package scanner。
+- `computer_use_poc/package_asset_scanner_rules.json`：scanner 规则。
+- `computer_use_poc/asset_extraction_regression_cases_v1.md`：asset extraction 攻击回归样例。
+
+打包前必须执行：
+
+```bash
+python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name>
+```
+
+门禁口径：
+
+- scanner 输出 critical / high 或 `package_should_block=true` 时，不得上传、不得打 dist 包。
+- 必须删除、替换或摘要化命中文件后重新运行 scanner。
+- release 包不得包含完整 domain skill 原文、历史 run logs 全量、原始 case / feedback / platform observation、完整 prompt、auth/session/token/cookie/header/API key 或可复原内部平台调用链路的细节。
+
 release 包目标路径：
 
 - `outputs/release/dennis_risk_agent_v2_4_runtime_plus_semi_open_release/`

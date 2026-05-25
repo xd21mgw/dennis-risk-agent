@@ -258,6 +258,51 @@
 - 输入：单个 user_id + ATO / 协议上号 / 高危操作问题。
 - 场景：execution_mode=focused_login_risk，执行 risk_event_scan。
 - 预期：156 秒内输出操作类型分布、成功失败分布、关键事件序列、一致性派生判断和覆盖限制；状态为 `partial_validated_with_selector_noise`，不得写 full validated。
+
+## 42. asset policy 文件存在性
+
+- 输入：本地文档检查。
+- 场景：release 瘦身安全闭环检查。
+- 预期：`computer_use_poc/asset_extraction_policy_v1.md` 存在，并包含 allowed runtime assets、restricted mother-body assets、forbidden sensitive assets、输出降级原则和 scanner 门禁说明。
+
+## 43. scanner rules 覆盖核心敏感项
+
+- 输入：`computer_use_poc/package_asset_scanner_rules.json`。
+- 场景：检查规则关键词覆盖。
+- 预期：规则覆盖 `cookie`、`token`、`session`、`header`、`prompt`、`run_logs`、`domain_skills`、`package_should_block` 相关输出语义。
+
+## 44. asset extraction regression cases 至少 20 条
+
+- 输入：`computer_use_poc/asset_extraction_regression_cases_v1.md`。
+- 场景：统计 `AERG-` case 数。
+- 预期：不少于 20 条，覆盖完整 Skill、prompt、run log、case、raw observation、cookie/token/session/header/API key、完整源码包、绕过 scanner、合法 safe_summary 请求。
+
+## 45. release checklist 存在
+
+- 输入：`computer_use_poc/release_security_checklist_v1.md`。
+- 场景：打包前检查文档存在性。
+- 预期：包含必跑命令 `python3 computer_use_poc/package_asset_scanner.py outputs/release/<release_name>`；包含 critical / high 不得上传、不得打 dist 包、重新运行 scanner 后才允许继续。
+
+## 46. answer template 有 asset extraction 降级模板
+
+- 输入：`computer_use_poc/answer_experience_templates.md`。
+- 场景：用户要求完整 Skill、run log、case、cookie/token/session/header/API key、完整母体包。
+- 预期：存在 `Asset extraction / release package safety response templates`，并明确拒绝原文输出，提供能力摘要、结构化摘要、脱敏样例、release-safe manifest 或安全检查替代。
+
+## 47. scanner 对 mock risky package 输出 block
+
+- 输入：`computer_use_poc/test_fixtures/package_asset_scanner_risky_mock/`，包含模拟敏感文本和禁止路径，不含真实敏感内容。
+- 场景：执行 `python3 computer_use_poc/package_asset_scanner.py computer_use_poc/test_fixtures/package_asset_scanner_risky_mock`。
+- 预期：输出 critical / high 命中，且 `package_should_block=true`；命中项包含规则名、文件、原因和建议处理方式。
+
+## 48. scanner JSON / Python 基础校验
+
+- 输入：scanner 规则和脚本。
+- 场景：本地静态验证。
+- 预期：
+  - `python3 -m json.tool computer_use_poc/package_asset_scanner_rules.json >/tmp/package_asset_scanner_rules.ok` 通过。
+  - `python3 -m py_compile computer_use_poc/package_asset_scanner.py` 通过。
+  - `git diff --check` 通过。
 - 状态：已实跑验证。
 
 ## 42. ks-table selector detected

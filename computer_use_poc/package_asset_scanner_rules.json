@@ -1,184 +1,442 @@
 {
-  "schema_version": "package_asset_scanner_rules_v1",
-  "description": "Path-level semi-open release package scanner rules. The scanner does not open files that match sensitive path patterns.",
+  "schema_version": "package_asset_scanner_rules_v2",
+  "description": "Release package asset scanner rules for Dennis Risk Agent semi-open packages. Path rules block mother-body assets first; bounded content rules catch sensitive strings in ordinary text files.",
+  "blocking_policy": "Any critical or high finding must set package_should_block=true in scanner output.",
+  "content_scan_max_bytes": 2000000,
+  "content_scan_extensions": [
+    ".csv",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".py",
+    ".txt",
+    ".yaml",
+    ".yml"
+  ],
+  "content_scan_exclude": [
+    "computer_use_poc/package_asset_scanner_rules.json",
+    "**/package_asset_scanner_rules.json"
+  ],
   "allowlist": [
     {
+      "name": "allow_field_output_policy",
       "pattern": "computer_use_poc/field_output_classification_policy_v1.md",
       "reason": "Runtime output policy is required."
     },
     {
+      "name": "allow_redaction_policy",
       "pattern": "computer_use_poc/sensitive_field_redaction_policy.md",
       "reason": "Runtime redaction policy is required."
     },
     {
+      "name": "allow_runtime_guard",
       "pattern": "computer_use_poc/multi_entry_runtime_guard_v1.md",
       "reason": "Runtime guard is required."
     },
     {
+      "name": "allow_runtime_user_guide",
       "pattern": "computer_use_poc/runtime_semi_open_user_guide_v1.md",
       "reason": "Semi-open user guide is safe and required."
     },
     {
+      "name": "allow_release_security_checklist",
+      "pattern": "computer_use_poc/release_security_checklist_v1.md",
+      "reason": "Release security checklist is a required packaging control."
+    },
+    {
+      "name": "allow_asset_extraction_policy",
+      "pattern": "computer_use_poc/asset_extraction_policy_v1.md",
+      "reason": "Release asset extraction policy is required."
+    },
+    {
+      "name": "allow_login_log_contract",
       "pattern": "computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md",
       "reason": "Tool contract is required."
     },
     {
+      "name": "allow_sso_runner",
       "pattern": "computer_use_poc/sso_session_runner.py",
       "reason": "Runtime wrapper is required for readonly validation."
     },
     {
+      "name": "allow_runtime_summaries",
+      "pattern": "skills/dennis_risk_agent_skills_v2_1_focused_deep/11_runtime_summaries/**",
+      "reason": "Distilled runtime summaries are allowed; full mother-body skills are not."
+    },
+    {
+      "name": "allow_release_closure_summary",
+      "pattern": "computer_use_poc/run_logs/*closure_summary*.md",
+      "reason": "Selected release closure summaries may be included if redacted."
+    },
+    {
+      "name": "allow_asset_guard_run_log",
+      "pattern": "computer_use_poc/run_logs/asset_extraction_guard_minimal_closure_v1.md",
+      "reason": "This run log records packaging guard changes without real platform data."
+    },
+    {
+      "name": "allow_token_policy_docs",
       "pattern": "*token*_policy*.md",
       "reason": "Policy docs may include token in filename without containing credential values."
     },
     {
+      "name": "allow_token_contract_docs",
       "pattern": "*token*_contract*.md",
       "reason": "Contract docs may include token in filename without containing credential values."
     },
     {
+      "name": "allow_token_summary_docs",
       "pattern": "*token*_summary*.md",
       "reason": "Summary docs may include token in filename without containing credential values."
     }
   ],
   "denylist": [
     {
+      "name": "git_metadata",
       "pattern": ".git/**",
-      "severity": "fail",
+      "severity": "critical",
       "category": "git_metadata",
-      "reason": "Git metadata must not be packaged."
+      "reason": "Git metadata must not be packaged.",
+      "recommendation": "Remove .git from the release directory."
     },
     {
+      "name": "nested_git_metadata",
       "pattern": "**/.git/**",
-      "severity": "fail",
+      "severity": "critical",
       "category": "git_metadata",
-      "reason": "Git metadata must not be packaged."
+      "reason": "Nested Git metadata must not be packaged.",
+      "recommendation": "Remove nested .git directories."
     },
     {
-      "pattern": "**/.ks_sso/**",
-      "severity": "fail",
-      "category": "auth_state",
-      "reason": "SSO auth state directory must not be packaged."
+      "name": "domain_skill_mother_body",
+      "pattern": "skills/dennis_risk_agent_skills_v2_1_focused_deep/02_domain_skills/**",
+      "severity": "critical",
+      "category": "mother_body_skill_source",
+      "reason": "Full domain skill source is a restricted mother-body asset and must not enter release packages.",
+      "recommendation": "Replace with files from 11_runtime_summaries only."
     },
     {
-      "pattern": "**/*auth*state*.json",
-      "severity": "fail",
-      "category": "auth_state",
-      "reason": "Auth state JSON files must not be packaged."
-    },
-    {
-      "pattern": "**/*storageState*.json",
-      "severity": "fail",
-      "category": "auth_state",
-      "reason": "storageState JSON files must not be packaged."
-    },
-    {
-      "pattern": "**/*auth_state*.md",
-      "severity": "warning",
-      "category": "auth_state_doc",
-      "reason": "Auth-state documentation should be reviewed before semi-open packaging."
-    },
-    {
-      "pattern": "**/*cookie*",
-      "severity": "fail",
-      "category": "credential_material",
-      "reason": "Cookie-bearing files must not be packaged."
-    },
-    {
-      "pattern": "**/*session*",
-      "severity": "fail",
-      "category": "credential_material",
-      "reason": "Session-bearing files must not be packaged unless explicitly reviewed."
-    },
-    {
-      "pattern": "**/outputs/dist/**",
-      "severity": "fail",
-      "category": "historical_dist",
-      "reason": "Historical dist packages must not be nested in release packages."
-    },
-    {
-      "pattern": "**/outputs/release/**",
-      "severity": "fail",
-      "category": "nested_release",
-      "reason": "Nested release packages indicate packaging recursion."
-    },
-    {
-      "pattern": "**/drafts/**",
-      "severity": "warning",
-      "category": "drafts",
-      "reason": "Drafts are development artifacts."
-    },
-    {
-      "pattern": "**/intermediate/**",
-      "severity": "warning",
-      "category": "intermediate",
-      "reason": "Intermediate artifacts are development assets."
-    },
-    {
-      "pattern": "**/run_logs/**",
-      "severity": "warning",
-      "category": "run_logs",
-      "reason": "Run logs should be selected and redacted, not included wholesale."
-    },
-    {
-      "pattern": "**/*regression_cases*.md",
-      "severity": "warning",
-      "category": "test_case_library",
-      "reason": "Full regression case libraries should not enter semi-open runtime packages."
-    },
-    {
-      "pattern": "**/prompt_injection_defense_cases.md",
-      "severity": "warning",
-      "category": "attack_case_library",
-      "reason": "Full prompt injection cases should not enter semi-open runtime packages."
-    },
-    {
-      "pattern": "**/asset_extraction_guard_regression_cases.md",
-      "severity": "warning",
-      "category": "attack_case_library",
-      "reason": "Full asset extraction cases should not enter semi-open runtime packages."
-    },
-    {
-      "pattern": "**/smoke_tests.md",
-      "severity": "warning",
-      "category": "full_test_suite",
-      "reason": "Prefer smoke test summary for semi-open packages."
-    },
-    {
+      "name": "raw_skill_source",
       "pattern": "**/SKILL.md",
-      "severity": "warning",
+      "severity": "high",
       "category": "raw_skill_source",
-      "reason": "Raw skill prompts are core assets."
+      "reason": "Raw skill prompts are core assets.",
+      "recommendation": "Replace raw skill source with a runtime-safe summary."
     },
     {
+      "name": "run_logs_full_directory",
+      "pattern": "computer_use_poc/run_logs/**",
+      "severity": "high",
+      "category": "run_logs",
+      "reason": "Run logs should not be included wholesale; they can contain historical case detail and platform observations.",
+      "recommendation": "Include only allowlisted release closure summaries after redaction."
+    },
+    {
+      "name": "nested_run_logs_full_directory",
+      "pattern": "**/computer_use_poc/run_logs/**",
+      "severity": "high",
+      "category": "run_logs",
+      "reason": "Nested run logs indicate full process asset inclusion.",
+      "recommendation": "Remove run logs or replace with a redacted closure summary."
+    },
+    {
+      "name": "runtime_question_collection_logs",
+      "pattern": "runtime_logs/question_collection/**",
+      "severity": "high",
+      "category": "runtime_raw_logs",
+      "reason": "Runtime question collection logs may contain user prompts and feedback raw text.",
+      "recommendation": "Replace with a schema, sample, or aggregate summary."
+    },
+    {
+      "name": "semi_open_pilot_raw_logs",
+      "pattern": "semi_open_pilot_logs/**",
+      "severity": "high",
+      "category": "runtime_raw_logs",
+      "reason": "Semi-open pilot logs may contain raw user feedback or operational detail.",
+      "recommendation": "Replace with an aggregate closure summary."
+    },
+    {
+      "name": "env_file",
+      "pattern": "**/.env*",
+      "severity": "critical",
+      "category": "credential_material",
+      "reason": "Environment files often contain credentials or private endpoints.",
+      "recommendation": "Remove the file; provide a redacted .env.example if needed."
+    },
+    {
+      "name": "auth_state_directory",
+      "pattern": "**/.ks_sso/**",
+      "severity": "critical",
+      "category": "auth_state",
+      "reason": "SSO auth state directory must not be packaged.",
+      "recommendation": "Delete auth state directories from release output."
+    },
+    {
+      "name": "auth_state_json",
+      "pattern": "**/*auth*state*.json",
+      "severity": "critical",
+      "category": "auth_state",
+      "reason": "Auth state JSON files must not be packaged.",
+      "recommendation": "Remove auth state files."
+    },
+    {
+      "name": "storage_state_json",
+      "pattern": "**/*storageState*.json",
+      "severity": "critical",
+      "category": "auth_state",
+      "reason": "storageState JSON files must not be packaged.",
+      "recommendation": "Remove browser storage state files."
+    },
+    {
+      "name": "credential_named_file_cookie",
+      "pattern": "**/*cookie*",
+      "severity": "critical",
+      "category": "credential_material",
+      "reason": "Cookie-bearing files must not be packaged.",
+      "recommendation": "Remove cookie files; do not replace them with alternate names."
+    },
+    {
+      "name": "credential_named_file_session",
+      "pattern": "**/*session*",
+      "severity": "critical",
+      "category": "credential_material",
+      "reason": "Session-bearing files must not be packaged unless explicitly reviewed.",
+      "recommendation": "Remove session files."
+    },
+    {
+      "name": "credential_named_file_token",
+      "pattern": "**/*token*",
+      "severity": "high",
+      "category": "credential_material",
+      "reason": "Token-named files are high risk unless explicitly allowlisted policy/contract/summary docs.",
+      "recommendation": "Remove token files or rename/rewrite as a redacted policy summary."
+    },
+    {
+      "name": "credential_named_file_secret",
+      "pattern": "**/*secret*",
+      "severity": "critical",
+      "category": "credential_material",
+      "reason": "Secret-bearing files must not be packaged.",
+      "recommendation": "Remove secret files."
+    },
+    {
+      "name": "credential_named_file_key",
+      "pattern": "**/*credential*",
+      "severity": "critical",
+      "category": "credential_material",
+      "reason": "Credential-bearing files must not be packaged.",
+      "recommendation": "Remove credential files."
+    },
+    {
+      "name": "key_named_file",
+      "pattern": "**/*key*",
+      "severity": "high",
+      "category": "credential_material",
+      "reason": "Key-named files may contain private keys or API keys.",
+      "recommendation": "Remove the file or replace with a redacted public example."
+    },
+    {
+      "name": "historical_dist_nested",
+      "pattern": "**/outputs/dist/**",
+      "severity": "critical",
+      "category": "historical_dist",
+      "reason": "Historical dist packages must not be nested in release packages.",
+      "recommendation": "Remove outputs/dist from the release directory."
+    },
+    {
+      "name": "nested_release_package",
+      "pattern": "**/outputs/release/**",
+      "severity": "critical",
+      "category": "nested_release",
+      "reason": "Nested release packages indicate packaging recursion.",
+      "recommendation": "Remove nested release packages before packaging."
+    },
+    {
+      "name": "mother_body_source_in_dist",
+      "pattern": "outputs/dist/**/skills/dennis_risk_agent_skills_v2_1_focused_deep/**",
+      "severity": "critical",
+      "category": "mother_body_source_in_dist",
+      "reason": "outputs/dist must not contain mother-body skill/source directories.",
+      "recommendation": "Rebuild dist from the sanitized release directory only."
+    },
+    {
+      "name": "drafts",
+      "pattern": "**/drafts/**",
+      "severity": "medium",
+      "category": "drafts",
+      "reason": "Drafts are development artifacts.",
+      "recommendation": "Remove drafts or convert to an approved runtime summary."
+    },
+    {
+      "name": "intermediate",
+      "pattern": "**/intermediate/**",
+      "severity": "medium",
+      "category": "intermediate",
+      "reason": "Intermediate artifacts are development assets.",
+      "recommendation": "Remove intermediate artifacts unless explicitly listed in the release manifest."
+    },
+    {
+      "name": "full_regression_case_library",
+      "pattern": "**/*regression_cases*.md",
+      "severity": "medium",
+      "category": "test_case_library",
+      "reason": "Full regression case libraries should not enter semi-open runtime packages.",
+      "recommendation": "Replace with a minimal smoke summary and expected decisions."
+    },
+    {
+      "name": "prompt_asset",
       "pattern": "**/*prompt*.md",
-      "severity": "warning",
+      "severity": "high",
       "category": "prompt_asset",
-      "reason": "Prompt source should be summarized unless runtime owner approves."
+      "reason": "Prompt source should be summarized unless runtime owner approves.",
+      "recommendation": "Replace with high-level capability or usage text."
     },
     {
+      "name": "poc_process_file",
       "pattern": "**/*poc*.md",
-      "severity": "warning",
+      "severity": "medium",
       "category": "poc_process_file",
-      "reason": "POC process files are development assets."
+      "reason": "POC process files are development assets.",
+      "recommendation": "Replace with release-safe runtime guidance."
     },
     {
+      "name": "raw_observation_directory",
       "pattern": "**/observations/**",
-      "severity": "warning",
+      "severity": "high",
       "category": "raw_observation",
-      "reason": "Observation files may contain sensitive details and should be selected/redacted."
+      "reason": "Observation files may contain sensitive details and should be selected/redacted.",
+      "recommendation": "Remove raw observations and include only derived evidence summaries."
+    }
+  ],
+  "content_denylist": [
+    {
+      "name": "cookie_literal",
+      "pattern": "\\bcookie\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Cookie-like credential field detected in file content.",
+      "recommendation": "Remove the value and replace with a redacted placeholder or policy text."
+    },
+    {
+      "name": "token_literal",
+      "pattern": "\\b(access[_-]?token|refresh[_-]?token|token)\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Token-like credential field detected in file content.",
+      "recommendation": "Remove token values; retain only redacted presence flags."
+    },
+    {
+      "name": "session_literal",
+      "pattern": "\\b(session|sessionid|session_id)\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Session-like credential field detected in file content.",
+      "recommendation": "Remove session values and auth state."
+    },
+    {
+      "name": "authorization_header",
+      "pattern": "\\bauthorization\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Authorization header detected in file content.",
+      "recommendation": "Remove complete headers and replace with a high-level auth boundary note."
+    },
+    {
+      "name": "bearer_token",
+      "pattern": "\\bbearer\\s+[A-Za-z0-9._~+\\-/=]{12,}",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Bearer token pattern detected.",
+      "recommendation": "Remove bearer credentials."
+    },
+    {
+      "name": "api_key_literal",
+      "pattern": "\\b(api[_-]?key|apikey)\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "API key field detected in file content.",
+      "recommendation": "Remove API key values and rotate if this was real."
+    },
+    {
+      "name": "x_ks_header",
+      "pattern": "\\bx-ks-[A-Za-z0-9_-]+\\s*[:=]",
+      "severity": "high",
+      "category": "internal_header_content",
+      "reason": "Internal x-ks header-like field detected.",
+      "recommendation": "Remove full platform headers; keep only a redacted header category if needed."
+    },
+    {
+      "name": "header_literal",
+      "pattern": "\\b(raw_)?headers?\\s*[:=]",
+      "severity": "high",
+      "category": "internal_header_content",
+      "reason": "Header dump marker detected.",
+      "recommendation": "Remove complete headers and summarize only required header classes."
+    },
+    {
+      "name": "password_literal",
+      "pattern": "\\b(password|passwd|pwd)\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Password-like field detected.",
+      "recommendation": "Remove password material."
+    },
+    {
+      "name": "secret_literal",
+      "pattern": "\\bsecret\\s*[:=]",
+      "severity": "critical",
+      "category": "credential_content",
+      "reason": "Secret-like field detected.",
+      "recommendation": "Remove secret material."
+    },
+    {
+      "name": "mainland_phone_number",
+      "pattern": "(?<!\\d)1[3-9]\\d{9}(?!\\d)",
+      "severity": "high",
+      "category": "personal_sensitive_content",
+      "reason": "Potential mainland China mobile phone number detected.",
+      "recommendation": "Mask or replace with safe_ref/sample placeholder."
+    },
+    {
+      "name": "internal_auth_state_keyword",
+      "pattern": "\\b(storageState|auth_state|sso_ticket|login_ticket|csrf|xsrf)\\b",
+      "severity": "high",
+      "category": "auth_state_content",
+      "reason": "Internal auth state marker detected.",
+      "recommendation": "Remove auth/session state details; keep only failure category if needed."
+    },
+    {
+      "name": "full_prompt_marker",
+      "pattern": "\\b(full\\s+)?(agent|system|developer|tool)\\s+prompt\\b|完整\\s*(agent|system|tool)?\\s*prompt|系统\\s*prompt|工具\\s*prompt",
+      "severity": "high",
+      "category": "prompt_asset_content",
+      "reason": "Prompt source marker detected.",
+      "recommendation": "Replace prompt source with capability summary and safety boundary."
+    },
+    {
+      "name": "raw_observation_marker",
+      "pattern": "\\b(raw\\s+observation|raw\\s+response|full\\s+platform\\s+response|raw_result|full_json)\\b|原始\\s*(observation|返回|日志|case)",
+      "severity": "high",
+      "category": "raw_platform_content",
+      "reason": "Raw platform/case response marker detected.",
+      "recommendation": "Replace raw response with structured, redacted evidence summary."
     }
   ],
   "aggregate_rules": [
     {
+      "name": "run_logs_aggregate",
       "category": "run_logs",
-      "max_count": 10,
-      "severity": "warning",
-      "reason": "More than 10 run logs suggests full run log inclusion rather than selected readiness summaries."
+      "max_count": 1,
+      "severity": "high",
+      "reason": "More than one run log suggests full run log inclusion rather than a selected release closure summary.",
+      "recommendation": "Keep only allowlisted redacted release closure summaries."
     },
     {
+      "name": "test_case_library_aggregate",
       "category": "test_case_library",
       "max_count": 5,
-      "severity": "warning",
-      "reason": "Multiple regression case files suggests full test library inclusion."
+      "severity": "medium",
+      "reason": "Multiple regression case files suggests full test library inclusion.",
+      "recommendation": "Replace full case libraries with minimal regression summaries."
     }
   ]
 }
