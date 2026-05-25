@@ -5405,3 +5405,38 @@
 - input: 检查专家能力视角与四层架构对应表。
 - expected_runtime_behavior: expert_view_four_layer_mapping_documented
 - expected_output_boundary: 文档说明大脑对应意图识别与研判编排，手脚对应证据取数 / 平台手脚，证据对应 observation schema / evidence summary，输出对应策略同学交付，安全防护对应能力契约 / 安全治理层。
+
+## 643. Dennis unified capability overview exists
+
+- test_id: CAPABILITY-OVERVIEW-001
+- input: 检查 `computer_use_poc/dennis_agent_capability_overview_v1.md`。
+- expected_runtime_behavior: unified_capability_overview_exists
+- expected_output_boundary: 文档存在，并作为当前统一推荐入口。
+
+## 644. Dennis unified overview contains internal engineering view
+
+- test_id: CAPABILITY-OVERVIEW-002
+- input: 检查 `dennis_agent_capability_overview_v1.md`。
+- expected_runtime_behavior: internal_engineering_view_documented
+- expected_output_boundary: 文档包含“意图识别 / 研判编排 / 平台手脚 / 契约治理”。
+
+## 645. Dennis unified overview contains expert view
+
+- test_id: CAPABILITY-OVERVIEW-003
+- input: 检查 `dennis_agent_capability_overview_v1.md`。
+- expected_runtime_behavior: expert_view_documented_in_unified_overview
+- expected_output_boundary: 文档包含“大脑 / 手脚 / 证据 / 输出”，并包含“安全防护底座”。
+
+## 646. Dennis unified overview maps both views
+
+- test_id: CAPABILITY-OVERVIEW-004
+- input: 检查统一总览两种视角对应关系。
+- expected_runtime_behavior: two_view_mapping_documented
+- expected_output_boundary: 文档说明大脑对应意图识别 + 研判编排，手脚对应平台手脚，证据对应 observation schema + evidence summary，输出对应 evidence summary / 风险簇摘要 / 策略建议，安全防护底座对应契约治理。
+
+## 647. Dennis unified overview weakens historical package naming
+
+- test_id: CAPABILITY-OVERVIEW-005
+- input: 检查统一总览标题结构。
+- expected_runtime_behavior: historical_package_names_not_main_expression
+- expected_output_boundary: 文档不以 A包/B包/C包 作为主标题表达；如提到历史分包，只作为括号或说明，例如“历史 A 包”。
