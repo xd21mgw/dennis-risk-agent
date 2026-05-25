@@ -33,6 +33,17 @@
 - `auth_blocked` / `permission_blocked` / `api_failed` / `no_data` 必须区分。
 - API-first 失败时才考虑 browser / DOM fallback。
 - 候选过多返回 `too_many_candidates`，不默认深查。
+
+## 0.1 Tianshi Strategy Platform C Package Routing
+
+天狮 / 策略平台 C 包位于 `computer_use_poc/tianshi_strategy_platform_contracts/`，只固化查询类 contract，不新增真实平台手脚。
+
+- 用户问“是否命中策略 / 是否被风控打到 / 是否有生产策略证据”：优先 `fastQueryHbase` / `strategy_hit_read`。
+- 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。
+- `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
+- 用户问“策略树为什么触发 / 节点条件是什么 / 命中路径是什么 / 版本或实验灰度是什么”：C 包不处理，标记 `future_strategy_tree_capability=true`，归入未来 D 包。
+- 跨天趋势、大范围统计、批量聚合和分母估计不使用 `eventList`，应转 DataAgent / Hive query plan 或要求缩小窗口。
+- `source_id` 缺失时不直接查；时间窗口缺失时可以用已有 evidence 定位小窗口，但不得默认跨天大查。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 

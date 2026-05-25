@@ -479,6 +479,13 @@ tianshi_eventlist_api_read_observation:
 - `fastQueryHbase` 不足以解释请求字段细节时，再补 `eventList API-read`。
 - 大范围统计、趋势、历史聚合不使用 `eventList`，应转 DataAgent / Hive 或要求缩小窗口。
 
+C 包 schema reference：
+
+- 天狮 / 策略平台 contract 已沉淀到 `computer_use_poc/tianshi_strategy_platform_contracts/`。
+- 详细 observation schema 以 `computer_use_poc/tianshi_strategy_platform_contracts/05_tianshi_observation_schema_v1.yaml` 为准，本文件保留兼容摘要。
+- C 包只覆盖 `fastQueryHbase` 策略命中概览和 `eventList API-read` 请求级细查；策略树、策略节点、条件表达式、命中路径、版本 / 实验 / 灰度解释属于未来 D 包。
+- `sourceIds` 非空、小窗口、eventList 原则上不跨天、命中事件完整 / 非命中事件抽样、`no_data` 不等于无风险等边界必须随 observation 一起消费。
+
 ### 2.0.-5 e2e_multi_evidence_evidence_summary
 
 v2.5.8 E2E 多手脚只读验证中，Dennis 消费多个 observation 时必须显式列出每个 evidence source 的状态。

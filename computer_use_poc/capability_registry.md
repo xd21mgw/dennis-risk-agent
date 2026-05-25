@@ -23,6 +23,7 @@
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
+| `tianshi_strategy_platform_contracts` | 固化天狮 fastQueryHbase / eventList 的 contract、schema、routing 和 observation 边界 | `computer_use_poc/tianshi_strategy_platform_contracts/` | contract layer only | documented | C 包不解析策略树；策略配置理解属于未来 D 包 |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 做分簇、异常相关性矩阵、代表样本抽样、证据缺口和策略建议 | `computer_use_poc/batch_risk_clustering/` templates | batch_plan_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙 |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
@@ -39,6 +40,7 @@
 - `user_device_resolution` 以 Weapon graphData 为主入口，不使用 Device SDK riskData 做实体解析主入口。
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
+- `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。

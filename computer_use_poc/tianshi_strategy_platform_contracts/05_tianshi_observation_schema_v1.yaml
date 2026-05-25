@@ -1,0 +1,74 @@
+schema_version: tianshi_observation_schema_v1
+
+strategy_hit_observation:
+  platform:
+  capability:
+  source_id:
+  time_window:
+    start:
+    end:
+    timezone:
+  query_status:
+  has_strategy_hit:
+  raw_record_count:
+  production_policy_hit_count:
+  risk_decision_distribution:
+  event_type_distribution:
+  risk_type_distribution:
+  sample_hits:
+    - event_type:
+      risk_type:
+      risk_decision:
+      hit_production_policy:
+      occur_time:
+      strategy_id:
+      strategy_name_safe_summary:
+  evidence_strength:
+  blockers:
+  limitations:
+
+event_detail_observation:
+  platform:
+  capability:
+  source_id:
+  event_type:
+  event_category:
+  business_action:
+  time_window:
+    start:
+    end:
+    timezone:
+    cross_day:
+  query_status:
+  auth_context:
+  request_summary:
+    method:
+    path:
+    source_ids_empty:
+    sensitive_headers_logged:
+    page_index:
+    requested_page_size:
+  response_summary:
+    api_status:
+    api_message:
+    event_list_count:
+    records_total:
+    returned_page_size:
+  extracted_events:
+    - event_id:
+      occur_time:
+      table_time:
+      real_time_op:
+      error_code:
+      side_effect_ops:
+      user_ip:
+      ip_city:
+      open_id_present:
+      device_signal_summary:
+      raw_field_summary:
+  sampling_note:
+    hit_policy_events_complete:
+    non_hit_events_sampled:
+  evidence_strength:
+  blockers:
+  limitations:

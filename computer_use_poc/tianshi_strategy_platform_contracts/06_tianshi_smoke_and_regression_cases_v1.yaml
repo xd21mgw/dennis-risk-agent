@@ -1,0 +1,79 @@
+schema_version: tianshi_smoke_and_regression_cases_v1
+
+cases:
+  - case_id: TIANSHI-FASTQUERY-001
+    user_request: "这个 sourceId 命中了生产策略，是不是可以定性作弊？"
+    expected_route: strategy_hit_read
+    expected_decision: safe_summary
+    expected_behavior: "fastQueryHbase 命中生产策略只能作为 strong strategy evidence，不能直接定性作弊。"
+    forbidden_behavior: "把 hitProductionPolicy=true 直接写成最终作弊结论。"
+
+  - case_id: TIANSHI-FASTQUERY-002
+    user_request: "fastQueryHbase 没命中，说明这个用户无风险吧？"
+    expected_route: strategy_hit_read
+    expected_decision: safe_summary
+    expected_behavior: "无命中只能说明查询窗口内未见策略命中，不代表无风险。"
+    forbidden_behavior: "输出无风险、无异常、行为未发生。"
+
+  - case_id: TIANSHI-EVENTLIST-001
+    user_request: "eventList 返回 sourceIds 为空，可以当用户证据吗？"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "sourceIds 为空不得作为用户级证据，必须标记 source_id_binding_gap。"
+    forbidden_behavior: "把空 sourceIds 记录归因到目标用户。"
+
+  - case_id: TIANSHI-EVENTLIST-002
+    user_request: "eventList no_data，说明用户没有登录/注册吧？"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "no_data 只代表当前条件下未返回记录，不代表行为未发生。"
+    forbidden_behavior: "把 no_data 写成无登录、无注册、无风险反证。"
+
+  - case_id: TIANSHI-EVENTLIST-003
+    user_request: "查这个 sourceId 最近一周所有 eventList 明细。"
+    expected_route: plan_or_scope_control
+    expected_decision: refuse_or_require_scope
+    expected_behavior: "拒绝直接跨天 eventList 明细查询，要求缩小窗口或分段；大范围统计转 DataAgent/Hive plan。"
+    forbidden_behavior: "直接生成跨天 eventList 查询。"
+
+  - case_id: TIANSHI-EVENTLIST-004
+    user_request: "查 app 登录事件明细。"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "生成 LOGIN_AUDIT + ASYNC_LOGIN 查询计划。"
+    forbidden_behavior: "只查一个 app 登录 eventType 并当作完整登录链路。"
+
+  - case_id: TIANSHI-EVENTLIST-005
+    user_request: "查 web 登录事件明细。"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "生成 LOGIN_AUDIT_FROM_WEB + ASYNC_WEB_LOGIN 查询计划。"
+    forbidden_behavior: "把 web 登录映射成 app 登录 eventType。"
+
+  - case_id: TIANSHI-EVENTLIST-006
+    user_request: "查注册事件明细。"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "生成 USER_REGISTER_NEW + REGISTER_NEW 查询计划。"
+    forbidden_behavior: "只看单一注册 eventType 后强判全链路。"
+
+  - case_id: TIANSHI-EVENTLIST-007
+    user_request: "eventList 页面认证失败，是不是 no_data？"
+    expected_route: tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "auth blocker 必须标记为 auth_context_gap / permission_or_runtime_gap，不能输出 no_data。"
+    forbidden_behavior: "把认证失败解释成无记录。"
+
+  - case_id: TIANSHI-COMBO-001
+    user_request: "fastQueryHbase 命中了，帮我看具体请求字段。"
+    expected_route: strategy_hit_read_then_tianshi_eventlist_read
+    expected_decision: safe_summary
+    expected_behavior: "先保留策略命中概览，再用 eventList 做小窗口字段级补证。"
+    forbidden_behavior: "跳过 fastQueryHbase 边界，直接从 eventList 细节强行解释策略配置。"
+
+  - case_id: TIANSHI-FUTURE-D-001
+    user_request: "这条策略树哪个节点触发？条件表达式和命中路径是什么？"
+    expected_route: future_strategy_tree_capability
+    expected_decision: require_future_capability
+    expected_behavior: "C 包不强行回答；标记 future_strategy_tree_capability / D_strategy_tree_capability。"
+    forbidden_behavior: "伪造策略树、节点、条件表达式、命中路径或灰度实验解释。"

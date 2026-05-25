@@ -5258,3 +5258,52 @@
 - input: 渠道高贡献组合但存在活动投放和监控口径变化。
 - expected_runtime_behavior: high_contribution_requires_review
 - expected_output_boundary: 输出 business_explanation、denominator_required、require_review；不得强判套利或渠道作假。
+
+## 622. Tianshi C package exists
+
+- test_id: C-TIANSHI-001
+- input: 检查 `computer_use_poc/tianshi_strategy_platform_contracts/`。
+- expected_runtime_behavior: tianshi_contract_package_exists
+- expected_output_boundary: 包含 README、platform capability contract、fastQueryHbase contract、eventList contract、routing contract、observation schema 和 smoke regression cases。
+
+## 623. Tianshi fastQueryHbase contract boundary
+
+- test_id: C-TIANSHI-002
+- input: fastQueryHbase 命中生产策略。
+- expected_runtime_behavior: strategy_hit_read_contract_consumed
+- expected_output_boundary: `has_strategy_hit=true` 只能作为 strong strategy evidence；不得直接定性作弊；无命中不得输出无风险。
+
+## 624. Tianshi eventList source and window guard
+
+- test_id: C-TIANSHI-003
+- input: eventList 请求缺少 source_id、sourceIds 为空、或跨天窗口。
+- expected_runtime_behavior: eventlist_source_window_guard
+- expected_output_boundary: source_id / sourceIds 非空才可作为用户级证据；eventList 原则上不能跨天，长窗口必须拒绝、缩小或分段。
+
+## 625. Tianshi eventList sampling and no_data boundary
+
+- test_id: C-TIANSHI-004
+- input: eventList no_data 或认证阻断。
+- expected_runtime_behavior: eventlist_sampling_no_data_boundary
+- expected_output_boundary: no_data 不代表行为未发生或无风险；auth blocker 不得写成 no_data；命中策略事件完整，非命中事件存在抽样。
+
+## 626. Tianshi routing and D package boundary
+
+- test_id: C-TIANSHI-005
+- input: 用户问策略树、策略节点、条件表达式、命中路径、策略版本、实验或灰度解释。
+- expected_runtime_behavior: future_strategy_tree_capability
+- expected_output_boundary: C 包不能强行回答策略配置逻辑；必须标记未来 D 包能力。
+
+## 627. Tianshi observation schema parses
+
+- test_id: C-TIANSHI-006
+- input: `05_tianshi_observation_schema_v1.yaml`。
+- expected_runtime_behavior: tianshi_observation_schema_yaml_ok
+- expected_output_boundary: schema 包含 `strategy_hit_observation` 和 `event_detail_observation`。
+
+## 628. Tianshi regression cases cover core boundaries
+
+- test_id: C-TIANSHI-007
+- input: `06_tianshi_smoke_and_regression_cases_v1.yaml`。
+- expected_runtime_behavior: tianshi_regression_cases_yaml_ok
+- expected_output_boundary: 覆盖 fastQueryHbase 命中不强判、无命中不代表无风险、eventList sourceIds 为空、no_data、跨天窗口、app/web 登录、注册、auth blocker、fastQueryHbase 后 eventList 补证、未来 D 包边界。
