@@ -24,6 +24,7 @@
 | 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
 | 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
+| 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性判断同团伙 |
 | ATO 批量 case 分析 | 5-20 个 ATO case 的批量归因、证据卡聚合、模式总结和策略方向草案 | `batch_case_analysis` → per-case evidence card → pattern summary → strategy direction draft | `eval/.../19_ato_batch_case_management/` templates；DataAgent only when future scene allows Hive/warehouse analysis | 缺关键字段时返回 missing evidence；规模过大先 Plan；真实查询另行授权 | 半自动归因，不自动策略上线，不自动处置 |
 | 黑产账号矩阵 / 导流互动 batch | 分析同波黑产账号矩阵、资料模板、导流互动、互粉互动和养号池 | `black_market_account_matrix_batch_analysis` → evidence cards → pattern summary → strategy direction draft | `eval/.../20_black_market_account_matrix_batch/` templates | 缺行为链路时输出 missing evidence；需要真实补证时另行授权 | 不是 ATO，不自动上线，不输出敏感联系方式 |
 
@@ -48,6 +49,7 @@ Semi-open experience patch v1 路由补丁：
 - `evidence_boundary_mode`：登录日志 no_data、设备关联、模型分、用户反馈、blocked/timeout/no_data 解释类问题默认纯分析，不自动查平台。
 - `strategy_plan_mode_priority`：灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案类问题即使带 `user_id`，也默认 `strategy_recommendation_plan_mode`。
 - `batch_plan_mode`：3+ `user_id` / `device_id` 或“这批 / 批量 / 多个 / 5个 / 100个 / 共性归因 / 分层判断”默认 plan_mode，不逐个在线查。
+- `batch_risk_clustering_threshold_policy`：1-2 entity → `single_entity_execution_mode`；3-4 entity → `small_multi_case_execution_mode`；5-9 entity → `small_batch_mode`；10-49 entity → `batch_clustering_mode`；50-499 entity → `large_batch_aggregation_mode`；500+ entity → `alert_batch_or_population_analysis_mode`。
 - `non_ato_browser_guard`：反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析先专家分析，不默认 browser / 档案中心。
 - `browser_session_bridge` / `auth_html_fast_fallback`：browser auth blocked、2FA、HTML/auth page、cookie bridge missing 均快速降级，不反复尝试。
 - `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
@@ -132,6 +134,61 @@ response-time provenance check：
 - Batch analysis 当前是半自动归因，不是自动策略上线。
 - DataAgent 仍只作为 Hive / 数仓取数分析能力，不是默认万能数据底座。
 - 内部 Agent 后续只作为真实只读 observation 执行层，不作为最终研判大脑。
+
+## 0A-1. Batch Risk Clustering Analysis 路由
+
+用户体感目标：
+
+- 用户给出一批 user / device / event / interface / channel / alert，希望 Dennis 判断这批异常是否属于同一类风险模式、是否存在异常相关性、代表样本是谁、该如何补证和治理。
+
+触发条件：
+
+- “这批用户 / 设备 / 告警帮我归因。”
+- “这些接口请求量突然升高。”
+- “这批渠道用户是不是套利？”
+- “这批策略召回做二次归因。”
+- “帮我分簇、抽代表样本、看共性模式。”
+- entity_count >= 10，且用户没有明确要求只查 1-4 个实体。
+
+阈值路由：
+
+- 1-2 entity → `single_entity_execution_mode`，可逐个深查。
+- 3-4 entity → `small_multi_case_execution_mode`，可全量深查 + cross-case comparison。
+- 5-9 entity → `small_batch_mode`，先轻量分组，再决定全查或抽 3-5 个代表样本。
+- 10-49 entity → `batch_clustering_mode`，不逐个在线查，先分簇 + 异常相关性矩阵 + 代表样本。
+- 50-499 entity → `large_batch_aggregation_mode`，默认 aggregation / DataAgent-Hive query plan。
+- 500+ entity → `alert_batch_or_population_analysis_mode`，只做批次级分布、异常相关性、抽样和策略建议。
+
+特殊意图优先级：
+
+- 如果用户问“策略怎么做 / 如何灰度 / 如何误伤控制 / 举一返三 / 监控怎么建”，即使带了 user_id，也优先 plan mode，不查平台。
+- 如果用户明确说“帮我查这几个用户”，且实体数 <5，可以全量深查。
+- 如果用户明确说“帮我查这批用户”，且实体数 >=10，默认先批量分簇和抽样，不逐个查。
+- 如果用户说“这些接口请求量突然升高”，默认 interface/request batch clustering。
+- 如果用户说“这批告警帮我归因”，默认 alert batch clustering。
+- 如果用户短回复“查一下吧 / 继续 / 看下”，必须先判断 task fingerprint；新 batch_id / entity_ids / time_window / risk_domain 出现时必须 fresh_context，不得继承上一批 evidence。
+
+核心输出：
+
+1. threshold mode。
+2. cluster summary。
+3. 不可预测矩阵 / 异常相关性矩阵。
+4. 3-5 个代表样本 evidence card。
+5. attack path hypotheses。
+6. missing evidence / source_gap。
+7. DataAgent-Hive query plan if needed。
+8. strategy / monitoring / grey release / manual review suggestions。
+
+边界：
+
+- 5 个以下可全量深查，但仍需 evidence card。
+- 10+ 默认 batch_clustering_mode，不逐个在线查。
+- 50+ 默认 aggregation / DataAgent-Hive query plan。
+- DataAgent 只能作为 Hive / 数仓取数分析能力，不是万能数据底座。
+- no_data 不能作为无风险反证。
+- blocked/timeout/partial source 必须 source_gap。
+- 不能仅凭相似性判断同团伙。
+- 历史 case 不能污染当前批次事实证据。
 
 ## 0B. ATO 批量 Case Analysis 路由
 

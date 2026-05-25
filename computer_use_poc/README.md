@@ -531,3 +531,50 @@ ATO 批量 case analysis 当前新增 v1 输入输出契约，入口位于：
 - 每个核心结论必须引用 `evidence_source` / `source_quality`。
 - strategy 只能是 candidate direction，不自动上线，不自动处置。
 - real-case pilot 推荐使用 3-5 个真实脱敏 case，先验证 input/output contract、证据卡、source coverage、manual review boundary，再决定是否扩到 5-20 cases。
+
+## Batch Risk Clustering Analysis Pack
+
+`computer_use_poc/batch_risk_clustering/` 是跨场景批量风险分簇研判包，用于从单 case 研判跃迁到多 case / 多实体 / 告警批次 / 接口请求激增 / 渠道异常 / 设备群控 / ATO 批量 / 活动套利 / 策略召回二次归因。
+
+入口文件：
+
+- `computer_use_poc/batch_risk_clustering/README.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_case_schema_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_threshold_policy_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_clustering_methodology_v1.md`
+- `computer_use_poc/batch_risk_clustering/abnormal_correlation_matrix_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_representative_sampling_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_evidence_card_template_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_pattern_summary_template_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_response_template_v1.md`
+- `computer_use_poc/batch_risk_clustering/batch_risk_runtime_validation_cases_v1.yaml`
+
+阈值口径：
+
+- 1-2 个实体：`single_entity_execution_mode`。
+- 3-4 个实体：`small_multi_case_execution_mode`，可全量深查 + cross-case comparison。
+- 5-9 个实体：`small_batch_mode`，先轻量分组，再决定全查或抽 3-5 个代表样本。
+- 10-49 个实体：`batch_clustering_mode`，不逐个在线查，先分簇 + 异常相关性矩阵 + 代表样本。
+- 50-499 个实体：`large_batch_aggregation_mode`，默认 aggregation / DataAgent-Hive query plan。
+- 500+ 个实体：`alert_batch_or_population_analysis_mode`。
+
+核心边界：
+
+- 5 个以下可全量深查。
+- 10+ 默认 batch_clustering_mode，不逐个在线查。
+- 50+ 默认 aggregation / DataAgent-Hive query plan。
+- DataAgent 只能作为 Hive / 公司数仓取数分析能力，不是万能数据底座。
+- no_data / blocked / timeout / partial source 不能作为无风险反证；blocked/timeout/partial source 必须 source_gap。
+- manual_input 不能单独支撑 strong conclusion。
+- model_inference 不能当 raw evidence。
+- 不能仅凭相似性判断同团伙。
+- 历史 case 不能污染当前批次事实证据。
+
+当前状态：
+
+- 文档 / 模板 / 回归沉淀完成。
+- 未访问真实平台。
+- 未调用 DataAgent。
+- 未修改 auth / gateway。
+- 未重新打包 release。
+- 后续如要 runtime 生效，需要 overlay 或重新打 patch release。

@@ -4943,3 +4943,115 @@
 - input: risky mock fixture with simulated sensitive markers.
 - expected_runtime_behavior: preflight_safe_summary_only
 - expected_output_boundary: preflight 输出 counts、blocking rule counts、required_files 状态；不得打印 matched_text、完整文件内容、完整 Skill 原文、完整 run_logs、测试原始样本内容。
+
+## 577. Batch risk clustering directory exists
+
+- test_id: BATCH-RISK-001
+- input: 检查 `computer_use_poc/batch_risk_clustering/`。
+- expected_runtime_behavior: batch_risk_clustering_pack_exists
+- expected_output_boundary: 目录存在，包含 README 和核心模板。
+
+## 578. Batch risk case schema exists
+
+- test_id: BATCH-RISK-002
+- input: 检查 `batch_risk_case_schema_v1.md`。
+- expected_runtime_behavior: batch_risk_case_schema_exists
+- expected_output_boundary: 包含 batch level、case level、source metadata 和字段输出边界。
+
+## 579. Batch risk threshold policy exists
+
+- test_id: BATCH-RISK-003
+- input: 检查 `batch_risk_threshold_policy_v1.md`。
+- expected_runtime_behavior: batch_threshold_policy_exists
+- expected_output_boundary: 包含 1-2、3-4、5-9、10-49、50-499、500+ 分层。
+
+## 580. Abnormal correlation matrix exists
+
+- test_id: BATCH-RISK-004
+- input: 检查 `abnormal_correlation_matrix_v1.md`。
+- expected_runtime_behavior: abnormal_correlation_matrix_exists
+- expected_output_boundary: 说明“不可预测矩阵不是不确定性矩阵，而是异常相关性矩阵”。
+
+## 581. Representative sampling rules exist
+
+- test_id: BATCH-RISK-005
+- input: 检查 `batch_risk_representative_sampling_v1.md`。
+- expected_runtime_behavior: representative_sampling_exists
+- expected_output_boundary: 包含 high-confidence positive、boundary/ambiguous、suspected false positive、high-impact、source-gap sample。
+
+## 582. Evidence type separation exists
+
+- test_id: BATCH-RISK-006
+- input: 检查 `batch_risk_evidence_card_template_v1.md`。
+- expected_runtime_behavior: evidence_type_separation_exists
+- expected_output_boundary: raw evidence / derived evidence / model inference / user claim / missing evidence / blocked evidence / historical similar pattern 分层存在。
+
+## 583. Pattern summary template exists
+
+- test_id: BATCH-RISK-007
+- input: 检查 `batch_risk_pattern_summary_template_v1.md`。
+- expected_runtime_behavior: pattern_summary_template_exists
+- expected_output_boundary: 包含 batch_overview、cluster_summary、abnormal_correlation_matrix_summary、representative_samples、DataAgent-Hive query plan、manual_review_boundary。
+
+## 584. Response template exists
+
+- test_id: BATCH-RISK-008
+- input: 检查 `batch_risk_response_template_v1.md`。
+- expected_runtime_behavior: response_template_exists
+- expected_output_boundary: 包含批量结论摘要、处理模式、分簇结果、异常相关性矩阵、代表样本证据卡、补证计划、举一返三、不可强判声明。
+
+## 585. Validation YAML has at least 12 cases
+
+- test_id: BATCH-RISK-009
+- input: 检查 `batch_risk_runtime_validation_cases_v1.yaml`。
+- expected_runtime_behavior: validation_yaml_case_count
+- expected_output_boundary: 至少 12 个 case，覆盖 single、4 entity、5 entity、10 entity、100 entity、ATO、设备群控、协议降级、接口激增、活动套利、策略召回、context contamination、no_data。
+
+## 586. Under 5 entities can be fully investigated
+
+- test_id: BATCH-RISK-010
+- input: 1-4 个实体。
+- expected_runtime_behavior: under_5_can_full_investigate
+- expected_output_boundary: 5 个以下可全量深查，但必须输出 evidence card 和 cross-case comparison。
+
+## 587. 10 plus defaults to batch clustering
+
+- test_id: BATCH-RISK-011
+- input: 10+ 个实体。
+- expected_runtime_behavior: ten_plus_batch_clustering_default
+- expected_output_boundary: 10+ 默认 batch_clustering_mode，不逐个在线查。
+
+## 588. 50 plus defaults to aggregation plan
+
+- test_id: BATCH-RISK-012
+- input: 50+ 个实体。
+- expected_runtime_behavior: fifty_plus_aggregation_plan
+- expected_output_boundary: 50+ 默认 aggregation / DataAgent-Hive query plan，不逐个在线查。
+
+## 589. no_data blocked timeout are not counter evidence
+
+- test_id: BATCH-RISK-013
+- input: no_data / blocked / timeout / partial source。
+- expected_runtime_behavior: source_gap_not_counter_evidence
+- expected_output_boundary: no_data 不能作为无风险反证；blocked/timeout/partial source 必须 source_gap。
+
+## 590. Historical evidence must not contaminate new batch
+
+- test_id: BATCH-RISK-014
+- input: 上一轮历史 case + 新 batch。
+- expected_runtime_behavior: no_history_contamination
+- expected_output_boundary: 历史 case 只能作为 similar pattern / hypothesis，不能污染当前批次事实证据。
+
+## 591. Similarity alone is not same gang
+
+- test_id: BATCH-RISK-015
+- input: 多个 case 表象相似但缺 join key。
+- expected_runtime_behavior: no_same_gang_from_similarity_only
+- expected_output_boundary: 不能仅凭相似性判断同团伙；需要 join key 或共用基础设施证据。
+
+## 592. DataAgent is limited to Hive warehouse analysis
+
+- test_id: BATCH-RISK-016
+- input: 50+ 批量归因需要离线补证。
+- expected_runtime_behavior: dataagent_hive_boundary
+- expected_output_boundary: DataAgent 被限定为 Hive / 数仓取数分析能力，不自动调用，不泛化为万能数据底座。

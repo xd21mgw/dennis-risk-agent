@@ -225,6 +225,95 @@ source quality:
 - DataAgent_plan_needed:
 ```
 
+### batch risk clustering response 模板
+
+适用：多 case / 多实体 / 告警批次 / 接口请求激增 / 渠道异常 / 设备群控 / ATO 批量 / 活动套利 / 策略召回二次归因。
+
+路由阈值：
+
+- 1-2 entity：`single_entity_execution_mode`。
+- 3-4 entity：`small_multi_case_execution_mode`。
+- 5-9 entity：`small_batch_mode`，先轻量分组，再决定全查或抽样。
+- 10-49 entity：`batch_clustering_mode`，不逐个在线查。
+- 50-499 entity：`large_batch_aggregation_mode`，默认 aggregation / DataAgent-Hive query plan。
+- 500+ entity：`alert_batch_or_population_analysis_mode`。
+
+```text
+批量结论摘要:
+- 这批更像:
+- 当前置信度:
+- 是否能强判:
+- 最大证据缺口:
+
+批量规模与处理模式:
+- entity_count:
+- case_count:
+- selected_mode:
+- 选择原因:
+
+分簇结果:
+- cluster_id:
+- cluster_name:
+- covered_cases:
+- key_common_features:
+- evidence_level:
+- risk_hypothesis:
+
+不可预测矩阵 / 异常相关性矩阵:
+- relation_direction:
+- coverage_ratio:
+- enrichment_signal:
+- baseline_status:
+- possible_explanation:
+- required_followup:
+
+代表样本证据卡:
+- case_id:
+- sample_type:
+- strong / medium / weak / counter / missing evidence:
+
+攻击路径假设:
+- hypothesis:
+- support_level:
+- missing_validation:
+- alternative_explanation:
+
+误伤与反证:
+- normal_business_explanation:
+- false_positive_risk:
+- counter_evidence:
+- manual_review_boundary:
+
+补证计划:
+- online_readonly_observation:
+- DataAgent-Hive query plan:
+- required_fields:
+- time_window:
+- hypothesis_to_validate:
+
+举一返三:
+- expansion_fields:
+- monitoring_candidates:
+- strategy_candidates:
+- grey_validation:
+
+不可强判声明:
+- 当前不能下的结论:
+- 升级判断所需证据:
+```
+
+边界：
+
+- 5 个以下可全量深查。
+- 10+ 默认 batch_clustering_mode，不逐个在线查。
+- 50+ 默认 aggregation / DataAgent-Hive query plan。
+- manual_input 不能单独支撑 strong conclusion。
+- model_inference 不能当 raw evidence。
+- no_data 不能作为无风险反证。
+- blocked/timeout/partial source 必须 source_gap。
+- 不能仅凭相似性判断同团伙。
+- 历史 case 不能污染当前批次事实证据。
+
 ### non-ATO expert mode 模板
 
 适用：反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析。
