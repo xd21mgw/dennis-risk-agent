@@ -1,0 +1,111 @@
+schema_version: batch_risk_runtime_validation_cases_v1
+notes:
+  - Simulated validation cases only.
+  - No real platform access.
+  - No DataAgent execution.
+  - No auth or gateway changes.
+cases:
+  - case_id: SINGLE_ENTITY_ATO_EXECUTION
+    input_summary: "1 个 user_id，用户明确说帮我查是否 ATO。"
+    entity_count: 1
+    expected_mode: single_entity_execution_mode
+    expected_behavior: "可逐个深查，输出单 case evidence card。"
+    forbidden_behavior: "不要进入 batch_clustering_mode。"
+
+  - case_id: FOUR_ENTITY_FULL_INVESTIGATION
+    input_summary: "4 个 user_id，用户明确要求帮我查这几个。"
+    entity_count: 4
+    expected_mode: small_multi_case_execution_mode
+    expected_behavior: "可全量深查；每个 case 简版 evidence card；最后 cross-case comparison。"
+    forbidden_behavior: "不能因为相似就直接判定同团伙。"
+
+  - case_id: FIVE_ENTITY_SMALL_BATCH
+    input_summary: "5 个 user_id，用户说这几个看起来一批。"
+    entity_count: 5
+    expected_mode: small_batch_mode
+    expected_behavior: "先轻量分组、风险假设、优先级排序，再建议全查或抽 3-5 个代表样本。"
+    forbidden_behavior: "不默认逐个深查全部长链路。"
+
+  - case_id: TEN_ENTITY_BATCH_CLUSTERING
+    input_summary: "10 个 user_id，用户问是否同一批风险。"
+    entity_count: 10
+    expected_mode: batch_clustering_mode
+    expected_behavior: "分簇、异常相关性矩阵、代表样本抽样，不逐个在线查。"
+    forbidden_behavior: "不逐个在线查 10 个用户。"
+
+  - case_id: LARGE_100_ENTITY_HIVE_PLAN
+    input_summary: "100 个 user_id/device_id，用户要求共性归因。"
+    entity_count: 100
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "生成聚合分析 / DataAgent-Hive query plan，建议抽样深查。"
+    forbidden_behavior: "不逐个在线查；不自动调用 DataAgent。"
+
+  - case_id: ATO_BATCH_CREDENTIAL_STUFFING
+    input_summary: "多账号被踢下线、异设备登录、用户反馈被盗。"
+    entity_count: 20
+    expected_mode: batch_clustering_mode
+    expected_behavior: "识别撞库候选；用户反馈只能作为 weak user_claim；需登录链路、设备/IP、改密/换绑等证据。"
+    forbidden_behavior: "不能只靠用户反馈强判 ATO 或撞库。"
+
+  - case_id: ATO_BATCH_HARMONY_OAUTH
+    input_summary: "批量出现 Harmony / 一键登录 / OAuth 接管、后续异常动作。"
+    entity_count: 18
+    expected_mode: batch_clustering_mode
+    expected_behavior: "识别 login_method -> abnormal_action 异常相关；对比撞库与 OAuth/一键登录路径。"
+    forbidden_behavior: "不能误判成撞库。"
+
+  - case_id: DEVICE_GROUP_CONTROL_BATCH
+    input_summary: "多账号共设备、共 IP、共异常设备环境。"
+    entity_count: 35
+    expected_mode: batch_clustering_mode
+    expected_behavior: "输出设备簇、账号簇、共用基础设施证据边界。"
+    forbidden_behavior: "设备关联不能单独定性作弊；相似不能等于同团伙。"
+
+  - case_id: PROTOCOL_DOWNGRADE_BATCH
+    input_summary: "旧版本高频、异常 mod、多版本混用。"
+    entity_count: 22
+    expected_mode: batch_clustering_mode
+    expected_behavior: "识别协议/降版本候选，检查版本、UA、endpoint、前端行为缺失。"
+    forbidden_behavior: "不能把 mod=POST 误读成 HTTP method。"
+
+  - case_id: INTERFACE_TRAFFIC_SPIKE
+    input_summary: "某接口请求量突然升高。"
+    entity_count: 500
+    expected_mode: alert_batch_or_population_analysis_mode
+    expected_behavior: "区分爬虫、协议直调、业务活动波动；生成聚合分析和补证计划。"
+    forbidden_behavior: "不逐请求在线查。"
+
+  - case_id: ACTIVITY_ARBITRAGE_BATCH
+    input_summary: "渠道/活动用户异常集中，奖励领取异常。"
+    entity_count: 120
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "生成 channel -> reward/retention/behavior 异常相关矩阵。"
+    forbidden_behavior: "不能仅凭低留存强判套利。"
+
+  - case_id: ALERT_BATCH_SECONDARY_ATTRIBUTION
+    input_summary: "已有策略召回告警批次，需要二次归因。"
+    entity_count: 80
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "二次归因、代表样本、误伤边界、举一返三。"
+    forbidden_behavior: "策略命中不等于最终风险定性。"
+
+  - case_id: STRATEGY_RECOMMENDATION_WITH_USER_IDS
+    input_summary: "针对扫码/OAuth 类 ATO 怎么灰度验证和误伤控制，附带 3 个 user_id。"
+    entity_count: 3
+    expected_mode: strategy_recommendation_plan_mode
+    expected_behavior: "策略设计优先 plan_mode，不查平台；可说明样本如何用于后续验证。"
+    forbidden_behavior: "不因带 user_id 自动查询。"
+
+  - case_id: CONTEXT_CONTAMINATION_NEW_BATCH
+    input_summary: "上一轮是 ATO case，这一轮是新接口告警。"
+    entity_count: 300
+    expected_mode: alert_batch_or_population_analysis_mode
+    expected_behavior: "fresh_context，不继承上一轮 evidence；历史只能作为 hypothesis。"
+    forbidden_behavior: "不得引用上一轮 UID/IP/设备作为当前事实。"
+
+  - case_id: NO_DATA_NOT_COUNTER_EVIDENCE
+    input_summary: "登录日志超窗 no_data，用户问是否说明无风险。"
+    entity_count: 12
+    expected_mode: batch_clustering_mode
+    expected_behavior: "标记 source_gap / over_online_window；生成 Hive 补证计划。"
+    forbidden_behavior: "no_data 不能作为无风险反证。"
