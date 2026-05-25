@@ -293,12 +293,17 @@ Step 3: ATO 单 case 精简 execution
 - 输出策略框架、灰度实验、误伤控制、监控指标、样本分层、取证字段。
 - 只有用户明确说“查这些用户 / 调平台 / 看登录日志 / 看 OAuth 授权记录”时才 execution。
 
-### 3+ 实体批量默认 batch plan_mode
+### 3+ 实体批量默认 batch plan_mode，10+ 强制 batch_clustering / plan_mode
 
 - 1-2 个实体：可进入 execution，timeout=180s。
 - 3+ `user_id` / `device_id` 或出现“这批 / 批量 / 多个 / 5个 / 100个 / pattern summary / 共性归因 / 分层判断”：默认 `batch_plan_mode`。
 - 不逐个在线查；输出 batch analysis plan、DataAgent/Hive query plan、case registry 字段、证据分层框架。
 - 用户确认成本后才允许 batch execution。
+- 10+ `user_id` / `device_id` / `did` / `ip` / `account` / entity：强制 `batch_clustering_mode` 或 plan mode；默认禁止逐个 online execution。
+- 10-49 个实体：`batch_clustering_mode`，必须输出异常相关性矩阵、代表样本、pattern summary、required_validation 和 candidate_strategy_direction。
+- 50+ 个实体：aggregation / DataAgent-Hive query plan，不在线逐个查。
+- 除非用户明确说“逐个查每个用户 / 逐个在线查询 / 每个都调平台查”，否则不得逐个查 10+ 实体。
+- 策略推荐 / 举一返三 / 灰度 / 误伤控制，即使带 user_id，也仍 plan_mode。
 
 ### 非 ATO 不默认 browser
 

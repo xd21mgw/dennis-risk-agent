@@ -139,6 +139,7 @@ Applies to:
 - Strategy evaluation / kill-vs-review separation / batch expansion.
 - Strategy recommendation / monitoring metrics / grey release / false-positive control / governance design even when the prompt contains `user_id`.
 - 3+ `user_id` or `device_id` batch analysis unless the user has explicitly confirmed real batch execution cost and scope.
+- 10+ detected entities of type `user_id` / `device_id` / `did` / `ip` / `account` / generic entity. This is a hard guard: route to `batch_clustering_mode` or plan mode, never one-by-one online execution by default.
 
 Behavior:
 
@@ -148,6 +149,27 @@ Behavior:
 - Only output DataAgent / Hive query plan.
 - Must explicitly include `offline_hive_required=true` and `DataAgent_plan_needed=true`.
 - For batch prompts, output case registry requirements, pattern summary plan, evidence layering, missing evidence, and DataAgent/Hive query plan.
+
+### B1. hard batch routing guard
+
+This guard runs before execution mode selection.
+
+```yaml
+batch_routing_guard:
+  entity_count_3_9: batch_plan_mode
+  entity_count_10_49: batch_clustering_mode
+  entity_count_50_plus: large_batch_aggregation_mode_or_DataAgent_Hive_query_plan
+  default_online_execution_allowed: false
+```
+
+Rules:
+
+- If the input contains 10 or more `user_id`, `device_id`, `did`, `ip`, `account`, or entity identifiers, execution mode is blocked unless the user explicitly says "逐个查每个用户", "逐个在线查询", or "每个都调平台查".
+- For 10-49 entities, select `batch_clustering_mode`.
+- For 50+ entities, select aggregation / DataAgent-Hive query plan and do not run online one-by-one checks.
+- For 3-9 entities, default to `batch_plan_mode`; if the user asks for small-sample execution, ask for confirmation or limit to representative samples.
+- Strategy recommendation, expansion, grey release, false-positive control, monitoring, and governance requests remain plan mode even when user ids are attached.
+- Required batch output fields: `batch_clustering_mode`, `relation_family`, `evidence_basis`, `denominator_status`, `relationship_strength`, `reverse_check_result`, `confounder_risk`, `cannot_conclude_boundary`, `representative_cases`, `pattern_summary`, `required_validation`, `candidate_strategy_direction`.
 
 ### B2. evidence boundary mode
 

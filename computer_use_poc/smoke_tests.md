@@ -5160,3 +5160,31 @@
 - input: runtime candidate queue missing or old schema。
 - expected_runtime_behavior: runtime_candidate_queue_schema_v2
 - expected_output_boundary: runtime queue 使用 13 列 header：candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes；旧 schema 保留为 schema_mismatch_backup 后新建 13 列文件。
+
+## 608. Batch routing hard guard for 10 entities
+
+- test_id: BATCH-ROUTING-GUARD-010
+- input: 10 个 user_id，用户明确要求批量分簇研判而不是逐个查单。
+- expected_runtime_behavior: ten_entity_forced_batch_clustering_mode
+- expected_output_boundary: 必须 `batch_clustering_mode`；不得逐个在线查；不得调用平台 API；必须输出异常相关性矩阵、representative_cases、pattern_summary、required_validation、candidate_strategy_direction；缺 join key 不得强判同团伙。
+
+## 609. Batch routing hard guard for 50+ entities
+
+- test_id: BATCH-ROUTING-GUARD-050
+- input: 50+ 个用户，判断是否同一批风险。
+- expected_runtime_behavior: fifty_plus_forced_aggregation_plan
+- expected_output_boundary: 必须 aggregation / DataAgent-Hive query plan；不得在线逐个查；输出抽样与聚合分析计划。
+
+## 610. Feedback writer unified markdown metadata
+
+- test_id: FEEDBACK-WRITER-FORMAT-001
+- input: observation_record / feedback_record 写入 semi_open_pilot_logs。
+- expected_runtime_behavior: markdown_only_with_json_metadata_block
+- expected_output_boundary: 不产生 JSON lines 并行日志；markdown block 的 metadata 必须包含 direct_tool_bypass、bypass_reason、risk_review_required、feedback_type、candidate_appended、candidate_queue_path、path_resolution、subagent_session_id、main_session_id。
+
+## 611. Feedback writer unified log path
+
+- test_id: FEEDBACK-WRITER-PATH-004
+- input: 设置 DENNIS_AGENT_HOME 后写 observation log 和 candidate queue。
+- expected_runtime_behavior: dennis_agent_home_unified_paths
+- expected_output_boundary: observation log 写入 `$DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md`；candidate queue 写入 `$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`；输出包含 log_path_resolution 和 candidate_queue_path_resolution。

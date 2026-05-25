@@ -25,6 +25,15 @@ selected_mode:
 - 500+: alert_batch_or_population_analysis_mode
 ```
 
+Hard routing guard:
+
+```text
+- 10+ entities: selected_mode must be batch_clustering_mode or plan mode.
+- 10-49 entities: batch_clustering_mode, no one-by-one online execution by default.
+- 50+ entities: aggregation / DataAgent-Hive query plan, no one-by-one online execution.
+- Explicit per-entity online lookup wording is required before any execution planning.
+```
+
 ## 3. 分簇结果
 
 ```text
@@ -123,7 +132,30 @@ grey_validation:
 scope_control:
 ```
 
-## 10. 不可强判声明
+## 10. Candidate Strategy Direction
+
+```text
+candidate_strategy_direction:
+- candidate_only:
+- do_not_auto_launch:
+- grey_release_plan:
+- monitoring_metrics:
+- manual_review_boundary:
+```
+
+## 11. Required Validation
+
+```text
+required_validation:
+- missing_join_key:
+- denominator_required:
+- reverse_check_needed:
+- confounder_check_needed:
+- source_gap:
+- offline_hive_required:
+```
+
+## 12. 不可强判声明
 
 ```text
 当前不能下的结论：
@@ -131,7 +163,7 @@ scope_control:
 升级判断所需证据：
 ```
 
-## 11. Short KIM Version
+## 13. Short KIM Version
 
 ```text
 这批先按 {selected_mode} 处理：{one_sentence_judgement}。

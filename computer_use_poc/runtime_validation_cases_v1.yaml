@@ -688,3 +688,41 @@ context_boundary_guard_regression:
       - do_not_mention_previous_case_entities_as_evidence
       - answer_general_methodology
     pass_fail_criteria: "方法论问题不得继承上一轮 case evidence。"
+
+batch_routing_guard_regression:
+  - case_id: BATCH-ROUTING-GUARD-010
+    input: "这 10 个用户疑似同批异常，不是让你逐个查单，而是判断是否存在团伙化、套利化、策略绕过。请做批量分簇研判：user_ids=[5210525205,5189806180,5421221469,5230788459,3411422761,5173449317,5364419533,5135447090,5417817349,4773719953]"
+    entity_count: 10
+    expected_routing_mode: batch_clustering_mode
+    platform_api_allowed: false
+    dataagent_allowed: false
+    expected_output_boundary:
+      - batch_clustering_mode
+      - no_per_user_online_execution
+      - abnormal_correlation_matrix_required
+      - relation_family
+      - evidence_basis
+      - denominator_status
+      - relationship_strength
+      - reverse_check_result
+      - confounder_risk
+      - cannot_conclude_boundary
+      - representative_cases
+      - pattern_summary
+      - required_validation
+      - candidate_strategy_direction
+    pass_fail_criteria: "10 个实体必须进入 batch_clustering_mode；不得逐个调平台；缺 join key 不得强判同团伙。"
+  - case_id: BATCH-ROUTING-GUARD-050
+    input: "给 50+ 个用户，让 agent 判断是否同一批风险。"
+    entity_count: 50
+    expected_routing_mode: large_batch_aggregation_mode
+    platform_api_allowed: false
+    dataagent_allowed: false
+    expected_output_boundary:
+      - aggregation_or_DataAgent_Hive_query_plan
+      - no_per_user_online_execution
+      - representative_sampling_plan
+      - field_distribution_plan
+      - denominator_required
+      - required_validation
+    pass_fail_criteria: "50+ 实体必须输出聚合分析 / DataAgent-Hive query plan 和抽样计划；不得在线逐个查。"

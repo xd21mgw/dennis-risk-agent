@@ -109,10 +109,11 @@ runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 
 The source-tree `question_learning_candidate_queue_v1.csv` remains a demo template and must not be overwritten by runtime.
 
-Runtime path resolution is stable and does not depend on arbitrary CWD:
+Runtime path resolution is stable and does not depend on arbitrary CWD. Observation logs and candidate queue use the same resolution order:
 
-1. `--candidate-queue <path>` wins when explicitly provided.
+1. `--log-dir <path>` wins for observation logs; `--candidate-queue <path>` wins for candidate queue.
 2. If `DENNIS_AGENT_HOME` is set, writer uses:
+   `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and
    `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
 3. Otherwise, writer resolves the `dennis-risk-agent` repo root from `pilot_observation_writer.py` and writes under that root.
 4. Only if repo-root detection fails, writer falls back to current CWD and reports `path_resolution=fallback_cwd`.
@@ -131,6 +132,29 @@ python3 computer_use_poc/question_collection/pilot_observation_writer.py \
 ```
 
 Writer output always includes `candidate_queue_path` and `path_resolution`.
+It also includes `log_path_resolution` and `candidate_queue_path_resolution`.
+
+Observation log format is markdown-only for this writer. Each record is a markdown block containing one JSON metadata block. The metadata block must include:
+
+- `record_id`
+- `record_type`
+- `timestamp`
+- `source_channel`
+- `user_prompt`
+- `routing_mode`
+- `execution_mode`
+- `final_status`
+- `final_answer_summary`
+- `issue_tags`
+- `direct_tool_bypass`
+- `bypass_reason`
+- `risk_review_required`
+- `feedback_type`
+- `candidate_appended`
+- `candidate_queue_path`
+- `path_resolution`
+- `subagent_session_id`
+- `main_session_id`
 
 Runtime candidate queue schema uses the 13-column header:
 

@@ -238,6 +238,13 @@ source quality:
 - 50-499 entity：`large_batch_aggregation_mode`，默认 aggregation / DataAgent-Hive query plan。
 - 500+ entity：`alert_batch_or_population_analysis_mode`。
 
+硬性执行边界：
+
+- 10+ 实体必须输出 `batch_clustering_mode` 或 plan mode；默认禁止逐个 online execution。
+- 除非用户明确说“逐个查每个用户 / 逐个在线查询 / 每个都调平台查”，否则不得逐个查。
+- 50+ 实体只输出 aggregation / DataAgent-Hive query plan、抽样和聚合补证计划。
+- 策略推荐 / 举一返三 / 灰度 / 误伤控制，即使带 user_id，也仍 plan mode。
+
 ```text
 批量结论摘要:
 - 这批更像:
@@ -305,6 +312,18 @@ source quality:
 - monitoring_candidates:
 - strategy_candidates:
 - grey_validation:
+
+candidate_strategy_direction:
+- candidate_only:
+- do_not_auto_launch:
+- grey_release_plan:
+- monitoring_metrics:
+
+required_validation:
+- missing_join_key:
+- denominator_required:
+- source_gap:
+- offline_hive_required:
 
 不可强判声明:
 - 当前不能下的结论:

@@ -109,3 +109,34 @@ cases:
     expected_mode: batch_clustering_mode
     expected_behavior: "标记 source_gap / over_online_window；生成 Hive 补证计划。"
     forbidden_behavior: "no_data 不能作为无风险反证。"
+
+  - case_id: BATCH-ROUTING-GUARD-010
+    input_summary: "10 个 user_id，用户明确说不是逐个查单，而是批量分簇研判团伙化、套利化、策略绕过。"
+    entity_count: 10
+    expected_mode: batch_clustering_mode
+    should_call_platform: false
+    should_call_DataAgent: false
+    expected_behavior: "输出分簇、异常相关性矩阵、代表样本、pattern_summary、required_validation、candidate_strategy_direction。"
+    required_output_fields:
+      - batch_clustering_mode
+      - relation_family
+      - evidence_basis
+      - denominator_status
+      - relationship_strength
+      - reverse_check_result
+      - confounder_risk
+      - cannot_conclude_boundary
+      - representative_cases
+      - pattern_summary
+      - required_validation
+      - candidate_strategy_direction
+    forbidden_behavior: "不得逐个在线查 10 个用户；缺 join key 不得强判同团伙。"
+
+  - case_id: BATCH-ROUTING-GUARD-050
+    input_summary: "50+ 个用户，用户要求判断是否同一批风险。"
+    entity_count: 50
+    expected_mode: large_batch_aggregation_mode
+    should_call_platform: false
+    should_call_DataAgent: false
+    expected_behavior: "输出 aggregation / DataAgent-Hive query plan、抽样计划、字段分布和补证计划。"
+    forbidden_behavior: "不得在线逐个查；不得自动调用 DataAgent。"

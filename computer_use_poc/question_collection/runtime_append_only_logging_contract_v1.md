@@ -36,14 +36,20 @@ runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 
 This runtime CSV is separate from the source-tree template CSV.
 
-Candidate queue path resolution must be stable:
+Observation log and candidate queue path resolution must be stable:
 
-1. `pilot_observation_writer.py --candidate-queue <path>` uses the explicit path.
-2. `DENNIS_AGENT_HOME` uses `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
+1. `pilot_observation_writer.py --log-dir <path>` and `--candidate-queue <path>` use explicit paths.
+2. `DENNIS_AGENT_HOME` uses `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
 3. If the env var is absent, the writer resolves the repo root from the script path.
 4. Only if repo-root detection fails, the writer may use CWD and must report `path_resolution=fallback_cwd`.
 
-Writer output must include `candidate_queue_path` and `path_resolution` for debugging.
+Writer output must include `candidate_queue_path`, `path_resolution`, `log_path_resolution`, and `candidate_queue_path_resolution` for debugging.
+
+The writer uses one observation log format: markdown block with one JSON metadata block. It must not create a parallel JSON-lines observation log. Required metadata fields:
+
+```text
+record_id,record_type,timestamp,source_channel,user_prompt,routing_mode,execution_mode,final_status,final_answer_summary,issue_tags,direct_tool_bypass,bypass_reason,risk_review_required,feedback_type,candidate_appended,candidate_queue_path,path_resolution,subagent_session_id,main_session_id
+```
 
 Runtime candidate queue CSV uses this 13-column schema:
 

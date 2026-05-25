@@ -196,11 +196,26 @@ does_not_do:
   - no_historical_case_evidence_as_current_batch_fact
 boundaries:
   - 5 个以下可全量深查
-  - 10+ 默认 batch_clustering_mode，不逐个在线查
-  - 50+ 默认 aggregation / DataAgent-Hive query plan
+  - 10+ 强制 batch_clustering_mode / plan_mode，不逐个在线查
+  - 50+ 强制 aggregation / DataAgent-Hive query plan
+  - explicit_per_entity_online_execution_required_for_10_plus
+  - strategy_recommendation_or_expansion_with_ids_stays_plan_mode
   - DataAgent only for Hive / warehouse query planning when needed
   - no_data cannot be no-risk counter evidence
   - blocked_timeout_partial_source_must_be_source_gap
+required_output_fields_for_10_plus:
+  - batch_clustering_mode
+  - relation_family
+  - evidence_basis
+  - denominator_status
+  - relationship_strength
+  - reverse_check_result
+  - confounder_risk
+  - cannot_conclude_boundary
+  - representative_cases
+  - pattern_summary
+  - required_validation
+  - candidate_strategy_direction
 templates:
   - computer_use_poc/batch_risk_clustering/README.md
   - computer_use_poc/batch_risk_clustering/batch_risk_case_schema_v1.md

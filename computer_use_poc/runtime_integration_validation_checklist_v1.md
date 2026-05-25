@@ -26,6 +26,8 @@ This checklist validates whether the semi-open runtime, feedback loop, evidence 
 | RUNTIME-INTEGRATION-007 | feedback | High-value feedback enters the runtime candidate queue. | Runtime path is `runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`. | pending |
 | RUNTIME-INTEGRATION-008 | feedback | `useful` feedback without high-value learning signal is recorded but not queued by default. | Candidate queue is not polluted by generic useful feedback. | pending |
 | RUNTIME-INTEGRATION-009 | feedback | Template candidate queue is not used as live output. | `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv` remains template/sample only. | pending |
+| RUNTIME-INTEGRATION-009A | feedback | `DENNIS_AGENT_HOME` is set in live and writer runs from different CWDs. | Observation log and candidate queue resolve under the same Dennis home; output includes `path_resolution`, `log_path_resolution`, and `candidate_queue_path_resolution`. | pending |
+| RUNTIME-INTEGRATION-009B | feedback | Observation writer output format is inspected. | Markdown block only, with JSON metadata containing `direct_tool_bypass`, `bypass_reason`, `risk_review_required`, `feedback_type`, `candidate_appended`, `candidate_queue_path`, `path_resolution`, `subagent_session_id`, and `main_session_id`. | pending |
 | RUNTIME-INTEGRATION-010 | evidence | Evidence type separation is applied. | Output separates `raw_evidence`, `behavior_event`, `user_claim`, `inference`, `hypothesis`, and `missing_evidence`. | pending |
 | RUNTIME-INTEGRATION-011 | evidence | Single case ATO response uses the evidence card. | Output contains source quality, completed/blocked/timeout sources, current confidence, and required follow-up. | pending |
 | RUNTIME-INTEGRATION-012 | boundary | `no_data`, timeout, blocked, or partial source appears. | It is marked as `source_gap` / `permission_or_runtime_gap`, not as no-risk counter-evidence. | pending |
@@ -35,6 +37,7 @@ This checklist validates whether the semi-open runtime, feedback loop, evidence 
 | RUNTIME-INTEGRATION-016 | bad case | `BC-HARMONY-ATO-001` is replayed. | Harmony/OAuth/one-click takeover is not collapsed into credential stuffing. | pending |
 | RUNTIME-INTEGRATION-017 | bad case | Batch ATO has mixed case types. | Runtime samples 3-5 representative users and asks for per-user timeline before strong attribution. | pending |
 | BATCH-INTEGRATION-001 | batch routing | User asks: `这 10 个用户像不像一批 ATO？` | `batch_clustering_mode`; no one-by-one online checks; output clusters, representatives, abnormal correlation matrix, follow-up plan. | pending |
+| BATCH-INTEGRATION-001A | batch routing | User provides 10 IDs and explicitly asks for batch clustering rather than per-user lookup. | Hard guard forces `batch_clustering_mode`; no platform API; output includes `required_validation` and no same-gang conclusion without join key. | pending |
 | BATCH-INTEGRATION-002 | batch routing | Mixed positive and negative ATO-like cases are provided. | Layered cluster judgement; no forced single ATO conclusion. | pending |
 | BATCH-INTEGRATION-003 | batch matrix | Inputs include multiple devices, IPs, versions, and nickname mutations. | Abnormal correlation matrix is emitted with direction and evidence boundary. | pending |
 | BATCH-INTEGRATION-004 | batch denominator | Denominator or control baseline is missing. | `denominator_status=denominator_required` or equivalent; no strong enrichment claim. | pending |
@@ -70,4 +73,3 @@ This checklist validates whether the semi-open runtime, feedback loop, evidence 
 - Batch risk clustering does not produce an abnormal correlation matrix.
 - Batch correlation is upgraded to same-source/group conclusion without join key or shared infrastructure.
 - Preflight fails, scanner fails, scanner output cannot be parsed, or high-risk package findings exist.
-

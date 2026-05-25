@@ -17,6 +17,16 @@ This policy prevents accidental large-scale online lookups and keeps batch reaso
 | 50-499 | `large_batch_aggregation_mode` | 必须优先生成聚合分析 / DataAgent-Hive query plan。 | 不逐个在线查；只建议抽样深查。 |
 | 500+ | `alert_batch_or_population_analysis_mode` | 只做批次级分布、异常相关性、代表样本抽样、策略建议。 | 必须生成离线取数 / 聚合分析计划。 |
 
+## Hard Live Routing Guard
+
+- 10+ detected entities must select `batch_clustering_mode` or plan mode before any online execution branch.
+- 10-49 entities: `batch_clustering_mode`; one-by-one online execution is forbidden by default.
+- 50+ entities: aggregation / DataAgent-Hive query plan; one-by-one online execution is forbidden.
+- 3-9 entities: default `batch_plan_mode` / `small_batch_mode`; if user wants small-sample online checks, ask for confirmation or sample 3-5 representatives.
+- Only explicit wording such as "逐个查每个用户", "逐个在线查询", or "每个都调平台查" can move 10+ entities toward an execution planning branch, and even then scope/cost confirmation is required.
+- Strategy recommendation, expansion, grey release, false-positive control, and monitoring requests stay plan mode even when ids are attached.
+- Required 10+ output fields: `batch_clustering_mode`, `relation_family`, `evidence_basis`, `denominator_status`, `relationship_strength`, `reverse_check_result`, `confounder_risk`, `cannot_conclude_boundary`, `representative_cases`, `pattern_summary`, `required_validation`, `candidate_strategy_direction`.
+
 ## 3. Detailed Rules
 
 ### 1-2 entities

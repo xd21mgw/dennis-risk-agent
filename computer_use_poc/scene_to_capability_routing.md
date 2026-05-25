@@ -159,6 +159,14 @@ response-time provenance check：
 - 50-499 entity → `large_batch_aggregation_mode`，默认 aggregation / DataAgent-Hive query plan。
 - 500+ entity → `alert_batch_or_population_analysis_mode`，只做批次级分布、异常相关性、抽样和策略建议。
 
+硬路由守卫：
+
+- 识别到 10 个及以上 user_id / device_id / did / ip / account / entity 时，必须进入 `batch_clustering_mode` 或 plan mode，不得进入逐个 online execution。
+- 只有用户明确写出“逐个查每个用户 / 逐个在线查询 / 每个都调平台查”时，才允许进入需要确认成本和范围的小批执行分支；否则即使用户说“帮我判断这批用户”，也仍按批量分簇处理。
+- 50+ 实体必须进入 aggregation / DataAgent-Hive query plan，不在线逐个查。
+- 3-9 实体默认 `batch_plan_mode` / `small_batch_mode`，可建议抽 3-5 个代表样本；小样本逐个查也需要明确用户意图或确认。
+- 策略推荐 / 举一返三 / 灰度 / 误伤控制 / 监控建设，即使带 user_id，也优先 plan mode，不查平台。
+
 特殊意图优先级：
 
 - 如果用户问“策略怎么做 / 如何灰度 / 如何误伤控制 / 举一返三 / 监控怎么建”，即使带了 user_id，也优先 plan mode，不查平台。
@@ -178,6 +186,8 @@ response-time provenance check：
 6. missing evidence / source_gap。
 7. DataAgent-Hive query plan if needed。
 8. strategy / monitoring / grey release / manual review suggestions。
+9. relation_family / evidence_basis / denominator_status / relationship_strength / reverse_check_result / confounder_risk / cannot_conclude_boundary。
+10. representative_cases / pattern_summary / required_validation / candidate_strategy_direction。
 
 边界：
 

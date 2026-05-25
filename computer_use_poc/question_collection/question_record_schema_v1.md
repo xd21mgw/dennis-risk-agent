@@ -77,10 +77,10 @@ Required fields:
 
 High-value feedback can be appended to the runtime candidate queue. The source-tree `question_learning_candidate_queue_v1.csv` remains a template and must not be overwritten by runtime.
 
-Runtime candidate queue path resolution:
+Runtime observation log and candidate queue path resolution:
 
-1. explicit `--candidate-queue <path>`
-2. `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`
+1. explicit `--log-dir <path>` and / or `--candidate-queue <path>`
+2. `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`
 3. repo root detected from `pilot_observation_writer.py`
 4. current CWD fallback with `path_resolution=fallback_cwd`
 
@@ -90,6 +90,32 @@ Writer result must include:
 |---|---|---|
 | `candidate_queue_path` | string | absolute resolved runtime queue path |
 | `path_resolution` | string | `explicit_arg` / `dennis_agent_home` / `script_repo_root` / `fallback_cwd` |
+| `log_path_resolution` | string | observation log path resolution |
+| `candidate_queue_path_resolution` | string | candidate queue path resolution |
+
+Observation writer log format is markdown block with one JSON metadata block. Required metadata fields:
+
+| field | rule |
+|---|---|
+| `record_id` | stable local record id |
+| `record_type` | observation_record / feedback_record |
+| `timestamp` | ISO-8601 |
+| `source_channel` | KIM / APP / Web / other |
+| `user_prompt` | sanitized |
+| `routing_mode` | selected routing mode when available |
+| `execution_mode` | selected execution mode when available |
+| `final_status` | recorded / partial / blocked / failed / pass |
+| `final_answer_summary` | sanitized concise summary |
+| `issue_tags` | list or CSV-compatible list |
+| `direct_tool_bypass` | boolean |
+| `bypass_reason` | safe reason string |
+| `risk_review_required` | boolean |
+| `feedback_type` | inferred feedback type or none |
+| `candidate_appended` | boolean |
+| `candidate_queue_path` | resolved candidate queue path |
+| `path_resolution` | combined path resolution |
+| `subagent_session_id` | sanitized id if available |
+| `main_session_id` | sanitized id if available |
 
 Runtime candidate queue CSV schema:
 
