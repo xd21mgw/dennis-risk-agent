@@ -24,6 +24,7 @@
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略；作为 strategy_hit_inventory 首选批量入口 | 天狮 fastQueryHbase HTTP+SSO | single_source bounded window | formal_readonly | `eventTypeCodes=""` 表示全事件类型；策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin | specific_event small window | partial_design_and_poc | eventList 是补查入口，不是 strategy_hit_inventory 首选命中概览入口；no_data 不代表行为未发生 |
 | `tianshi_strategy_platform_contracts` | 固化天狮 fastQueryHbase / eventList 的 contract、schema、routing 和 observation 边界 | `computer_use_poc/tianshi_strategy_platform_contracts/` | contract layer only | documented | C 包不解析策略树；策略配置理解属于未来 D 包 |
+| `tianshi_strategy_hit_inventory` | 从 user/source_id 维度盘点策略命中概览、TOP 策略、TOP 节点、TOP 条件、策略共现和代表事件 | fastQueryHbase HTTP+SSO → eventList supplement → representative event attribution | single_source bounded window inventory | documented_ready_for_runtime | 策略命中盘点是风险感知线索，不等于最终风险定性，不自动处置 |
 | `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
@@ -42,6 +43,11 @@
 - `user_device_resolution` 以 Weapon graphData 为主入口，不使用 Device SDK riskData 做实体解析主入口。
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览，也是 `strategy_hit_inventory` 的首选批量入口；`tianshi_eventlist_read` 用于 eventType 级具体请求补证，尤其是允许 / `ec=1` 事件补查。
+- `tianshi_strategy_hit_inventory` 是天狮策略命中盘点能力，子能力包括：
+  - `strategy_hit_overview_lookup`：首选 fastQueryHbase，输入 `source_id + time_window`，输出 `eventId` / `eventType` / `riskDecision` / `hitPolicies` / `hitProductionPolicies` / `confidenceLevel` / `riskType`。
+  - `event_type_detail_supplement`：使用 eventList，对允许事件、`ec=1` 事件和请求级字段做 eventType 级补查；eventList 需要 browser same-origin。
+  - `representative_event_attribution`：使用 `rcpEventDetail` + `nodePolicyAttribution` + `nodeBindPolicyAttribution` 对代表 event 深挖，不默认对所有事件全量归因。
+  - 盘点输出可包含 `policy_topn`、`node_topn`、`condition_topn`、`policy_cooccurrence` 和 `representative_events`；这些都是风险感知线索，不是用户级风险定性。
 - `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
 - `tianshi_strategy_governance_readonly` 是天狮策略治理只读能力，子能力包括：
   - `policy_detail_lookup`：解释策略定义、条件表达式、版本历史、绑定树。

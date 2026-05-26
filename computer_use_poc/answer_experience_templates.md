@@ -1311,7 +1311,87 @@ RCP 补证：
 如果要判断风险，先选关联强且有异常摘要的用户，补档案中心账号状态、统一登录日志和 Device SDK 设备环境证据。
 ```
 
-## 4. 策略治理回答模板
+## 4. 策略命中盘点回答模板
+
+适用问题：
+
+- “这个用户命中过哪些策略？”
+- “这个用户被哪些策略拦过？”
+- “这个用户最近策略命中情况怎么样？”
+- “这个用户一天内哪些策略反复命中？”
+- “有没有 TOP 策略、TOP 节点、TOP 条件或策略共现？”
+
+默认能力：
+
+- `tianshi_strategy_hit_inventory`
+- 子能力按问题分流到 `strategy_hit_overview_lookup`、`event_type_detail_supplement`、`representative_event_attribution`。
+
+回答骨架：
+
+```text
+结论摘要：
+本次只能说明 source_id 在指定时间窗内的事件级策略命中和盘点分布，可用于风险感知增强；不能直接给用户级风险定性或处置结论。
+
+查询范围：
+- source_id：
+- time_window：
+- primary_entry：fastQueryHbase
+- supplement_entry：eventList / representative event attribution
+
+事件分布：
+- event_count：
+- event_type_distribution：
+- event_detail_success_count：
+- attributed_event_count：
+
+反馈 / riskDecision 分布：
+- allow：
+- block：
+- verify：
+- unknown：
+
+TOP 策略：
+- policy_topn：
+- 解释边界：高频策略不等于策略一定有效。
+
+TOP 节点：
+- node_topn：
+- 解释边界：高频节点不等于节点有问题。
+
+TOP 条件：
+- condition_topn：
+- 解释边界：条件 true/false 是策略表达式层证据，业务含义需要特征字典或人工解释。
+
+策略共现：
+- policy_cooccurrence：
+- 解释边界：策略共现只是风险感知线索，不等于团伙或攻击路径定性。
+
+代表事件：
+- representative_events：
+- 只选择代表 event 深挖，不默认对所有事件全量归因。
+
+缺口与边界：
+- 策略命中不等于最终风险定性。
+- no_data / timeout / auth_blocker 不得解释为无风险。
+- confidenceLevel='强' 不等于最终定性。
+- updateUser / operator / bindingUser 只做追溯字段，不做责任归因。
+- 不输出敏感字段原值。
+- 不自动处置、不写操作、不上线、不审批。
+
+下一步建议：
+- 如要判断用户风险，补用户画像、登录日志、设备、行为和内容证据。
+- 如要解释某个 eventId 为什么被阻止，进入 single_event_policy_attribution。
+- 如要做跨用户风险感知，扩展为 multi_user_strategy_hit_inventory。
+```
+
+输出边界：
+
+- fastQueryHbase 是策略命中盘点首选入口；eventList 是 eventType 级补查入口。
+- `hitTimestamp` 不能直接等同 rcpEventDetail 的 `queryTime`；代表 event 深挖时优先使用事件详情 `_occurTime`，或标记 `queryTime_source`。
+- 用户只问“有没有风险”时不默认触发完整策略盘点，先走多源证据编排。
+- 不因策略命中、TOP 策略、TOP 节点、策略共现直接输出用户级风险定性。
+
+## 5. 策略治理回答模板
 
 适用问题：
 
@@ -1394,7 +1474,7 @@ RCP 补证：
 - `hitTimestamp` 不能直接等同 rcpEventDetail 的 `queryTime`；代表 event 深挖时优先使用事件详情 `_occurTime`，或标记 `queryTime_source`。
 - “只问用户有没有风险”优先多源证据编排，不默认全量策略治理。
 
-## 5. Plan 模式提示规则
+## 6. Plan 模式提示规则
 
 适用问题：
 

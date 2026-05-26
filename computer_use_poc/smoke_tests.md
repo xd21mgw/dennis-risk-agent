@@ -1853,6 +1853,48 @@
 - 预期：策略命中概览不等于最终风险定性；`confidenceLevel='强'` 不等于最终定性；`updateUser` 不做责任归因；敏感字段不输出原值。
 - 状态：guardrail added。
 
+## 191-AN. capability_registry contains tianshi_strategy_hit_inventory
+
+- 输入：`computer_use_poc/capability_registry.md`。
+- 场景：runtime capability registry。
+- 预期：包含 `tianshi_strategy_hit_inventory`，并列出 `strategy_hit_overview_lookup`、`event_type_detail_supplement`、`representative_event_attribution` 三个子能力。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-AO. strategy_hit_inventory fastQueryHbase primary entry
+
+- 输入：“帮我看下用户 218368298 最近命中过哪些策略。”
+- 场景：策略命中盘点路由。
+- 预期：route=`tianshi_strategy_hit_inventory` / `strategy_hit_overview_lookup`，首选 fastQueryHbase，不默认进入完整策略治理四链路。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-AP. strategy_hit_inventory eventList supplement only
+
+- 输入：“允许事件或 ec=1 事件需要请求级明细。”
+- 场景：策略命中盘点补查。
+- 预期：eventList 作为 `event_type_detail_supplement` 补查入口，不作为首选命中概览入口。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-AQ. user risk question does not trigger full strategy inventory
+
+- 输入：“帮我看下用户 218368298 有没有风险。”
+- 场景：用户风险研判。
+- 预期：route=`multi_evidence_orchestration`；天狮作为 `strategy_hit_evidence` 候选，不默认触发完整策略盘点或完整策略治理四链路。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-AR. eventId question routes to single_event_policy_attribution
+
+- 输入：“这次 eventId=5370247893355116990 为什么被阻止？”
+- 场景：单事件策略归因。
+- 预期：route=`single_event_policy_attribution`，不是 `tianshi_strategy_hit_inventory`。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-AS. strategy_hit_inventory answer template boundaries
+
+- 输入：策略命中盘点回答模板。
+- 场景：回答模板。
+- 预期：包含结论摘要、查询范围、事件分布、riskDecision 分布、TOP 策略、TOP 节点、TOP 条件、策略共现、代表事件、缺口与边界、下一步建议；包含策略命中不等于最终风险定性、高频策略不等于策略一定有效、策略共现不等于团伙或攻击路径定性、不自动处置等边界。
+- 状态：guardrail added，runtime lightweight integration。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

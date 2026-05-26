@@ -23,6 +23,7 @@
 | 用户关联设备查询 | 给出用户关联设备候选和排序理由 | `user_device_resolution` | Weapon graphData 主入口，档案中心近期设备补充排序 | Weapon no_data 时可用登录日志设备分布、档案中心最近登录设备做候选 | graphData no_data 不等于用户没有设备 |
 | 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
 | 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → `tianshi_strategy_governance_readonly` when asking strategy definition/tree/attribution/release | 天狮 fastQueryHbase、eventList、策略治理 readonly docs、档案中心、Device SDK | 缺 eventId / policyCode / policyTreeCode 等关键字段时输出 query plan 或追问缺字段 | riskDecision 是策略返回动作，不等于最终处置成功；策略治理不等于最终作弊定性 |
+| 策略命中盘点 | 从 user/source_id 维度盘点最近命中过哪些策略、TOP 策略、TOP 节点、TOP 条件、策略共现和代表事件 | `tianshi_strategy_hit_inventory` → `strategy_hit_overview_lookup` → `event_type_detail_supplement` when request detail needed → `representative_event_attribution` for selected events | fastQueryHbase HTTP+SSO、eventList browser same-origin、rcpEventDetail、nodePolicyAttribution / nodeBindPolicyAttribution | eventList 仅作补查；代表 event 才深挖，不全量归因 | 策略命中盘点是风险感知线索，不等于最终风险定性 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
 | 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
 | 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → L1 feature query plan → TOP drilldown → frequent pattern contribution → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性或高贡献组合判断同团伙 |
@@ -41,12 +42,14 @@
 策略治理只读能力位于 `computer_use_poc/strategy_governance/`，用于解释策略详情、策略树资产、单事件策略归因和策略发布记录。
 
 - 用户问“是否命中策略 / 是否被风控打到 / 是否有生产策略证据 / 被哪些策略拦过 / 单用户多事件策略盘点”：优先 `fastQueryHbase` / `strategy_hit_read`。`fastQueryHbase` 是 `strategy_hit_inventory` 首选批量入口，可通过 HTTP+SSO 直连；`eventTypeCodes=""` 表示全事件类型。
+- 用户问“这个用户命中过哪些策略 / 被哪些策略拦过 / 最近策略命中情况”：route=`tianshi_strategy_hit_inventory` / `strategy_hit_overview_lookup`，首选 fastQueryHbase 输出策略命中概览。
+- 用户问“这个用户一天内哪些策略反复命中 / TOP 策略 / TOP 节点 / 策略共现”：route=`tianshi_strategy_hit_inventory`，输出 `policy_topn` / `node_topn` / `condition_topn` / `policy_cooccurrence` 和代表事件。
 - 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。eventList 是 eventType 级补查入口，尤其用于允许 / `ec=1` 事件和请求级明细，不是策略命中盘点首选入口。
 - `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
 - 用户问“这条策略是什么 / 这条策略条件是什么 / 这个策略挂在哪个节点 / 这个策略在哪棵策略树 / 这次为什么被阻止或验证 / 这次为什么命中这个策略 / 这个策略什么时候上线 / 这个策略最近是否改过 / 从策略详情、策略树、归因、发布记录解释一下”：选择 `tianshi_strategy_governance_readonly`。
 - 二级路由边界：
   - 用户问“这个用户有没有风险 / 帮我看下这个用户风险”：route=`multi_evidence_orchestration`，天狮仅作为 `strategy_hit_evidence` 候选，不默认触发 `tianshi_strategy_governance_readonly` 四链路，也不默认触发 `single_event_policy_attribution`。
-  - 用户问“这个用户有没有命中策略 / 被哪些策略拦过 / 单用户多事件策略盘点”：route=`strategy_hit_check` / `strategy_hit_inventory`，先走 fastQueryHbase / `strategy_hit_read`，必要时用 `tianshi_eventlist_read` 补事件明细；默认只输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
+  - 用户问“这个用户有没有命中策略 / 被哪些策略拦过 / 单用户多事件策略盘点”：route=`tianshi_strategy_hit_inventory`，先走 fastQueryHbase / `strategy_hit_overview_lookup`，必要时用 `event_type_detail_supplement` 补事件明细；默认只输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
   - 用户问“这个 eventId 为什么被阻止 / 为什么命中某策略”：只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才 route=`single_event_policy_attribution`；可按需补 `policy_detail_lookup`、`policy_tree_asset_lookup`、`policy_release_record_lookup`。
   - 用户问“这条策略是什么 / 条件是什么 / 哪个节点 / 什么时候上线”：route=`tianshi_strategy_governance_readonly` 对应子能力。
 - 路由分流：
