@@ -27,6 +27,7 @@
 | 直播长连接 attach 归因候选 | 解释 `SYNC_LIVE_ATTACH_REQUEST` / 直播长连接为什么被拦、直播人气防刷命中原因 | `tianshi_live_attach_attribution_candidate` → `attach_hit_overview_lookup` → `attach_event_detail_supplement` → `attach_policy_attribution` | fastQueryHbase、eventList、rcpEventDetail、getPolicyVersionListByEvent、nodePolicyAttribution | beta / partial candidate；阻止事件 rcpEventDetail 可能 timeout | 不是 full success，不做最终风险定性 |
 | 业务安全场景资产地图 | 解释天狮里账号、流量、反爬、互动、活动有哪些 eventType / policyTree 候选 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping_poc_v1.md` | asset_index_only / query_plan_only，不触发平台查询 | 资产地图不是可执行研判能力 |
 | ANTICRAWL 家族候选 | 解释 ANTICRAWL 家族怎么查、需要哪些输入 | `tianshi_anticrawl_family_candidate` / `anti_crawler_expert_mode` | 资产地图 + query plan | candidate_only / query_plan_only；缺命中 source_id / eventId 时不执行归因 | 不注册为 full runtime 能力 |
+| 实名数据服务 partial contract | 解释实名信息是否可查、可输出哪些脱敏摘要、EB_USER_REAL_NAME_VERILY__1 怎么传参 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract_v1.md` | partial_contract / redaction_schema_only / query_plan_only，不执行真实查询 | 不是本人 / 盗号判断能力，不输出身份证 / 姓名 / 生日 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
 | 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
 | 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → L1 feature query plan → TOP drilldown → frequent pattern contribution → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性或高贡献组合判断同团伙 |
@@ -50,6 +51,9 @@
 - 用户问“直播长连接为什么被拦 / SYNC_LIVE_ATTACH_REQUEST 为什么阻止 / 这个用户直播 attach 命中过什么策略 / 直播人气防刷命中原因是什么”：route=`tianshi_live_attach_attribution_candidate`；首选 fastQueryHbase 查 attach 命中概览，eventList 补事件分布，代表事件走 nodePolicyAttribution；rcpEventDetail timeout 时输出 partial，不裸失败。
 - 用户问“业务安全目前有哪些场景 / 天狮里账号、流量、反爬、互动都有哪些 eventType / 除了注册登录还能覆盖哪些场景”：route=`business_security_scene_asset_mapping`；输出资产地图，不触发平台查询，不说这些都是已上线能力，明确 verified / partial / candidate_only 分层。
 - 用户问“这个用户是不是被反爬命中了 / ANTICRAWL 怎么查 / 这个接口是不是被爬”：route=`tianshi_anticrawl_family_candidate` 或 `anti_crawler_expert_mode`；没有 eventId / source_id / 时间窗口时输出 query plan，不默认执行完整归因，不把 ANTICRAWL 注册为 full runtime。
+- 用户问“这个用户有没有实名 / 实名信息能查吗 / 实名信息能输出哪些字段 / EB_USER_REAL_NAME_VERILY__1 怎么传参 / 能不能看实名省份、年龄段、性别”：route=`real_name_feature_service_partial_contract`；只输出 partial contract、参数映射、脱敏 schema 或 query plan，不执行真实查询，不注册 identity runtime。
+- 用户问“这个用户是不是本人操作 / 这个是不是盗号 / 实名省份和发布 IP 一致是不是就不是盗号”：route=`multi_evidence_orchestration` 或 `account_security_expert_mode`；实名信息只能作为候选补证源，不得单独包装本人 / 盗号判断。
+- 用户要求“输出身份证前 6 位 / 身份证号 / 姓名 / 完整生日 / 手机号”：拒绝输出敏感原文，可替代输出省级摘要、城市级可用性、年龄段或性别摘要。
 - 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。eventList 是 eventType 级补查入口，尤其用于允许 / `ec=1` 事件和请求级明细，不是策略命中盘点首选入口。
 - `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
 - 用户问“这条策略是什么 / 这条策略条件是什么 / 这个策略挂在哪个节点 / 这个策略在哪棵策略树 / 这次为什么被阻止或验证 / 这次为什么命中这个策略 / 这个策略什么时候上线 / 这个策略最近是否改过 / 从策略详情、策略树、归因、发布记录解释一下”：选择 `tianshi_strategy_governance_readonly`。

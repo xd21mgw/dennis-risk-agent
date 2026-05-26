@@ -28,6 +28,7 @@
 | `tianshi_live_attach_attribution_candidate` | 解释直播长连接 attach / `SYNC_LIVE_ATTACH_REQUEST` 为什么被策略阻止，以及直播人气防刷相关策略路径 | fastQueryHbase → eventList / rcpEventDetail → getPolicyVersionListByEvent → nodePolicyAttribution | live_attach single_source beta partial | runtime_candidate_beta_partial | beta / partial candidate，不是 full success；eventDetail timeout 只能标 `event_detail_partial` |
 | `business_security_scene_asset_mapping` | 回答业务安全有哪些场景、eventType / policyTree 候选和后续验证优先级 | `business_security_scene_asset_mapping_poc_v1.md` | asset index / query plan only | asset_index_only_query_plan_only | 资产地图不是可执行研判能力，不触发平台查询，不输出风险定性 |
 | `tianshi_anticrawl_family_candidate` | 解释 ANTICRAWL 家族候选 eventType 和反爬查询计划 | asset map + future hit sample required | candidate query plan only | candidate_only_query_plan_only | 不注册为可执行 runtime；缺真实命中 source_id / eventId 时只输出 query plan |
+| `real_name_feature_service_partial_contract` | 记录 EB_USER_REAL_NAME_VERILY__1 testCase bridge 调用方式、参数映射、字段可用性和脱敏输出边界 | `real_name_feature_service_partial_contract_v1.md` | partial contract / redaction schema / query plan | partial_contract_redaction_schema_only_query_plan_only | 不是完整实名画像能力，不是本人 / 盗号判断，不注册可执行 identity runtime |
 | `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
@@ -57,6 +58,11 @@
   - `attach_policy_attribution`：使用 getPolicyVersionListByEvent + nodePolicyAttribution，支持代表事件条件级归因；已验证 `BS_antibrush_attach_user_multi_loc_block_policy` 和 `BS_antibrush_attach_not_same_startup_block_policy`。
 - `business_security_scene_asset_mapping` 只做资产地图 / query plan，覆盖 account_security、traffic_security、anti_crawler_antibrush、interaction_anti_abuse、activity_anti_cheating；找到 eventType / policyTree 不代表已可归因或正在命中。
 - `tianshi_anticrawl_family_candidate` 只做 candidate_only / query_plan_only；已知候选包括 `ANTICRAWL`、`ANTICRAWL_LIVE`、`ANTICRAWL_BASE`、`ANTICRAWL_SEARCH`、`ANTICRAWL_COMMON`、`ANTICRAWL_RPC_SIGN`、`ANTICRAWL_PLATFORM_SYNC`、`LIVE_STREAM_ANTICRAWL`；没有命中样本时不得假装可完整归因。
+- `real_name_feature_service_partial_contract` 只做 EB_USER_REAL_NAME_VERILY__1 的 partial contract / redaction schema / query plan，不注册可执行 identity runtime：
+  - 关键调用参数：`access_path=/v2/rest/testCase/run`，`foreignKey=EB_USER_REAL_NAME_VERILY__1`，`sourceId=userId`，`activityName=call_condition`，`required_activityName=MERCHANT_NEWSHOP_OPEN_AWARD`，`sid=kuaishou.api` 由 feature config 自动填充。
+  - 当前可用信息：`idNo` 存在性、idNo 派生省份摘要、城市级可用性、年龄段、性别摘要、敏感字段 redacted 标记。
+  - 禁止输出：姓名、身份证号、身份证前 6 位、完整生日、手机号、完整 IP、详细地址。
+  - 已实名不等于一定本人操作，未实名不等于一定黑产；实名省份与发布 IP 一致不能单独排除盗号，不一致也不能单独判定盗号。
 - `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
 - `tianshi_strategy_governance_readonly` 是天狮策略治理只读能力，子能力包括：
   - `policy_detail_lookup`：解释策略定义、条件表达式、版本历史、绑定树。

@@ -440,6 +440,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 非注册 / 登录场景深验证 POC 已新增：`computer_use_poc/strategy_governance/non_register_login_scene_deep_validation_poc_v1.md`。本轮将 `SYNC_LIVE_ATTACH_REQUEST` / 直播长连接 attach 更新为 `deep_validation_partial / runtime_candidate_beta_partial`：fastQueryHbase、eventList、getPolicyVersionListByEvent、nodePolicyAttribution 可用，但阻止事件 rcpEventDetail timeout，仍非 full success；ANTICRAWL 家族保持 `candidate_only`，需要有反爬命中的 source_id 或 eventId 后再深验证。
 - 非注册 / 登录 runtime candidate dry-run 已新增：`computer_use_poc/run_logs/non_register_login_runtime_candidate_dryrun_v1.md`。本轮轻量接入 `tianshi_live_attach_attribution_candidate`、`business_security_scene_asset_mapping`、`tianshi_anticrawl_family_candidate` 的 registry / routing / answer templates；其中 live attach 是 beta partial candidate，资产地图和 ANTICRAWL 仅为 asset_index / query_plan，不是可执行完整研判能力。
 - 实名数据服务 partial contract 已新增：`computer_use_poc/real_name_feature_service_partial_contract_v1.md`。该文档沉淀 `EB_USER_REAL_NAME_VERILY__1` 最小复测结果：`sourceId` 映射为 userId，`activityName` 是调用条件字段且当前可用值为 `MERCHANT_NEWSHOP_OPEN_AWARD`，`sid=kuaishou.api` 由特征配置自动填充；当前实际只返回 `idNo`，输出只能使用省份、城市级可用性、年龄段、性别等派生摘要，不输出姓名、身份证号、身份证前 6 位、完整生日或手机号，也不注册 identity runtime 能力。
+- 实名数据服务 partial contract 已完成轻量 registry / routing / template 接入：capability 为 `real_name_feature_service_partial_contract`，状态为 `partial_contract / redaction_schema_only / query_plan_only`。它只输出调用契约、参数映射和脱敏 schema，不执行真实查询，不新增接口，不注册 identity runtime，不包装本人 / 盗号判断能力。
 
 Auth preflight：
 

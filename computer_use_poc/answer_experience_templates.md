@@ -1565,7 +1565,80 @@ ANTICRAWL 家族当前是 candidate_only / query_plan_only，缺真实命中 sou
 - 不自动处置、不写操作、不上线、不审批。
 ```
 
-## 8. 策略治理回答模板
+## 8. 实名数据服务 partial contract 回答模板
+
+适用问题：
+
+- “这个用户有没有实名信息可以查？”
+- “实名信息能输出哪些字段？”
+- “能不能看实名省份 / 年龄段 / 性别？”
+- “查一下 EB_USER_REAL_NAME_VERILY__1 怎么传参。”
+
+默认能力：`real_name_feature_service_partial_contract`
+
+回答骨架：
+
+```text
+结论摘要：
+当前只有 EB_USER_REAL_NAME_VERILY__1 的 partial contract / redaction schema / query plan，不是完整实名画像能力，也不执行真实查询。
+
+当前可用能力：
+- 可记录 testCase bridge 调用方式和参数映射。
+- 当前实际返回字段只有 idNo，可派生省份摘要、城市级可用性、年龄段、性别摘要。
+- age / birthday / gender / name 仅为 schema 字段，当前 output=否。
+
+调用参数与映射：
+- access_path: /v2/rest/testCase/run
+- foreignKey: EB_USER_REAL_NAME_VERILY__1
+- caseType: FEATURE
+- eventType: TEST_TOOL_EVENT_TYPE
+- sourceId: userId
+- activityName: call_condition
+- required_activityName: MERCHANT_NEWSHOP_OPEN_AWARD
+- sid: kuaishou.api 由 feature config 自动填充
+
+字段返回状态：
+- idNo: actually_returned，但不得输出原文。
+- age / birthday / gender / name: schema_only_not_output。
+
+可输出的脱敏摘要：
+- real_name_verified / id_no_present:
+- id_region.province:
+- city_level_available:
+- age_bucket:
+- gender_summary:
+- sensitive_fields_redacted: true
+
+禁止输出字段：
+- 姓名
+- 身份证号
+- 身份证前 6 位
+- 完整生日
+- 手机号
+- 完整 IP
+- 详细地址
+
+不能下的结论：
+- 已实名不等于一定本人操作。
+- 未实名不等于一定黑产。
+- 身份证地区与发布 IP 省份一致不等于一定非盗号。
+- 身份证地区与发布 IP 省份不一致不等于一定盗号。
+- 年龄 / 性别不能作为单独风险判断依据。
+- 身份信息必须结合登录日志、设备、发布路径、历史行为、内容异常综合判断。
+
+下一步建议：
+- 若用于账号安全研判，只能作为 candidate evidence source。
+- 需要进入本人 / 盗号判断时，先走 multi_evidence_orchestration 或 account_security_expert_mode。
+- 本轮不访问真实平台、不调用 DataAgent、不新增接口。
+```
+
+敏感字段请求降级：
+
+```text
+不能输出身份证号、身份证前 6 位、姓名或完整生日。可替代提供省级摘要、城市级可用性、年龄段和性别摘要，并标记 sensitive_fields_redacted=true。
+```
+
+## 9. 策略治理回答模板
 
 适用问题：
 
@@ -1648,7 +1721,7 @@ ANTICRAWL 家族当前是 candidate_only / query_plan_only，缺真实命中 sou
 - `hitTimestamp` 不能直接等同 rcpEventDetail 的 `queryTime`；代表 event 深挖时优先使用事件详情 `_occurTime`，或标记 `queryTime_source`。
 - “只问用户有没有风险”优先多源证据编排，不默认全量策略治理。
 
-## 9. Plan 模式提示规则
+## 10. Plan 模式提示规则
 
 适用问题：
 
