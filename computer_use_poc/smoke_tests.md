@@ -1776,6 +1776,41 @@
 - 预期：输出 query plan 或追问缺字段；不得猜 eventId、queryTime、policyTreeNodeCode、policyVersion。
 - 状态：guardrail added，second-level routing boundary。
 
+## 191-AC. single_user_event_strategy_inventory POC document exists
+
+- 输入：`computer_use_poc/strategy_governance/single_user_event_strategy_inventory_poc_v1.md`。
+- 场景：单用户多事件策略命中盘点 POC。
+- 预期：文档存在，定位为单用户多事件策略盘点，不等于跨用户批量风险簇。
+- 状态：guardrail added，strategy governance inventory POC。
+
+## 191-AD. single_user_event_strategy_inventory includes eventList browser entry
+
+- 输入：单用户多事件策略盘点 POC。
+- 场景：已验证链路。
+- 预期：包含 browser eventList `source_id -> event_id` 批量入口，并说明 eventList browser same-origin 批量入口已打通。
+- 状态：guardrail added。
+
+## 191-AE. single_user_event_strategy_inventory aggregation fields
+
+- 输入：单用户多事件策略盘点 POC schema / template。
+- 场景：策略命中聚合。
+- 预期：包含 `policy_topn`、`node_topn`、`condition_topn`、`policy_cooccurrence`、`representative_events`、`governance_findings`。
+- 状态：guardrail added。
+
+## 191-AF. single_user_event_strategy_inventory boundary
+
+- 输入：单用户多事件策略盘点 POC。
+- 场景：证据边界。
+- 预期：包含“单用户多事件不等于跨用户批量”“策略命中不等于用户风险定性”“TOP 策略 / 节点 / 条件只是风险感知线索”。
+- 状态：guardrail added。
+
+## 191-AG. single_user_event_strategy_inventory no_data timeout boundary
+
+- 输入：eventDetail / attribution 部分失败、timeout、auth_blocker。
+- 场景：source gap 解释。
+- 预期：`no_data` / timeout / auth_blocker 不得解释为无风险；应进入 missing_evidence / limitations / boundaries。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

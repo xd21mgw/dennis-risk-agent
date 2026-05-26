@@ -433,6 +433,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 策略治理只读能力 v1 已新增：`computer_use_poc/strategy_governance/tianshi_strategy_governance_readonly_capability_v1.md`。该能力整合四条 full success 链路：策略详情、策略树资产、单事件策略归因、策略发布记录。它把天狮从“策略命中查询”升级为“策略详情 + 策略树资产 + 单事件策略归因 + 策略发布记录”的 readonly governance loop，可服务规模化、风险感知增强和策略体系治理；仍不自动处置、不写操作、不上线、不审批、不做最终作弊定性。
 - 策略治理验收测试用例已新增：`computer_use_poc/strategy_governance/tianshi_strategy_governance_validation_cases_v1.md`。该文档用 5 个真实策略治理问题验证四条链路是否能支撑实际回答：单事件策略归因、策略详情解释、策略树资产、发布记录、综合策略治理；同时覆盖策略归因不等于最终作弊定性、策略树资产不等于实际命中路径、发布记录不等于风险定性、人员字段不做责任归因等边界。
 - 策略治理只读能力已完成轻量 runtime 接入：`capability_registry.md` 注册 `tianshi_strategy_governance_readonly`，`scene_to_capability_routing.md` 按 `policy_detail_lookup` / `policy_tree_asset_lookup` / `single_event_policy_attribution` / `policy_release_record_lookup` 分流，`answer_experience_templates.md` 提供策略治理回答模板；该接入仅做只读解释，不新增真实 API、不调用 DataAgent、不自动处置。
+- 单用户多事件策略命中盘点 POC 已新增：`computer_use_poc/strategy_governance/single_user_event_strategy_inventory_poc_v1.md`。该 POC 基于内部 Agent 对 `source_id=218368298` 在 2026-05-26 当天 9 个事件的策略盘点结果，沉淀 `policy_topn` / `node_topn` / `condition_topn` / `policy_cooccurrence` / `representative_events` / `governance_findings` 的 schema、回答模板和 validation 草案；它用于风险感知增强和策略治理线索发现，不等于跨用户批量风险簇或用户级风险定性。
 
 Auth preflight：
 
