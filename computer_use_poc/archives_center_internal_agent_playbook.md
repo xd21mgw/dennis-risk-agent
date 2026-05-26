@@ -72,6 +72,19 @@ source_entry_resolution:
 
 v2.4.7.2 已验证档案中心核心 API inventory。档案中心后续默认使用 API direct read。页面 / DOM / selector 读取只作为 fallback，不应默认触发。
 
+v2.6.1 起，档案中心主线命名为 `archives API-first core capability map`，不再从页面 / Tab 视角派生新能力。执行侧应优先按风控 capability 包选择接口：
+
+- `account_profile`
+- `account_change_trace`
+- `account_action_log`
+- `content_gallery`
+- `content_forensics`
+- `social_interaction`
+- `report_signal`
+- `relation_graph`
+
+对应文档：`computer_use_poc/archives_center_core_capability_map_v2_6_1.md`。
+
 默认读取顺序：
 
 1. API direct read。
@@ -87,6 +100,7 @@ v2.4.7.2 已验证档案中心核心 API inventory。档案中心后续默认使
 - `key_fields_missing`。
 - `link_url_only`。
 - `mapping_pending_validation`。
+- `need_required_param`。
 
 执行规则：
 
@@ -111,6 +125,7 @@ v2.4.7.2 已验证档案中心核心 API inventory。档案中心后续默认使
 - 粉丝 / 关注：`POST /v3/user/profile/relation/fans/list`、`POST /v3/user/profile/relation/follow/list`。
 - 收藏 / 合集：`POST /v3/user/collect/photo/list`、`POST /archives/photo/collection/getCollectionList`。
 - 同设备关联用户：`POST /archives/user/search/device type=0/type=1`，但业务语义映射 pending。
+- v2.6.1 新增 inventory 候选：四项资料日志、用户 / 视频举报、私信、评论、直播详情 / 评论、动态列表等接口。仅从 HAR / 截图分析发现的接口必须标记 `pending_from_har_or_screenshot_analysis`，不得写成 `validated`。
 
 失败 / partial 边界：
 
@@ -122,10 +137,29 @@ v2.4.7.2 已验证档案中心核心 API inventory。档案中心后续默认使
 
 敏感字段策略：
 
-- 不输出手机号、IP、deviceId、open_id、sig、token、tokenId、refresh_token 明文。
-- 不输出完整 `requestParam` / `extraParam` / full JSON。
-- 不输出关联用户 ID / 昵称 / device 明文。
-- 只输出字段名、计数、分布、状态、分页 profile 和派生特征。
+- 不输出 cookie、token、tokenId、session、KIM code、password、authorization、CSRF/XSRF、access token / refresh token 明文。
+- 不输出 open_id、sig、deviceId、IP、手机号明文。
+- 不输出完整 `requestParam` / `extraParam` / response JSON / video meta JSON / `userRouteTrace`。
+- 不输出完整私信内容、完整评论内容、关联用户 ID / 昵称 / device 明文、头像 / 背景 / 媒体 URL 明文。
+- 只输出字段名、计数、时间范围、状态分布、操作类型分布、风险标签、是否存在、是否异常、设备一致性结论、内容类型摘要、重复模式摘要、导流风险摘要、发布端类型、版本差异、是否导入、路径摘要等派生特征。
+
+场景路由摘要：
+
+- ATO 初筛：`account_profile + account_action_log + account_change_trace + relation_graph`，按需补 `content_gallery / social_interaction / report_signal`。
+- 盗号后发视频：`account_action_log + content_gallery + content_forensics + report_signal`。
+- 盗号后改资料：`account_profile + account_change_trace + report_signal`。
+- 私信导流 / 诈骗：`social_interaction + account_action_log + report_signal`。
+- 评论导流 / 色导：`social_interaction + content_forensics + report_signal`。
+- 直播作恶：`content_gallery + content_forensics + social_interaction + report_signal`。
+- 刷粉 / 关系链异常：`relation_graph + social_interaction + account_profile`。
+- 误伤复核：`report_signal + content_forensics + account_profile + account_action_log` 组合视图。
+
+边界：
+
+- 用户举报 / 视频举报是反馈线索，不是强证据。
+- same-device 关联是候选关系，不直接定性团伙或作弊。
+- API direct read 可用不代表自动风险定性。
+- 不引入自动处置。
 
 ## 2. execution_mode 定义
 

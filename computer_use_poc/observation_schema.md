@@ -375,6 +375,101 @@ api_inventory_profile:
 - 列表接口如未覆盖所有分页，必须记录 `partial_coverage=true`。
 - 不输出手机号、IP、deviceId、open_id、sig、token、tokenId、refresh_token、完整 `requestParam`、完整 `extraParam`、完整 response JSON、关联用户 ID / 昵称 / device 明文。
 
+## 8-B. Archives Capability Map Profile v2.6.1
+
+v2.6.1 将档案中心 observation 从页面 / Tab 视角升级为 capability 视角。该 schema 用于记录档案中心 API-first capability observation，不代表自动风险定性。
+
+```yaml
+archives_capability_observation:
+  version: v2.6.1
+  platform: archives_center
+  capability_package: account_profile / account_change_trace / account_action_log / content_gallery / content_forensics / social_interaction / report_signal / relation_graph
+  scene:
+  read_strategy:
+    primary: api_direct_read
+    fallback_order:
+      - dom_scoped_js_eval
+      - row_feature_filter
+      - scoped_snapshot
+  api_observations:
+    - endpoint:
+      method:
+      validation_status: validated / partial / failed / pending_from_har_or_screenshot_analysis
+      request_fields:
+      response_shape:
+      list_total_pagination_fields:
+      api_can_replace_dom:
+      fallback_condition:
+      partial_coverage:
+      sensitive_fields:
+      output_policy: derived_features_only
+  fallback_used:
+    used:
+    reason: API failed / permission_blocked / response_shape_changed / key_fields_missing / link_url_only / mapping_pending_validation / need_required_param
+    method: dom_scoped_js_eval / row_feature_filter / scoped_snapshot
+  evidence_summary:
+    current_metric_or_api_evidence:
+    derived_features:
+    report_or_user_feedback_signal:
+    missing_evidence:
+    counter_evidence:
+  sensitive_output_check:
+    never_output_raw:
+      - cookie
+      - token
+      - tokenId
+      - session
+      - KIM code
+      - password
+      - authorization
+      - CSRF/XSRF
+      - access token / refresh token
+      - open_id plaintext
+      - sig plaintext
+      - deviceId plaintext
+      - IP plaintext
+      - phone plaintext
+      - full requestParam
+      - full extraParam
+      - full response JSON
+      - full video meta JSON
+      - full userRouteTrace
+      - full private message content
+      - full comment content
+      - related user ID / nickname / device plaintext
+      - avatar / background / media URL plaintext
+    allowed_derived_features:
+      - field_name
+      - count
+      - time_range
+      - state_distribution
+      - operation_type_distribution
+      - risk_label
+      - exists_or_absent
+      - abnormality_flag
+      - device_consistency_conclusion
+      - content_type_summary
+      - repetition_pattern_summary
+      - diversion_risk_summary
+      - posting_client_type
+      - version_delta
+      - import_flag
+      - path_summary
+  boundary:
+    no_auto_enforcement:
+    no_auto_risk_finalization:
+    report_signal_not_strong_alone:
+    same_device_mapping_pending_if_type_0_or_1:
+    screenshots_not_interface_validation:
+```
+
+规则：
+
+- `pending_from_har_or_screenshot_analysis` 不得升级为 `validated`，除非有已解析接口 response 或已实跑 observation。
+- 私信 / 评论 / 视频 meta / userRouteTrace 只能输出摘要和派生特征，不输出原文。
+- 用户举报 / 视频举报不能单独作为强证据。
+- same-device `type=0/type=1` 仍保持 `mapping_pending_validation`。
+
 ## 9. User Analysis Selector Profile
 
 用户分析 Tab 可能不是标准表格结构，必须记录 selector profile。

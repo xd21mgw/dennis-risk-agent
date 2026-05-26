@@ -551,3 +551,61 @@ pagination_validated:
 - 对 failed APIs 补充 required param 来源探索时，必须继续保持只读，不得点击写操作。
 - 对 same_device type=0/type=1 单独做业务语义映射验证后，才可升级为明确关系类型。
 - 列表型 API 后续如进入完整覆盖，必须先定义分页上限、采样策略和输出 redaction 策略。
+
+## 10. v2.6.1 Capability Map Linkage
+
+v2.4.7.2 保持为历史 API inventory validation 记录，不继续派生新版本。v2.6.1 的新增沉淀见：
+
+- `computer_use_poc/archives_center_core_capability_map_v2_6_1.md`
+
+v2.6.1 将档案中心从页面 / Tab 视角升级为风控 capability 视角，核心 capability 包包括：
+
+- `account_profile`
+- `account_change_trace`
+- `account_action_log`
+- `content_gallery`
+- `content_forensics`
+- `social_interaction`
+- `report_signal`
+- `relation_graph`
+
+v2.6.1 继续沿用 API-first 策略：
+
+```text
+API direct read
+→ DOM scoped JS eval fallback
+→ row feature filter fallback
+→ scoped snapshot fallback
+```
+
+页面 fallback 仅在 `API failed`、`permission_blocked`、`response_shape_changed`、`key_fields_missing`、`link_url_only`、`mapping_pending_validation`、`need_required_param` 时触发。
+
+### 10.1 v2.6.1 Added / Pending API Inventory
+
+以下接口来自最新档案中心有效动作 HAR / 截图分析结果。它们应先进入 inventory，但不得仅凭截图内容写成接口 validated；`validation_status` 默认记录为 `pending_from_har_or_screenshot_analysis`，只有已解析接口 response 或已实跑 observation 才能升级为 `validated`。
+
+| capability | endpoint | method | request fields | response shape | list / total / pagination fields | sensitive fields | validation_status | api_can_replace_dom | fallback condition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| report_signal | `/v4/archives/report/user/options` | GET | user/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
+| report_signal | `/v4/archives/report/user/search` | POST | userId, time/filter/page | user report list | list/total/page fields pending | reporter / target identifiers, report text | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
+| account_change_trace | `/v4/audit/user/fourinfo/log/allTypes` | POST | userId/context | four-info type/options | none | operator / audit notes | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | userId, type/time/page | four-info change list | list/total/page fields pending | old/new profile text/media URL/operator | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
+| social_interaction | `/archives/photo/comment/search` | POST | photoId/userId/filter/page | comment list | list/total/page fields pending | comment plaintext, commenter id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| social_interaction | `/archives/photo/comment/types` | GET | comment context | type options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/photo/comment/status` | POST | comment context | status options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/photo/comment/userStatus` | POST | user/comment context | user status options | none | user identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/photo/comment/queryTypes` | POST | comment context | query type options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/photo/comment/orders` | POST | comment context | order options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/photo/comment/keyMaps` | POST | comment context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| report_signal | `/v4/archives/report/photo/options` | GET | photo/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
+| report_signal | `/v4/archives/report/photo/search` | POST | photoId/userId/filter/page | photo report list | list/total/page fields pending | reporter / target identifiers, report text | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
+| social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list/total/page fields pending | private message plaintext, counterpart id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / permission_blocked |
+| social_interaction | `/archives/user/message/options` | POST | user message context | option structure | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| social_interaction | `/archives/user/message/keyMaps` | POST | user message context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
+| content_forensics | `/archives/livestream/home/info` | POST | liveId/userId | live home info | none | live media URL, anchors/users | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| content_forensics | `/archives/livestream/home/meta` | POST | liveId/userId | live meta | none | full live meta JSON | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| content_forensics | `/archives/livestream/home/log` | POST | liveId/userId/time | live audit/log list | list/total/page fields pending | operator / notes / raw log | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| social_interaction | `/archives/livestream/comment/statistics` | POST | liveId/filter | live comment statistics | aggregate fields | comment content samples | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| social_interaction | `/archives/livestream/comment/detail` | POST | liveId/filter/page | live comment detail list | list/total/page fields pending | comment plaintext, commenter id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / permission_blocked |
+| content_gallery | `/archives/user/gallery/momentList` | POST | userId/page/filter | moment list | list/total/page fields pending | content plaintext/media URL | pending_from_har_or_screenshot_analysis | false_until_observed | key_fields_missing |
+| content_gallery | `/archives/user/gallery/momentAuthority` | POST | userId/moment context | moment authority/status | none | internal status reason | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |

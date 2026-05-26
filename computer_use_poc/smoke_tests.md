@@ -1741,6 +1741,111 @@
 - 预期：页面 fallback 只在 API failed、permission_blocked、response_shape_changed、key_fields_missing、link_url_only、mapping_pending_validation 时触发；不默认打开页面做 selector / snapshot。
 - 状态：guardrail added，v2.4.7.2 API-first patch。
 
+## 214-A. archives center v2.6.1 capability map exists
+
+- 输入：`computer_use_poc/archives_center_core_capability_map_v2_6_1.md`。
+- 场景：档案中心从页面 / Tab 读取升级为 capability map。
+- 预期：文件存在，并说明 v2.6.1 不是新平台、不是 v2.4.x 继续派生，默认 API direct read。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-B. account_profile routes to API direct read
+
+- 输入：账号基础画像 / 当前状态 / 风险标签 / 处罚状态。
+- 场景：account_profile capability。
+- 预期：路由到 `/archives/user/home/info`、negative / risk / label / shop / punish APIs；页面读取仅 fallback。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-C. account_change_trace routes to fourinfo API
+
+- 输入：头像 / 昵称 / 简介 / 背景历史修改。
+- 场景：account_change_trace capability。
+- 预期：路由到 `/v4/audit/user/fourinfo/log/allTypes` 和 `/v4/audit/user/fourinfo/log/search`；未实跑前标记 pending，不写 validated。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-D. account_action_log routes to coreLogs API
+
+- 输入：启动 / 登录 / 扫码 / 绑定 / 重置 / 冻结行为链。
+- 场景：account_action_log capability。
+- 预期：优先 `/v3/user/analyze/fetch` 与 `/v3/user/log/coreLogs/fetch` API direct POST；DOM row feature filter 仅 fallback。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-E. content_gallery routes to photo live moment collect APIs
+
+- 输入：视频作品集 / 直播作品集 / 收藏 / 合集 / 动态。
+- 场景：content_gallery capability。
+- 预期：路由到 photo/list、live/list、collect、collection、momentList、momentAuthority 等 API；分页未全量覆盖时标 partial。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-F. content_forensics routes to photo profile meta report APIs
+
+- 输入：视频详情 / meta / 举报聚合 / 审核 / 发布路径。
+- 场景：content_forensics capability。
+- 预期：路由到 `/v3/photo/profile`、`/v3/photo/meta`、`/v3/photo/report/aggregate`、`/archives/photo/home/userAutonomy`；不输出完整 video meta JSON / userRouteTrace。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-G. social_interaction routes to message comment relation APIs
+
+- 输入：私信 / 评论 / 直播评论 / 粉丝 / 关注。
+- 场景：social_interaction capability。
+- 预期：路由到 message search/options/keyMaps、photo comment APIs、livestream comment APIs、fans/follow APIs；私信和评论内容只摘要化。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-H. report_signal routes to user and photo report APIs
+
+- 输入：用户举报 / 视频举报 / 举报聚合。
+- 场景：report_signal capability。
+- 预期：路由到 `/v4/archives/report/user/*`、`/v4/archives/report/photo/*`、`/v3/photo/report/aggregate`；举报不单独作为强证据。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-I. relation_graph routes to same_device API
+
+- 输入：同设备关联 / 粉丝关注关系。
+- 场景：relation_graph capability。
+- 预期：路由到 `/archives/user/search/device` 与 fans/follow APIs；same_device type=0/type=1 仍保持 mapping_pending_validation。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-J. archives API direct read remains default
+
+- 输入：任意档案中心 capability 查询。
+- 场景：读取顺序。
+- 预期：默认 API direct read → DOM scoped JS eval → row feature filter → scoped snapshot fallback；不默认触发页面。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-K. archives page fallback only on allowed conditions
+
+- 输入：API failed / permission_blocked / response_shape_changed / key_fields_missing / link_url_only / mapping_pending_validation / need_required_param。
+- 场景：页面 fallback。
+- 预期：仅这些条件触发页面 fallback，并记录 fallback reason；其他情况不使用 DOM / selector 默认路径。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-L. private message and comment content summarized only
+
+- 输入：私信 / 评论命中记录。
+- 场景：social_interaction 输出边界。
+- 预期：不输出完整私信明文和完整评论明文；只输出内容类型、风险摘要、重复模式、数量、时间分布、状态分布。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-M. video meta and userRouteTrace are not raw output
+
+- 输入：视频 meta / userRouteTrace。
+- 场景：content_forensics 输出边界。
+- 预期：不输出完整 video meta JSON 和完整 userRouteTrace；只输出设备一致性、发布端类型、版本差异、是否导入、路径摘要等派生特征。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-N. report signals are not strong evidence alone
+
+- 输入：用户举报 / 视频举报。
+- 场景：report_signal 证据强度。
+- 预期：举报只是外部反馈线索，不能单独定性违规 / 盗号；需结合详情、meta、审核日志和处罚状态。
+- 状态：guardrail added，v2.6.1 capability map。
+
+## 214-O. archives no automatic enforcement or finalization
+
+- 输入：任意档案中心 API-first observation。
+- 场景：安全边界。
+- 预期：不引入自动处置，不引入自动风险定性，不输出敏感明文，不把截图内容写成接口 validated。
+- 状态：guardrail added，v2.6.1 capability map。
+
 # 体验黄金 Case Smoke Tests
 
 ## 215. UX golden case: ATO 用户研判
