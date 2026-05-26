@@ -1643,6 +1643,48 @@
 - 预期：该结论仅限已验证的策略归因 API；不得泛化到所有 RCP 接口。
 - 状态：guardrail added。
 
+## 191-J. tianshi strategy governance readonly capability document exists
+
+- 输入：`computer_use_poc/strategy_governance/tianshi_strategy_governance_readonly_capability_v1.md`。
+- 场景：策略治理只读能力 v1。
+- 预期：文档存在，包含策略详情、策略树资产、单事件策略归因、策略发布记录四条链路。
+- 状态：guardrail added，strategy governance readonly capability v1。
+
+## 191-K. tianshi strategy governance four chains full success
+
+- 输入：策略治理四条链路状态。
+- 场景：capability status。
+- 预期：策略详情 full_success，策略树资产 full_success，单事件策略归因 full_p0_e2e_success，策略发布记录 full_success。
+- 状态：guardrail added。
+
+## 191-L. tianshi strategy governance queryProPolicyTree and nodeBindPolicyAttribution
+
+- 输入：策略树节点解析和节点级归因。
+- 场景：策略树资产 / 单事件策略归因。
+- 预期：包含 `queryProPolicyTree` 和 `nodeBindPolicyAttribution`；`policyTreeNodeCode` 必须通过策略树递归解析，不猜。
+- 状态：guardrail added。
+
+## 191-M. tianshi strategy governance queryBindingByNodeCode and getAllPolicyCodeByPage
+
+- 输入：策略树资产链路。
+- 场景：节点级策略列表和全树策略 code 列表。
+- 预期：包含 `queryBindingByNodeCode` 和 `getAllPolicyCodeByPage`；明确前者是节点级策略列表，后者是全树策略 code 列表。
+- 状态：guardrail added。
+
+## 191-N. tianshi strategy governance pipeline list version parsing
+
+- 输入：策略发布记录链路。
+- 场景：发布流程 / 版本追溯。
+- 预期：`pipeline/list` 使用 `extrbB=policyCode` 精确过滤；策略版本号从 `businessUnionKey={policyCode}_{version}_{eventTypeCode}` 解析；`pipelineVersion` 不是策略版本号。
+- 状态：guardrail added。
+
+## 191-O. tianshi strategy governance evidence boundaries
+
+- 输入：策略详情 / 策略树 / 策略归因 / 发布记录。
+- 场景：策略治理证据边界。
+- 预期：策略归因不等于最终作弊定性；发布记录不等于风险定性；`updateUser` / `operator` / `createUser` / `bindingUser` 不做责任归因；敏感字段不输出原值。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

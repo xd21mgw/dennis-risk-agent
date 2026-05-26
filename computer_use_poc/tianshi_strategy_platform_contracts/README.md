@@ -14,6 +14,7 @@ The package covers:
 Related but separate strategy-governance POC:
 
 - `computer_use_poc/strategy_governance/tianshi_policy_attribution_api_read_poc_v1.md` now records a full P0 E2E single-event policy attribution path: event detail, feature snapshot, policy version, policy tree node resolution, condition-level attribution, and node binding attribution.
+- `computer_use_poc/strategy_governance/tianshi_strategy_governance_readonly_capability_v1.md` records the broader readonly governance capability: strategy detail, policy tree asset, single-event policy attribution, and policy release records.
 - The validated policy tree API for that POC is `GET /v2/rest/pro/policyTree/queryProPolicyTree`.
 - The POC is still a readonly evidence capability and does not imply final cheating classification or automatic enforcement.
 
@@ -26,17 +27,17 @@ Related but separate strategy-governance POC:
 
 ## Not Included
 
-This C package does not cover general strategy tree understanding.
+This C package does not itself execute general strategy governance. The strategy-governance docs define readonly evidence contracts and boundaries.
 
 Out of scope:
 
-- General strategy tree parsing beyond the verified single-event policy attribution POC.
-- Broad strategy nodes and condition expression interpretation.
+- Runtime execution of broad strategy governance flows without explicit authorization.
+- Automatic strategy semantic interpretation beyond readonly evidence summaries.
 - Hit path reconstruction.
 - Strategy version, experiment, or grey-release explanation beyond the verified single-event context.
 - Automatic strategy semantic explanation or final policy judgement.
 
-Those belong to the future D package: strategy tree / strategy configuration understanding.
+Those belong to strategy-governance follow-up work and future runtime integration, not the base C package wrapper.
 
 ## Boundaries
 
