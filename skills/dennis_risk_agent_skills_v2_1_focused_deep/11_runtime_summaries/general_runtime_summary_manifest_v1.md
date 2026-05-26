@@ -122,6 +122,9 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 - 批量 ATO 不能只看 totalCount、kick_out 次数、password fail / CAPTCHA 次数。
 - 发现 `HARMONY_` 设备、token issued、同 IP 多账号登录、token revoke / kick out、后续小米 / Android 改密或密码验证失败时，应优先考虑一键登录 / 三方授权接管 / 鸿蒙一键登录 ATO 候选。
 - 必须抽取 3-5 个代表用户做逐条时序，比较撞库 ATO 与一键登录 ATO 的替代解释。
+- 在线登录日志窗口不足时必须标记 `login_log_window_incomplete`，不能把 online no_data / 超窗 no_data 当作“无登录异常”或“无 ATO 风险”反证。
+- 账号安全 Hive 取数计划必须按目标选表：成功登录查 `ks_rc_bs.ks_account_login_basic_info`；登录失败 / 撞库 / 暴力破解 / 改密查 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`；Web RCP 查 `ks_rc_arch.antispam_feature_map_default_partitioned`；App RCP 查 `ks_raw_log_v2.antispam_feature_map_partitioned`。
+- App / Web RCP plan 必须限制 `p_date + p_hourmin + p_action_type`；DataAgent 只作为 Hive / 数仓取数分析能力。
 
 ## 8. 数据调用边界
 

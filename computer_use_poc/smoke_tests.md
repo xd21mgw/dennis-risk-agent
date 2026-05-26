@@ -5678,3 +5678,38 @@
 - input: 用户要求 DataAgent 自动解决账号安全 case。
 - expected_runtime_behavior: dataagent_boundary_kept
 - expected_output_boundary: DataAgent 只作为 Hive / 数仓取数分析能力，不得泛化成万能风控执行器；本地模板只生成 query plan，不执行查询。
+
+## 660. ATO over-window online no_data creates Hive plan
+
+- test_id: HIVE-BRAIN-001
+- input: `这个 5 月 12 日的盗号，今天在线日志查不到，是不是没异常？`
+- expected_runtime_behavior: login_log_window_incomplete_and_hive_plan
+- expected_output_boundary: 不能说没异常；必须标记 `login_log_window_incomplete`，说明 online no_data 不能作为反证，并输出 Hive query plan。
+
+## 661. ATO successful cross-device login uses success table
+
+- test_id: HIVE-BRAIN-002
+- input: `有没有异设备成功登录？`
+- expected_runtime_behavior: successful_login_hive_source_selected
+- expected_output_boundary: 成功登录查 `ks_rc_bs.ks_account_login_basic_info`，输出 query_goal / selected_table / partition_filters / key_fields。
+
+## 662. Credential stuffing uses full login request table
+
+- test_id: HIVE-BRAIN-003
+- input: `是不是被撞库？`
+- expected_runtime_behavior: login_failure_hive_source_selected
+- expected_output_boundary: 失败登录查 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，`p_action_type='login'`；不得只看成功登录表。
+
+## 663. Password reset uses resetPwd partition
+
+- test_id: HIVE-BRAIN-004
+- input: `有没有改密？`
+- expected_runtime_behavior: resetpwd_hive_partition_selected
+- expected_output_boundary: 查询 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` 且 `p_action_type='resetPwd'`；no_data 只作为改密链路缺口。
+
+## 664. App publish risk hit uses App RCP table with strong partitions
+
+- test_id: HIVE-BRAIN-005
+- input: `App 发布行为有没有风控命中？`
+- expected_runtime_behavior: app_rcp_hive_source_selected_with_partitions
+- expected_output_boundary: 使用 `ks_raw_log_v2.antispam_feature_map_partitioned`，生命周期 50 天，必须限制 `p_date + p_hourmin + p_action_type`，不得全表扫。

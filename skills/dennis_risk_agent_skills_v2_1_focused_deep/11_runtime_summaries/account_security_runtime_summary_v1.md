@@ -109,3 +109,47 @@
 - `next_action`
 
 平台 blocked、timeout、browser loop 时，输出 partial evidence card，不裸 timeout。
+
+## 6. ATO 离线 Hive 数据源运行态规则
+
+在线统一登录日志只按近 7 天可靠窗口处理。历史 ATO / 盗号 case、超窗 case、批量 ATO case 不能把在线 no_data / 超窗 no_data 写成“无登录异常”或“无 ATO 风险”反证。
+
+必须标记：
+
+- `login_log_window_incomplete`
+- `offline_hive_required`
+- `online_login_log_may_be_false_negative`
+
+### 6.1 选表规则
+
+| 用户问题 | runtime 选表 | 关键约束 |
+|---|---|---|
+| 有没有异设备成功登录 / 成功登录轨迹 | `ks_rc_bs.ks_account_login_basic_info` | 成功登录专用，9999 天，全量历史；只查成功登录。 |
+| 是否被撞库 / 登录失败 / 暴力破解 | `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | 表名必须是 `orign`；`p_action_type='login'`；`finalloginresult=1` 成功，其他失败，null 不确定。 |
+| 有没有改密 / resetPwd | `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | `p_action_type='resetPwd'`。 |
+| Web/H5 端风控拦截 | `ks_rc_arch.antispam_feature_map_default_partitioned` | 生命周期 30 天；必须限制 `p_date + p_hourmin + p_action_type`。 |
+| App 发布 / 登录 / 互动 / 协议风险命中 | `ks_raw_log_v2.antispam_feature_map_partitioned` | 生命周期 50 天；必须限制 `p_date + p_hourmin + p_action_type`；禁止全表扫描。 |
+
+### 6.2 标准输出
+
+如果在线数据缺失或窗口不足，不能只说“建议补充登录日志”，必须输出 Hive query plan：
+
+```yaml
+query_goal:
+selected_table:
+reason_for_table_selection:
+partition_filters:
+entity_filters:
+key_fields:
+expected_signal:
+risk_if_missing:
+fallback_table:
+no_data_interpretation:
+```
+
+示例边界：
+
+- `ks_account_login_basic_info` 无数据，只能说明该日期分区未发现成功登录，不代表没有失败登录、未走完流程或改密。
+- `dwd_risk_usr_accnt_login_orign_info` 中 `finalloginresult is null` 是流程未完成 / 状态不确定，不得简单写成失败。
+- Web RCP 超过 30 天、App RCP 超过 50 天时，必须标记 `source_gap`，不得作为无风险反证。
+- DataAgent 只作为 Hive / 数仓取数分析能力，不是万能风控执行器。

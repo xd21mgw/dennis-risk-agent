@@ -1146,6 +1146,36 @@ evidence_card:
 现有证据不足以闭合 ATO 链路，也不足以反向排除 ATO。用户点击疑似助力链接 + 异常发布 + 在线日志窗口不完整，更适合标记为 partial_support，并优先补查发布审计与离线登录日志。
 ```
 
+### ATO Hive query plan 标准表达
+
+当用户问历史盗号、异设备成功登录、撞库、改密或 App/Web 风控命中，且在线日志窗口不足时，不要空泛写“补充登录日志”，必须给出选表计划：
+
+```yaml
+login_log_window_incomplete: true
+offline_hive_required: true
+DataAgent_plan_needed: true
+query_plan:
+  - query_goal: 查询异常时间前后的成功登录链路
+    selected_table: ks_rc_bs.ks_account_login_basic_info
+    reason_for_table_selection: 成功登录专用表，9999 天全量历史，适合追溯异设备成功登录
+    partition_filters: p_date between ${start_date} and ${end_date}
+    entity_filters: user_id = ${user_id}
+    key_fields: user_id, op_time, device_id, source_ip, login_type, app_ver, province, city
+    no_data_interpretation: 无数据只说明该分区未发现成功登录，不排除失败登录、未走完流程或改密
+  - query_goal: 查询登录失败 / 撞库 / 改密链路
+    selected_table: ks_rc_bs.dwd_risk_usr_accnt_login_orign_info
+    reason_for_table_selection: 登录请求全量表，覆盖成功、失败、resetPwd；orign 拼写不能改
+    partition_filters: p_date between ${start_date} and ${end_date}; p_action_type in ('login','resetPwd')
+    key_fields: user_id, op_time, device_id, source_ip, login_type, finalloginresult, code, punish, hit_policies
+    no_data_interpretation: 不能作为无 ATO 反证，需要结合成功登录表和 RCP 风控表
+```
+
+RCP 补证：
+
+- Web/H5 风控：`ks_rc_arch.antispam_feature_map_default_partitioned`，30 天，必须限制 `p_date + p_hourmin + p_action_type`。
+- App 风控：`ks_raw_log_v2.antispam_feature_map_partitioned`，50 天，必须限制 `p_date + p_hourmin + p_action_type`，禁止全表扫描。
+- DataAgent 只作为 Hive / 数仓取数分析能力，不是万能风控执行器。
+
 ## 2. 原因解释类回答模板
 
 ### 适用问题

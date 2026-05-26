@@ -173,6 +173,26 @@ ATO / 盗号研判必须先判断 `suspicious_event_time` 与 `query_time` 的�
 - “该窗口需要离线 Hive 登录日志或发布审计日志补证。”
 - “现有证据不足以闭合 ATO 链路，也不足以反向排除 ATO。”
 
+### 4.4 账号安全 Hive 数据源选表规则
+
+当在线登录日志窗口不足、历史 ATO 需要补证、批量 case 需要离线聚合，必须从“补充登录日志”升级为明确 Hive query plan。不要把在线日志窗口不足误写成“无登录异常”。
+
+核心表：
+
+| 目标 | 推荐 Hive 表 | 关键分区 / 过滤 | 边界 |
+|---|---|---|---|
+| 成功登录链路 / 异设备成功登录 | `ks_rc_bs.ks_account_login_basic_info` | `p_date` + `user_id` | 只包含登录成功，不适合分析登录失败 / 撞库失败。 |
+| 登录失败 / 撞库 / 暴力破解 | `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | `p_date` + `p_action_type='login'` + `user_id` | 表名是 `orign`，不能改成 `origin`；`finalloginresult=1` 才是成功，其他为失败，null 为未走完流程 / 不确定。 |
+| 改密相关事件 | `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | `p_date` + `p_action_type='resetPwd'` + `user_id` | resetPwd no_data 只能作为改密链路缺口，不排除其他 ATO 链路。 |
+| Web/H5 风控拦截 | `ks_rc_arch.antispam_feature_map_default_partitioned` | `p_date + p_hourmin + p_action_type` | 生命周期 30 天；超窗 no_data 是 source_gap。 |
+| App 风控拦截 | `ks_raw_log_v2.antispam_feature_map_partitioned` | `p_date + p_hourmin + p_action_type` | 生命周期 50 天；表极大，必须强制分区，禁止全表扫。 |
+
+runtime 回答要求：
+
+- 在线 no_data / 超窗 no_data 不得作为“无登录异常”或“无 ATO 风险”反证。
+- 如果缺在线数据，应输出明确 Hive query plan，包括 `selected_table`、`reason_for_table_selection`、`partition_filters`、`entity_filters`、`key_fields`、`expected_signal`、`risk_if_missing`、`fallback_table`、`no_data_interpretation`。
+- DataAgent 只作为 Hive / 数仓取数分析能力，不得泛化成万能风控执行器。
+
 ## 5. 证据体系
 
 - 强证据：
