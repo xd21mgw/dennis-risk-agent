@@ -44,6 +44,11 @@
 - 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。
 - `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
 - 用户问“这条策略是什么 / 这条策略条件是什么 / 这个策略挂在哪个节点 / 这个策略在哪棵策略树 / 这次为什么被阻止或验证 / 这次为什么命中这个策略 / 这个策略什么时候上线 / 这个策略最近是否改过 / 从策略详情、策略树、归因、发布记录解释一下”：选择 `tianshi_strategy_governance_readonly`。
+- 二级路由边界：
+  - 用户问“这个用户有没有风险 / 帮我看下这个用户风险”：route=`multi_evidence_orchestration`，天狮仅作为 `strategy_hit_evidence` 候选，不默认触发 `tianshi_strategy_governance_readonly` 四链路，也不默认触发 `single_event_policy_attribution`。
+  - 用户问“这个用户有没有命中策略 / 被哪些策略拦过”：route=`strategy_hit_check`，先走 fastQueryHbase / `strategy_hit_read`，必要时用 `tianshi_eventlist_read` 补事件明细；默认只输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
+  - 用户问“这个 eventId 为什么被阻止 / 为什么命中某策略”：只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才 route=`single_event_policy_attribution`；可按需补 `policy_detail_lookup`、`policy_tree_asset_lookup`、`policy_release_record_lookup`。
+  - 用户问“这条策略是什么 / 条件是什么 / 哪个节点 / 什么时候上线”：route=`tianshi_strategy_governance_readonly` 对应子能力。
 - 路由分流：
   - 只问策略定义 / 条件 / version：`policy_detail_lookup`。
   - 问策略树 / 节点 / 同节点策略 / 全树策略：`policy_tree_asset_lookup`。
@@ -53,7 +58,7 @@
 - 不触发规则：
   - 只问“这个用户有没有风险”：不默认全量策略治理，先走多源证据编排。
   - 只问“有没有命中策略”：先走 fastQueryHbase / `strategy_hit_read`。
-  - 缺 `eventId` / `policyCode` / `policyTreeCode` 等关键字段：输出 query plan 或追问缺字段，不猜。
+  - 缺 `eventId` / `eventType` / `queryTime` / `policyCode` / `policyTreeCode` / `policyTreeNodeCode` / `policyVersion` 等关键字段：输出 query plan 或追问缺字段，不猜。
   - 不因策略命中直接做最终作弊定性。
 - 跨天趋势、大范围统计、批量聚合和分母估计不使用 `eventList`，应转 DataAgent / Hive query plan 或要求缩小窗口。
 - `source_id` 缺失时不直接查；时间窗口缺失时可以用已有 evidence 定位小窗口，但不得默认跨天大查。

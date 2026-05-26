@@ -49,6 +49,7 @@
   - `single_event_policy_attribution`：解释某次事件为什么命中 / 生效，包括事件详情、特征快照、条件级归因、节点级归因。
   - `policy_release_record_lookup`：解释策略发布流程、实验 / 审批 / 灰度 / 上线 / 终止和版本变更追溯。
   - 它不同于 `strategy_hit_read`：后者只回答是否命中策略；策略治理能力回答策略定义、策略树资产、事件归因和发布记录。
+  - 用户风险研判只把天狮作为 `strategy_hit_evidence` 候选；只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才进入 `single_event_policy_attribution`。
 - `multi_evidence_orchestration_contracts` 是完整风险研判问题的 planner 层：默认三源为 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`；只有请求级字段问题才触发 `tianshi_eventlist_api_read`。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。

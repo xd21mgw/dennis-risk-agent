@@ -1748,6 +1748,34 @@
 - 预期：包含策略归因不等于最终作弊定性、发布记录不等于风险定性、`status=2` 上线不等于每次事件都生效、`proPolicyPunishList` 为空不代表无惩罚、人员字段不做责任归因、不输出敏感字段原值、不自动处置 / 写操作 / 上线 / 审批。
 - 状态：guardrail added，runtime lightweight integration。
 
+## 191-Y. user_risk_question_should_not_trigger_full_strategy_governance
+
+- 输入：“帮我看下这个用户有没有风险，user_id=...”
+- 场景：用户风险研判。
+- 预期：route=`multi_evidence_orchestration`；天狮仅作为 `strategy_hit_evidence` 候选，不默认触发 `tianshi_strategy_governance_readonly` 四链路，不默认触发 `single_event_policy_attribution`。
+- 状态：guardrail added，second-level routing boundary。
+
+## 191-Z. user_strategy_hit_question_should_trigger_strategy_hit_check_first
+
+- 输入：“这个用户有没有命中策略 / 被哪些策略拦过？”
+- 场景：策略命中概览。
+- 预期：route=`strategy_hit_check`，先走 fastQueryHbase / `strategy_hit_read`；输出策略命中概览，不默认查策略详情、策略树资产、发布记录。
+- 状态：guardrail added，second-level routing boundary。
+
+## 191-AA. event_level_block_reason_should_trigger_single_event_policy_attribution
+
+- 输入：“这个 eventId 为什么被阻止 / 为什么命中某策略？”
+- 场景：单事件策略归因。
+- 预期：当具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，route=`single_event_policy_attribution`；可按需补策略详情、策略树资产、发布记录。
+- 状态：guardrail added，second-level routing boundary。
+
+## 191-AB. missing_event_context_should_query_plan_not_guess
+
+- 输入：“这个事件为什么命中策略？”但缺 `eventId` / `queryTime` / `policyCode` / `policyVersion` / `policyTreeNodeCode` 等关键字段。
+- 场景：策略治理缺字段。
+- 预期：输出 query plan 或追问缺字段；不得猜 eventId、queryTime、policyTreeNodeCode、policyVersion。
+- 状态：guardrail added，second-level routing boundary。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

@@ -1328,6 +1328,14 @@ RCP 补证：
 - `tianshi_strategy_governance_readonly`
 - 子能力按问题分流到 `policy_detail_lookup`、`policy_tree_asset_lookup`、`single_event_policy_attribution`、`policy_release_record_lookup`，综合问题组合四条链路。
 
+二级路由边界：
+
+- 用户只问“这个用户有没有风险 / 帮我看下这个用户风险”：先走多源证据编排，天狮只作为 `strategy_hit_evidence` 候选，不默认展开策略治理四链路。
+- 用户只问“这个用户有没有命中策略 / 被哪些策略拦过”：先走 fastQueryHbase / `strategy_hit_read` 输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
+- 用户问“这个 eventId 为什么被阻止 / 为什么命中某策略”：只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才进入 `single_event_policy_attribution`。
+- 用户问“这条策略是什么 / 条件是什么 / 哪个节点 / 什么时候上线”：按对应子能力进入策略治理。
+- 缺 `eventId` / `queryTime` / `policyCode` / `policyVersion` / `policyTreeNodeCode` 等关键字段时，输出 query plan 或追问缺字段，不猜。
+
 回答骨架：
 
 ```text
