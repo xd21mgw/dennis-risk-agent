@@ -24,6 +24,7 @@
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
 | `tianshi_strategy_platform_contracts` | 固化天狮 fastQueryHbase / eventList 的 contract、schema、routing 和 observation 边界 | `computer_use_poc/tianshi_strategy_platform_contracts/` | contract layer only | documented | C 包不解析策略树；策略配置理解属于未来 D 包 |
+| `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 做分簇、异常相关性矩阵、代表样本抽样、证据缺口和策略建议 | `computer_use_poc/batch_risk_clustering/` templates | batch_plan_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙 |
@@ -42,6 +43,12 @@
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
 - `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
 - `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
+- `tianshi_strategy_governance_readonly` 是天狮策略治理只读能力，子能力包括：
+  - `policy_detail_lookup`：解释策略定义、条件表达式、版本历史、绑定树。
+  - `policy_tree_asset_lookup`：解释策略树结构、节点路径、节点绑定策略、全树策略 code。
+  - `single_event_policy_attribution`：解释某次事件为什么命中 / 生效，包括事件详情、特征快照、条件级归因、节点级归因。
+  - `policy_release_record_lookup`：解释策略发布流程、实验 / 审批 / 灰度 / 上线 / 终止和版本变更追溯。
+  - 它不同于 `strategy_hit_read`：后者只回答是否命中策略；策略治理能力回答策略定义、策略树资产、事件归因和发布记录。
 - `multi_evidence_orchestration_contracts` 是完整风险研判问题的 planner 层：默认三源为 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`；只有请求级字段问题才触发 `tianshi_eventlist_api_read`。
 - `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。

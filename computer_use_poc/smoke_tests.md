@@ -1706,6 +1706,48 @@
 - 预期：包含策略归因不等于最终作弊定性、策略详情条件表达式不等于完整业务因果解释、策略树资产不等于某次事件实际命中路径、发布记录不等于风险定性、`status=2` 上线不等于每次事件都生效、人员字段不做责任归因、不输出敏感字段原值、不自动处置 / 写操作 / 上线 / 审批。
 - 状态：guardrail added。
 
+## 191-S. tianshi strategy governance capability registered
+
+- 输入：`computer_use_poc/capability_registry.md`。
+- 场景：runtime capability registry。
+- 预期：包含 `tianshi_strategy_governance_readonly`，并标注只读、非最终作弊定性、非自动处置。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-T. tianshi strategy governance routing has four sub-capabilities
+
+- 输入：策略定义、策略树、单事件归因、发布记录类问题。
+- 场景：scene routing。
+- 预期：`policy_detail_lookup`、`policy_tree_asset_lookup`、`single_event_policy_attribution`、`policy_release_record_lookup` 均有明确路由分流。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-U. tianshi strategy governance answer template exists
+
+- 输入：`computer_use_poc/answer_experience_templates.md`。
+- 场景：回答模板。
+- 预期：包含“策略治理回答模板”，结构覆盖结论摘要、事件 / 策略上下文、策略详情、策略树资产、单事件归因、发布记录、不能下的结论、下一步建议。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-V. user risk question does not trigger full strategy governance by default
+
+- 输入：“这个用户有没有风险？”
+- 场景：不触发规则。
+- 预期：不默认展开全量策略治理；先走多源证据编排，策略治理只在用户明确问策略定义 / 树 / 归因 / 发布记录时触发。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-W. fastQueryHbase strategy hit differs from governance chain
+
+- 输入：“有没有命中策略？”
+- 场景：strategy hit vs governance route。
+- 预期：先走 fastQueryHbase / `strategy_hit_read`；不默认展开策略详情、策略树、单事件归因、发布记录四链路。
+- 状态：guardrail added，runtime lightweight integration。
+
+## 191-X. strategy governance key boundaries in runtime template
+
+- 输入：策略治理回答。
+- 场景：runtime answer boundaries。
+- 预期：包含策略归因不等于最终作弊定性、发布记录不等于风险定性、`status=2` 上线不等于每次事件都生效、`proPolicyPunishList` 为空不代表无惩罚、人员字段不做责任归因、不输出敏感字段原值、不自动处置 / 写操作 / 上线 / 审批。
+- 状态：guardrail added，runtime lightweight integration。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

@@ -1311,7 +1311,81 @@ RCP 补证：
 如果要判断风险，先选关联强且有异常摘要的用户，补档案中心账号状态、统一登录日志和 Device SDK 设备环境证据。
 ```
 
-## 4. Plan 模式提示规则
+## 4. 策略治理回答模板
+
+适用问题：
+
+- “这条策略是什么？”
+- “这条策略条件是什么？”
+- “这个策略挂在哪个节点 / 哪棵策略树？”
+- “这次为什么被阻止 / 验证？”
+- “这次为什么命中这个策略？”
+- “这个策略什么时候上线 / 最近是否改过？”
+- “从策略详情、策略树、归因、发布记录解释一下。”
+
+默认能力：
+
+- `tianshi_strategy_governance_readonly`
+- 子能力按问题分流到 `policy_detail_lookup`、`policy_tree_asset_lookup`、`single_event_policy_attribution`、`policy_release_record_lookup`，综合问题组合四条链路。
+
+回答骨架：
+
+```text
+结论摘要：
+这次回答只能解释策略定义 / 策略树资产 / 单事件归因 / 发布记录，不直接给最终作弊定性或处置结论。
+
+事件 / 策略上下文：
+- eventType / eventId / queryTime：
+- policyCode / policyVersion：
+- policyTreeCode / policyTreeVersion / node：
+
+策略详情：
+- 策略定义摘要：
+- 条件表达式摘要：
+- 版本历史摘要：
+- 绑定树摘要：
+
+策略树资产：
+- 所属策略树：
+- 节点路径：
+- 节点绑定策略：
+- 全树策略 code 覆盖：
+
+单事件归因：
+- 事件详情：
+- 特征快照摘要：
+- 条件级归因：
+- 节点级归因：
+
+发布记录：
+- 发布 / 灰度 / 上线 / 终止记录：
+- businessUnionKey 解析出的策略版本：
+- pipelineVersion 边界：
+
+不能下的结论：
+- 策略归因不等于最终作弊定性。
+- 策略详情条件表达式不等于完整业务因果解释。
+- 策略树资产不等于某次事件实际命中路径。
+- 发布记录不等于风险定性。
+- status=2 上线不等于每次事件都生效。
+- proPolicyPunishList 为空不代表无惩罚，惩罚可能在节点绑定层。
+- createUser / updateUser / bindingUser / operator 只做追溯字段，不做责任归因。
+
+下一步建议：
+- 如要判断用户风险，应补用户 / 设备 / 行为 / 登录 / 内容等业务证据。
+- 如要做策略治理，应进入人工评审、灰度验证、误伤评估和回归，不自动上线 / 下线 / 审批。
+```
+
+输出边界：
+
+- 不输出敏感字段原值。
+- 不输出 cookie / token / session / header。
+- 不自动处置、不写操作、不上线、不审批。
+- 缺 `eventId` / `policyCode` / `policyTreeCode` 等关键字段时，输出 query plan 或追问缺字段，不猜。
+- “只问是否命中策略”优先用 fastQueryHbase / `strategy_hit_read`，不要直接展开全量策略治理。
+- “只问用户有没有风险”优先多源证据编排，不默认全量策略治理。
+
+## 5. Plan 模式提示规则
 
 适用问题：
 

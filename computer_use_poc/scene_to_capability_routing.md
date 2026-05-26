@@ -22,7 +22,7 @@
 | 设备风险补证 | 判断设备侧是否存在 hook/root/frida/模拟器/代理等异常线索 | `device_risk_read` → `device_to_user` via `user_device_resolution` → `login_log_read` | Device SDK / Weapon riskData、Weapon graphData、统一登录日志 | web_ 前缀设备不适合作为移动端 did 主测对象；需移动端 did | 设备异常是设备侧补证，不直接定性用户作弊 |
 | 用户关联设备查询 | 给出用户关联设备候选和排序理由 | `user_device_resolution` | Weapon graphData 主入口，档案中心近期设备补充排序 | Weapon no_data 时可用登录日志设备分布、档案中心最近登录设备做候选 | graphData no_data 不等于用户没有设备 |
 | 设备关联用户查询 | 给出设备关联用户候选、封禁/异常线索摘要 | `user_device_resolution` | Weapon graphData device_to_user | graphData 失败时返回 blocker，不伪造关联 | 关联用户只是候选关系，不是团伙结论 |
-| 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → user/device/profile補证 | 天狮 fastQueryHbase、eventList、档案中心、Device SDK | eventList POST 未封装时返回 partial/TODO | riskDecision 是策略返回动作，不等于最终处置成功 |
+| 策略命中解释 | 解释为什么被拦 / 验证、策略命中说明什么 | `strategy_hit_read` → `tianshi_eventlist_read` when specific request detail needed → `tianshi_strategy_governance_readonly` when asking strategy definition/tree/attribution/release | 天狮 fastQueryHbase、eventList、策略治理 readonly docs、档案中心、Device SDK | 缺 eventId / policyCode / policyTreeCode 等关键字段时输出 query plan 或追问缺字段 | riskDecision 是策略返回动作，不等于最终处置成功；策略治理不等于最终作弊定性 |
 | 前端活跃画像补证 | 判断是否存在前端活跃信号 | `frontend_activity_read` | 埋点分析用户属性及时长区域 | 当前不作为半开放默认真实执行能力 | 不证明真人/本人/具体业务动作 |
 | 通用 batch analysis 设计 | 为新 batch 场景抽象 registry、证据卡、模式聚合和策略草案 | `batch_analysis_framework` → scene-specific batch capability | `batch_analysis_framework_v1.md` | 先定义 risk definition，再复制场景模板 | 方法论层，不执行查询，不替代风险定义 |
 | 批量风险分簇研判 | 多 case / 多实体 / 告警批次 / 接口激增 / 渠道异常 / 策略召回二次归因 | `batch_risk_clustering_analysis` → threshold policy → L1 feature query plan → TOP drilldown → frequent pattern contribution → abnormal correlation matrix → representative samples → pattern summary | `computer_use_poc/batch_risk_clustering/` templates；DataAgent/Hive only as future query plan | 10+ 默认分簇和抽样，50+ 默认聚合计划 | 不逐个在线查大批量，不仅凭相似性或高贡献组合判断同团伙 |
@@ -35,14 +35,26 @@
 - API-first 失败时才考虑 browser / DOM fallback。
 - 候选过多返回 `too_many_candidates`，不默认深查。
 
-## 0.1 Tianshi Strategy Platform C Package Routing
+## 0.1 Tianshi Strategy Platform Routing
 
 天狮 / 策略平台 C 包位于 `computer_use_poc/tianshi_strategy_platform_contracts/`，只固化查询类 contract，不新增真实平台手脚。
+策略治理只读能力位于 `computer_use_poc/strategy_governance/`，用于解释策略详情、策略树资产、单事件策略归因和策略发布记录。
 
 - 用户问“是否命中策略 / 是否被风控打到 / 是否有生产策略证据”：优先 `fastQueryHbase` / `strategy_hit_read`。
 - 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。
 - `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
-- 用户问“策略树为什么触发 / 节点条件是什么 / 命中路径是什么 / 版本或实验灰度是什么”：C 包不处理，标记 `future_strategy_tree_capability=true`，归入未来 D 包。
+- 用户问“这条策略是什么 / 这条策略条件是什么 / 这个策略挂在哪个节点 / 这个策略在哪棵策略树 / 这次为什么被阻止或验证 / 这次为什么命中这个策略 / 这个策略什么时候上线 / 这个策略最近是否改过 / 从策略详情、策略树、归因、发布记录解释一下”：选择 `tianshi_strategy_governance_readonly`。
+- 路由分流：
+  - 只问策略定义 / 条件 / version：`policy_detail_lookup`。
+  - 问策略树 / 节点 / 同节点策略 / 全树策略：`policy_tree_asset_lookup`。
+  - 问某次 `eventId` 为什么被阻止 / 为什么命中：`single_event_policy_attribution`。
+  - 问上线 / 灰度 / 发布 / 终止 / 版本演进：`policy_release_record_lookup`。
+  - 综合解释：四条链路组合。
+- 不触发规则：
+  - 只问“这个用户有没有风险”：不默认全量策略治理，先走多源证据编排。
+  - 只问“有没有命中策略”：先走 fastQueryHbase / `strategy_hit_read`。
+  - 缺 `eventId` / `policyCode` / `policyTreeCode` 等关键字段：输出 query plan 或追问缺字段，不猜。
+  - 不因策略命中直接做最终作弊定性。
 - 跨天趋势、大范围统计、批量聚合和分母估计不使用 `eventList`，应转 DataAgent / Hive query plan 或要求缩小窗口。
 - `source_id` 缺失时不直接查；时间窗口缺失时可以用已有 evidence 定位小窗口，但不得默认跨天大查。
 
@@ -53,8 +65,8 @@
 - 用户问“这个用户是不是风险用户 / 今天为什么被阻止或验证 / 这个 case 怎么判断”：进入 B 包 planner，默认生成三源计划：天狮 `fastQueryHbase`、统一登录日志、档案中心。
 - 用户只问“是否命中策略 / 是否被风控打到”：直接进入 C 包 `fastQueryHbase`，不强行展开完整三源。
 - 用户问“具体某次请求字段 / eventType 明细 / IP / 错误码 / sideEffectOps”：通过 B 包编排调用 C 包 `eventList`，同时保留小窗口、source_id 非空、不跨天、抽样边界。
-- 用户问“策略树 / 节点条件 / 命中路径 / 策略版本 / 灰度实验”：标记未来 D 包，不由 B/C 强答。
-- D/E/F 暂作为后续能力：B v1 不默认触发策略树、前端活跃或设备 SDK 手脚。
+- 用户问“策略树 / 节点条件 / 命中路径 / 策略版本 / 灰度实验”：可路由到 `tianshi_strategy_governance_readonly`；B 包本身仍不直接承担策略治理执行。
+- 前端活跃或设备 SDK 深查仍按各自 capability，不由 B 包默认触发。
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 

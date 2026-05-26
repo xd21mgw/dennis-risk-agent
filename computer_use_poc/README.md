@@ -432,6 +432,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 策略归因 API-read POC 已升级为 full P0 E2E success：`computer_use_poc/strategy_governance/tianshi_policy_attribution_api_read_poc_v1.md`。内部 Agent 第二轮 follow-up 已验证 rcp REST API 可通过 HTTP + SSO 直连完成单事件策略归因闭环：`rcpEventDetail`、`rcpEventFeatureList`、`getPolicyVersionListByEvent`、`queryProPolicyTree`、`nodePolicyAttribution`、`nodeBindPolicyAttribution` 六步成功。当前支持事件详情、特征快照、策略版本、策略树节点解析、条件级归因、节点级归因；仍不等于最终作弊定性，不做自动处置，`updateUser` 只能作为追溯字段。
 - 策略治理只读能力 v1 已新增：`computer_use_poc/strategy_governance/tianshi_strategy_governance_readonly_capability_v1.md`。该能力整合四条 full success 链路：策略详情、策略树资产、单事件策略归因、策略发布记录。它把天狮从“策略命中查询”升级为“策略详情 + 策略树资产 + 单事件策略归因 + 策略发布记录”的 readonly governance loop，可服务规模化、风险感知增强和策略体系治理；仍不自动处置、不写操作、不上线、不审批、不做最终作弊定性。
 - 策略治理验收测试用例已新增：`computer_use_poc/strategy_governance/tianshi_strategy_governance_validation_cases_v1.md`。该文档用 5 个真实策略治理问题验证四条链路是否能支撑实际回答：单事件策略归因、策略详情解释、策略树资产、发布记录、综合策略治理；同时覆盖策略归因不等于最终作弊定性、策略树资产不等于实际命中路径、发布记录不等于风险定性、人员字段不做责任归因等边界。
+- 策略治理只读能力已完成轻量 runtime 接入：`capability_registry.md` 注册 `tianshi_strategy_governance_readonly`，`scene_to_capability_routing.md` 按 `policy_detail_lookup` / `policy_tree_asset_lookup` / `single_event_policy_attribution` / `policy_release_record_lookup` 分流，`answer_experience_templates.md` 提供策略治理回答模板；该接入仅做只读解释，不新增真实 API、不调用 DataAgent、不自动处置。
 
 Auth preflight：
 
