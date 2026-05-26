@@ -1671,12 +1671,12 @@
 - 预期：接口 validated；分页字段分别为 `page/count/totalCount` 和 `page/size/totalCount`；收藏音乐 / 文件夹 searchOption 仅 partial，不得写成数据列表 validated。
 - 状态：validated by internal Agent，v2.4.7.2 Run 001 已验证。
 
-## 205. archives same_device API validated with mapping pending
+## 205. archives same_device API validated with mapping resolved
 
 - 输入：`POST /archives/user/search/device type=0/type=1`。
 - 场景：同设备关联用户候选 API。
-- 预期：接口成功但业务语义映射保持 `mapping_pending_validation`；不得写死 type=0/type=1 对应同设备登录 / 同设备注册；关联用户 ID / 昵称 / device 不输出明文。
-- 状态：partial validated by internal Agent，v2.4.7.2 Run 001 已验证接口成功，mapping pending。
+- 预期：正确 payload 为 `{keyword:<user_id>, inputType:0, type}`；`type=0` 表示同设备注册用户，`type=1` 表示同设备登录用户；关联用户 ID / 昵称 / device 不输出明文。
+- 状态：mapping validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
 ## 206. archives failed APIs remain pending with required params
 
@@ -1727,12 +1727,12 @@
 - 预期：标记 `link_url_only` 或 pending；可触发页面 fallback 验证，但不得写成 API fully validated。
 - 状态：guardrail added，v2.4.7.2 API-first patch。
 
-## 213. same_device mapping remains pending
+## 213. same_device mapping is validated
 
 - 输入：`/archives/user/search/device type=0/type=1`。
 - 场景：业务语义映射。
-- 预期：即使 API 成功，也必须保留 `mapping_pending_validation`；不得写死同设备登录 / 同设备注册。
-- 状态：guardrail added，v2.4.7.2 API-first patch。
+- 预期：`type=0` 为同设备注册用户，`type=1` 为同设备登录用户；不得使用旧 `{userId, source, type}` payload；输出仍需脱敏。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
 ## 214. page fallback is not default path
 
@@ -1801,8 +1801,8 @@
 
 - 输入：同设备关联 / 粉丝关注关系。
 - 场景：relation_graph capability。
-- 预期：路由到 `/archives/user/search/device` 与 fans/follow APIs；same_device type=0/type=1 仍保持 mapping_pending_validation。
-- 状态：guardrail added，v2.6.1 capability map。
+- 预期：路由到 `/archives/user/search/device` 与 fans/follow APIs；same_device type=0/type=1 已验证，type=0 同设备注册用户，type=1 同设备登录用户。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
 ## 214-J. archives API direct read remains default
 
@@ -1881,19 +1881,40 @@
 - 预期：`total=4029930781` 这类值不得当真实总量；只记录 `list_len` 和字段结构。
 - 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
 
-## 214-U. archives photo report search remains pending on 500
+## 214-U. archives photo report search validated with corrected payload
 
-- 输入：`/v4/archives/report/photo/search` 持续返回 500。
+- 输入：`/v4/archives/report/photo/search` 使用 corrected payload。
 - 场景：report_signal。
-- 预期：标记 `server_error_500 / request_shape_uncertain / pending`；不得写成 validated。
-- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+- 预期：payload 使用 `reportedIds=<user_id>`，不是 photoId；`matchType` / `sort` 为字符串；返回 `code/result=1`、`totalCount`、`dataList` 时可标记 validated。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
-## 214-V. archives same_device payload shape and mapping pending
+## 214-V. archives same_device payload shape and mapping validated
 
 - 输入：`/archives/user/search/device type=0/type=1`。
 - 场景：relation_graph。
-- 预期：正确 payload 为 `{keyword, inputType:0, type}`；type=0/type=1 语义保持 `mapping_pending_validation`，不得写死登录/注册。
-- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+- 预期：正确 payload 为 `{keyword, inputType:0, type}`；`type=0` 是同设备注册用户，`type=1` 是同设备登录用户；不使用 `{userId, source, type}`。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
+
+## 214-W. archives photo report search uses begin/end not beginTime/endTime
+
+- 输入：`/v4/archives/report/photo/search` 时间窗口参数。
+- 场景：report_signal payload contract。
+- 预期：使用 `begin` / `end` 毫秒时间戳；不得使用 `beginTime` / `endTime`。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
+
+## 214-X. archives photo report search uses sort not sortType
+
+- 输入：`/v4/archives/report/photo/search` 排序参数。
+- 场景：report_signal payload contract。
+- 预期：使用 `sort` 字段且值为字符串；不得使用 `sortType`。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
+
+## 214-Y. archives getPunishStatus photo and live target validation
+
+- 输入：`/archives/draco/getPunishStatus`。
+- 场景：处罚状态读取边界。
+- 预期：photo-level payload 为 `{targetId:<photoId>, targetType:"PHOTO"}`；live-level payload 为 `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`；user-level unsupported；`targetType` 必须大写。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
 # 体验黄金 Case Smoke Tests
 

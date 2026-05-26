@@ -369,7 +369,7 @@ api_inventory_profile:
 
 - `validation_status=failed` 的接口不得写成可用。
 - `validation_status=partial` 的接口不得写成 fully validated。
-- `same_device type=0/type=1` 必须保留 `mapping_pending_validation`，不得写死为同设备登录 / 同设备注册。
+- `same_device type=0/type=1` 已在 v2.6.1 follow-up 完成映射验证：`type=0` 为同设备注册用户，`type=1` 为同设备登录用户；关联用户 ID / 昵称 / device 仍不得明文输出。
 - API direct read 可替代 DOM 只代表读取路径可用，不代表自动风险定性。
 - 页面 / DOM / selector 读取只作为 fallback，不应默认触发。
 - 列表接口如未覆盖所有分页，必须记录 `partial_coverage=true`。
@@ -401,7 +401,7 @@ archives_capability_observation:
   api_observations:
     - endpoint:
       method:
-      validation_status: validated / smoke_validated / smoke_validated_empty_result / smoke_validated_partial_total_unreliable / partial / failed / pending_from_har_or_screenshot_analysis / server_error_500_request_shape_uncertain_pending
+      validation_status: validated / smoke_validated / smoke_validated_empty_result / smoke_validated_partial_total_unreliable / mapping_validated / partial / failed / pending_from_har_or_screenshot_analysis / server_error_500_request_shape_uncertain_pending
       request_fields:
       response_shape:
       list_total_pagination_fields:
@@ -424,12 +424,14 @@ archives_capability_observation:
     counter_evidence:
   special_boundaries:
     empty_result_interpretation: not_counter_evidence
-    getPunishStatus_user_level: unavailable_requires_photo_or_live_targetId
-    photo_report_search_status: server_error_500_request_shape_uncertain_pending
+    getPunishStatus_user_level: unsupported
+    getPunishStatus_photo_level: validated_with_targetType_PHOTO
+    getPunishStatus_live_level: validated_with_targetType_LIVE_STREAM
+    photo_report_search_status: validated_with_reportedIds_user_id_begin_end_sort
     message_search_total_semantics: unreliable_use_list_len_only
     photo_meta_missing_fields_proxy: use_profile_uploadSource_photoMethod_when_publishDevice_publishVersion_isImport_missing
     same_device_payload_shape: "{keyword, inputType: 0, type}"
-    same_device_type_mapping: mapping_pending_validation
+    same_device_type_mapping: "type=0 same-device registered users; type=1 same-device login users"
   sensitive_output_check:
     never_output_raw:
       - cookie
@@ -476,7 +478,7 @@ archives_capability_observation:
     no_auto_enforcement:
     no_auto_risk_finalization:
     report_signal_not_strong_alone:
-    same_device_mapping_pending_if_type_0_or_1:
+    same_device_mapping_validated_if_type_0_or_1:
     screenshots_not_interface_validation:
 ```
 
@@ -485,13 +487,13 @@ archives_capability_observation:
 - `pending_from_har_or_screenshot_analysis` 不得升级为 `validated`，除非有已解析接口 response 或已实跑 observation。
 - `smoke_validated` / `smoke_validated_empty_result` 只代表 v2.6.1 capability 小闭环对观察到的 request / response shape 成功，不代表全量接口回归。
 - `empty_result` 不得解释为无行为、无日志、无变更或无风险。
-- `/v4/archives/report/photo/search` 持续 500 时必须标记 `server_error_500_request_shape_uncertain_pending`。
+- `/v4/archives/report/photo/search` follow-up 已验证；payload 必须使用 `reportedIds=<user_id>`、`begin/end` 毫秒时间戳、`sort` 字段，以及字符串 `matchType/sort`。旧 500 根因是 payload 字段名和语义错误。
 - `/archives/user/message/search` 的 `total` 如出现疑似内部计数器，只能记录 `list_len` 和字段结构。
-- `getPunishStatus` 当前不作为通用 user-level API；需要 photo/live `targetId`。
+- `getPunishStatus` 不支持 user-level；photo-level 使用 `{targetId:<photoId>, targetType:"PHOTO"}`，live-level 使用 `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`，targetType 必须大写。
 - `photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，可使用 `profile.uploadSource/photoMethod` 等代理字段，但必须标记 proxy。
 - 私信 / 评论 / 视频 meta / userRouteTrace 只能输出摘要和派生特征，不输出原文。
 - 用户举报 / 视频举报不能单独作为强证据。
-- same-device `type=0/type=1` 仍保持 `mapping_pending_validation`。
+- same-device `type=0/type=1` 已验证映射：`type=0` 同设备注册用户，`type=1` 同设备登录用户；不使用旧 `{userId, source, type}` payload。
 
 ## 9. User Analysis Selector Profile
 

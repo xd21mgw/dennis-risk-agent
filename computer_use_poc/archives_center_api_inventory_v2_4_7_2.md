@@ -54,12 +54,12 @@ v2.4.7.2 是档案中心核心 API inventory validation。
 - `live_gallery`。
 - `fans / follow`。
 - `collect / collection`。
-- `same_device_users`，但保持 `mapping_pending_validation`。
+- `same_device_users`，v2.6.1 follow-up 已验证 `type=0` 为同设备注册用户、`type=1` 为同设备登录用户。
 
 边界：
 
 - 未验证 / 失败 / partial 接口不得标 fully validated。
-- same_device `type=0 / type=1` 不写死语义映射。
+- same_device `type=0 / type=1` 已在 v2.6.1 follow-up 中完成语义映射验证；后续不得回退到旧 `{userId, source, type}` payload。
 - `requestParam` / `extraParam` / full JSON / token-like 字段不得输出。
 - 页面兜底不应默认触发。
 - API direct read 只代表读取路径可用，不代表自动风险定性。
@@ -179,13 +179,14 @@ shop_info:
 punish_status:
   endpoint: /archives/draco/getPunishStatus
   method: POST
-  validation_status: validated
+  validation_status: photo_live_validated_user_level_unsupported
   api_can_replace_dom: true
-  request_shape: userId payload
+  request_shape: "{targetId: <photoId>, targetType: PHOTO} or {targetId: <liveStreamId>, targetType: LIVE_STREAM}"
   response_shape: punish status list / status summary
   pagination: none_observed
   sensitive_fields_policy: status_names_and_counts_only
   fallback_strategy: DOM scoped JS eval
+  boundary: user-level unsupported; targetType must be uppercase PHOTO or LIVE_STREAM
 ```
 
 ### 4.8 review_log
@@ -431,28 +432,28 @@ collection_list:
 same_device_users_type_0:
   endpoint: /archives/user/search/device
   method: POST
-  validation_status: partial
-  api_can_replace_dom: true_for_result_list
-  request_shape: userId/device context, type=0
+  validation_status: mapping_validated
+  api_can_replace_dom: true
+  request_shape: "{keyword: <user_id>, inputType: 0, type: 0}"
   response_shape: related user list
   pagination: shape_detected_if_present
   sensitive_fields_policy: related_user_ids_names_devices_redacted; counts_only
   fallback_strategy: DOM scoped JS eval / scoped snapshot
-  mapping_status: mapping_pending_validation
-  boundary: type=0 业务语义映射 pending，不得写死为同设备登录或同设备注册
+  mapping_status: mapping_validated
+  boundary: type=0 表示同设备注册用户；不输出关联用户 ID / 昵称 / device 明文
 
 same_device_users_type_1:
   endpoint: /archives/user/search/device
   method: POST
-  validation_status: partial
-  api_can_replace_dom: true_for_result_list
-  request_shape: userId/device context, type=1
+  validation_status: mapping_validated
+  api_can_replace_dom: true
+  request_shape: "{keyword: <user_id>, inputType: 0, type: 1}"
   response_shape: related user list
   pagination: shape_detected_if_present
   sensitive_fields_policy: related_user_ids_names_devices_redacted; counts_only
   fallback_strategy: DOM scoped JS eval / scoped snapshot
-  mapping_status: mapping_pending_validation
-  boundary: type=1 业务语义映射 pending，不得写死为同设备登录或同设备注册
+  mapping_status: mapping_validated
+  boundary: type=1 表示同设备登录用户；不输出关联用户 ID / 昵称 / device 明文
 ```
 
 ## 5. 失败接口
@@ -541,15 +542,15 @@ pagination_validated:
 - Partial 接口不得写成 fully validated。
 - `auditLogOptions / getLogOption` 只验证 option 结构，不代表审核日志数据列表可用。
 - `collect music / folder searchOption` 只验证筛选项，不代表实际数据列表可用。
-- `/archives/user/search/device type=0/type=1` 接口成功，但业务语义映射必须保持 `mapping_pending_validation`。
-- same_device type 不得直接写死为同设备登录 / 同设备注册。
+- `/archives/user/search/device type=0/type=1` 在 v2.4.7.2 仅验证接口成功；v2.6.1 follow-up 已补齐页面入口文案和 payload 对应关系验证。
+- same_device type 当前可按 v2.6.1 follow-up 使用：`type=0` 同设备注册用户，`type=1` 同设备登录用户。
 - API inventory 只说明读取路径可用性，不输出风险定性。
 
 ## 9. 后续建议
 
 - 将档案中心 deep-read 默认实现从 DOM 优先切换为 API direct read 优先。
 - 对 failed APIs 补充 required param 来源探索时，必须继续保持只读，不得点击写操作。
-- 对 same_device type=0/type=1 单独做业务语义映射验证后，才可升级为明确关系类型。
+- same_device type=0/type=1 已在 v2.6.1 follow-up 完成业务语义映射验证；后续重点是分页、脱敏和异常口径验证。
 - 列表型 API 后续如进入完整覆盖，必须先定义分页上限、采样策略和输出 redaction 策略。
 
 ## 10. v2.6.1 Capability Map Linkage
@@ -600,9 +601,22 @@ API direct read
 - 这是 capability smoke test passed，不是全量接口回归。
 - `empty_result` 不得解释为无行为、无日志、无风险或无变更。
 - partial / 500 / request shape uncertain 不得写成 fully validated。
-- `getPunishStatus` 不作为通用 user-level API；当前 user-level 调用不可用，需要 photo/live `targetId`。
+- `getPunishStatus` 不作为通用 user-level API；photo-level / live-level 已验证，需要 `targetType=PHOTO` 或 `targetType=LIVE_STREAM`。
 - `message/search total` 语义不可信，只记录 `list_len` 和字段结构。
-- `same_device type=0/type=1` 语义继续保持 `mapping_pending_validation`。
+- `same_device type=0/type=1` 语义已验证：`type=0` 为同设备注册用户，`type=1` 为同设备登录用户。
+
+### 10.0-A v2.6.1 Follow-up Validation Patch
+
+Follow-up validation updated three previously partial / pending boundaries:
+
+- `POST /v4/archives/report/photo/search` is validated with corrected payload shape:
+  `{matchType:"0", reportedIds:"<user_id>", sort:"0", begin:<ms_timestamp>, end:<ms_timestamp>, page:1, count:20}`.
+  `reportedIds` uses `user_id`, not `photoId`; `begin/end` are millisecond timestamps; `sort` is the field name, not `sortType`; `matchType` and `sort` are strings.
+- `POST /archives/draco/getPunishStatus` is validated only for photo and live targets:
+  `{targetId:"<photoId>", targetType:"PHOTO"}` and `{targetId:"<liveStreamId>", targetType:"LIVE_STREAM"}`.
+  User-level is unsupported; lowercase targetType values are invalid.
+- `POST /archives/user/search/device` mapping is validated with payload `{keyword:"<user_id>", inputType:0, type}`.
+  `type=0` means same-device registered users; `type=1` means same-device login users.
 
 ### 10.1 v2.6.1 Added / Pending API Inventory
 
@@ -622,7 +636,7 @@ API direct read
 | social_interaction | `/archives/photo/comment/orders` | POST | comment context | order options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/keyMaps` | POST | comment context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | report_signal | `/v4/archives/report/photo/options` | GET | photo/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
-| report_signal | `/v4/archives/report/photo/search` | POST | photoId/userId/filter/page | photo report list | unavailable due server error | reporter / target identifiers, report text | server_error_500_request_shape_uncertain_pending | false_until_observed | server_error_500 / request_shape_uncertain |
+| report_signal | `/v4/archives/report/photo/search` | POST | `reportedIds=<user_id>`, `matchType/sort` strings, `begin/end` ms, `page/count` | photo report list | `totalCount`, `dataList`, page/count | reporter / target identifiers, report text | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
 | social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list_len observed; total unreliable | private message plaintext, counterpart id | smoke_validated_partial_total_unreliable | true_for_list_shape_only | total_semantics_untrusted / permission_blocked |
 | social_interaction | `/archives/user/message/options` | POST | user message context | option structure | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/user/message/keyMaps` | POST | user message context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |

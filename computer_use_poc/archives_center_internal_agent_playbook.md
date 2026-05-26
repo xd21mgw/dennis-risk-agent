@@ -111,7 +111,7 @@ v2.6.1 起，档案中心主线命名为 `archives API-first core capability map
 - API direct read 必须使用已登录档案中心 browser session / same-origin context，不导出 cookie、token、session、KIM code。
 - API 失败、response shape 变化、权限阻断或参数不足时，记录明确 failure / fallback reason，不得解释为用户无数据或无风险。
 - 失败接口不得写成可用；partial 接口不得写成 fully validated。
-- `/archives/user/search/device type=0/type=1` 只记录 `mapping_pending_validation`，不得写死为同设备登录 / 同设备注册。
+- `/archives/user/search/device type=0/type=1` follow-up 已完成语义映射验证：`type=0` 同设备注册用户，`type=1` 同设备登录用户；关联用户明细仍必须脱敏或聚合输出。
 - 所有列表 API 如未覆盖全部分页，必须记录 `partial_coverage=true`。
 - 页面兜底不应默认触发；API direct read 只代表读取路径可用，不代表自动风险定性。
 
@@ -126,19 +126,19 @@ v2.6.1 起，档案中心主线命名为 `archives API-first core capability map
 - 直播作品集：`POST /v4/archives/gallery/live/list`。
 - 粉丝 / 关注：`POST /v3/user/profile/relation/fans/list`、`POST /v3/user/profile/relation/follow/list`。
 - 收藏 / 合集：`POST /v3/user/collect/photo/list`、`POST /archives/photo/collection/getCollectionList`。
-- 同设备关联用户：`POST /archives/user/search/device type=0/type=1`，但业务语义映射 pending。
+- 同设备关联用户：`POST /archives/user/search/device`，payload `{keyword:<user_id>, inputType:0, type}`。`type=0` 为同设备注册用户，`type=1` 为同设备登录用户。
 - v2.6.1 新增 inventory 候选：四项资料日志、用户 / 视频举报、私信、评论、直播详情 / 评论、动态列表等接口。仅从 HAR / 截图分析发现的接口必须标记 `pending_from_har_or_screenshot_analysis`，不得写成 `validated`。
 
 v2.6.1 smoke-test 关键结果：
 
-- `account_profile`: `/archives/user/home/info` success；`/archives/user/home/getUserLabel` success；`/archives/draco/getPunishStatus` user-level 不可用，需 photo/live `targetId`，不得作为通用 user-level API。
+- `account_profile`: `/archives/user/home/info` success；`/archives/user/home/getUserLabel` success；`/archives/draco/getPunishStatus` user-level 不可用，photo/live level 已验证。photo payload `{targetId:<photoId>, targetType:"PHOTO"}`；live payload `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`；`targetType` 必须大写。
 - `account_change_trace`: `/v4/audit/user/fourinfo/log/search` success；当前样本 `empty_result`，不得解释为无变更。
 - `account_action_log`: `/v3/user/log/coreLogs/fetch` success；当前样本 `empty_result`，不得解释为无操作日志。
 - `content_gallery`: `/v3/user/gallery/photo/list` success，`total=746`；`/v4/archives/gallery/live/list` success empty；`/archives/user/gallery/momentList` success empty。
 - `content_forensics`: `/v3/photo/profile`、`/v3/photo/meta`、`/v3/photo/report/aggregate`、`/archives/photo/home/userAutonomy` success；`photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，用 `profile.uploadSource/photoMethod` 等代理字段。
 - `social_interaction`: `/archives/user/message/search` success，但 `total=4029930781` 疑似内部计数器，不得当真实总量；只记录 `list_len` 和字段结构。`/archives/photo/comment/search`、fans/follow list success。
-- `report_signal`: `/v4/archives/report/user/search` success empty；`/v4/archives/report/photo/search` 持续 500，标记 `server_error_500 / request_shape_uncertain / pending`。
-- `relation_graph`: `/archives/user/search/device type=0` success；`type=1` success empty。正确 payload 为 `{keyword, inputType: 0, type}`；`type=0/type=1` 映射继续 pending。
+- `report_signal`: `/v4/archives/report/user/search` success empty；`/v4/archives/report/photo/search` follow-up validated。正确 payload 为 `{matchType:"0", reportedIds:<user_id>, sort:"0", begin:<ms_timestamp>, end:<ms_timestamp>, page:1, count:20}`。`reportedIds` 是 user_id，`begin/end` 是毫秒时间戳，字段名是 `sort` 不是 `sortType`。
+- `relation_graph`: `/archives/user/search/device type=0` 与 `type=1` 均可走 API-first validated path。正确 payload 为 `{keyword, inputType: 0, type}`；`type=0` 是同设备注册用户，`type=1` 是同设备登录用户，不再使用旧 `{userId, source, type}` payload。
 
 失败 / partial 边界：
 

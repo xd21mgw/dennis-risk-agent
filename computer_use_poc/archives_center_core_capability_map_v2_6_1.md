@@ -77,7 +77,10 @@ Smoke-test status:
 
 - `/archives/user/home/info`: success.
 - `/archives/user/home/getUserLabel`: success.
-- `/archives/draco/getPunishStatus`: user-level unavailable; requires photo/live `targetId`, so it must not be treated as a general user-level API.
+- `/archives/draco/getPunishStatus`: user-level unsupported; photo-level and live-level are validated.
+- Photo-level payload: `{ "targetId": "<photoId>", "targetType": "PHOTO" }`.
+- Live-level payload: `{ "targetId": "<liveStreamId>", "targetType": "LIVE_STREAM" }`.
+- `targetType` must be uppercase. Lowercase `"photo"` returns 412; live-level uses `"LIVE_STREAM"`, not `"LIVE"`.
 
 Risk value:
 
@@ -317,8 +320,10 @@ APIs:
 Smoke-test status:
 
 - `/v4/archives/report/user/search`: success with `empty_result`.
-- `/v4/archives/report/photo/search`: persistent 500; mark `server_error_500 / request_shape_uncertain / pending`.
-- `report/photo/search` must not be written as validated.
+- `/v4/archives/report/photo/search`: follow-up validation passed; `code/result=1`, `totalCount=292`, and `dataList.length=20` observed for the corrected payload.
+- Correct payload uses `reportedIds=<user_id>`, `begin` / `end` millisecond timestamps, `sort`, `page`, `count`, and string values for `matchType` / `sort`.
+- Previous 500 was caused by wrong payload field names and semantics, not by endpoint unavailability.
+- `report_signal` status: `user_report_search=validated`, `photo_report_search=validated`.
 
 Risk value:
 
@@ -352,12 +357,11 @@ Typical APIs:
 
 Notes:
 
-- `/archives/user/search/device type=0 / type=1` interfaces are usable.
-- Business meaning for `type=0 / type=1` remains `mapping_pending_validation`.
-- Do not hard-code login / registration mapping unless later validated by entry wording.
-- Smoke-test status: `/archives/user/search/device type=0` success; `type=1` success with `empty_result`.
+- `/archives/user/search/device type=0 / type=1` interfaces are usable and mapping validated by page entry wording plus request payload relation.
 - Correct payload shape is `{keyword, inputType: 0, type}`.
-- `type=0 / type=1` mapping remains pending; do not write login/register semantics.
+- `type=0` means same-device registered users.
+- `type=1` means same-device login users.
+- Do not use the old `{userId, source, type}` payload shape.
 
 Risk value:
 
@@ -424,7 +428,7 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | social_interaction | `/archives/photo/comment/orders` | POST | comment context | order options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/keyMaps` | POST | comment context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | report_signal | `/v4/archives/report/photo/options` | GET | photo/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
-| report_signal | `/v4/archives/report/photo/search` | POST | photoId/userId/filter/page | photo report list | unavailable due server error | reporter / target identifiers, report text | server_error_500_request_shape_uncertain_pending | false_until_observed | server_error_500 / request_shape_uncertain |
+| report_signal | `/v4/archives/report/photo/search` | POST | `reportedIds=<user_id>`, `matchType` string, `sort` string, `begin/end` ms, `page/count` | photo report list | `totalCount`, `dataList`, page/count | reporter / target identifiers, report text | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
 | social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list_len observed; total unreliable | private message plaintext, counterpart id | smoke_validated_partial_total_unreliable | true_for_list_shape_only | total_semantics_untrusted / permission_blocked |
 | social_interaction | `/archives/user/message/options` | POST | user message context | option structure | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/user/message/keyMaps` | POST | user message context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
@@ -442,7 +446,8 @@ Validation status rule:
 - Upgrade to `validated` only after parsed API response or executed observation records request/response shape and readonly boundary.
 - `smoke_validated` means the endpoint completed a v2.6.1 API-first capability smoke-test loop for the observed request shape only. It is not full API regression.
 - `smoke_validated_empty_result` means request/response shape was observed but the sample returned empty; empty result must not be interpreted as no behavior or no risk.
-- `server_error_500_request_shape_uncertain_pending` remains pending and must not be treated as validated.
+- `/v4/archives/report/photo/search` is upgraded to `validated` in the follow-up patch only for the corrected payload shape above.
+- `server_error_500_request_shape_uncertain_pending` remains pending for other endpoints or unvalidated payload shapes and must not be treated as validated.
 
 ## 6. Sensitive Field Policy
 
