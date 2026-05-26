@@ -2035,6 +2035,55 @@
 - 预期：包含 6 个 case，覆盖 live attach、业务安全资产地图、ANTICRAWL query plan、用户风险问题和 COMMENT / MESSAGE 边界。
 - 状态：guardrail added。
 
+## 191-BN. real_name_feature_service partial contract exists
+
+- 输入：`computer_use_poc/real_name_feature_service_partial_contract_v1.md`。
+- 场景：实名数据服务 partial contract。
+- 预期：文档存在，并明确这是 `EB_USER_REAL_NAME_VERILY__1` partial contract，不是完整实名画像能力，不注册 runtime 可执行能力。
+- 状态：guardrail added。
+
+## 191-BO. real_name_feature_service sourceId maps userId
+
+- 输入：`POST /v2/rest/testCase/run` body。
+- 场景：参数映射。
+- 预期：`input.sourceId` 映射为 `userId`。
+- 状态：guardrail added。
+
+## 191-BP. real_name_feature_service activityName call condition
+
+- 输入：`input.activityName`。
+- 场景：参数语义。
+- 预期：`activityName` 是 call_condition，不是 sid；`sid=kuaishou.api` 由特征配置自动填充。
+- 状态：guardrail added。
+
+## 191-BQ. real_name_feature_service required activityName
+
+- 输入：`activityName`。
+- 场景：调用条件。
+- 预期：required activityName 是 `MERCHANT_NEWSHOP_OPEN_AWARD`；`activityName=kuaishou.api` 会返回 null / timeout。
+- 状态：guardrail added。
+
+## 191-BR. real_name_feature_service idNo derived summary only
+
+- 输入：返回 `idNo`。
+- 场景：脱敏输出。
+- 预期：只输出 idNo 派生摘要，不输出 idNo 原文，不输出身份证前 6 位，不输出完整生日。
+- 状态：guardrail added。
+
+## 191-BS. real_name_feature_service no identity judgement
+
+- 输入：实名数据字段。
+- 场景：证据边界。
+- 预期：身份信息不能单独定性本人 / 盗号 / 黑产；`218368298` 返回空 dict 不能证明用户未实名。
+- 状态：guardrail added。
+
+## 191-BT. real_name_feature_service not runtime capability
+
+- 输入：能力注册。
+- 场景：runtime 能力边界。
+- 预期：不注册 identity runtime 能力，不新增其他接口，不自动用于风险定性。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。
