@@ -241,6 +241,8 @@ required_output_fields_for_10_plus:
   - contribution_score
 templates:
   - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
+  - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+  - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
   - computer_use_poc/batch_risk_clustering/batch_l1_feature_query_contract_v1.md
   - computer_use_poc/batch_risk_clustering/batch_top_dimension_drilldown_template_v1.md
   - computer_use_poc/batch_risk_clustering/batch_frequent_pattern_contribution_template_v1.md
@@ -255,6 +257,15 @@ templates:
   - computer_use_poc/batch_risk_clustering/batch_risk_response_template_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_runtime_validation_cases_v1.yaml
 ```
+
+Account-security Hive source boundary:
+
+- ATO / 盗号 / 登录链路离线补证应使用 `account_security_hive_source_registry_v1.md` 和 `account_security_hive_query_plan_templates_v1.md`。
+- 成功登录优先 `ks_rc_bs.ks_account_login_basic_info`。
+- 登录失败 / 撞库 / 暴力破解 / 改密优先 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`；表名拼写为 `orign`，不得改成 `origin`。
+- Web RCP 使用 `ks_rc_arch.antispam_feature_map_default_partitioned`，30 天窗口。
+- App RCP 使用 `ks_raw_log_v2.antispam_feature_map_partitioned`，50 天窗口，必须限制 `p_date + p_hourmin + p_action_type`。
+- DataAgent 仅作为 Hive / 数仓取数分析计划或确认后的离线执行能力，不是万能风控执行器。
 
 ## batch_case_analysis
 

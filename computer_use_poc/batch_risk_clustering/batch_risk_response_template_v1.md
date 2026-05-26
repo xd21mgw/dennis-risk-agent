@@ -164,6 +164,36 @@ l1_query_plan:
 - not_execute_now: true
 ```
 
+ATO / login-chain Hive query plan block:
+
+```text
+account_security_hive_query_plan:
+- query_goal:
+- selected_table:
+- reason_for_table_selection:
+- partition_filters:
+- entity_filters:
+- key_fields:
+- expected_signal:
+- risk_if_missing:
+- fallback_table:
+- no_data_interpretation:
+```
+
+Table selection rules:
+
+- Successful login trail → `ks_rc_bs.ks_account_login_basic_info`.
+- Login failure / credential stuffing / brute force → `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`.
+- Password reset → `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` with `p_action_type='resetPwd'`.
+- Web RCP risk events → `ks_rc_arch.antispam_feature_map_default_partitioned` with `p_date + p_hourmin + p_action_type`.
+- App RCP risk events → `ks_raw_log_v2.antispam_feature_map_partitioned` with `p_date + p_hourmin + p_action_type`.
+
+No-data boundary:
+
+- Online login log no-data / over-window is `login_log_window_incomplete`, not no-risk proof.
+- `ks_account_login_basic_info` no-data means no successful login found in the selected partition/filter; it does not exclude login failure or resetPwd.
+- RCP over-window no-data must be marked `source_gap`.
+
 ## 9. 举一返三
 
 ```text

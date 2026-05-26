@@ -22,6 +22,12 @@ DataAgent / Hive responsibility:
 
 Sensitive fields such as phone, identity number, real-name fields, credential material and raw request payloads must not be output in plaintext. IP can be used as an internal risk entity or aggregated feature, but should be masked or bucketed when shared outside the controlled analysis scope.
 
+Account-security Hive source specialization:
+
+- Detailed ATO / login-chain offline source selection is now split into `account_security_hive_source_registry_v1.md`.
+- DataAgent/Hive plan templates for successful login, failed login, resetPwd, Web RCP and App RCP are in `account_security_hive_query_plan_templates_v1.md`.
+- Online login-log window gaps should route to those templates rather than treating online login logs as the only data source.
+
 ## Source Selection Principle
 
 Use this registry as a source-priority map, not a raw table list.
@@ -107,38 +113,49 @@ No source below can directly authorize disposal. High-precision tags and admin h
 
 ## Capability Domain 3: 登录 / 账号安全行为
 
-主表：`ks_raw_log_v3.infra_user_action_log`
+主表：`ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`
 
 辅助表：
 
 - `ks_rc_bs.ks_account_login_basic_info`
+- `ks_raw_log_v3.infra_user_action_log`
 - `ks_rc_bs.user_login_infos`
 
 选择依据：
 
 - 9999 天全量历史。
-- 查询约 786 次/月。
-- 覆盖登录、账号安全链路和用户行为动作，适合 ATO 研判和批量行为链路归因。
+- `dwd_risk_usr_accnt_login_orign_info` 覆盖登录成功、失败和改密事件，适合 ATO / 盗号登录链路追溯。
+- `ks_account_login_basic_info` 仅成功登录，适合异设备成功登录和历史成功登录分布。
 
 主表优先使用场景：
 
-- 登录成功 / 失败。
+- 登录失败。
+- 撞库 / 暴力破解。
 - 改密登录。
-- 登录设备 / IP。
-- 账号安全链路。
-- ATO 批量浅查。
-- login_success → downstream abnormal action 的 A→B 有向相关。
+- 登录全链路追溯。
+- ATO / 盗号事件调查。
 
 辅助表触发条件：
 
-- `ks_rc_bs.ks_account_login_basic_info`：需要登录基础明细、登录方法、设备/IP、失败原因、ATO 链路字段时使用。
+- `ks_rc_bs.ks_account_login_basic_info`：需要成功登录明细、登录方法、设备/IP、ATO 成功登录链路起点时使用。
+- `ks_raw_log_v3.infra_user_action_log`：需要更宽泛动作日志或 login_success → downstream abnormal action 的 A→B 相关时使用。
 - `ks_rc_bs.user_login_infos`：需要用户级登录摘要、最新登录上下文或 L1 聚合字段时使用。
 
 | table_name | role | grain | freshness | field_richness | applicable_scenarios | notes |
 |---|---|---|---|---|---|---|
-| `ks_raw_log_v3.infra_user_action_log` | main | action / event | 全量 / 原始日志 | 高 | ATO, 行为链路, 协议, 群控, 批量分簇 | 先聚合再解释；动作语义需确认；不能输出原始日志全文。 |
-| `ks_rc_bs.ks_account_login_basic_info` | auxiliary | user / login event | 日增量 / 明细 | 高 | ATO, 撞库, OAuth/一键登录接管, 批量分簇 | 关注登录方法、设备、IP、时间顺序；超窗 no_data 是 source_gap。 |
+| `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | main | user / login request event | 9999 天 / 日增量 / 明细 | 高 | ATO, 登录失败, 撞库, 暴力破解, resetPwd, 批量分簇 | 表名是 `orign`，不能改成 `origin`；必须带 `p_date`，建议带 `p_action_type`；`finalloginresult=1` 才是成功，其他为失败，null 为未走完流程 / 不确定。 |
+| `ks_rc_bs.ks_account_login_basic_info` | auxiliary | user / successful login event | 9999 天 / 日增量 / 明细 | 高 | ATO, OAuth/一键登录接管, 异设备成功登录, 批量分簇 | 成功登录专用表；不适合分析登录失败、撞库失败或暴力破解失败。 |
+| `ks_raw_log_v3.infra_user_action_log` | auxiliary | action / event | 全量 / 原始日志 | 高 | ATO, 行为链路, 协议, 群控, 批量分簇 | 先聚合再解释；动作语义需确认；不能输出原始日志全文。 |
 | `ks_rc_bs.user_login_infos` | auxiliary | user / login summary | 日增量 / 快照 | 中 | ATO, 登录环境聚集, 账号安全 | 适合 L1 计数和最新上下文；不足以单独支撑 token 链路结论。 |
+
+ATO / 盗号离线取数路由：
+
+- 成功登录：优先 `ks_rc_bs.ks_account_login_basic_info`。
+- 登录失败 / 撞库 / 暴力破解：优先 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，`p_action_type='login'`。
+- 改密事件：优先 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，`p_action_type='resetPwd'`。
+- Web/H5 风控拦截：优先 `ks_rc_arch.antispam_feature_map_default_partitioned`，30 天窗口。
+- App 风控拦截：优先 `ks_raw_log_v2.antispam_feature_map_partitioned`，50 天窗口。
+- 在线登录日志窗口不足时，必须标记 `login_log_window_incomplete` 并生成 Hive query plan；不得输出“无登录异常”强结论。
 
 ## Capability Domain 4: Token / Web / Server 链路
 

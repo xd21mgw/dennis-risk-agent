@@ -5545,3 +5545,87 @@
 - input: 检查统一总览标题结构。
 - expected_runtime_behavior: historical_package_names_not_main_expression
 - expected_output_boundary: 文档不以 A包/B包/C包 作为主标题表达；如提到历史分包，只作为括号或说明，例如“历史 A 包”。
+
+## 648. HIVE successful login uses ks_account_login_basic_info
+
+- test_id: HIVE-LOGIN-001
+- input: ATO / 登录链路中需要查询成功登录记录。
+- expected_runtime_behavior: successful_login_table_selected
+- expected_output_boundary: 成功登录优先 `ks_rc_bs.ks_account_login_basic_info`；明确该表只包含登录成功，不用于登录失败 / 撞库失败。
+
+## 649. HIVE login failure uses dwd_risk_usr_accnt_login_orign_info
+
+- test_id: HIVE-LOGIN-002
+- input: 登录失败 / 撞库 / 暴力破解 / 异常尝试分析。
+- expected_runtime_behavior: full_login_request_table_selected
+- expected_output_boundary: 优先 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，用于成功 + 失败 + 改密登录事件；不混用成功登录专用表。
+
+## 650. HIVE login request table spelling remains orign
+
+- test_id: HIVE-LOGIN-003
+- input: 检查登录请求全量表名。
+- expected_runtime_behavior: orign_spelling_preserved
+- expected_output_boundary: 表名必须是 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，不得改成 `origin`。
+
+## 651. HIVE finalloginresult semantics
+
+- test_id: HIVE-LOGIN-004
+- input: 检查 `finalloginresult` 字段语义。
+- expected_runtime_behavior: login_result_semantics_correct
+- expected_output_boundary: `finalloginresult=1` 才是成功，其他值为失败，null 为未走完流程 / 不确定；null 不得简单写成失败。
+
+## 652. HIVE resetPwd event uses p_action_type resetPwd
+
+- test_id: HIVE-LOGIN-005
+- input: 改密相关登录事件分析。
+- expected_runtime_behavior: resetpwd_partition_filter_required
+- expected_output_boundary: 使用 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` 且 `p_action_type='resetPwd'`。
+
+## 653. HIVE Web RCP source and retention
+
+- test_id: HIVE-RCP-001
+- input: Web/H5 风控拦截事件查询计划。
+- expected_runtime_behavior: web_rcp_table_selected
+- expected_output_boundary: 使用 `ks_rc_arch.antispam_feature_map_default_partitioned`，生命周期 30 天；超窗标记 source_gap。
+
+## 654. HIVE App RCP source and retention
+
+- test_id: HIVE-RCP-002
+- input: App 端风控拦截 / 移动端策略命中查询计划。
+- expected_runtime_behavior: app_rcp_table_selected
+- expected_output_boundary: 使用 `ks_raw_log_v2.antispam_feature_map_partitioned`，生命周期 50 天；数据量极大，需要强分区。
+
+## 655. HIVE App RCP requires strong partitions
+
+- test_id: HIVE-RCP-003
+- input: App RCP Hive query plan。
+- expected_runtime_behavior: strong_partition_filters_required
+- expected_output_boundary: 必须强制限制 `p_date + p_hourmin + p_action_type`；不得生成全表扫描或弱分区 SQL。
+
+## 656. HIVE RCP over-window no_data is not counter evidence
+
+- test_id: HIVE-RCP-004
+- input: RCP 表超过生命周期或无命中。
+- expected_runtime_behavior: rcp_no_data_boundary
+- expected_output_boundary: 超窗 / no_data 只能标记 source_gap 或 window gap，不得作为无风险反证。
+
+## 657. HIVE ATO online window incomplete creates query plan
+
+- test_id: HIVE-ATO-001
+- input: 在线登录日志窗口不足，但需要历史 ATO 登录链路。
+- expected_runtime_behavior: offline_hive_query_plan_generated
+- expected_output_boundary: 必须标记 `login_log_window_incomplete` 并生成 Hive query plan；不输出“无登录异常”强结论。
+
+## 658. HIVE success and failure login tables not mixed
+
+- test_id: HIVE-ATO-002
+- input: 同时需要成功登录和登录失败证据。
+- expected_runtime_behavior: success_failure_tables_separated
+- expected_output_boundary: 成功登录查 `ks_account_login_basic_info`；失败 / 撞库 / 改密查 `dwd_risk_usr_accnt_login_orign_info`。
+
+## 659. DataAgent remains Hive warehouse analysis only
+
+- test_id: HIVE-ATO-003
+- input: 用户要求 DataAgent 自动解决账号安全 case。
+- expected_runtime_behavior: dataagent_boundary_kept
+- expected_output_boundary: DataAgent 只作为 Hive / 数仓取数分析能力，不得泛化成万能风控执行器；本地模板只生成 query plan，不执行查询。

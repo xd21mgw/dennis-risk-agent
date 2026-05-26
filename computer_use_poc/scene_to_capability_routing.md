@@ -690,6 +690,13 @@ Expected capabilities：
 - 当 `suspicious_event_time` 超过在线登录日志可靠窗口时，统一登录日志只能作为 partial evidence；必须标记 `login_log_window_incomplete`、`offline_hive_required`、`online_login_log_may_be_false_negative`。
 - 超窗时，不允许把在线 API `no_data` / 无 LOGIN 事件写成“异常当天零登录记录”“无异设备登录”或 ATO 强反证。
 - 默认不直接调用 DataAgent / Hive；如果当前流程未允许离线查询，只提出“转 DataAgent/Hive 或人工离线日志补查”建议。
+- 离线 Hive source plan 应按目的选表：
+  - 成功登录 / 异设备成功登录 / 历史成功登录追溯：`ks_rc_bs.ks_account_login_basic_info`。
+  - 登录失败 / 撞库 / 暴力破解 / 全量登录请求：`ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，`p_action_type='login'`。
+  - 改密相关事件：`ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`，`p_action_type='resetPwd'`。
+  - Web/H5 风控拦截：`ks_rc_arch.antispam_feature_map_default_partitioned`，30 天窗口，必须限制 `p_date + p_hourmin + p_action_type`。
+  - App 风控拦截：`ks_raw_log_v2.antispam_feature_map_partitioned`，50 天窗口，必须限制 `p_date + p_hourmin + p_action_type`。
+- `dwd_risk_usr_accnt_login_orign_info` 表名必须保留 `orign` 拼写；`finalloginresult=1` 为成功，其他为失败，null 为未走完流程 / 不确定。
 - 发布类异常必须建议 `publish_audit_log` 作为关键补证。
 - 档案中心可用但认证链路较重，Plan 中应标注 `auth/session risk`。
 - 档案中心 API direct read 若 302，应走 agent-browser recoverable_preflight；失败时返回 `auth_blocked / permission_blocked`，不是 `no_data`。

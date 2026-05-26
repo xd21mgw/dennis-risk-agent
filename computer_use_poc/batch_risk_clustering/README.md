@@ -38,6 +38,8 @@ Core questions:
 - `batch_risk_case_schema_v1.md`: batch input schema.
 - `batch_risk_threshold_policy_v1.md`: entity count threshold policy and routing modes.
 - `account_risk_data_source_registry_v1.md`: account-risk L1 data source registry.
+- `account_security_hive_source_registry_v1.md`: account-security Hive source registry for ATO / login-chain / successful login / failed login / resetPwd / Web RCP / App RCP.
+- `account_security_hive_query_plan_templates_v1.md`: DataAgent/Hive query plan templates for account-security offline evidence.
 - `batch_l1_feature_query_contract_v1.md`: L1 wide table / profile shallow query contract and `batch_feature_table` schema.
 - `batch_top_dimension_drilldown_template_v1.md`: TOP dimension drilldown and `top_dimension_summary` schema.
 - `batch_frequent_pattern_contribution_template_v1.md`: frequent pattern / contribution analysis template.
