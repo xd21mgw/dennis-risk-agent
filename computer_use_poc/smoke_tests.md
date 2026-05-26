@@ -1378,7 +1378,7 @@
 - 预期：
   - Dennis 识别 `intent=strategy_hit_check`。
   - 生成 `tianshi_strategy_hit_check` 查询计划。
-  - 查询计划包含 `source_id=4231737183`、`time_window`、固定 `eventTypeCodes=BS/ANTICRAWL/ACTIVITY_ANTISPAM/ACCOUNT/FLOW_ANTISPAM`。
+  - 查询计划包含 `source_id=4231737183`、`time_window`、`eventTypeCodes=""`；空字符串表示全事件类型，不传 `BS,ANTICRAWL,ACTIVITY_ANTISPAM,ACCOUNT,FLOW_ANTISPAM` 这类字符串枚举。
   - 输出不得直接判定用户作弊。
   - 输出必须包含“策略命中是证据，不等于最终风险定性；无命中不代表无风险”的边界说明。
 - 状态：routing smoke test added，pending live regression。
@@ -1809,6 +1809,48 @@
 - 输入：eventDetail / attribution 部分失败、timeout、auth_blocker。
 - 场景：source gap 解释。
 - 预期：`no_data` / timeout / auth_blocker 不得解释为无风险；应进入 missing_evidence / limitations / boundaries。
+- 状态：guardrail added。
+
+## 191-AH. fastQueryHbase HTTP SSO available for strategy_hit_inventory
+
+- 输入：`GET /v2/rest/event/fastQueryHbase` with `sourceIds=218368298`。
+- 场景：strategy_hit_inventory 首选批量入口。
+- 预期：fastQueryHbase 可 HTTP + SSO 直连，返回用户维度策略命中概览；不标为 browser-only。
+- 状态：validated by internal Agent POC，strategy hit inventory update。
+
+## 191-AI. fastQueryHbase eventTypeCodes empty string means all event types
+
+- 输入：`eventTypeCodes=""`。
+- 场景：fastQueryHbase 参数。
+- 预期：空字符串表示全事件类型；不得传 `BS,ANTICRAWL,ACTIVITY_ANTISPAM,ACCOUNT,FLOW_ANTISPAM` 这类错误字符串枚举。
+- 状态：guardrail added。
+
+## 191-AJ. fastQueryHbase is strategy_hit_inventory primary entry
+
+- 输入：单用户策略命中盘点。
+- 场景：推荐链路。
+- 预期：先走 fastQueryHbase 拿 `eventId` / `eventType` / `hitPolicies` / `riskDecision`；eventList 只作为 eventType 级补查入口。
+- 状态：guardrail added。
+
+## 191-AK. eventList is supplemental not primary inventory entry
+
+- 输入：允许事件、`ec=1` 事件或请求级明细补查。
+- 场景：eventList 角色边界。
+- 预期：eventList 用于 eventType 级补查和请求级字段，不作为 strategy_hit_inventory 首选命中概览入口。
+- 状态：guardrail added。
+
+## 191-AL. hitTimestamp is not directly queryTime
+
+- 输入：fastQueryHbase `hitTimestamp` 和 rcpEventDetail `_occurTime`。
+- 场景：代表 event 深挖。
+- 预期：`hitTimestamp` 不能直接等同 rcpEventDetail `queryTime`；优先使用事件详情 `_occurTime`，或标记 `queryTime_source=hitTimestamp_approximate`。
+- 状态：guardrail added。
+
+## 191-AM. fastQueryHbase inventory is not final risk classification
+
+- 输入：fastQueryHbase 返回命中概览、`confidenceLevel=强`、`riskDecision=阻止`。
+- 场景：证据边界。
+- 预期：策略命中概览不等于最终风险定性；`confidenceLevel='强'` 不等于最终定性；`updateUser` 不做责任归因；敏感字段不输出原值。
 - 状态：guardrail added。
 
 ## 192. archives user_analysis API direct POST succeeds

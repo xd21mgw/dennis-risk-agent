@@ -21,8 +21,8 @@
 | `frontend_activity_read` | 读取前端活跃画像和使用时长信号 | 埋点分析“用户属性及时长”区域 | single_user_or_device profile summary | validated_but_not_default_real_execution | 只能说明前端活跃信号，不证明真人/本人/具体动作 |
 | `user_device_resolution` | 做 user ↔ device 双向实体转译 | Weapon graphData，档案中心近期设备作为补充排序 | single_entity candidates | formal_readonly | 关联关系是候选实体关系，不是风险结论 |
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
-| `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略 | 天狮 fastQueryHbase | single_source bounded window | formal_readonly | 策略命中是证据，不等于最终作弊定性 |
-| `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin future wrapper | specific_event small window | partial_design_and_poc | 不做大窗口统计，no_data 不代表行为未发生 |
+| `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略；作为 strategy_hit_inventory 首选批量入口 | 天狮 fastQueryHbase HTTP+SSO | single_source bounded window | formal_readonly | `eventTypeCodes=""` 表示全事件类型；策略命中是证据，不等于最终作弊定性 |
+| `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin | specific_event small window | partial_design_and_poc | eventList 是补查入口，不是 strategy_hit_inventory 首选命中概览入口；no_data 不代表行为未发生 |
 | `tianshi_strategy_platform_contracts` | 固化天狮 fastQueryHbase / eventList 的 contract、schema、routing 和 observation 边界 | `computer_use_poc/tianshi_strategy_platform_contracts/` | contract layer only | documented | C 包不解析策略树；策略配置理解属于未来 D 包 |
 | `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
@@ -41,7 +41,7 @@
 - `login_log_read` 的 online URL 必须保留 `recallSource=2,0,1,3`；缺失可能导致 `code=10045`，这属于 wrapper URL 映射缺口，不应误判为登录行为不存在。
 - `user_device_resolution` 以 Weapon graphData 为主入口，不使用 Device SDK riskData 做实体解析主入口。
 - `device_risk_read` 在拿到 deviceId / did / deviceceid 后做设备侧风险补证。
-- `strategy_hit_read` 用于策略命中概览；`tianshi_eventlist_read` 用于具体请求级补证。
+- `strategy_hit_read` 用于策略命中概览，也是 `strategy_hit_inventory` 的首选批量入口；`tianshi_eventlist_read` 用于 eventType 级具体请求补证，尤其是允许 / `ec=1` 事件补查。
 - `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
 - `tianshi_strategy_governance_readonly` 是天狮策略治理只读能力，子能力包括：
   - `policy_detail_lookup`：解释策略定义、条件表达式、版本历史、绑定树。

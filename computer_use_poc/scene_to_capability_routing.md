@@ -40,13 +40,13 @@
 天狮 / 策略平台 C 包位于 `computer_use_poc/tianshi_strategy_platform_contracts/`，只固化查询类 contract，不新增真实平台手脚。
 策略治理只读能力位于 `computer_use_poc/strategy_governance/`，用于解释策略详情、策略树资产、单事件策略归因和策略发布记录。
 
-- 用户问“是否命中策略 / 是否被风控打到 / 是否有生产策略证据”：优先 `fastQueryHbase` / `strategy_hit_read`。
-- 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。
+- 用户问“是否命中策略 / 是否被风控打到 / 是否有生产策略证据 / 被哪些策略拦过 / 单用户多事件策略盘点”：优先 `fastQueryHbase` / `strategy_hit_read`。`fastQueryHbase` 是 `strategy_hit_inventory` 首选批量入口，可通过 HTTP+SSO 直连；`eventTypeCodes=""` 表示全事件类型。
+- 用户问“具体某次请求字段 / eventType 明细 / 错误码 / 惩罚动作 / 实时反馈 / IP / 设备字段 / openId 是否存在”：选择 `eventList API-read` / `tianshi_eventlist_read`，且必须有 `source_id` 和小时间窗口。eventList 是 eventType 级补查入口，尤其用于允许 / `ec=1` 事件和请求级明细，不是策略命中盘点首选入口。
 - `fastQueryHbase` 命中后，如果需要解释具体请求字段，再用 `eventList API-read` 做补证；两者都不能单独作为最终作弊定性。
 - 用户问“这条策略是什么 / 这条策略条件是什么 / 这个策略挂在哪个节点 / 这个策略在哪棵策略树 / 这次为什么被阻止或验证 / 这次为什么命中这个策略 / 这个策略什么时候上线 / 这个策略最近是否改过 / 从策略详情、策略树、归因、发布记录解释一下”：选择 `tianshi_strategy_governance_readonly`。
 - 二级路由边界：
   - 用户问“这个用户有没有风险 / 帮我看下这个用户风险”：route=`multi_evidence_orchestration`，天狮仅作为 `strategy_hit_evidence` 候选，不默认触发 `tianshi_strategy_governance_readonly` 四链路，也不默认触发 `single_event_policy_attribution`。
-  - 用户问“这个用户有没有命中策略 / 被哪些策略拦过”：route=`strategy_hit_check`，先走 fastQueryHbase / `strategy_hit_read`，必要时用 `tianshi_eventlist_read` 补事件明细；默认只输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
+  - 用户问“这个用户有没有命中策略 / 被哪些策略拦过 / 单用户多事件策略盘点”：route=`strategy_hit_check` / `strategy_hit_inventory`，先走 fastQueryHbase / `strategy_hit_read`，必要时用 `tianshi_eventlist_read` 补事件明细；默认只输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
   - 用户问“这个 eventId 为什么被阻止 / 为什么命中某策略”：只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才 route=`single_event_policy_attribution`；可按需补 `policy_detail_lookup`、`policy_tree_asset_lookup`、`policy_release_record_lookup`。
   - 用户问“这条策略是什么 / 条件是什么 / 哪个节点 / 什么时候上线”：route=`tianshi_strategy_governance_readonly` 对应子能力。
 - 路由分流：

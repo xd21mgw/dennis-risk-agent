@@ -1331,7 +1331,7 @@ RCP 补证：
 二级路由边界：
 
 - 用户只问“这个用户有没有风险 / 帮我看下这个用户风险”：先走多源证据编排，天狮只作为 `strategy_hit_evidence` 候选，不默认展开策略治理四链路。
-- 用户只问“这个用户有没有命中策略 / 被哪些策略拦过”：先走 fastQueryHbase / `strategy_hit_read` 输出策略命中概览，不默认查策略详情、策略树资产或发布记录。
+- 用户只问“这个用户有没有命中策略 / 被哪些策略拦过 / 单用户多事件策略盘点”：先走 fastQueryHbase / `strategy_hit_read` 输出策略命中概览；fastQueryHbase 是 `strategy_hit_inventory` 首选批量入口，eventList 只做 eventType 级补查，不默认查策略详情、策略树资产或发布记录。
 - 用户问“这个 eventId 为什么被阻止 / 为什么命中某策略”：只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才进入 `single_event_policy_attribution`。
 - 用户问“这条策略是什么 / 条件是什么 / 哪个节点 / 什么时候上线”：按对应子能力进入策略治理。
 - 缺 `eventId` / `queryTime` / `policyCode` / `policyVersion` / `policyTreeNodeCode` 等关键字段时，输出 query plan 或追问缺字段，不猜。
@@ -1390,7 +1390,8 @@ RCP 补证：
 - 不输出 cookie / token / session / header。
 - 不自动处置、不写操作、不上线、不审批。
 - 缺 `eventId` / `policyCode` / `policyTreeCode` 等关键字段时，输出 query plan 或追问缺字段，不猜。
-- “只问是否命中策略”优先用 fastQueryHbase / `strategy_hit_read`，不要直接展开全量策略治理。
+- “只问是否命中策略 / 单用户多事件策略盘点”优先用 fastQueryHbase / `strategy_hit_read`，不要直接展开全量策略治理。
+- `hitTimestamp` 不能直接等同 rcpEventDetail 的 `queryTime`；代表 event 深挖时优先使用事件详情 `_occurTime`，或标记 `queryTime_source`。
 - “只问用户有没有风险”优先多源证据编排，不默认全量策略治理。
 
 ## 5. Plan 模式提示规则

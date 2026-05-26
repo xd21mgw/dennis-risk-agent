@@ -19,19 +19,27 @@
 
 本轮内部 Agent POC 已验证：
 
-1. browser eventList
+1. HTTP + SSO fastQueryHbase
+   - `source_id + time_window -> 策略命中概览`
+   - `GET /v2/rest/event/fastQueryHbase` HTTP + SSO 直连可用。
+   - `eventTypeCodes=""` 表示全事件类型；不要传 `"BS,ANTICRAWL,ACTIVITY_ANTISPAM,ACCOUNT,FLOW_ANTISPAM"` 这类字符串枚举。
+   - 这是 `strategy_hit_inventory` 的首选批量入口，用于拿 `eventId`、`eventType`、`hitPolicies`、`riskDecision`、`confidenceLevel` 等命中概览字段。
+
+2. browser eventList
    - `source_id -> event_id` 列表
    - eventList browser same-origin 批量入口已打通。
+   - 该入口降级为 eventType 级明细补查，尤其用于允许 / `ec=1` 事件和请求级字段补查，不再作为策略命中盘点首选入口。
 
-2. HTTP + SSO rcpEventDetail
+3. HTTP + SSO rcpEventDetail
    - `event_id -> 事件详情`
    - 9 个事件中 8 个完成事件详情读取。
+   - `hitTimestamp` 不能直接等同 `rcpEventDetail` 的 `queryTime`；USER_REGISTER_NEW 样本中 `hitTimestamp` 与 `_occurTime` 差约 50ms。代表 event 深挖时优先使用事件详情中的 `_occurTime`，或显式标记 `queryTime_source`。
 
-3. HTTP + SSO nodePolicyAttribution / nodeBindPolicyAttribution
+4. HTTP + SSO nodePolicyAttribution / nodeBindPolicyAttribution
    - 事件级条件归因和节点绑定策略归因。
    - 3 个事件完成完整策略归因：2 个阻止事件 + 1 个允许事件。
 
-4. 聚合输出
+5. 聚合输出
    - `policy_topn`
    - `node_topn`
    - `condition_topn`
@@ -62,7 +70,50 @@ overall_result:
   strategy_hit_inventory_feasible: true
   can_support_risk_perception_enhancement: true
   ready_for_codex_schema_template: true
+
+fast_query_hbase_poc:
+  endpoint: GET /v2/rest/event/fastQueryHbase
+  access_mode: HTTP+SSO
+  sourceIds: 218368298
+  eventTypeCodes: ""
+  startTime: 1779724800512
+  endTime: 1779787311130
+  limit: 500
+  data_count: 5
+  role: strategy_hit_inventory 首选批量入口
+  new_event_type: SYNC_LIVE_ATTACH_REQUEST
+  new_policies:
+    - BS_antibrush_attach_user_multi_loc_block_policy
+    - BS_antibrush_attach_not_same_startup_block_policy
 ```
+
+fastQueryHbase 返回字段包括 `sourceId`、`eventId`、`eventType`、`riskDecision`、`errorCode`、`hitTimestamp`、`hitProductionPolicy`、`hitProductionPolicies`、`hitPolicies`、`confidenceLevel`、`riskEventName`、`riskType`、`updateUser`、`deviceId` 等。输出时不得保留敏感字段原值；`sourceIp`、`deviceId`、用户标识等按字段输出分层策略处理。
+
+`SYNC_LIVE_ATTACH_REQUEST` 和直播长连接防刷策略是本轮新发现的策略命中类型。`rcpEventDetail` 对 `USER_REGISTER_NEW` 可下钻；`SYNC_LIVE_ATTACH_REQUEST` 下钻 HTTP timeout 时应标记 `event_detail_partial`，不得解释为无风险或无详情。
+
+## 3.1 推荐链路
+
+1. fastQueryHbase HTTP + SSO
+   - 用户维度命中概览。
+   - 获取 `eventId` / `eventType` / `hitPolicies` / `riskDecision`。
+
+2. eventList browser same-origin
+   - eventType 级补查。
+   - 重点补允许事件、`ec=1` 事件和请求级明细。
+
+3. rcpEventDetail HTTP + SSO
+   - 代表 event 详情。
+   - queryTime 优先使用事件详情 `_occurTime`；如仅有 `hitTimestamp`，必须标记 `queryTime_source=hitTimestamp_approximate`。
+
+4. nodePolicyAttribution / nodeBindPolicyAttribution
+   - 代表 event 条件级 / 节点级归因。
+
+5. 聚合输出
+   - `policy_topn`
+   - `node_topn`
+   - `condition_topn`
+   - `policy_cooccurrence`
+   - `representative_events`
 
 ## 4. Observation Schema 草案
 
@@ -112,6 +163,8 @@ single_user_event_strategy_inventory_observation:
     - event_ref:
       event_type:
       risk_decision:
+      hit_timestamp:
+      query_time_source:
       effective_policy:
       attribution_status:
       reason_to_represent:
@@ -133,6 +186,7 @@ single_user_event_strategy_inventory_observation:
     - 高频策略不等于策略一定有效。
     - 高频节点不等于节点有问题。
     - 策略组合共现不等于团伙或攻击路径定性。
+    - hitTimestamp 不能直接等同 rcpEventDetail queryTime。
     - no_data / timeout / auth_blocker 不得解释为无风险。
     - updateUser / operator / bindingUser 只做追溯字段，不做责任归因。
     - 不输出敏感字段原值，不自动处置。
@@ -183,6 +237,8 @@ TOP 条件：
 不能下的结论：
 - 单用户多事件不等于跨用户批量风险簇。
 - 策略命中是事件级结论，不是用户级风险定性。
+- confidenceLevel='强' 不等于最终风险定性。
+- hitTimestamp 不能直接等同 rcpEventDetail queryTime，代表事件下钻时优先用 `_occurTime` 或标明 queryTime_source。
 - no_data / timeout / auth_blocker 不得解释为无风险。
 - updateUser / operator / bindingUser 只做追溯字段，不做责任归因。
 - 不自动处置、不写操作、不上线、不审批。
