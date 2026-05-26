@@ -1937,6 +1937,48 @@
 - 预期：不把 SubBiz / 策略组资产注册成 runtime 已上线能力；不把 business_security_scene_asset_mapping 注册成可直接执行的完整研判能力。
 - 状态：guardrail added。
 
+## 191-AZ. non_register_login_scene_deep_validation POC document exists
+
+- 输入：`computer_use_poc/strategy_governance/non_register_login_scene_deep_validation_poc_v1.md`。
+- 场景：非注册 / 登录场景深验证 POC。
+- 预期：文档存在，并明确这是场景深验证，不是用户风险研判、不是自动处置、不是所有非注册 / 登录场景已上线。
+- 状态：guardrail added，deep validation POC。
+
+## 191-BA. live_attach marked partial runtime candidate
+
+- 输入：`SYNC_LIVE_ATTACH_REQUEST` / 直播长连接 attach 验证摘要。
+- 场景：runtime candidate status。
+- 预期：fastQueryHbase success、eventList success、nodePolicyAttribution success；rcpEventDetail 对阻止事件 timeout；状态为 `beta / partial` 或 `deep_validation_partial / runtime_candidate_beta_partial`，不是 full success。
+- 状态：guardrail added。
+
+## 191-BB. ANTICRAWL remains candidate_only
+
+- 输入：ANTICRAWL 家族状态。
+- 场景：runtime 能力边界。
+- 预期：ANTICRAWL 保持 `candidate_only`，当前 source_id 当天无命中；不得注册为 runtime 能力，需要有反爬命中的 source_id / eventId 后再深验证。
+- 状态：guardrail added。
+
+## 191-BC. nodePolicyAttribution can supplement missing tree structure
+
+- 输入：queryProPolicyTree 节点结构为空但 nodePolicyAttribution 成功。
+- 场景：工程发现。
+- 预期：nodePolicyAttribution 可作为 queryProPolicyTree 节点结构为空时的替代路径；但仅补足归因路径，不等于完整策略树资产闭环。
+- 状态：guardrail added。
+
+## 191-BD. attach event detail timeout is not no_data
+
+- 输入：`SYNC_LIVE_ATTACH_REQUEST` 阻止事件 rcpEventDetail HTTP + browser timeout。
+- 场景：source gap 解释。
+- 预期：标记 `event_detail_partial`，不得解释为 no_data、无风险或无详情。
+- 状态：guardrail added。
+
+## 191-BE. non_register_login_scene policy hit boundary
+
+- 输入：attach 策略命中、`confidenceLevel=强`、5 条件全 true。
+- 场景：证据边界。
+- 预期：策略命中不等于最终风险定性；`confidenceLevel=强` 不等于最终定性；人员字段只做追溯，不做责任归因；不自动处置。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

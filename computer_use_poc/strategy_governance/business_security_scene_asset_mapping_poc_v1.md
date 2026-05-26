@@ -159,11 +159,15 @@
 #### SYNC_LIVE_ATTACH_REQUEST
 
 - fastQueryHbase 已看到真实阻止事件。
+- eventList 已验证，返回 8 个事件：3 阻止 + 5 允许。
 - 发现策略：
   - `BS_antibrush_attach_user_multi_loc_block_policy`
   - `BS_antibrush_attach_not_same_startup_block_policy`
-- rcpEventDetail HTTP 超时。
-- attribution 未验证。
+- rcpEventDetail 对允许事件成功，对阻止事件 HTTP + browser 都 timeout。
+- getPolicyVersionListByEvent 已验证。
+- nodePolicyAttribution 已验证，2 条策略均完成条件级归因，5 条件全 true。
+- queryProPolicyTree 仍 partial，只返回版本号，不返回节点结构；可用 nodePolicyAttribution 归因路径补足部分节点结构缺口。
+- 当前状态更新为 `deep_validation_partial / runtime_candidate_beta_partial`，不是 full success。
 
 #### FOLLOW / LIKE / COMMENT / MESSAGE
 
@@ -200,10 +204,12 @@
 原因：
 
 - 反爬是核心业务安全方向，eventType 家族很大。
+- 当前仍保持 `candidate_only`，需要有反爬命中的 source_id 或 eventId 后再深验证。
 
 下一步：
 
 - 确认 `ANTICRAWL` / `ANTICRAWL_LIVE` / `ANTICRAWL_BASE` / `ANTICRAWL_PLATFORM_SYNC` 的 policyTreeCode 和节点结构。
+- 当前已确认部分子树版本：`ANTICRAWL_LIVE`、`ANTICRAWL_BASE`、`ANTICRAWL_SEARCH`、`ANTICRAWL_COMMON`、`ANTICRAWL_RPC_SIGN`；`ANTICRAWL` 根节点 / `ANTICRAWL_PLATFORM_SYNC` / `LIVE_STREAM_ANTICRAWL` 无版本返回。
 
 ### P1
 
