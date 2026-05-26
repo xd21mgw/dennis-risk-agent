@@ -436,6 +436,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 单用户多事件策略命中盘点 POC 已新增：`computer_use_poc/strategy_governance/single_user_event_strategy_inventory_poc_v1.md`。该 POC 基于内部 Agent 对 `source_id=218368298` 在 2026-05-26 当天 9 个事件的策略盘点结果，沉淀 `policy_topn` / `node_topn` / `condition_topn` / `policy_cooccurrence` / `representative_events` / `governance_findings` 的 schema、回答模板和 validation 草案；它用于风险感知增强和策略治理线索发现，不等于跨用户批量风险簇或用户级风险定性。
 - fastQueryHbase 定位已更新：内部 Agent POC 验证 `GET /v2/rest/event/fastQueryHbase` 可 HTTP + SSO 直连，`eventTypeCodes=""` 表示全事件类型，适合作为 `strategy_hit_inventory` 首选批量入口；eventList 降级为 eventType 级明细补查入口，rcpEventDetail 和归因链路用于代表 event 深挖。`hitTimestamp` 不直接等同 rcpEventDetail `queryTime`，代表 event 下钻优先使用事件详情 `_occurTime` 或标记 `queryTime_source`。
 - 策略命中盘点能力已完成轻量 runtime 接入：`capability_registry.md` 注册 `tianshi_strategy_hit_inventory`，`scene_to_capability_routing.md` 按 `strategy_hit_overview_lookup` / `event_type_detail_supplement` / `representative_event_attribution` 分流，`answer_experience_templates.md` 提供策略命中盘点回答模板；该接入仍只做只读盘点和风险感知线索输出，不自动处置、不调用 DataAgent、不更新 release。
+- 业务安全场景资产地图 POC 已新增：`computer_use_poc/strategy_governance/business_security_scene_asset_mapping_poc_v1.md`。该文档把天狮已发现的 account_security、traffic_security、anti_crawler_antibrush、interaction_anti_abuse、activity_anti_cheating 等 eventType / policyTree 资产按验证状态分层沉淀，用于选择下一批深验证场景；它不是已上线 runtime 能力，不是风险定性能力，也不是策略归因能力，不应注册成可直接执行的完整研判能力。
 
 Auth preflight：
 

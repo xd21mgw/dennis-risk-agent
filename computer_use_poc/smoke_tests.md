@@ -1895,6 +1895,48 @@
 - 预期：包含结论摘要、查询范围、事件分布、riskDecision 分布、TOP 策略、TOP 节点、TOP 条件、策略共现、代表事件、缺口与边界、下一步建议；包含策略命中不等于最终风险定性、高频策略不等于策略一定有效、策略共现不等于团伙或攻击路径定性、不自动处置等边界。
 - 状态：guardrail added，runtime lightweight integration。
 
+## 191-AT. business_security_scene_asset_mapping POC document exists
+
+- 输入：`computer_use_poc/strategy_governance/business_security_scene_asset_mapping_poc_v1.md`。
+- 场景：业务安全场景资产地图 POC。
+- 预期：文档存在，并明确这是资产地图，不是已上线 runtime 能力，不是风险定性能力，不是策略归因能力。
+- 状态：guardrail added，asset mapping POC。
+
+## 191-AU. business_security_scene_asset_mapping covers five domains
+
+- 输入：业务安全场景资产地图 POC。
+- 场景：大类覆盖。
+- 预期：覆盖 `account_security`、`traffic_security`、`anti_crawler_antibrush`、`interaction_anti_abuse`、`activity_anti_cheating`。
+- 状态：guardrail added。
+
+## 191-AV. business_security_scene_asset_mapping has high value next scenes
+
+- 输入：业务安全场景资产地图 POC。
+- 场景：下一批验证计划。
+- 预期：包含 P0 / P1 / P2 高价值下一批验证场景，P0 包含 `SYNC_LIVE_ATTACH_REQUEST` 和 `ANTICRAWL` 家族。
+- 状态：guardrail added。
+
+## 191-AW. business_security_scene_asset_mapping has parameter gaps
+
+- 输入：业务安全场景资产地图 POC。
+- 场景：参数缺口。
+- 预期：包含 `policyTreeList` 参数格式、非注册树 `queryProPolicyTree` 节点结构、`policySearch` 模糊搜索、`ANTICRAWL` 家族结构、`SYNC_LIVE_ATTACH_REQUEST` eventDetail 超时等 blocker。
+- 状态：guardrail added。
+
+## 191-AX. business_security_scene_asset_mapping boundaries
+
+- 输入：业务安全场景资产地图 POC。
+- 场景：边界。
+- 预期：包含 eventType 存在不等于风险定性、policyTree 存在不等于已验证归因、策略存在不等于风险存在、status=上线不等于每次事件都生效、人员字段不做责任归因。
+- 状态：guardrail added。
+
+## 191-AY. business_security_scene_asset_mapping not registered runtime capability
+
+- 输入：能力注册和资产地图 POC。
+- 场景：runtime 能力边界。
+- 预期：不把 SubBiz / 策略组资产注册成 runtime 已上线能力；不把 business_security_scene_asset_mapping 注册成可直接执行的完整研判能力。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。
