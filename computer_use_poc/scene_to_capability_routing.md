@@ -643,6 +643,11 @@ routing_metadata:
 
 路由映射要求：
 
+- `route` 必须使用本文件中的正式 route 名，禁止写成 `dennis-risk-agent` 等 agent 名。
+- `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
+- `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
+- `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - `single_event_policy_attribution`：capability=`tianshi_strategy_governance_readonly`，boundary 包含 `attribution_not_cheating_judgement`；缺 `eventId` / `eventType` / `queryTime` 时 `final_status=needs_input`。
 - `policy_detail_lookup`：capability=`tianshi_strategy_governance_readonly`，sub_capability=`policy_detail_lookup`。
 - `tianshi_strategy_hit_inventory`：boundary 包含 `strategy_hit_not_final_risk_judgement`。

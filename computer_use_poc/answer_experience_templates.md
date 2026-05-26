@@ -159,6 +159,11 @@ Routing Summary:
 - 自然语言回答可以照常先输出。
 - 回答末尾必须追加一个机器可读 YAML block，顶层 key 固定为 `routing_metadata`。
 - metadata 只描述本轮路由、能力、执行边界和敏感输出状态，不替代业务结论。
+- `route` 必须使用 `scene_to_capability_routing.md` 中的正式 route 名，禁止写成 `dennis-risk-agent` 等 agent 名。
+- `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
+- `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
+- `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - 如果本轮未调用平台，`platform_called=false` 且 `platform_call_summary: []`。
 - 如果本轮未调用 DataAgent，`dataagent_called=false`。
 - 正常情况下 `sensitive_output=false`；如发生安全拒绝，仍应保持 `sensitive_output=false` 并标 `execution_mode=refusal`。
@@ -279,13 +284,30 @@ routing_metadata:
 | 场景 | route | capability | sub_capability | execution_mode | query_plan_only | 必须包含 boundary_flags |
 |---|---|---|---|---|---|---|
 | 单事件策略归因 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `query_plan` 或 `execution` | false | `attribution_not_cheating_judgement` |
-| 策略详情 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `query_plan` 或 `expert_analysis` | false | `policy_expression_not_full_causality` |
+| 策略详情 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `query_plan` 或 `expert_analysis` | false | `expression_not_business_causality` |
 | 策略命中盘点 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `query_plan` 或 `execution` | false | `strategy_hit_not_final_risk_judgement` |
 | live attach | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `partial` 或 `query_plan` | false | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
 | 业务安全资产地图 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | null | `query_plan` | true | `asset_map_not_executable` |
 | ANTICRAWL | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | null | `query_plan` | true | `anticrawl_candidate_only`, `not_executable_runtime` |
 | 实名字段边界 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | null | `refusal` 或 `query_plan` | true | `real_name_no_raw_identity`, `not_identity_runtime` |
 | 泛风险问题 | `multi_evidence_orchestration` | `account_security_expert_mode` 或 `multi_evidence_orchestration_contracts` | null | `expert_analysis` 或 `query_plan` | false | `generic_risk_no_default_specialized_capability` |
+
+标准名称映射表：
+
+| 用户意图 | route | capability | sub_capability | 必须包含 boundary_flags |
+|---|---|---|---|---|
+| eventId 为什么被阻止 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `attribution_not_cheating_judgement` |
+| 这条策略是什么 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `expression_not_business_causality` |
+| 策略挂在哪个节点 | `policy_tree_asset_lookup` | `tianshi_strategy_governance_readonly` | `policy_tree_asset_lookup` | `policy_tree_asset_not_event_hit_path` |
+| 策略什么时候上线 | `policy_release_record_lookup` | `tianshi_strategy_governance_readonly` | `policy_release_record_lookup` | `release_record_not_risk_judgement` |
+| 用户最近命中过哪些策略 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `strategy_hit_not_final_risk_judgement` |
+| 一天内哪些策略反复命中 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `cooccurrence_not_attack_path_conclusion` |
+| 直播长连接为什么被拦 | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
+| 业务安全有哪些场景 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | `null` | `asset_map_not_executable` |
+| ANTICRAWL 怎么查 | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | `null` | `anticrawl_candidate_only`, `not_executable_runtime` |
+| 实名能否输出身份证前6位 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | `null` | `real_name_no_raw_identity`, `not_identity_runtime` |
+| 实名省份和 IP 一致是否排除盗号 | `multi_evidence_orchestration` | `account_security_expert_mode` | `null` | `province_match_not_ato_exclusion`, `real_name_not_standalone_evidence` |
+| 用户有没有风险 | `multi_evidence_orchestration` | `account_security_expert_mode` | `null` | `generic_risk_no_default_specialized_capability` |
 
 ## 0B. Semi-open experience patch v1 响应模板
 

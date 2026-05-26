@@ -2189,6 +2189,41 @@
 - 预期：`final_status=needs_input`，`missing_required_fields` 非空，`platform_called=false`，`dataagent_called=false`。
 - 状态：guardrail added。
 
+## 191-CJ. routing_metadata route must not be agent name
+
+- 输入：任意 dennis-risk-agent 子 agent 回答。
+- 场景：metadata 命名稳定性。
+- 预期：`routing_metadata.route` 不得等于 `dennis-risk-agent`；必须使用 `scene_to_capability_routing.md` 中的正式 route 名。
+- 状态：guardrail added。
+
+## 191-CK. routing_metadata capability must be registered name
+
+- 输入：策略命中盘点 / 泛风险问题。
+- 场景：metadata capability 命名稳定性。
+- 预期：`routing_metadata.capability` 不得为 `strategy_attribution`、`user_risk_profile` 等未注册名；必须使用 `capability_registry.md` 中正式 capability 名。
+- 状态：guardrail added。
+
+## 191-CL. routing_metadata strategy hit exact names
+
+- 输入：“这个用户最近命中过哪些策略？”
+- 场景：策略命中盘点。
+- 预期：`route=tianshi_strategy_hit_inventory`，`capability=tianshi_strategy_hit_inventory`，`sub_capability=strategy_hit_overview_lookup`，`boundary_flags` 包含 `strategy_hit_not_final_risk_judgement`，缺输入时 `missing_required_fields` 包含 `source_id` / `time_window`。
+- 状态：guardrail added。
+
+## 191-CM. routing_metadata generic risk exact names
+
+- 输入：“帮我看下这个用户有没有风险。”
+- 场景：泛风险问题。
+- 预期：`route=multi_evidence_orchestration`，`capability=account_security_expert_mode` 或 `multi_evidence_orchestration`，`boundary_flags` 包含 `generic_risk_no_default_specialized_capability`。
+- 状态：guardrail added。
+
+## 191-CN. routing_metadata boundary flags exact names
+
+- 输入：任意 metadata block。
+- 场景：boundary flag 命名稳定性。
+- 预期：`boundary_flags` 必须使用标准 flag 名，不得只用语义近似名；例如必须使用 `strategy_hit_not_final_risk_judgement`，不得改写成 `strategy_hit_is_not_final_risk`。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

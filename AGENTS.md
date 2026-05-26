@@ -425,9 +425,33 @@ routing_metadata:
 
 约束：
 
+- `route` 必须使用 `computer_use_poc/scene_to_capability_routing.md` 中的正式 route 名。
+- `capability` 必须使用 `computer_use_poc/capability_registry.md` 中的正式 capability 名。
+- `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
+- `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
+- 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
+- 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - 未调用真实平台时，`platform_called=false`，`platform_call_summary=[]`。
 - 未调用 DataAgent 时，`dataagent_called=false`。
 - 正常必须 `sensitive_output=false`。
 - asset map / ANTICRAWL candidate / real-name partial contract 必须 `query_plan_only=true`。
 - 缺字段时 `final_status=needs_input`，`missing_required_fields` 非空。
 - 泛风险问题不得默认标完整策略治理、attach、ANTICRAWL 或实名能力为执行能力。
+
+名称映射表：
+
+| 用户意图 | route | capability | sub_capability | 必须包含 boundary_flags |
+|---|---|---|---|---|
+| eventId 为什么被阻止 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `attribution_not_cheating_judgement` |
+| 这条策略是什么 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `expression_not_business_causality` |
+| 策略挂在哪个节点 | `policy_tree_asset_lookup` | `tianshi_strategy_governance_readonly` | `policy_tree_asset_lookup` | `policy_tree_asset_not_event_hit_path` |
+| 策略什么时候上线 | `policy_release_record_lookup` | `tianshi_strategy_governance_readonly` | `policy_release_record_lookup` | `release_record_not_risk_judgement` |
+| 用户最近命中过哪些策略 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `strategy_hit_not_final_risk_judgement` |
+| 一天内哪些策略反复命中 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `cooccurrence_not_attack_path_conclusion` |
+| 直播长连接为什么被拦 | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
+| 业务安全有哪些场景 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | `null` | `asset_map_not_executable` |
+| ANTICRAWL 怎么查 | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | `null` | `anticrawl_candidate_only`, `not_executable_runtime` |
+| 实名能否输出身份证前6位 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | `null` | `real_name_no_raw_identity`, `not_identity_runtime` |
+| 实名省份和 IP 一致是否排除盗号 | `multi_evidence_orchestration` | `account_security_expert_mode` | `null` | `province_match_not_ato_exclusion`, `real_name_not_standalone_evidence` |
+| 用户有没有风险 | `multi_evidence_orchestration` | `account_security_expert_mode` | `null` | `generic_risk_no_default_specialized_capability` |
