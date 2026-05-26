@@ -146,6 +146,147 @@ Routing Summary:
 - 不在 KIM 中输出长报告、全量日志表或大段 raw observation。
 - Web 可以承载长报告，但仍必须遵守字段分层、DataAgent 边界和敏感字段脱敏。
 
+## 0A-1. routing_metadata 输出契约
+
+适用范围：
+
+- dennis-risk-agent 的所有正式回答。
+- main agent / 观测日志 / runtime validation 需要从子 agent 最终回答中读取内部路由结果的场景。
+- 不依赖跨 session history，不要求额外平台调用。
+
+输出规则：
+
+- 自然语言回答可以照常先输出。
+- 回答末尾必须追加一个机器可读 YAML block，顶层 key 固定为 `routing_metadata`。
+- metadata 只描述本轮路由、能力、执行边界和敏感输出状态，不替代业务结论。
+- 如果本轮未调用平台，`platform_called=false` 且 `platform_call_summary: []`。
+- 如果本轮未调用 DataAgent，`dataagent_called=false`。
+- 正常情况下 `sensitive_output=false`；如发生安全拒绝，仍应保持 `sensitive_output=false` 并标 `execution_mode=refusal`。
+
+标准 schema：
+
+```yaml
+routing_metadata:
+  route: "<final_route>"
+  capability: "<selected_capability>"
+  sub_capability: "<selected_sub_capability_or_null>"
+  intent_type: "<user_intent_type>"
+  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
+  query_plan_only: true
+  platform_called: false
+  platform_call_summary:
+    - platform:
+      action:
+      status:
+  dataagent_called: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - "<boundary_flag_1>"
+  missing_required_fields:
+    - "<field_name>"
+  partial_reason: "<reason_or_null>"
+  final_status: "answered | needs_input | partial | refused | failed"
+```
+
+字段解释：
+
+- `route`：最终路由，例如 `single_event_policy_attribution`、`tianshi_strategy_hit_inventory`、`multi_evidence_orchestration`。
+- `capability`：选中的 capability，例如 `tianshi_strategy_governance_readonly`。
+- `sub_capability`：子能力，例如 `policy_detail_lookup`、`attach_policy_attribution`；无子能力时为 `null`。
+- `intent_type`：用户意图类型，例如 `strategy_governance`、`strategy_hit_inventory`、`generic_risk_review`、`real_name_boundary`。
+- `execution_mode`：
+  - `execution`：允许的只读执行。
+  - `query_plan`：只输出查询计划，不执行。
+  - `expert_analysis`：专家分析，不调平台。
+  - `refusal`：安全拒绝。
+  - `partial`：部分完成 / 降级。
+- `query_plan_only`：是否属于 asset map / ANTICRAWL candidate / real-name partial contract 这类只能 query plan 的能力。
+- `platform_called`：本轮是否实际调用真实平台。
+- `platform_call_summary`：如调用平台，列出平台、动作和状态；无调用时为空数组。
+- `dataagent_called`：本轮是否调用 DataAgent。
+- `sensitive_output`：是否输出敏感原文；正常必须为 `false`。
+- `redaction_applied`：是否进行了脱敏或安全摘要化。
+- `boundary_flags`：关键边界标记。
+- `missing_required_fields`：缺失字段，例如 `eventId`、`eventType`、`queryTime`、`policyCode`、`sourceId`、`time_window`。
+- `partial_reason`：partial 原因，例如 `event_detail_timeout`、`session_history_visibility_restricted`、`missing_input`；无则为 `null`。
+- `final_status`：最终状态。
+
+常用 `boundary_flags`：
+
+- `strategy_hit_not_final_risk_judgement`
+- `attribution_not_cheating_judgement`
+- `asset_map_not_executable`
+- `anticrawl_candidate_only`
+- `not_executable_runtime`
+- `real_name_no_raw_identity`
+- `not_identity_runtime`
+- `live_attach_beta_partial`
+- `event_detail_timeout_not_no_data`
+- `generic_risk_no_default_specialized_capability`
+- `real_name_not_standalone_evidence`
+- `province_match_not_ato_exclusion`
+
+示例：缺参数的单事件策略归因。
+
+```yaml
+routing_metadata:
+  route: single_event_policy_attribution
+  capability: tianshi_strategy_governance_readonly
+  sub_capability: single_event_policy_attribution
+  intent_type: strategy_governance
+  execution_mode: query_plan
+  query_plan_only: false
+  platform_called: false
+  platform_call_summary: []
+  dataagent_called: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - attribution_not_cheating_judgement
+  missing_required_fields:
+    - eventId
+    - eventType
+    - queryTime
+  partial_reason: missing_input
+  final_status: needs_input
+```
+
+示例：泛风险问题不默认触发专用能力。
+
+```yaml
+routing_metadata:
+  route: multi_evidence_orchestration
+  capability: account_security_expert_mode
+  sub_capability: null
+  intent_type: generic_risk_review
+  execution_mode: expert_analysis
+  query_plan_only: false
+  platform_called: false
+  platform_call_summary: []
+  dataagent_called: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - generic_risk_no_default_specialized_capability
+  missing_required_fields: []
+  partial_reason: null
+  final_status: answered
+```
+
+八类验收路由的 metadata 期望：
+
+| 场景 | route | capability | sub_capability | execution_mode | query_plan_only | 必须包含 boundary_flags |
+|---|---|---|---|---|---|---|
+| 单事件策略归因 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `query_plan` 或 `execution` | false | `attribution_not_cheating_judgement` |
+| 策略详情 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `query_plan` 或 `expert_analysis` | false | `policy_expression_not_full_causality` |
+| 策略命中盘点 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `query_plan` 或 `execution` | false | `strategy_hit_not_final_risk_judgement` |
+| live attach | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `partial` 或 `query_plan` | false | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
+| 业务安全资产地图 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | null | `query_plan` | true | `asset_map_not_executable` |
+| ANTICRAWL | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | null | `query_plan` | true | `anticrawl_candidate_only`, `not_executable_runtime` |
+| 实名字段边界 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | null | `refusal` 或 `query_plan` | true | `real_name_no_raw_identity`, `not_identity_runtime` |
+| 泛风险问题 | `multi_evidence_orchestration` | `account_security_expert_mode` 或 `multi_evidence_orchestration_contracts` | null | `expert_analysis` 或 `query_plan` | false | `generic_risk_no_default_specialized_capability` |
+
 ## 0B. Semi-open experience patch v1 响应模板
 
 ### 显式查询 partial evidence card

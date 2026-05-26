@@ -396,3 +396,38 @@ timeout / no_data / blocked 不等于无风险。
   - `degrade_reason`
   - `boundary_risk`
 - routing trace 不影响正常回答，也不改变 DataAgent 边界。
+
+## routing_metadata 输出块
+
+所有正式回答末尾必须追加一个机器可读的 `routing_metadata` YAML block，供 main agent / 观测日志 / 验收测试读取本轮内部路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
+
+必填字段：
+
+```yaml
+routing_metadata:
+  route: "<final_route>"
+  capability: "<selected_capability>"
+  sub_capability: "<selected_sub_capability_or_null>"
+  intent_type: "<user_intent_type>"
+  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
+  query_plan_only: true
+  platform_called: false
+  platform_call_summary: []
+  dataagent_called: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - "<boundary_flag>"
+  missing_required_fields: []
+  partial_reason: null
+  final_status: "answered | needs_input | partial | refused | failed"
+```
+
+约束：
+
+- 未调用真实平台时，`platform_called=false`，`platform_call_summary=[]`。
+- 未调用 DataAgent 时，`dataagent_called=false`。
+- 正常必须 `sensitive_output=false`。
+- asset map / ANTICRAWL candidate / real-name partial contract 必须 `query_plan_only=true`。
+- 缺字段时 `final_status=needs_input`，`missing_required_fields` 非空。
+- 泛风险问题不得默认标完整策略治理、attach、ANTICRAWL 或实名能力为执行能力。

@@ -615,7 +615,44 @@ ATO / 登录日志类 Plan 和执行结果都必须提示：在线统一登录�
 
 Plan 输出后，如果用户选择 A/B/C/D，再进入对应执行路径。不要在 Plan 阶段调用真实平台接口。
 
-## 0F. Agent Safety Routing Guardrails
+## 0F. routing_metadata Output Contract
+
+dennis-risk-agent 的所有正式回答末尾必须追加 `routing_metadata` block，供 main agent、观测日志和验收测试直接解析子 agent 的最终路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
+
+最小字段：
+
+```yaml
+routing_metadata:
+  route: "<final_route>"
+  capability: "<selected_capability>"
+  sub_capability: "<selected_sub_capability_or_null>"
+  intent_type: "<user_intent_type>"
+  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
+  query_plan_only: true
+  platform_called: false
+  platform_call_summary: []
+  dataagent_called: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - "<boundary_flag>"
+  missing_required_fields: []
+  partial_reason: null
+  final_status: "answered | needs_input | partial | refused | failed"
+```
+
+路由映射要求：
+
+- `single_event_policy_attribution`：capability=`tianshi_strategy_governance_readonly`，boundary 包含 `attribution_not_cheating_judgement`；缺 `eventId` / `eventType` / `queryTime` 时 `final_status=needs_input`。
+- `policy_detail_lookup`：capability=`tianshi_strategy_governance_readonly`，sub_capability=`policy_detail_lookup`。
+- `tianshi_strategy_hit_inventory`：boundary 包含 `strategy_hit_not_final_risk_judgement`。
+- `tianshi_live_attach_attribution_candidate`：boundary 必须包含 `live_attach_beta_partial` 和 `event_detail_timeout_not_no_data`。
+- `business_security_scene_asset_mapping`：`query_plan_only=true`，boundary 包含 `asset_map_not_executable`。
+- `tianshi_anticrawl_family_candidate`：`query_plan_only=true`，boundary 包含 `anticrawl_candidate_only` 和 `not_executable_runtime`。
+- `real_name_feature_service_partial_contract`：`query_plan_only=true`；敏感字段请求时 `execution_mode=refusal`，boundary 包含 `real_name_no_raw_identity` 和 `not_identity_runtime`。
+- 泛风险问题：route=`multi_evidence_orchestration`，boundary 包含 `generic_risk_no_default_specialized_capability`；不得默认标完整策略治理、attach、ANTICRAWL 或实名能力为执行能力。
+
+## 0G. Agent Safety Routing Guardrails
 
 核心原则：
 
