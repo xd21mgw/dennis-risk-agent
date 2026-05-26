@@ -7,6 +7,17 @@ platform and is not a continuation branch of v2.4.x. v2.4.x remains historical
 validation record; v2.6.1 reorganizes archives center from page / Tab reading
 into risk capability packages.
 
+Current status:
+
+- `v2_6_1_capability_smoke_test` passed for the API-first capability loop.
+- All 8 capability packages completed API-first smoke coverage.
+- 6 capability packages basically succeeded.
+- 2 capability packages remain partial.
+- This is a capability smoke test, not a full API regression.
+- Page / DOM / selector were not triggered by default.
+- Fallback only triggered under allowed conditions.
+- No sensitive plaintext output, auth export, write action, risk finalization, or enforcement suggestion.
+
 Goal:
 
 - Move archives center execution from page-tab perspective to risk capability perspective.
@@ -62,6 +73,12 @@ Typical APIs:
 | `/archives/user/home/getUserShopInfo` | GET | shop status |
 | `/archives/draco/getPunishStatus` | POST | punishment status |
 
+Smoke-test status:
+
+- `/archives/user/home/info`: success.
+- `/archives/user/home/getUserLabel`: success.
+- `/archives/draco/getPunishStatus`: user-level unavailable; requires photo/live `targetId`, so it must not be treated as a general user-level API.
+
 Risk value:
 
 - Base account status.
@@ -84,6 +101,11 @@ APIs:
 | --- | --- | --- |
 | `/v4/audit/user/fourinfo/log/allTypes` | POST | four-info type/options |
 | `/v4/audit/user/fourinfo/log/search` | POST | four-info change logs |
+
+Smoke-test status:
+
+- `/v4/audit/user/fourinfo/log/search`: success.
+- Current sample returned `empty_result`; do not interpret empty result as no profile change.
 
 Risk value:
 
@@ -112,6 +134,8 @@ Notes:
 - `/v3/user/log/coreLogs/fetch` was validated in v2.4.7.1.
 - `focused_login_risk` defaults to API direct POST.
 - DOM row feature filter is fallback only.
+- Smoke-test status: `/v3/user/log/coreLogs/fetch` success.
+- Current sample returned `empty_result`; do not interpret empty result as no operation log.
 
 Risk value:
 
@@ -143,6 +167,13 @@ Typical APIs:
 | `/archives/user/gallery/momentList` | POST | moment list |
 | `/archives/user/gallery/momentAuthority` | POST | moment authority |
 
+Smoke-test status:
+
+- `/v3/user/gallery/photo/list`: success, observed `total=746`.
+- `/v4/archives/gallery/live/list`: success with `empty_result`.
+- `/archives/user/gallery/momentList`: success with `empty_result`.
+- Empty gallery/live/moment result is source output, not a no-risk conclusion.
+
 Risk value:
 
 - Whether video / live / moment was posted after ATO.
@@ -171,6 +202,14 @@ Typical APIs:
 | `/v3/photo/report/aggregate` | POST | report aggregate |
 | `/archives/photo/home/userAutonomy` | POST | photo user autonomy |
 | `/archives/user/home/auditLog` | POST | audit log, requires required params |
+
+Smoke-test status:
+
+- `/v3/photo/profile`: success.
+- `/v3/photo/meta`: success.
+- `/v3/photo/report/aggregate`: success.
+- `/archives/photo/home/userAutonomy`: success.
+- `photo/meta` did not expose `publishDevice` / `publishVersion` / `isImport` in the smoke sample; use `profile.uploadSource` / `photoMethod` and related profile fields as proxy features when meta fields are missing.
 
 Important fields:
 
@@ -233,6 +272,13 @@ APIs:
 | `/v3/user/profile/relation/fans/list` | POST | fans list |
 | `/v3/user/profile/relation/follow/list` | POST | follow list |
 
+Smoke-test status:
+
+- `/archives/user/message/search`: success, but observed `total=4029930781` appears to be an internal counter or unreliable total; do not use it as true message volume. Record `list_len` and response field structure instead.
+- `/archives/photo/comment/search`: success.
+- `/v3/user/profile/relation/fans/list`: success.
+- `/v3/user/profile/relation/follow/list`: success.
+
 Risk value:
 
 - Whether private message diversion or fraud exists after ATO.
@@ -267,6 +313,12 @@ APIs:
 | `/v4/archives/report/photo/options` | GET | photo report options |
 | `/v4/archives/report/photo/search` | POST | photo report search |
 | `/v3/photo/report/aggregate` | POST | photo report aggregate |
+
+Smoke-test status:
+
+- `/v4/archives/report/user/search`: success with `empty_result`.
+- `/v4/archives/report/photo/search`: persistent 500; mark `server_error_500 / request_shape_uncertain / pending`.
+- `report/photo/search` must not be written as validated.
 
 Risk value:
 
@@ -303,6 +355,9 @@ Notes:
 - `/archives/user/search/device type=0 / type=1` interfaces are usable.
 - Business meaning for `type=0 / type=1` remains `mapping_pending_validation`.
 - Do not hard-code login / registration mapping unless later validated by entry wording.
+- Smoke-test status: `/archives/user/search/device type=0` success; `type=1` success with `empty_result`.
+- Correct payload shape is `{keyword, inputType: 0, type}`.
+- `type=0 / type=1` mapping remains pending; do not write login/register semantics.
 
 Risk value:
 
@@ -358,10 +413,10 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | capability | endpoint | method | request fields | response shape | list / total / pagination fields | sensitive fields | validation_status | api_can_replace_dom | fallback condition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | report_signal | `/v4/archives/report/user/options` | GET | user/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
-| report_signal | `/v4/archives/report/user/search` | POST | userId, time/filter/page | user report list | list/total/page fields pending | reporter / target identifiers, report text | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
+| report_signal | `/v4/archives/report/user/search` | POST | userId, time/filter/page | user report list | empty_result observed in smoke sample | reporter / target identifiers, report text | smoke_validated_empty_result | true_for_observed_shape | key_fields_missing / empty_result_not_counter_evidence |
 | account_change_trace | `/v4/audit/user/fourinfo/log/allTypes` | POST | userId/context | four-info type/options | none | operator / audit notes | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
-| account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | userId, type/time/page | four-info change list | list/total/page fields pending | old/new profile text/media URL/operator | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
-| social_interaction | `/archives/photo/comment/search` | POST | photoId/userId/filter/page | comment list | list/total/page fields pending | comment plaintext, commenter id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
+| account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | userId, type/time/page | four-info change list | empty_result observed in smoke sample | old/new profile text/media URL/operator | smoke_validated_empty_result | true_for_observed_shape | need_required_param / empty_result_not_counter_evidence |
+| social_interaction | `/archives/photo/comment/search` | POST | photoId/userId/filter/page | comment list | list_len and field structure observed | comment plaintext, commenter id | smoke_validated | true_for_observed_shape | need_required_param |
 | social_interaction | `/archives/photo/comment/types` | GET | comment context | type options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/status` | POST | comment context | status options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/userStatus` | POST | user/comment context | user status options | none | user identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
@@ -369,8 +424,8 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | social_interaction | `/archives/photo/comment/orders` | POST | comment context | order options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/keyMaps` | POST | comment context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | report_signal | `/v4/archives/report/photo/options` | GET | photo/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
-| report_signal | `/v4/archives/report/photo/search` | POST | photoId/userId/filter/page | photo report list | list/total/page fields pending | reporter / target identifiers, report text | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / key_fields_missing |
-| social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list/total/page fields pending | private message plaintext, counterpart id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / permission_blocked |
+| report_signal | `/v4/archives/report/photo/search` | POST | photoId/userId/filter/page | photo report list | unavailable due server error | reporter / target identifiers, report text | server_error_500_request_shape_uncertain_pending | false_until_observed | server_error_500 / request_shape_uncertain |
+| social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list_len observed; total unreliable | private message plaintext, counterpart id | smoke_validated_partial_total_unreliable | true_for_list_shape_only | total_semantics_untrusted / permission_blocked |
 | social_interaction | `/archives/user/message/options` | POST | user message context | option structure | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/user/message/keyMaps` | POST | user message context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | content_forensics | `/archives/livestream/home/info` | POST | liveId/userId | live home info | none | live media URL, anchors/users | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
@@ -378,13 +433,16 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | content_forensics | `/archives/livestream/home/log` | POST | liveId/userId/time | live audit/log list | list/total/page fields pending | operator / notes / raw log | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
 | social_interaction | `/archives/livestream/comment/statistics` | POST | liveId/filter | live comment statistics | aggregate fields | comment content samples | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
 | social_interaction | `/archives/livestream/comment/detail` | POST | liveId/filter/page | live comment detail list | list/total/page fields pending | comment plaintext, commenter id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / permission_blocked |
-| content_gallery | `/archives/user/gallery/momentList` | POST | userId/page/filter | moment list | list/total/page fields pending | content plaintext/media URL | pending_from_har_or_screenshot_analysis | false_until_observed | key_fields_missing |
+| content_gallery | `/archives/user/gallery/momentList` | POST | userId/page/filter | moment list | empty_result observed in smoke sample | content plaintext/media URL | smoke_validated_empty_result | true_for_observed_shape | key_fields_missing / empty_result_not_counter_evidence |
 | content_gallery | `/archives/user/gallery/momentAuthority` | POST | userId/moment context | moment authority/status | none | internal status reason | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
 
 Validation status rule:
 
 - `pending_from_har_or_screenshot_analysis` means the endpoint was identified from effective action HAR / screenshot analysis but must not be written as `validated`.
 - Upgrade to `validated` only after parsed API response or executed observation records request/response shape and readonly boundary.
+- `smoke_validated` means the endpoint completed a v2.6.1 API-first capability smoke-test loop for the observed request shape only. It is not full API regression.
+- `smoke_validated_empty_result` means request/response shape was observed but the sample returned empty; empty result must not be interpreted as no behavior or no risk.
+- `server_error_500_request_shape_uncertain_pending` remains pending and must not be treated as validated.
 
 ## 6. Sensitive Field Policy
 

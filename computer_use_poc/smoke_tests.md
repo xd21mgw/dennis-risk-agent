@@ -1846,6 +1846,55 @@
 - 预期：不引入自动处置，不引入自动风险定性，不输出敏感明文，不把截图内容写成接口 validated。
 - 状态：guardrail added，v2.6.1 capability map。
 
+## 214-P. archives v2.6.1 capability smoke test passed
+
+- 输入：`execution_mode=v2_6_1_capability_smoke_test` observation。
+- 场景：8 个 capability API-first 小闭环验证。
+- 预期：标记 capability smoke test passed；说明 8 个 capability 均完成 coverage，6 个基本成功、2 个 partial；这不是全量接口回归。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-Q. archives getPunishStatus is not generic user-level API
+
+- 输入：`/archives/draco/getPunishStatus`。
+- 场景：account_profile 处罚状态。
+- 预期：user-level 调用不可用，需 photo/live targetId；不得作为通用 user-level API validated。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-R. archives empty result is not no behavior
+
+- 输入：`fourinfo/log/search` 或 `coreLogs/fetch` 返回 empty_result。
+- 场景：account_change_trace / account_action_log。
+- 预期：empty_result 不解释为无资料变更 / 无操作日志 / 无风险；只能记录 observed empty under current request.
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-S. archives photo meta missing fields use proxy features
+
+- 输入：`/v3/photo/meta` 缺少 `publishDevice/publishVersion/isImport`。
+- 场景：content_forensics。
+- 预期：使用 `profile.uploadSource/photoMethod` 等代理字段，并显式标记 proxy；不得虚构 meta 字段。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-T. archives message search total is unreliable
+
+- 输入：`/archives/user/message/search` 返回异常大 total。
+- 场景：social_interaction。
+- 预期：`total=4029930781` 这类值不得当真实总量；只记录 `list_len` 和字段结构。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-U. archives photo report search remains pending on 500
+
+- 输入：`/v4/archives/report/photo/search` 持续返回 500。
+- 场景：report_signal。
+- 预期：标记 `server_error_500 / request_shape_uncertain / pending`；不得写成 validated。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
+## 214-V. archives same_device payload shape and mapping pending
+
+- 输入：`/archives/user/search/device type=0/type=1`。
+- 场景：relation_graph。
+- 预期：正确 payload 为 `{keyword, inputType:0, type}`；type=0/type=1 语义保持 `mapping_pending_validation`，不得写死登录/注册。
+- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+
 # 体验黄金 Case Smoke Tests
 
 ## 215. UX golden case: ATO 用户研判

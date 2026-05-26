@@ -383,6 +383,13 @@ v2.6.1 将档案中心 observation 从页面 / Tab 视角升级为 capability �
 archives_capability_observation:
   version: v2.6.1
   platform: archives_center
+  execution_mode: v2_6_1_capability_smoke_test / api_direct_read / fallback_read
+  smoke_test_status:
+    capability_smoke_test_passed:
+    capability_count:
+    basically_success_count:
+    partial_count:
+    full_api_regression:
   capability_package: account_profile / account_change_trace / account_action_log / content_gallery / content_forensics / social_interaction / report_signal / relation_graph
   scene:
   read_strategy:
@@ -394,10 +401,12 @@ archives_capability_observation:
   api_observations:
     - endpoint:
       method:
-      validation_status: validated / partial / failed / pending_from_har_or_screenshot_analysis
+      validation_status: validated / smoke_validated / smoke_validated_empty_result / smoke_validated_partial_total_unreliable / partial / failed / pending_from_har_or_screenshot_analysis / server_error_500_request_shape_uncertain_pending
       request_fields:
       response_shape:
       list_total_pagination_fields:
+      list_len:
+      total_semantics: trusted / unreliable / not_present / not_checked
       api_can_replace_dom:
       fallback_condition:
       partial_coverage:
@@ -413,6 +422,14 @@ archives_capability_observation:
     report_or_user_feedback_signal:
     missing_evidence:
     counter_evidence:
+  special_boundaries:
+    empty_result_interpretation: not_counter_evidence
+    getPunishStatus_user_level: unavailable_requires_photo_or_live_targetId
+    photo_report_search_status: server_error_500_request_shape_uncertain_pending
+    message_search_total_semantics: unreliable_use_list_len_only
+    photo_meta_missing_fields_proxy: use_profile_uploadSource_photoMethod_when_publishDevice_publishVersion_isImport_missing
+    same_device_payload_shape: "{keyword, inputType: 0, type}"
+    same_device_type_mapping: mapping_pending_validation
   sensitive_output_check:
     never_output_raw:
       - cookie
@@ -466,6 +483,12 @@ archives_capability_observation:
 规则：
 
 - `pending_from_har_or_screenshot_analysis` 不得升级为 `validated`，除非有已解析接口 response 或已实跑 observation。
+- `smoke_validated` / `smoke_validated_empty_result` 只代表 v2.6.1 capability 小闭环对观察到的 request / response shape 成功，不代表全量接口回归。
+- `empty_result` 不得解释为无行为、无日志、无变更或无风险。
+- `/v4/archives/report/photo/search` 持续 500 时必须标记 `server_error_500_request_shape_uncertain_pending`。
+- `/archives/user/message/search` 的 `total` 如出现疑似内部计数器，只能记录 `list_len` 和字段结构。
+- `getPunishStatus` 当前不作为通用 user-level API；需要 photo/live `targetId`。
+- `photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，可使用 `profile.uploadSource/photoMethod` 等代理字段，但必须标记 proxy。
 - 私信 / 评论 / 视频 meta / userRouteTrace 只能输出摘要和派生特征，不输出原文。
 - 用户举报 / 视频举报不能单独作为强证据。
 - same-device `type=0/type=1` 仍保持 `mapping_pending_validation`。
