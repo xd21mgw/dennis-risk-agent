@@ -108,7 +108,10 @@ APIs:
 Smoke-test status:
 
 - `/v4/audit/user/fourinfo/log/search`: success.
-- Current sample returned `empty_result`; do not interpret empty result as no profile change.
+- Extended validation confirmed the correct payload uses `keyword`, not `userId`.
+- `fourinfo_infoType_mapping=validated`: `infoType=0` all, `1` username, `2` avatar, `3` profile description, `4` background.
+- Observed counts: all 71, username 12, avatar 18, profile description 22, background 19.
+- Do not output raw username, avatar URL, profile description text, or background URL; output only counts, time ranges, status, and type summaries.
 
 Risk value:
 
@@ -173,9 +176,10 @@ Typical APIs:
 Smoke-test status:
 
 - `/v3/user/gallery/photo/list`: success, observed `total=746`.
-- `/v4/archives/gallery/live/list`: success with `empty_result`.
+- `/v4/archives/gallery/live/list`: success and can provide `liveStreamId` for the validated livestream chain.
 - `/archives/user/gallery/momentList`: success with `empty_result`.
 - Empty gallery/live/moment result is source output, not a no-risk conclusion.
+- `livestream_chain=validated`: live list -> live detail/meta/log/comment statistics/comment detail is connected through API direct read.
 
 Risk value:
 
@@ -212,6 +216,7 @@ Smoke-test status:
 - `/v3/photo/meta`: success.
 - `/v3/photo/report/aggregate`: success.
 - `/archives/photo/home/userAutonomy`: success.
+- Livestream detail chain validated: `/archives/livestream/home/info`, `/archives/livestream/home/meta`, and `/archives/livestream/home/log` all succeeded after `liveStreamId` was obtained from live list.
 - `photo/meta` did not expose `publishDevice` / `publishVersion` / `isImport` in the smoke sample; use `profile.uploadSource` / `photoMethod` and related profile fields as proxy features when meta fields are missing.
 
 Important fields:
@@ -277,8 +282,12 @@ APIs:
 
 Smoke-test status:
 
-- `/archives/user/message/search`: success, but observed `total=4029930781` appears to be an internal counter or unreliable total; do not use it as true message volume. Record `list_len` and response field structure instead.
-- `/archives/photo/comment/search`: success.
+- `/archives/user/message/search`: private message directions validated. `fromUserId=<user_id>` succeeded with `total=66`; `toUserId=<user_id>` succeeded with `total=204`.
+- `private_message_search_direction=validated`: both sender and receiver directions are available.
+- `/archives/photo/comment/search`: comment directions validated. `userId=<user_id>` finds comments sent by that user; `photoId=<photoId>, containsPhotoInfo=true` finds comments received by a photo and additionally returns `photoInfo`.
+- `comment_by_userId=validated`, observed `total=20`.
+- `comment_by_photoId=validated`, observed `total=3180`.
+- Livestream comment chain validated: `/archives/livestream/comment/statistics` and `/archives/livestream/comment/detail` succeeded.
 - `/v3/user/profile/relation/fans/list`: success.
 - `/v3/user/profile/relation/follow/list`: success.
 
@@ -295,6 +304,8 @@ Safety requirements:
 - Private message and comment contents default to summarized output.
 - Do not output full private message plaintext.
 - Do not output full comment plaintext.
+- Do not output full live comment plaintext.
+- Do not output full `photoInfo` or media URL from comment / live context.
 - Output content type, risk summary, repeated pattern, count, time distribution, and state distribution.
 
 ### 2.7 report_signal
@@ -419,8 +430,8 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | report_signal | `/v4/archives/report/user/options` | GET | user/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
 | report_signal | `/v4/archives/report/user/search` | POST | userId, time/filter/page | user report list | empty_result observed in smoke sample | reporter / target identifiers, report text | smoke_validated_empty_result | true_for_observed_shape | key_fields_missing / empty_result_not_counter_evidence |
 | account_change_trace | `/v4/audit/user/fourinfo/log/allTypes` | POST | userId/context | four-info type/options | none | operator / audit notes | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
-| account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | userId, type/time/page | four-info change list | empty_result observed in smoke sample | old/new profile text/media URL/operator | smoke_validated_empty_result | true_for_observed_shape | need_required_param / empty_result_not_counter_evidence |
-| social_interaction | `/archives/photo/comment/search` | POST | photoId/userId/filter/page | comment list | list_len and field structure observed | comment plaintext, commenter id | smoke_validated | true_for_observed_shape | need_required_param |
+| account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | `keyword=<user_id>`, `infoType=0/1/2/3/4`, `markResult`, `punishResult`, `page/count` | four-info change list | count/page, observed non-empty by infoType | old/new profile text/media URL/operator | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
+| social_interaction | `/archives/photo/comment/search` | POST | `userId=<user_id>` or `photoId=<photoId>, containsPhotoInfo=true` | comment list, optional photoInfo | totals observed for both directions | comment plaintext, commenter id, photoInfo sensitive fields | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
 | social_interaction | `/archives/photo/comment/types` | GET | comment context | type options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/status` | POST | comment context | status options | none | none expected | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/photo/comment/userStatus` | POST | user/comment context | user status options | none | user identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
@@ -429,14 +440,14 @@ Each entry must be recorded with capability, endpoint, method, request fields, r
 | social_interaction | `/archives/photo/comment/keyMaps` | POST | comment context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | report_signal | `/v4/archives/report/photo/options` | GET | photo/report context | option structure | none | reporter / target identifiers | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / mapping_pending_validation |
 | report_signal | `/v4/archives/report/photo/search` | POST | `reportedIds=<user_id>`, `matchType` string, `sort` string, `begin/end` ms, `page/count` | photo report list | `totalCount`, `dataList`, page/count | reporter / target identifiers, report text | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
-| social_interaction | `/archives/user/message/search` | POST | userId/filter/page | private message list | list_len observed; total unreliable | private message plaintext, counterpart id | smoke_validated_partial_total_unreliable | true_for_list_shape_only | total_semantics_untrusted / permission_blocked |
+| social_interaction | `/archives/user/message/search` | POST | sender direction `fromUserId=<user_id>` or receiver direction `toUserId=<user_id>` with content/status/sort/page/count | private message list | totals observed for both directions; use counts and distributions only | private message plaintext, counterpart id | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
 | social_interaction | `/archives/user/message/options` | POST | user message context | option structure | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
 | social_interaction | `/archives/user/message/keyMaps` | POST | user message context | key map/options | none | internal field mapping | pending_from_har_or_screenshot_analysis | false_until_observed | mapping_pending_validation |
-| content_forensics | `/archives/livestream/home/info` | POST | liveId/userId | live home info | none | live media URL, anchors/users | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
-| content_forensics | `/archives/livestream/home/meta` | POST | liveId/userId | live meta | none | full live meta JSON | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
-| content_forensics | `/archives/livestream/home/log` | POST | liveId/userId/time | live audit/log list | list/total/page fields pending | operator / notes / raw log | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
-| social_interaction | `/archives/livestream/comment/statistics` | POST | liveId/filter | live comment statistics | aggregate fields | comment content samples | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
-| social_interaction | `/archives/livestream/comment/detail` | POST | liveId/filter/page | live comment detail list | list/total/page fields pending | comment plaintext, commenter id | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param / permission_blocked |
+| content_forensics | `/archives/livestream/home/info` | POST | `liveStreamId` from live list | live home info | none | live media URL, anchors/users | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
+| content_forensics | `/archives/livestream/home/meta` | POST | `liveStreamId` from live list | live meta | none | full live meta JSON | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
+| content_forensics | `/archives/livestream/home/log` | POST | `liveStreamId` and optional time/filter | live audit/log list | list/total/page fields when present | operator / notes / raw log | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
+| social_interaction | `/archives/livestream/comment/statistics` | POST | `liveStreamId` and filter | live comment statistics | aggregate fields | comment content samples | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
+| social_interaction | `/archives/livestream/comment/detail` | POST | `liveStreamId`, filter, page/count | live comment detail list | list/total/page fields when present | comment plaintext, commenter id | validated | true | API failed / permission_blocked / response_shape_changed / key_fields_missing |
 | content_gallery | `/archives/user/gallery/momentList` | POST | userId/page/filter | moment list | empty_result observed in smoke sample | content plaintext/media URL | smoke_validated_empty_result | true_for_observed_shape | key_fields_missing / empty_result_not_counter_evidence |
 | content_gallery | `/archives/user/gallery/momentAuthority` | POST | userId/moment context | moment authority/status | none | internal status reason | pending_from_har_or_screenshot_analysis | false_until_observed | need_required_param |
 

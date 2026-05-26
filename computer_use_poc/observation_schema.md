@@ -428,7 +428,13 @@ archives_capability_observation:
     getPunishStatus_photo_level: validated_with_targetType_PHOTO
     getPunishStatus_live_level: validated_with_targetType_LIVE_STREAM
     photo_report_search_status: validated_with_reportedIds_user_id_begin_end_sort
-    message_search_total_semantics: unreliable_use_list_len_only
+    private_message_search_direction: validated_fromUserId_and_toUserId
+    message_search_output_policy: counts_status_distribution_risk_summary_only
+    comment_search_direction: validated_userId_and_photoId
+    comment_search_containsPhotoInfo: returns_photoInfo_when_true
+    livestream_chain: validated_live_list_to_info_meta_log_comment_statistics_detail
+    fourinfo_payload_field: keyword_required_not_userId
+    fourinfo_infoType_mapping: "0 all; 1 username; 2 avatar; 3 profile description; 4 background"
     photo_meta_missing_fields_proxy: use_profile_uploadSource_photoMethod_when_publishDevice_publishVersion_isImport_missing
     same_device_payload_shape: "{keyword, inputType: 0, type}"
     same_device_type_mapping: "type=0 same-device registered users; type=1 same-device login users"
@@ -489,6 +495,10 @@ archives_capability_observation:
 - `empty_result` 不得解释为无行为、无日志、无变更或无风险。
 - `/v4/archives/report/photo/search` follow-up 已验证；payload 必须使用 `reportedIds=<user_id>`、`begin/end` 毫秒时间戳、`sort` 字段，以及字符串 `matchType/sort`。旧 500 根因是 payload 字段名和语义错误。
 - `/archives/user/message/search` 的 `total` 如出现疑似内部计数器，只能记录 `list_len` 和字段结构。
+- `/archives/user/message/search` 支持 sender / receiver 双向查询：`fromUserId=<user_id>` 查发送方向，`toUserId=<user_id>` 查接收方向。不得输出完整私信内容。
+- `/archives/photo/comment/search` 支持 `userId=<user_id>` 查用户发出的评论，支持 `photoId=<photoId>, containsPhotoInfo=true` 查视频收到的评论并返回 `photoInfo`。不得输出完整评论内容或完整 photoInfo。
+- 直播链路已验证为 live list -> live info/meta/log/comment statistics/comment detail；不得输出媒体 URL、完整直播评论或完整 JSON。
+- `/v4/audit/user/fourinfo/log/search` 使用 `keyword=<user_id>`，不是 `userId`；`infoType=0/1/2/3/4` 分别为全部、用户名、头像、简介、背景。不得输出原始用户名、头像 URL、简介内容或背景 URL。
 - `getPunishStatus` 不支持 user-level；photo-level 使用 `{targetId:<photoId>, targetType:"PHOTO"}`，live-level 使用 `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`，targetType 必须大写。
 - `photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，可使用 `profile.uploadSource/photoMethod` 等代理字段，但必须标记 proxy。
 - 私信 / 评论 / 视频 meta / userRouteTrace 只能输出摘要和派生特征，不输出原文。

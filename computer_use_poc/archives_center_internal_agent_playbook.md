@@ -132,11 +132,11 @@ v2.6.1 起，档案中心主线命名为 `archives API-first core capability map
 v2.6.1 smoke-test 关键结果：
 
 - `account_profile`: `/archives/user/home/info` success；`/archives/user/home/getUserLabel` success；`/archives/draco/getPunishStatus` user-level 不可用，photo/live level 已验证。photo payload `{targetId:<photoId>, targetType:"PHOTO"}`；live payload `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`；`targetType` 必须大写。
-- `account_change_trace`: `/v4/audit/user/fourinfo/log/search` success；当前样本 `empty_result`，不得解释为无变更。
+- `account_change_trace`: `/v4/audit/user/fourinfo/log/search` extended validated；正确 payload 使用 `keyword=<user_id>`，不是 `userId`。`infoType` 映射已验证：0 全部、1 用户名、2 头像、3 简介、4 背景；只输出变更数量、时间、状态、类型摘要，不输出原始资料内容或 URL。
 - `account_action_log`: `/v3/user/log/coreLogs/fetch` success；当前样本 `empty_result`，不得解释为无操作日志。
-- `content_gallery`: `/v3/user/gallery/photo/list` success，`total=746`；`/v4/archives/gallery/live/list` success empty；`/archives/user/gallery/momentList` success empty。
-- `content_forensics`: `/v3/photo/profile`、`/v3/photo/meta`、`/v3/photo/report/aggregate`、`/archives/photo/home/userAutonomy` success；`photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，用 `profile.uploadSource/photoMethod` 等代理字段。
-- `social_interaction`: `/archives/user/message/search` success，但 `total=4029930781` 疑似内部计数器，不得当真实总量；只记录 `list_len` 和字段结构。`/archives/photo/comment/search`、fans/follow list success。
+- `content_gallery`: `/v3/user/gallery/photo/list` success，`total=746`；`/v4/archives/gallery/live/list` 可返回 `liveStreamId` 并串起直播详情链路；`/archives/user/gallery/momentList` success empty。
+- `content_forensics`: `/v3/photo/profile`、`/v3/photo/meta`、`/v3/photo/report/aggregate`、`/archives/photo/home/userAutonomy` success；`photo/meta` 缺少 `publishDevice/publishVersion/isImport` 时，用 `profile.uploadSource/photoMethod` 等代理字段。直播详情链路 `/archives/livestream/home/info`、`meta`、`log` 已验证。
+- `social_interaction`: `/archives/user/message/search` sender / receiver 双向 validated，`fromUserId` 方向 total=66，`toUserId` 方向 total=204；只输出字段名、计数、状态分布和风险摘要。`/archives/photo/comment/search` userId / photoId 双向 validated，`containsPhotoInfo=true` 会额外返回 photoInfo；直播评论 statistics/detail validated；fans/follow list success。
 - `report_signal`: `/v4/archives/report/user/search` success empty；`/v4/archives/report/photo/search` follow-up validated。正确 payload 为 `{matchType:"0", reportedIds:<user_id>, sort:"0", begin:<ms_timestamp>, end:<ms_timestamp>, page:1, count:20}`。`reportedIds` 是 user_id，`begin/end` 是毫秒时间戳，字段名是 `sort` 不是 `sortType`。
 - `relation_graph`: `/archives/user/search/device type=0` 与 `type=1` 均可走 API-first validated path。正确 payload 为 `{keyword, inputType: 0, type}`；`type=0` 是同设备注册用户，`type=1` 是同设备登录用户，不再使用旧 `{userId, source, type}` payload。
 

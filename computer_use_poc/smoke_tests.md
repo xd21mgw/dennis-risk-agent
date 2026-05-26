@@ -1759,8 +1759,8 @@
 
 - 输入：头像 / 昵称 / 简介 / 背景历史修改。
 - 场景：account_change_trace capability。
-- 预期：路由到 `/v4/audit/user/fourinfo/log/allTypes` 和 `/v4/audit/user/fourinfo/log/search`；未实跑前标记 pending，不写 validated。
-- 状态：guardrail added，v2.6.1 capability map。
+- 预期：路由到 `/v4/audit/user/fourinfo/log/allTypes` 和 `/v4/audit/user/fourinfo/log/search`；search payload 使用 `keyword` 而不是 `userId`；`infoType=0/1/2/3/4` 映射已验证。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
 
 ## 214-D. account_action_log routes to coreLogs API
 
@@ -1787,8 +1787,8 @@
 
 - 输入：私信 / 评论 / 直播评论 / 粉丝 / 关注。
 - 场景：social_interaction capability。
-- 预期：路由到 message search/options/keyMaps、photo comment APIs、livestream comment APIs、fans/follow APIs；私信和评论内容只摘要化。
-- 状态：guardrail added，v2.6.1 capability map。
+- 预期：路由到 message search/options/keyMaps、photo comment APIs、livestream comment APIs、fans/follow APIs；私信、评论、直播评论内容只摘要化，不输出原文。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
 
 ## 214-H. report_signal routes to user and photo report APIs
 
@@ -1857,15 +1857,15 @@
 
 - 输入：`/archives/draco/getPunishStatus`。
 - 场景：account_profile 处罚状态。
-- 预期：user-level 调用不可用，需 photo/live targetId；不得作为通用 user-level API validated。
-- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+- 预期：user-level 调用不可用；photo-level 使用 `targetType=PHOTO`，live-level 使用 `targetType=LIVE_STREAM`；不得作为通用 user-level API validated。
+- 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
 
 ## 214-R. archives empty result is not no behavior
 
-- 输入：`fourinfo/log/search` 或 `coreLogs/fetch` 返回 empty_result。
+- 输入：`coreLogs/fetch` 返回 empty_result，或其他已验证 API 在当前 request 下返回 empty_result。
 - 场景：account_change_trace / account_action_log。
-- 预期：empty_result 不解释为无资料变更 / 无操作日志 / 无风险；只能记录 observed empty under current request.
-- 状态：validated by internal Agent observation，v2.6.1 smoke test run 001。
+- 预期：empty_result 不解释为无资料变更 / 无操作日志 / 无风险；只能记录 observed empty under current request。`fourinfo/log/search` 已在 extended validation 中修正为 `keyword` payload 并验证非空结果。
+- 状态：updated by internal Agent extended observation，v2.6.1 extended validation patch。
 
 ## 214-S. archives photo meta missing fields use proxy features
 
@@ -1915,6 +1915,83 @@
 - 场景：处罚状态读取边界。
 - 预期：photo-level payload 为 `{targetId:<photoId>, targetType:"PHOTO"}`；live-level payload 为 `{targetId:<liveStreamId>, targetType:"LIVE_STREAM"}`；user-level unsupported；`targetType` 必须大写。
 - 状态：validated by internal Agent follow-up，v2.6.1 follow-up validation patch。
+
+## 214-Z. archives private message search directions validated
+
+- 输入：`/archives/user/message/search`。
+- 场景：私信发送 / 接收方向查询。
+- 预期：`fromUserId=<user_id>` 方向 validated；`toUserId=<user_id>` 方向 validated；不输出完整私信内容，只输出字段名、计数、状态分布和风险摘要。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AA. archives photo comment search directions validated
+
+- 输入：`/archives/photo/comment/search`。
+- 场景：评论发送 / 视频收到评论方向查询。
+- 预期：`userId=<user_id>` 查该用户发出的评论；`photoId=<photoId>, containsPhotoInfo=true` 查某视频收到的评论并可返回 `photoInfo`；不输出完整评论内容或完整 photoInfo。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AB. archives livestream full chain validated
+
+- 输入：live list 获取 `liveStreamId` 后继续读取直播详情链路。
+- 场景：content_gallery / content_forensics / social_interaction。
+- 预期：`/v4/archives/gallery/live/list`、`/archives/livestream/home/info`、`/archives/livestream/home/meta`、`/archives/livestream/home/log`、`/archives/livestream/comment/statistics`、`/archives/livestream/comment/detail` 串通；不输出媒体 URL、完整直播评论或完整 JSON。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AC. archives fourinfo payload uses keyword not userId
+
+- 输入：`/v4/audit/user/fourinfo/log/search`。
+- 场景：四项资料历史修改。
+- 预期：payload 使用 `keyword=<user_id>`，不是 `userId`；`markResult`、`punishResult`、`count`、`page` 按接口需要保留。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AD. archives fourinfo infoType mapping validated
+
+- 输入：`infoType=0/1/2/3/4`。
+- 场景：四项资料类型映射。
+- 预期：`0=全部`、`1=用户名`、`2=头像`、`3=简介`、`4=背景`；只输出变更数量、时间、状态、类型摘要，不输出具体用户名、头像、简介、背景内容。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AE. archives fourinfo infoType 0 all validated
+
+- 输入：`/v4/audit/user/fourinfo/log/search infoType=0`。
+- 场景：四项资料全部类型。
+- 预期：映射为全部；只输出数量、时间、状态、类型摘要，不输出资料原文。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AF. archives fourinfo infoType 1 username validated
+
+- 输入：`/v4/audit/user/fourinfo/log/search infoType=1`。
+- 场景：用户名历史修改。
+- 预期：映射为用户名；不输出具体用户名原文。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AG. archives fourinfo infoType 2 avatar validated
+
+- 输入：`/v4/audit/user/fourinfo/log/search infoType=2`。
+- 场景：头像历史修改。
+- 预期：映射为头像；不输出头像 URL / 媒体 URL。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AH. archives fourinfo infoType 3 profile description validated
+
+- 输入：`/v4/audit/user/fourinfo/log/search infoType=3`。
+- 场景：简介历史修改。
+- 预期：映射为简介；不输出完整简介内容，只输出风险摘要和状态分布。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AI. archives fourinfo infoType 4 background validated
+
+- 输入：`/v4/audit/user/fourinfo/log/search infoType=4`。
+- 场景：背景历史修改。
+- 预期：映射为背景；不输出背景 URL / 媒体 URL。
+- 状态：validated by internal Agent extended observation，v2.6.1 extended validation patch。
+
+## 214-AJ. archives extended validation raw content redaction
+
+- 输入：私信、视频评论、直播评论、四项资料历史修改返回内容字段。
+- 场景：extended validation 输出边界。
+- 预期：不输出完整私信、完整评论、完整直播评论、用户名原文、头像 URL、简介原文、背景 URL；只输出字段名、计数、状态分布、时间范围、风险摘要和派生特征。
+- 状态：guardrail added，v2.6.1 extended validation patch。
 
 # 体验黄金 Case Smoke Tests
 
