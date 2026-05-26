@@ -429,6 +429,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - v2.5.9 已新增天狮 `eventList API-read` 请求级细查 POC：内部 Agent 已验证在已认证 rcp 浏览器会话中，`POST /v2/rest/event/eventList` 可用。该能力作为 `fastQueryHbase` 的补充：`fastQueryHbase` 负责策略命中概览，`eventList` 负责具体请求 / 事件明细细查。`eventList` 必须依赖已认证 browser context，查询窗口应尽量小、原则上不能跨天；命中策略事件 100% 记录，非命中事件存在抽样，`eventList no_data` 不代表无风险或行为未发生。
 - B 包已新增多源证据编排 contract：`computer_use_poc/multi_evidence_orchestration_contracts/`。该包把 v2.5.7 / v2.5.8 / v2.5.8.1 的多源 E2E 研判雏形升级为 planner / C 包双接口编排 / evidence summary template / regression，不新增真实平台查询。默认最小三源为天狮 `fastQueryHbase`、统一登录日志、档案中心；天狮 `eventList` 只在需要具体请求字段或 eventType 明细时触发。
 - C 包已新增天狮 / 策略平台能力契约：`computer_use_poc/tianshi_strategy_platform_contracts/`。该包把 v2.5.5 `fastQueryHbase` 和 v2.5.9 `eventList API-read` 沉淀为 contract / schema / routing / observation / regression，不新增真实平台查询，不更新 release package。C 包只覆盖天狮查询类能力契约，不解析策略树、策略节点、条件表达式、命中路径、策略版本、实验 / 灰度或策略语义；这些边界归入未来 D 包。
+- 策略归因 API-read POC 已新增：`computer_use_poc/strategy_governance/tianshi_policy_attribution_api_read_poc_v1.md`。内部 Agent 已验证 rcp REST API 可通过 HTTP + SSO 直连，`rcpEventDetail`、`getPolicyVersionListByEvent`、`nodePolicyAttribution` 三步成功，可支持单事件、单策略版本的轻量条件级归因；`rcpEventFeatureList` 返回空 data 需标记 `feature_snapshot_empty_or_unavailable`，`nodeBindPolicyAttribution` 因缺 `policyTreeNodeCode` blocked。该能力当前是 partial success，不是完整策略树闭环；策略归因不等于最终作弊定性，`updateUser` 只能作为追溯字段。
 
 Auth preflight：
 

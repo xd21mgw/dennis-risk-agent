@@ -1580,6 +1580,48 @@
   - 如需确认登录链路，应补用户登录统一日志或围绕实际活跃时间缩小窗口再查。
 - 状态：guardrail added，pending regression。
 
+## 191-A. tianshi policy attribution POC document exists
+
+- 输入：`computer_use_poc/strategy_governance/tianshi_policy_attribution_api_read_poc_v1.md`。
+- 场景：单事件策略归因 API-read 能力沉淀。
+- 预期：文档存在，并说明该能力是 partial success，不是完整策略树闭环。
+- 状态：guardrail added，tianshi policy attribution API-read POC v1。
+
+## 191-B. tianshi policy attribution run log exists
+
+- 输入：`computer_use_poc/run_logs/tianshi_policy_attribution_api_read_run_001.md`。
+- 场景：内部 Agent partial success 结果落盘。
+- 预期：run log 存在，并记录 4/6 步成功、feature list empty、nodeBind blocked。
+- 状态：guardrail added，tianshi policy attribution API-read Run 001。
+
+## 191-C. tianshi nodePolicyAttribution condition evidence
+
+- 输入：单事件 `eventId` + `policyCode` + `policyVersion`。
+- 场景：条件级策略归因。
+- 预期：包含 `nodePolicyAttribution`，可输出条件 true / false 归因摘要；本次 4 个条件均 true。
+- 状态：partial success documented。
+
+## 191-D. tianshi policyTreeNodeCode blocker
+
+- 输入：`nodeBindPolicyAttribution`。
+- 场景：完整节点绑定归因。
+- 预期：缺少 `policyTreeNodeCode` 时标记 blocked；不得写成完整策略树闭环。
+- 状态：blocker documented。
+
+## 191-E. tianshi feature list empty boundary
+
+- 输入：`/v2/rest/event/rcpEventFeatureList` 返回空 data。
+- 场景：事件特征快照。
+- 预期：标记 `feature_snapshot_empty_or_unavailable`；不得解释为无特征、无风险或策略无依据。
+- 状态：boundary documented。
+
+## 191-F. tianshi policy attribution is not final risk classification
+
+- 输入：策略条件级归因成功。
+- 场景：证据解释边界。
+- 预期：策略归因不等于最终作弊定性；`updateUser` 只能作为追溯字段，不做责任归因。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。
