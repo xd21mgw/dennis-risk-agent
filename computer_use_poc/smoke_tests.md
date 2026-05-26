@@ -1584,42 +1584,63 @@
 
 - 输入：`computer_use_poc/strategy_governance/tianshi_policy_attribution_api_read_poc_v1.md`。
 - 场景：单事件策略归因 API-read 能力沉淀。
-- 预期：文档存在，并说明该能力是 partial success，不是完整策略树闭环。
-- 状态：guardrail added，tianshi policy attribution API-read POC v1。
+- 预期：文档存在，并说明该能力已升级为 `full_p0_e2e_success`，但仍不等于最终作弊定性或自动处置。
+- 状态：updated，tianshi policy attribution API-read POC v1 full success。
 
-## 191-B. tianshi policy attribution run log exists
+## 191-B. tianshi policy attribution full success run log exists
 
-- 输入：`computer_use_poc/run_logs/tianshi_policy_attribution_api_read_run_001.md`。
-- 场景：内部 Agent partial success 结果落盘。
-- 预期：run log 存在，并记录 4/6 步成功、feature list empty、nodeBind blocked。
-- 状态：guardrail added，tianshi policy attribution API-read Run 001。
+- 输入：`computer_use_poc/run_logs/tianshi_policy_attribution_api_read_run_002_full_success.md`。
+- 场景：内部 Agent follow-up fix 结果落盘。
+- 预期：run log 存在，并记录 `overall_result=full_p0_e2e_success`、feature list fixed、policyTreeNodeCode resolved、nodeBindPolicyAttribution fixed。
+- 状态：guardrail added，tianshi policy attribution API-read Run 002 full success。
 
 ## 191-C. tianshi nodePolicyAttribution condition evidence
 
 - 输入：单事件 `eventId` + `policyCode` + `policyVersion`。
 - 场景：条件级策略归因。
 - 预期：包含 `nodePolicyAttribution`，可输出条件 true / false 归因摘要；本次 4 个条件均 true。
-- 状态：partial success documented。
+- 状态：full P0 E2E success documented。
 
-## 191-D. tianshi policyTreeNodeCode blocker
+## 191-D. tianshi policyTreeNodeCode resolved
 
-- 输入：`nodeBindPolicyAttribution`。
+- 输入：`queryProPolicyTree` 递归解析策略树。
 - 场景：完整节点绑定归因。
-- 预期：缺少 `policyTreeNodeCode` 时标记 blocked；不得写成完整策略树闭环。
-- 状态：blocker documented。
+- 预期：包含正确接口 `/v2/rest/pro/policyTree/queryProPolicyTree`；解析得到 `policyTreeNodeCode=53187346034508`；不得使用错误接口 `/v2/rest/pc/policytree/getPolicyTreeByVersion`，不得用 serial 或 policyCode 猜节点。
+- 状态：validated by internal Agent follow-up，Run 002 full success。
 
-## 191-E. tianshi feature list empty boundary
+## 191-E. tianshi rcpEventFeatureList fixed
 
-- 输入：`/v2/rest/event/rcpEventFeatureList` 返回空 data。
+- 输入：`/v2/rest/event/rcpEventFeatureList`。
 - 场景：事件特征快照。
-- 预期：标记 `feature_snapshot_empty_or_unavailable`；不得解释为无特征、无风险或策略无依据。
-- 状态：boundary documented。
+- 预期：`featureGroup=""`，`queryTime=1779774526479`；返回 `feature_count=519`，包含 DERIVE / ORIG / COUNTER / SYS / DATASERV / OTHER；不输出敏感字段原值。
+- 状态：validated by internal Agent follow-up，Run 002 full success。
 
 ## 191-F. tianshi policy attribution is not final risk classification
 
 - 输入：策略条件级归因成功。
 - 场景：证据解释边界。
 - 预期：策略归因不等于最终作弊定性；`updateUser` 只能作为追溯字段，不做责任归因。
+- 状态：guardrail added。
+
+## 191-G. tianshi nodeBindPolicyAttribution success
+
+- 输入：`nodeBindPolicyAttribution` with `policyTreeNodeCode=53187346034508`。
+- 场景：节点级绑定策略归因。
+- 预期：返回 `nodeName`、`conditionList`、`nodebindingPolicyList`；目标策略 `BS_fake_account_register_thirdPlatformAll_bindphone#5` 是上线且 `result=true` 的生效策略。
+- 状态：validated by internal Agent follow-up，Run 002 full success。
+
+## 191-H. tianshi policy attribution sensitive output boundary
+
+- 输入：策略归因 observation 中的特征值、用户字段、认证字段。
+- 场景：输出安全边界。
+- 预期：不输出 cookie / token / session / header，不输出身份证 / 手机号 / IP 等敏感原值；只输出字段名、计数、分组分布和脱敏 sample keys。
+- 状态：guardrail added，Run 002 full success。
+
+## 191-I. tianshi RCP HTTP SSO scope boundary
+
+- 输入：rcp 策略归因 REST API 可 HTTP + SSO 调用。
+- 场景：能力范围边界。
+- 预期：该结论仅限已验证的策略归因 API；不得泛化到所有 RCP 接口。
 - 状态：guardrail added。
 
 ## 192. archives user_analysis API direct POST succeeds
