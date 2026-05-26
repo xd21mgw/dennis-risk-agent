@@ -1685,6 +1685,27 @@
 - 预期：策略归因不等于最终作弊定性；发布记录不等于风险定性；`updateUser` / `operator` / `createUser` / `bindingUser` 不做责任归因；敏感字段不输出原值。
 - 状态：guardrail added。
 
+## 191-P. tianshi strategy governance validation cases document exists
+
+- 输入：`computer_use_poc/strategy_governance/tianshi_strategy_governance_validation_cases_v1.md`。
+- 场景：策略治理只读能力验收测试。
+- 预期：文档存在，包含 5 个验收 case。
+- 状态：guardrail added。
+
+## 191-Q. tianshi strategy governance validation cases cover four chains
+
+- 输入：策略治理验收 case。
+- 场景：链路覆盖。
+- 预期：覆盖策略详情、策略树资产、单事件策略归因、策略发布记录四条链路。
+- 状态：guardrail added。
+
+## 191-R. tianshi strategy governance validation cases include critical boundaries
+
+- 输入：策略治理验收 case 的 `must_include_boundaries`。
+- 场景：边界覆盖。
+- 预期：包含策略归因不等于最终作弊定性、策略详情条件表达式不等于完整业务因果解释、策略树资产不等于某次事件实际命中路径、发布记录不等于风险定性、`status=2` 上线不等于每次事件都生效、人员字段不做责任归因、不输出敏感字段原值、不自动处置 / 写操作 / 上线 / 审批。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。
