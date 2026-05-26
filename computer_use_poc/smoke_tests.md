@@ -1979,6 +1979,62 @@
 - 预期：策略命中不等于最终风险定性；`confidenceLevel=强` 不等于最终定性；人员字段只做追溯，不做责任归因；不自动处置。
 - 状态：guardrail added。
 
+## 191-BF. capability_registry contains live attach runtime candidate
+
+- 输入：`computer_use_poc/capability_registry.md`。
+- 场景：能力注册。
+- 预期：包含 `tianshi_live_attach_attribution_candidate`，状态为 `runtime_candidate_beta_partial`，不是 full success。
+- 状态：guardrail added，runtime candidate beta。
+
+## 191-BG. capability_registry contains business security asset map as index only
+
+- 输入：`computer_use_poc/capability_registry.md`。
+- 场景：资产地图能力。
+- 预期：包含 `business_security_scene_asset_mapping`，状态是 `asset_index_only / query_plan_only`；不作为可执行研判能力。
+- 状态：guardrail added。
+
+## 191-BH. ANTICRAWL is candidate only query plan only
+
+- 输入：`computer_use_poc/capability_registry.md` 和路由。
+- 场景：ANTICRAWL 边界。
+- 预期：`tianshi_anticrawl_family_candidate` 是 `candidate_only / query_plan_only`，不是 executable runtime。
+- 状态：guardrail added。
+
+## 191-BI. attach template contains event_detail_partial boundary
+
+- 输入：attach runtime candidate 模板。
+- 场景：回答模板。
+- 预期：包含 `event_detail_partial`、rcpEventDetail timeout 不等于 no_data、queryProPolicyTree 节点为空可用 nodePolicyAttribution 补路径但要标注来源。
+- 状态：guardrail added。
+
+## 191-BJ. user risk question does not trigger attach or ANTICRAWL
+
+- 输入：“帮我看下用户 218368298 有没有风险。”
+- 场景：用户风险研判。
+- 预期：route=`multi_evidence_orchestration`；不默认触发 attach / ANTICRAWL / 完整策略治理，天狮只作为 strategy_hit_evidence 候选。
+- 状态：guardrail added。
+
+## 191-BK. COMMENT MESSAGE not registered runtime capability
+
+- 输入：“评论和私信的策略能不能也查？”
+- 场景：互动场景能力边界。
+- 预期：不注册 COMMENT / MESSAGE runtime；输出当前是 asset map 中的 partial 场景，需单独深验证。
+- 状态：guardrail added。
+
+## 191-BL. business asset map not executable capability
+
+- 输入：“业务安全除了注册登录还有哪些场景？”
+- 场景：资产地图。
+- 预期：route=`business_security_scene_asset_mapping`，只输出资产地图、覆盖面、候选场景和下一步验证计划；不触发平台查询，不输出风险定性。
+- 状态：guardrail added。
+
+## 191-BM. non_register_login_runtime_candidate_dryrun exists
+
+- 输入：`computer_use_poc/run_logs/non_register_login_runtime_candidate_dryrun_v1.md`。
+- 场景：本地 dry-run regression。
+- 预期：包含 6 个 case，覆盖 live attach、业务安全资产地图、ANTICRAWL query plan、用户风险问题和 COMMENT / MESSAGE 边界。
+- 状态：guardrail added。
+
 ## 192. archives user_analysis API direct POST succeeds
 
 - 输入：档案中心用户分析 / APP端核心操作日志。

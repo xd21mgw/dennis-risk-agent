@@ -1391,7 +1391,181 @@ TOP 条件：
 - 用户只问“有没有风险”时不默认触发完整策略盘点，先走多源证据编排。
 - 不因策略命中、TOP 策略、TOP 节点、策略共现直接输出用户级风险定性。
 
-## 5. 策略治理回答模板
+## 5. 直播 attach runtime candidate 模板
+
+适用问题：
+
+- “直播长连接为什么被拦？”
+- “SYNC_LIVE_ATTACH_REQUEST 为什么阻止？”
+- “这个用户直播 attach 命中过什么策略？”
+- “直播人气防刷命中原因是什么？”
+
+默认能力：`tianshi_live_attach_attribution_candidate`
+
+回答骨架：
+
+```text
+结论摘要：
+live attach 当前是 beta / partial runtime candidate，只能解释直播长连接建连事件的策略命中和条件级归因线索，不直接给最终风险定性。
+
+查询范围：
+- source_id:
+- time_window:
+- event_type: SYNC_LIVE_ATTACH_REQUEST
+
+attach 事件分布：
+- total_events:
+- blocked_events:
+- allowed_events:
+- event_detail_status:
+
+命中策略概览：
+- BS_antibrush_attach_user_multi_loc_block_policy:
+- BS_antibrush_attach_not_same_startup_block_policy:
+- confidenceLevel:
+
+代表事件：
+- representative_event_refs:
+- event_detail_status:
+- attribution_status:
+
+条件级归因路径：
+- 用户位置频繁跳变拦截策略路径:
+- 启动参数不一致拦截策略路径:
+- condition_count / true_condition_count:
+
+已知缺口：
+- rcpEventDetail 对阻止事件可能 timeout，标记 event_detail_partial。
+- queryProPolicyTree 可能只返回版本号，不返回节点结构。
+- getPolicyDetailByVersion 对 antibrush 策略可能 fields empty。
+
+不能下的结论：
+- 这是 beta / partial candidate，不是 full success。
+- 策略命中不等于最终风险定性。
+- confidenceLevel=强 不等于最终定性。
+- event_detail_partial 不等于 no_data。
+- updateUser / operator / owner 只做追溯字段，不做责任归因。
+- 不自动处置、不写操作、不上线、不审批。
+
+下一步建议：
+- 若需要用户风险判断，补用户画像、登录、设备、行为和直播上下文证据。
+- 若需要完善 attach 能力，继续验证阻止事件详情接口和策略树节点结构。
+```
+
+## 6. 业务安全场景资产地图模板
+
+适用问题：
+
+- “业务安全目前有哪些场景？”
+- “天狮里账号、流量、反爬、互动都有哪些 eventType？”
+- “除了注册登录还能覆盖哪些场景？”
+
+默认能力：`business_security_scene_asset_mapping`
+
+回答骨架：
+
+```text
+结论摘要：
+这是业务安全场景资产地图，只用于说明 eventType / policyTree 候选和验证优先级，不是已上线执行能力，也不是风险定性。
+
+已覆盖大类：
+- account_security:
+- traffic_security:
+- anti_crawler_antibrush:
+- interaction_anti_abuse:
+- activity_anti_cheating:
+
+verified 场景：
+- USER_REGISTER_NEW:
+
+partial 场景：
+- LOGIN_AUDIT:
+- REBIND:
+- RESET_PASSWORD:
+- SYNC_LIVE_ATTACH_REQUEST:
+- FOLLOW / LIKE / COMMENT / MESSAGE:
+
+candidate_only 场景：
+- ANTICRAWL 家族:
+- 活动反作弊家族:
+- 互动防刷子 eventType:
+- 离线处置类 TASK 事件:
+
+高价值下一批验证：
+- P0:
+- P1:
+- P2:
+
+参数缺口：
+- policyTreeList 参数格式:
+- queryProPolicyTree 非注册树节点:
+- policySearch 模糊搜索:
+- ANTICRAWL 家族结构:
+- SYNC_LIVE_ATTACH_REQUEST detail:
+
+不得误读的边界：
+- 找到 eventType 不代表已可归因。
+- 找到 policyTree 不代表策略正在命中。
+- 策略存在不等于风险存在。
+- policyTreeVersion 高不等于策略更多或风险更高。
+- 不触发平台查询。
+- 不输出风险定性。
+
+下一步建议：
+- 选择少量高价值场景深验证，不全量扩散。
+```
+
+## 7. ANTICRAWL candidate query plan 模板
+
+适用问题：
+
+- “这个用户是不是被反爬命中了？”
+- “ANTICRAWL 怎么查？”
+- “这个接口是不是被爬？”
+
+默认能力：`tianshi_anticrawl_family_candidate` / `anti_crawler_expert_mode`
+
+回答骨架：
+
+```text
+当前状态：
+ANTICRAWL 家族当前是 candidate_only / query_plan_only，缺真实命中 source_id / eventId 时不能做完整归因。
+
+已知 ANTICRAWL 子 eventType：
+- ANTICRAWL
+- ANTICRAWL_LIVE
+- ANTICRAWL_BASE
+- ANTICRAWL_SEARCH
+- ANTICRAWL_COMMON
+- ANTICRAWL_RPC_SIGN
+- ANTICRAWL_PLATFORM_SYNC
+- LIVE_STREAM_ANTICRAWL
+
+需要的输入：
+- source_id:
+- eventId:
+- time_window:
+- interface / action_type:
+
+建议查询链路：
+1. fastQueryHbase：确认是否有 ANTICRAWL 家族命中。
+2. eventList：按 eventType 补请求级明细。
+3. rcpEventDetail：代表 event 详情。
+4. nodePolicyAttribution：代表 event 条件级归因。
+
+当前缺口：
+- 当前样本无 ANTICRAWL 命中。
+- 只确认部分子树版本。
+- 不能归因，不能声称已上线可执行。
+
+边界说明：
+- 不注册为可执行 runtime。
+- 无命中样本时只输出 query plan。
+- 不把接口异常直接等同反爬命中。
+- 不自动处置、不写操作、不上线、不审批。
+```
+
+## 8. 策略治理回答模板
 
 适用问题：
 
@@ -1474,7 +1648,7 @@ TOP 条件：
 - `hitTimestamp` 不能直接等同 rcpEventDetail 的 `queryTime`；代表 event 深挖时优先使用事件详情 `_occurTime`，或标记 `queryTime_source`。
 - “只问用户有没有风险”优先多源证据编排，不默认全量策略治理。
 
-## 6. Plan 模式提示规则
+## 9. Plan 模式提示规则
 
 适用问题：
 

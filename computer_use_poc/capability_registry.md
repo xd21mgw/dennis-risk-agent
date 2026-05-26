@@ -25,6 +25,9 @@
 | `tianshi_eventlist_read` | 对具体 eventType / 小时间窗口做请求级细查 | 天狮 eventList API-read / browser same-origin | specific_event small window | partial_design_and_poc | eventList 是补查入口，不是 strategy_hit_inventory 首选命中概览入口；no_data 不代表行为未发生 |
 | `tianshi_strategy_platform_contracts` | 固化天狮 fastQueryHbase / eventList 的 contract、schema、routing 和 observation 边界 | `computer_use_poc/tianshi_strategy_platform_contracts/` | contract layer only | documented | C 包不解析策略树；策略配置理解属于未来 D 包 |
 | `tianshi_strategy_hit_inventory` | 从 user/source_id 维度盘点策略命中概览、TOP 策略、TOP 节点、TOP 条件、策略共现和代表事件 | fastQueryHbase HTTP+SSO → eventList supplement → representative event attribution | single_source bounded window inventory | documented_ready_for_runtime | 策略命中盘点是风险感知线索，不等于最终风险定性，不自动处置 |
+| `tianshi_live_attach_attribution_candidate` | 解释直播长连接 attach / `SYNC_LIVE_ATTACH_REQUEST` 为什么被策略阻止，以及直播人气防刷相关策略路径 | fastQueryHbase → eventList / rcpEventDetail → getPolicyVersionListByEvent → nodePolicyAttribution | live_attach single_source beta partial | runtime_candidate_beta_partial | beta / partial candidate，不是 full success；eventDetail timeout 只能标 `event_detail_partial` |
+| `business_security_scene_asset_mapping` | 回答业务安全有哪些场景、eventType / policyTree 候选和后续验证优先级 | `business_security_scene_asset_mapping_poc_v1.md` | asset index / query plan only | asset_index_only_query_plan_only | 资产地图不是可执行研判能力，不触发平台查询，不输出风险定性 |
+| `tianshi_anticrawl_family_candidate` | 解释 ANTICRAWL 家族候选 eventType 和反爬查询计划 | asset map + future hit sample required | candidate query plan only | candidate_only_query_plan_only | 不注册为可执行 runtime；缺真实命中 source_id / eventId 时只输出 query plan |
 | `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
@@ -48,6 +51,12 @@
   - `event_type_detail_supplement`：使用 eventList，对允许事件、`ec=1` 事件和请求级字段做 eventType 级补查；eventList 需要 browser same-origin。
   - `representative_event_attribution`：使用 `rcpEventDetail` + `nodePolicyAttribution` + `nodeBindPolicyAttribution` 对代表 event 深挖，不默认对所有事件全量归因。
   - 盘点输出可包含 `policy_topn`、`node_topn`、`condition_topn`、`policy_cooccurrence` 和 `representative_events`；这些都是风险感知线索，不是用户级风险定性。
+- `tianshi_live_attach_attribution_candidate` 是 `SYNC_LIVE_ATTACH_REQUEST` / 直播长连接 attach 的非注册 / 登录 runtime candidate beta，子能力包括：
+  - `attach_hit_overview_lookup`：首选 fastQueryHbase，输入 `source_id + time_window`，输出 attach 相关 eventId / riskDecision / hitPolicies / confidenceLevel / riskType。
+  - `attach_event_detail_supplement`：使用 eventList / rcpEventDetail；rcpEventDetail 对阻止事件可能 timeout，必须标 `event_detail_partial`，不得当 no_data。
+  - `attach_policy_attribution`：使用 getPolicyVersionListByEvent + nodePolicyAttribution，支持代表事件条件级归因；已验证 `BS_antibrush_attach_user_multi_loc_block_policy` 和 `BS_antibrush_attach_not_same_startup_block_policy`。
+- `business_security_scene_asset_mapping` 只做资产地图 / query plan，覆盖 account_security、traffic_security、anti_crawler_antibrush、interaction_anti_abuse、activity_anti_cheating；找到 eventType / policyTree 不代表已可归因或正在命中。
+- `tianshi_anticrawl_family_candidate` 只做 candidate_only / query_plan_only；已知候选包括 `ANTICRAWL`、`ANTICRAWL_LIVE`、`ANTICRAWL_BASE`、`ANTICRAWL_SEARCH`、`ANTICRAWL_COMMON`、`ANTICRAWL_RPC_SIGN`、`ANTICRAWL_PLATFORM_SYNC`、`LIVE_STREAM_ANTICRAWL`；没有命中样本时不得假装可完整归因。
 - `tianshi_strategy_platform_contracts` 是 `strategy_hit_read` 和 `tianshi_eventlist_read` 的契约索引；它定义 source_id 非空、小窗口、eventList 不跨天、sampling / no_data / auth blocker 边界，以及未来 D 包策略树边界。
 - `tianshi_strategy_governance_readonly` 是天狮策略治理只读能力，子能力包括：
   - `policy_detail_lookup`：解释策略定义、条件表达式、版本历史、绑定树。
