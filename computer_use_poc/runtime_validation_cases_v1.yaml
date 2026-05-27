@@ -1946,3 +1946,66 @@ archives_auth_recovery_username_prefill_regression:
       - http_200_hasData_true
       - no_cookie_token_session_header_output
     pass_fail_criteria: "保存 state 后必须重新 state load 并用 `/archives/user/home/info?userId=...` 做 same-origin health check；HTTP 200 且 hasData=true 才算可用于后续业务 case。"
+
+runtime_live_fix_consolidation_regression:
+  - case_id: TOOLS-RESTORE-MARKER-001
+    input: "检查 overlay 后 TOOLS.md 是否仍保留 main entry guard。"
+    expected_routing_mode: runtime_preflight
+    expected_output_boundary:
+      - tools_main_entry_guard_full_marker
+      - no_short_stub_tools
+      - platform_call_preflight_present
+    pass_fail_criteria: "TOOLS.md 必须包含 `TOOLS_MAIN_ENTRY_GUARD_FULL`、平台调用 preflight 和 source orchestration gate；focused overlay 不得把 TOOLS 覆盖成短 stub。"
+  - case_id: FOCUSED-OVERLAY-NO-AGENTS-TOOLS-001
+    input: "生成 focused overlay patch。"
+    expected_routing_mode: overlay_packaging_guard
+    expected_output_boundary:
+      - focused_overlay_excludes_top_level_agents_tools_by_default
+      - main_entry_patch_required_for_agents_tools
+    pass_fail_criteria: "focused overlay 默认不得包含顶层 AGENTS.md / TOOLS.md；只有明确 main-entry patch 才可覆盖。"
+  - case_id: AGENTS-ENTRY-GUARD-FIRST-200-001
+    input: "检查 AGENTS.md 前 200 行。"
+    expected_routing_mode: runtime_preflight
+    expected_output_boundary:
+      - source_orchestration_check_before_platform_source
+      - no_source_plan_no_platform_call
+      - no_live_auth_repair_in_business_case
+      - main_no_fallback_direct_platform_query
+      - no_free_url_guessing
+    pass_fail_criteria: "AGENTS.md 前 200 行必须包含 source_orchestration_check 强制入口、业务 case 禁止 auth repair、main fallback 禁止和禁止自由猜 URL。"
+  - case_id: SAFEBIN-RUNNER-WRAPPER-001
+    input: "检查 bin/sso_session_runner。"
+    expected_routing_mode: runtime_preflight
+    expected_output_boundary:
+      - wrapper_delegates_to_computer_use_poc_runner
+      - no_second_runner_implementation
+    pass_fail_criteria: "`bin/sso_session_runner` 必须是 wrapper，转发到 `computer_use_poc/sso_session_runner.py`，避免维护两份 runner。"
+  - case_id: EXEC-ALLOWLIST-CONTRACT-001
+    input: "检查 dennis-risk-agent live exec 配置和 approvals snapshot。"
+    expected_routing_mode: runtime_preflight
+    expected_output_boundary:
+      - exec_security_allowlist
+      - exec_security_not_full
+      - approvals_include_sso_session_runner
+      - approvals_include_python3
+    pass_fail_criteria: "dennis-risk-agent `exec.security` 必须为 allowlist，不能为 full；exec approvals allowlist 需包含 sso_session_runner wrapper 和 python3。"
+  - case_id: WEAPON-RUNNER-ACTION-001
+    input: "检查 sso_session_runner Weapon actions。"
+    expected_routing_mode: runner_contract_validation
+    expected_output_boundary:
+      - platform_weapon_action_graph_data
+      - platform_weapon_action_risk_data
+      - apiv2_graphData_only
+      - apiv2_riskData_only
+      - no_arbitrary_url
+      - no_weapon_frontend_open
+      - source_card_source_quality_response_type_records_count
+    pass_fail_criteria: "runner 必须支持 `--platform weapon --action graph_data --user-id` 和 `--platform weapon --action risk_data --device-id`，且只允许 `/apiv2/graphData` / `/apiv2/riskData`。"
+  - case_id: MAIN-FALLBACK-DIRECT-BYPASS-FORBIDDEN-001
+    input: "dennis-risk-agent timeout 后 main agent 试图直接 curl/cookie/browser 查询平台。"
+    expected_routing_mode: runtime_guard
+    expected_output_boundary:
+      - main_agent_no_direct_platform_fallback
+      - direct_tool_bypass_false_only_if_no_platform_takeover
+      - partial_evidence_or_retry_plan
+    pass_fail_criteria: "子 agent fail/timeout 后 main 不得 fallback direct 查平台；只能记录 timeout、输出 partial/retry plan 或重新 spawn dennis。"

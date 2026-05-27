@@ -127,13 +127,18 @@ Input:
 
 Preferred path:
 
-1. USER_ID to DEVICE_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2`.
-2. DEVICE_ID to USER_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2`.
-3. Device risk uses `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}` only after a device id is available.
+1. For Dennis runtime execution, use the controlled runner when available:
+   - `python3 computer_use_poc/sso_session_runner.py --platform weapon --action graph_data --user-id {userId} --timeout 30 --format json`
+   - `python3 computer_use_poc/sso_session_runner.py --platform weapon --action risk_data --device-id {deviceId} --timeout 30 --format json`
+2. USER_ID to DEVICE_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2`.
+3. DEVICE_ID to USER_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2`.
+4. Device risk uses `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}` only after a device id is available.
 
 Hard rules:
 
 - `/apiv2/graphData` and `/apiv2/riskData` are the default readonly API paths.
+- The runner must not accept arbitrary URL input and must not open the Weapon frontend.
+- Runner output must include `source_card`, `source_quality`, `response_type`, `records_count`, `real_platform_request_executed`, and redaction markers.
 - Do not use `/api/graphData` as default execution guidance.
 - Do not strip mobile device prefixes such as `ANDROID_` or `IOS_` before calling Weapon riskData. Preserve the observed device id string unless a validated platform contract explicitly says otherwise.
 - Do not switch to arbitrary frontend or guessed API paths when `/apiv2/*` returns `auth_failed`, `blocked`, or `timeout`; record the source status and continue the evidence card.

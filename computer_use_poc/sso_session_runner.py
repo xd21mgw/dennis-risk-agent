@@ -42,10 +42,13 @@ MAX_TIMEOUT_SECONDS = 120
 PLATFORM_ALIASES = {
     "login_log": "user_login_unified_log",
     "user_login_unified_log": "user_login_unified_log",
+    "weapon": "weapon",
 }
 
 ACTION_ALIASES = {
     "query_user_login_log": "query_user_login_log",
+    "graph_data": "graph_data",
+    "risk_data": "risk_data",
 }
 
 PLATFORM_ACTIONS = {
@@ -53,7 +56,17 @@ PLATFORM_ACTIONS = {
         "source_name": "user_login_unified_log",
         "method": "GET",
         "base_url": "https://user-center-workbench.corp.kuaishou.com/rest/unified/log/search",
-    }
+    },
+    ("weapon", "graph_data"): {
+        "source_name": "weapon_user_to_device_graph",
+        "method": "GET",
+        "base_url": "https://weapon.corp.kuaishou.com/apiv2/graphData",
+    },
+    ("weapon", "risk_data"): {
+        "source_name": "weapon_device_risk",
+        "method": "GET",
+        "base_url": "https://weapon.corp.kuaishou.com/apiv2/riskData",
+    },
 }
 
 SENSITIVE_KEY_RE = re.compile(
@@ -184,23 +197,71 @@ def build_user_login_url(user_id: str, from_ts: str | None, to_ts: str | None) -
     return url, metadata
 
 
+DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def build_weapon_graph_url(user_id: str) -> tuple[str, dict[str, Any]]:
+    params = {
+        "product": "KUAISHOU",
+        "productName": "KUAISHOU",
+        "groupValue": user_id,
+        "groupKey": "USER_ID",
+        "dimKey": "DEVICE_ID",
+        "searchLevel": "2",
+    }
+    url = f"{PLATFORM_ACTIONS[('weapon', 'graph_data')]['base_url']}?{urlencode(params)}"
+    return url, {
+        "request_safe_id": safe_id(url),
+        "endpoint_contract": "/apiv2/graphData",
+        "forbidden_endpoint": "/api/graphData",
+        "query_shape": {
+            "product": "KUAISHOU",
+            "productName": "KUAISHOU",
+            "groupKey": "USER_ID",
+            "dimKey": "DEVICE_ID",
+            "searchLevel": 2,
+        },
+    }
+
+
+def build_weapon_risk_url(device_id: str) -> tuple[str, dict[str, Any]]:
+    if not DEVICE_ID_RE.fullmatch(device_id):
+        raise ValueError("device_id must be an opaque device identifier")
+    params = {
+        "product": "KUAISHOU",
+        "deviceIds": device_id,
+    }
+    url = f"{PLATFORM_ACTIONS[('weapon', 'risk_data')]['base_url']}?{urlencode(params)}"
+    return url, {
+        "request_safe_id": safe_id(url),
+        "endpoint_contract": "/apiv2/riskData",
+        "device_id_prefix_preserved": device_id.startswith(("ANDROID_", "IOS_")),
+        "query_shape": {
+            "product": "KUAISHOU",
+            "deviceIds": "redacted_device_id",
+        },
+    }
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = EnvelopeArgumentParser(description="Controlled readonly SSO API executor.")
     parser.add_argument("--platform", choices=sorted(PLATFORM_ALIASES), help="Recommended runtime platform key.")
     parser.add_argument("--action", choices=sorted(ACTION_ALIASES), help="Recommended runtime action key.")
     parser.add_argument("--user-id", dest="user_id_dash")
+    parser.add_argument("--device-id", dest="device_id_dash")
     parser.add_argument("--timeout", default="30")
     parser.add_argument("--format", default="json", choices=["json"])
 
     # Backward-compatible parameters.
     parser.add_argument("--platform_key", choices=sorted(PLATFORM_ALIASES))
     parser.add_argument("--user_id")
+    parser.add_argument("--device_id")
     parser.add_argument("--from_timestamp")
     parser.add_argument("--to_timestamp")
     return parser.parse_args(argv)
 
 
-def normalize_args(args: argparse.Namespace) -> tuple[str, str, str, str | None, str | None, int]:
+def normalize_args(args: argparse.Namespace) -> tuple[str, str, str | None, str | None, str | None, str | None, int]:
     platform_raw = args.platform or args.platform_key
     if not platform_raw:
         raise ValueError("platform is required")
@@ -217,12 +278,20 @@ def normalize_args(args: argparse.Namespace) -> tuple[str, str, str, str | None,
         raise ValueError("unsupported platform/action")
 
     user_id = validate_digits(args.user_id_dash or args.user_id, "user_id", ID_RE)
-    if user_id is None:
+    device_id = args.device_id_dash or args.device_id
+    if platform == "user_login_unified_log" and user_id is None:
         raise ValueError("user_id is required")
+    if platform == "weapon" and action == "graph_data" and user_id is None:
+        raise ValueError("user_id is required")
+    if platform == "weapon" and action == "risk_data":
+        if not device_id:
+            raise ValueError("device_id is required")
+        if not DEVICE_ID_RE.fullmatch(device_id):
+            raise ValueError("device_id must be an opaque device identifier")
     from_ts = validate_digits(args.from_timestamp, "from_timestamp", TS_RE)
     to_ts = validate_digits(args.to_timestamp, "to_timestamp", TS_RE)
     timeout = parse_timeout(args.timeout)
-    return platform, action, user_id, from_ts, to_ts, timeout
+    return platform, action, user_id, device_id, from_ts, to_ts, timeout
 
 
 def build_observation(
@@ -242,10 +311,13 @@ def build_observation(
     auth_refresh_status: str = "skipped",
     retry_after_refresh: bool = False,
     source_status_before_refresh: str | None = None,
+    source_name: str = "user_login_unified_log",
+    response_type: str | None = None,
+    source_card: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     observation: dict[str, Any] = {
         "schema_version": "sso_runner_observation_v2",
-        "source_name": "user_login_unified_log",
+        "source_name": source_name,
         "source_status": source_status,
         "user_id": user_id,
         "records_count": records_count if records_count is not None else 0,
@@ -264,6 +336,8 @@ def build_observation(
         "dataagent_called": False,
         "platform_write_action": False,
         "sensitive_output": False,
+        "response_type": response_type,
+        "source_card": source_card or {},
         "logs": [],
     }
     if error_message:
@@ -472,6 +546,45 @@ def classify_json_payload(payload: Any) -> tuple[str, int, str, dict[str, Any]]:
     return status, records_count, summary, quality
 
 
+def classify_weapon_payload(payload: Any, source_name: str) -> tuple[str, int, str, dict[str, Any], dict[str, Any]]:
+    records = extract_records(payload)
+    records_count = len(records)
+    if records_count == 0 and isinstance(payload, dict):
+        for key in ("pointInfoMap", "relationEdgeList", "labelInfo", "data"):
+            value = payload.get(key)
+            if isinstance(value, dict):
+                records_count += len(value)
+            elif isinstance(value, list):
+                records_count += len(value)
+
+    source_card = {
+        "source_name": source_name,
+        "response_shape": "json_summary",
+        "raw_response_redacted": True,
+    }
+    if source_name == "weapon_user_to_device_graph":
+        source_card["endpoint"] = "/apiv2/graphData"
+        source_card["forbidden_endpoint"] = "/api/graphData"
+        source_card["graph_empty_not_no_device"] = records_count == 0
+    else:
+        source_card["endpoint"] = "/apiv2/riskData"
+        source_card["device_risk_not_user_risk"] = True
+
+    status = "completed" if records_count > 0 else "no_data"
+    summary = (
+        f"{source_name} returned {records_count} summarized item(s)."
+        if records_count > 0
+        else f"{source_name} returned JSON with no summarized item in this source."
+    )
+    quality = {
+        "permission_status": "ok",
+        "reliability_level": "api_json_summary",
+        "no_data_not_risk_exclusion": status == "no_data",
+        "raw_response_redacted": True,
+    }
+    return status, records_count, summary, quality, source_card
+
+
 def classify_response_to_observation(
     *,
     response: Any,
@@ -661,12 +774,139 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
     )
 
 
+def execute_weapon(
+    *,
+    action: str,
+    user_id: str | None,
+    device_id: str | None,
+    timeout: int,
+) -> dict[str, Any]:
+    source_name = PLATFORM_ACTIONS[("weapon", action)]["source_name"]
+    if action == "graph_data":
+        if user_id is None:
+            raise ValueError("user_id is required")
+        url, metadata = build_weapon_graph_url(user_id)
+        observation_user_id = user_id
+    elif action == "risk_data":
+        if device_id is None:
+            raise ValueError("device_id is required")
+        url, metadata = build_weapon_risk_url(device_id)
+        observation_user_id = None
+    else:
+        raise ValueError("unsupported weapon action")
+
+    request_safe_id = metadata.pop("request_safe_id")
+    try:
+        response, executor_mode = call_executor_get(url, timeout)
+    except TimeoutError as exc:
+        return build_observation(
+            source_name=source_name,
+            source_status="timeout",
+            user_id=observation_user_id,
+            evidence_time_range={},
+            evidence_summary=f"{source_name} request timed out.",
+            source_quality={"permission_status": "unknown", "failure_reason": "timeout"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            error_message=str(exc),
+            extra_metadata=metadata,
+            executor_mode="unavailable",
+        )
+    except Exception as exc:
+        return build_observation(
+            source_name=source_name,
+            source_status="blocked",
+            user_id=observation_user_id,
+            evidence_time_range={},
+            evidence_summary=f"{source_name} request could not complete through controlled SSO executor.",
+            source_quality={
+                "permission_status": "blocked",
+                "failure_reason": "sso_executor_unavailable",
+                "no_data_not_risk_exclusion": True,
+            },
+            real_platform_request_executed=False,
+            raw_reference_safe_id=request_safe_id,
+            error_message=safe_error_message(exc),
+            extra_metadata=metadata,
+            executor_mode="unavailable",
+        )
+
+    status_code = response_status(response)
+    text = response_text(response)
+    if status_code is not None and 300 <= int(status_code) < 400:
+        return build_observation(
+            source_name=source_name,
+            source_status="auth_failed",
+            user_id=observation_user_id,
+            evidence_time_range={},
+            evidence_summary=f"{source_name} request redirected, likely authentication or access proxy issue.",
+            source_quality={"permission_status": "auth_failed", "failure_reason": "http_redirect"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            response_type="redirect",
+        )
+    if looks_like_auth_html(text):
+        return build_observation(
+            source_name=source_name,
+            source_status="auth_failed",
+            user_id=observation_user_id,
+            evidence_time_range={},
+            evidence_summary=f"{source_name} returned HTML/login-like content instead of JSON.",
+            source_quality={"permission_status": "auth_failed", "failure_reason": "html_or_login_page"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            response_type="html",
+        )
+    try:
+        payload = response_json(response)
+    except Exception as exc:
+        return build_observation(
+            source_name=source_name,
+            source_status="parse_error",
+            user_id=observation_user_id,
+            evidence_time_range={},
+            evidence_summary=f"{source_name} response was not parseable as JSON.",
+            source_quality={"permission_status": "unknown", "failure_reason": "json_parse_error"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            error_message=str(exc),
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            response_type="parse_error",
+        )
+
+    source_status, records_count, summary, quality, source_card = classify_weapon_payload(payload, source_name)
+    return build_observation(
+        source_name=source_name,
+        source_status=source_status,
+        user_id=observation_user_id,
+        evidence_time_range={},
+        evidence_summary=summary,
+        source_quality=quality,
+        real_platform_request_executed=True,
+        records_count=records_count,
+        raw_reference_safe_id=request_safe_id,
+        extra_metadata=metadata,
+        executor_mode=executor_mode,
+        response_type="json",
+        source_card=source_card,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv or sys.argv[1:])
-        platform, action, user_id, from_ts, to_ts, timeout = normalize_args(args)
+        platform, action, user_id, device_id, from_ts, to_ts, timeout = normalize_args(args)
         if platform == "user_login_unified_log" and action == "query_user_login_log":
+            if user_id is None:
+                raise ValueError("user_id is required")
             observation = execute_login_log(user_id, from_ts, to_ts, timeout)
+        elif platform == "weapon":
+            observation = execute_weapon(action=action, user_id=user_id, device_id=device_id, timeout=timeout)
         else:
             raise ValueError("unsupported platform/action")
         emit_json(observation)

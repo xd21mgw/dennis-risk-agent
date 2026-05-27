@@ -7169,3 +7169,52 @@
 - input: 用户完成员工 SSO 后保存 `archives_auth_state.json`。
 - expected_runtime_behavior: state_reload_same_origin_health_check
 - expected_output_boundary: 必须 browser close、state load、打开档案中心用户主页、确认不跳登录页、same-origin fetch `/archives/user/home/info?userId=...`，HTTP 200 且 hasData=true 才算 health check passed。
+
+## 748. TOOLS restore marker
+
+- test_id: TOOLS-RESTORE-MARKER-001
+- input: focused overlay 后检查 `TOOLS.md`。
+- expected_runtime_behavior: tools_main_entry_guard_present
+- expected_output_boundary: `TOOLS.md` 必须包含 `TOOLS_MAIN_ENTRY_GUARD_FULL`、`DENNIS_ROUTING_GUARD_V1`、platform call preflight 和 source orchestration gate；短 stub 覆盖应 fail。
+
+## 749. Focused overlay does not overwrite main entry files
+
+- test_id: FOCUSED-OVERLAY-NO-AGENTS-TOOLS-001
+- input: focused overlay manifest。
+- expected_runtime_behavior: focused_overlay_main_entry_guard
+- expected_output_boundary: focused overlay 默认不得包含顶层 `AGENTS.md` / `TOOLS.md`；只有明确 `main-entry patch` 才允许覆盖。
+
+## 750. AGENTS entry guard first 200 lines
+
+- test_id: AGENTS-ENTRY-GUARD-FIRST-200-001
+- input: `AGENTS.md` 前 200 行。
+- expected_runtime_behavior: entry_guard_visible_before_deep_runtime_text
+- expected_output_boundary: 必须包含 source_orchestration_check 强制入口、无 source plan 不查平台、business case 禁止 auth repair、main 不 fallback direct 查平台、禁止自由猜 URL。
+
+## 751. safeBin runner wrapper
+
+- test_id: SAFEBIN-RUNNER-WRAPPER-001
+- input: `bin/sso_session_runner`。
+- expected_runtime_behavior: wrapper_to_canonical_runner
+- expected_output_boundary: wrapper 必须 `exec python3 computer_use_poc/sso_session_runner.py "$@"`；不得维护第二份 runner。
+
+## 752. exec allowlist contract
+
+- test_id: EXEC-ALLOWLIST-CONTRACT-001
+- input: live `openclaw.json` / `exec-approvals.json` snapshot。
+- expected_runtime_behavior: dennis_exec_allowlist_not_full
+- expected_output_boundary: dennis-risk-agent `exec.security=allowlist`，不得为 full；allowlist 非空，至少包含 sso_session_runner wrapper 和 python3。
+
+## 753. Weapon runner actions
+
+- test_id: WEAPON-RUNNER-ACTION-001
+- input: `sso_session_runner.py --platform weapon --action graph_data|risk_data`。
+- expected_runtime_behavior: controlled_weapon_api_executor
+- expected_output_boundary: 只允许 `/apiv2/graphData` 和 `/apiv2/riskData`；不接受 arbitrary URL；不打开 Weapon 前端；输出 `source_card` / `source_quality` / `response_type` / `records_count`。
+
+## 754. Main fallback direct bypass forbidden
+
+- test_id: MAIN-FALLBACK-DIRECT-BYPASS-FORBIDDEN-001
+- input: dennis-risk-agent source timeout 后 main agent 试图 curl/cookie/browser 直接查平台。
+- expected_runtime_behavior: main_no_platform_takeover
+- expected_output_boundary: main 只能记录 subagent/source timeout，输出 partial/retry plan 或重新 spawn dennis；不得 fallback direct 查平台。

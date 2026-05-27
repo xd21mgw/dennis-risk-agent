@@ -81,6 +81,8 @@ def main() -> int:
     drift_audit = read_text(REPO_ROOT / "computer_use_poc" / "internal_agent_drift_audit_v1.md")
     tools = read_text(REPO_ROOT / "TOOLS.md")
     validation = read_text(REPO_ROOT / "computer_use_poc" / "runtime_validation_cases_v1.yaml")
+    readiness = read_text(REPO_ROOT / "computer_use_poc" / "release_overlay_readiness_checklist.md")
+    bin_runner = read_text(REPO_ROOT / "bin" / "sso_session_runner")
 
     findings: list[dict[str, Any]] = []
 
@@ -101,9 +103,12 @@ def main() -> int:
             "--platform",
             "--action",
             "--user-id",
+            "--device-id",
             "--timeout",
             "--format",
             "query_user_login_log",
+            "graph_data",
+            "risk_data",
         ],
     )
     findings += check_contains(
@@ -166,8 +171,68 @@ def main() -> int:
             "importlib.import_module('sso_session')",
         ],
     )
+    findings += check_contains(
+        "weapon_runner_action_contract",
+        runner,
+        [
+            '"weapon"',
+            '"graph_data"',
+            '"risk_data"',
+            "/apiv2/graphData",
+            "/apiv2/riskData",
+            "source_card",
+            "response_type",
+            "records_count",
+        ],
+    )
+    findings += check_absent(
+        "weapon_runner_no_forbidden_default_path",
+        runner,
+        [
+            "weapon.corp.kuaishou.com/api/graphData",
+            "/anti-device/",
+        ],
+    )
+    if "/api/graphData" in runner and "forbidden_endpoint" not in runner:
+        findings.append(
+            {
+                "check": "weapon_runner_api_graphdata_boundary",
+                "severity": "critical",
+                "status": "fail",
+                "reason": "runner mentions /api/graphData without marking it forbidden",
+            }
+        )
+    findings += check_contains(
+        "safe_bin_runner_wrapper",
+        bin_runner,
+        [
+            'cd "$(dirname "$0")/.."',
+            "exec python3 computer_use_poc/sso_session_runner.py",
+        ],
+    )
 
     combined_guard = agents + "\n" + guard + "\n" + routing
+    first_200_agents = "\n".join((read_text(REPO_ROOT / "AGENTS.md").splitlines())[:200])
+    findings += check_contains(
+        "agents_entry_guard_first_200",
+        first_200_agents,
+        [
+            "source_orchestration_check.py",
+            "没有 source plan，不允许调用",
+            "业务 case 中禁止现场修认证态",
+            "main agent 不得 fallback direct 查平台",
+            "禁止自由猜 URL",
+        ],
+    )
+    findings += check_contains(
+        "tools_restore_marker",
+        tools,
+        [
+            "TOOLS_MAIN_ENTRY_GUARD_FULL",
+            "Focused overlays must not include or overwrite top-level `AGENTS.md` or `TOOLS.md`",
+            "source_orchestration_check.py",
+        ],
+    )
     findings += check_contains(
         "routing_guard_markers",
         combined_guard + "\n" + tools,
@@ -214,8 +279,73 @@ def main() -> int:
             "PLATFORM-PLAYBOOK-PREFLIGHT-001",
             "REALTIME-API-NO-USER-CONFIRM-001",
             "SINGLE-USER-P0-MULTISOURCE-62950989-001",
+            "TOOLS-RESTORE-MARKER-001",
+            "FOCUSED-OVERLAY-NO-AGENTS-TOOLS-001",
+            "AGENTS-ENTRY-GUARD-FIRST-200-001",
+            "SAFEBIN-RUNNER-WRAPPER-001",
+            "EXEC-ALLOWLIST-CONTRACT-001",
+            "WEAPON-RUNNER-ACTION-001",
+            "MAIN-FALLBACK-DIRECT-BYPASS-FORBIDDEN-001",
         ],
     )
+    findings += check_contains(
+        "release_overlay_readiness_live_fix_contract",
+        readiness,
+        [
+            "TOOLS_MAIN_ENTRY_GUARD_FULL",
+            "Focused overlays must not include top-level `AGENTS.md` or `TOOLS.md`",
+            "bin/sso_session_runner",
+            "exec.security=allowlist",
+            "exec.security=full",
+            "sso_session_runner",
+        ],
+    )
+    # Live openclaw / exec-approvals files are not committed to this repo. If a
+    # caller supplies snapshots under computer_use_poc/live_runtime_snapshots/,
+    # validate them fail-closed; otherwise report a non-blocking warning.
+    snapshot_dir = REPO_ROOT / "computer_use_poc" / "live_runtime_snapshots"
+    openclaw_snapshot = snapshot_dir / "openclaw.json"
+    approvals_snapshot = snapshot_dir / "exec-approvals.json"
+    if openclaw_snapshot.exists():
+        openclaw_text = read_text(openclaw_snapshot)
+        if "dennis-risk-agent" not in openclaw_text or '"security": "full"' in openclaw_text or '"exec.security": "full"' in openclaw_text:
+            findings.append(
+                {
+                    "check": "exec_security_allowlist_contract",
+                    "severity": "critical",
+                    "status": "fail",
+                    "reason": "live openclaw snapshot must contain dennis-risk-agent and must not set exec.security=full",
+                }
+            )
+    else:
+        findings.append(
+            {
+                "check": "exec_security_allowlist_contract",
+                "severity": "warning",
+                "status": "not_checked",
+                "reason": "live openclaw snapshot absent; validate dennis-risk-agent exec.security=allowlist during live apply",
+            }
+        )
+    if approvals_snapshot.exists():
+        approvals_text = read_text(approvals_snapshot)
+        if "dennis-risk-agent" not in approvals_text or "sso_session_runner" not in approvals_text or "python3" not in approvals_text:
+            findings.append(
+                {
+                    "check": "exec_approvals_allowlist_contract",
+                    "severity": "critical",
+                    "status": "fail",
+                    "reason": "exec approvals snapshot must include dennis-risk-agent allowlist with sso_session_runner and python3",
+                }
+            )
+    else:
+        findings.append(
+            {
+                "check": "exec_approvals_allowlist_contract",
+                "severity": "warning",
+                "status": "not_checked",
+                "reason": "exec-approvals snapshot absent; validate non-empty dennis-risk-agent allowlist during live apply",
+            }
+        )
     findings += check_contains(
         "source_orchestration_plan_required",
         source_plan,
@@ -384,6 +514,9 @@ def main() -> int:
             "computer_use_poc/source_orchestration_check.py",
             "computer_use_poc/internal_agent_drift_audit_v1.md",
             "computer_use_poc/runtime_validation_cases_v1.yaml",
+            "TOOLS.md",
+            "bin/sso_session_runner",
+            "computer_use_poc/release_overlay_readiness_checklist.md",
         ],
         "tools_md_status": tools_status,
         "real_platform_called": False,

@@ -149,6 +149,26 @@ release 打包的完整 Skill / Prompt 原文。
 
 Guard marker: `DENNIS_ROUTING_GUARD_V1`.
 
+### Entry Hard Guard：source plan / auth / fallback
+
+所有 business execution case 在调用任何平台 source 前，必须先跑 `computer_use_poc/source_orchestration_check.py` 或等价 source plan 选择，生成 `source_plan` 与 `source_completion_matrix`。没有 source plan，不允许调用统一登录日志、Weapon、档案中心、天狮、track-analysis 或其他风控平台 source。
+
+业务 case 包括 KNC、单用户账号安全 / ATO、登录异常、小批量 / 批量研判、普通用户风险研判。业务 case 中禁止现场修认证态：
+
+- 不点击登录页。
+- 不输入账号。
+- 不现场完成 SSO。
+- 不猜 URL / 域名 / API path。
+- 不搜索历史 session 找 URL。
+- 不调试 cookie / token / session / header。
+- 不为 conditional source 现场修认证态。
+
+遇到登录页、SSO 页、`account.p` 页、HTML 登录页、auth failed、permission blocked、path error 时，30 秒内停止该 source，标 `auth_session_issue` / `source_gap`，写入 `source_quality` 与 `remaining_source_gaps`，不得阻塞已完成 P0 evidence card，也不得当低风险 / 无风险反证。
+
+子 agent fail / timeout 后，main agent 不得 fallback direct 查平台；不得临时使用 curl、cookie、browser、same-origin fetch 或自写脚本接管平台查询。正确行为是记录 `subagent_timeout` / `source_timeout`，输出 partial evidence card / retry plan，或重新 spawn dennis-risk-agent。
+
+禁止自由猜 URL。Weapon 默认只允许 `/apiv2/graphData` 与 `/apiv2/riskData`；未登记 endpoint discovery 只能在明确 `task_type=endpoint_discovery` 时执行，普通风控研判不得尝试未登记 URL。
+
 ### Runtime Config Apply 前置条件
 
 半开放 readonly runtime config template 不等于 live runtime 已生效。只有 live `openclaw.json` 的 `agents.list` 中存在独立 `dennis-risk-agent` entry，并且该 entry 应用了 `exec.security=allowlist`、`safeBins`、`tools.deny`、`fs.workspaceOnly=true` 和 `loopDetection`，AGENTS.md 中的 wrapper-first / browser fallback / direct exec guard 才是 runtime 硬约束。

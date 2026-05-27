@@ -12,6 +12,8 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 ## Release Before Package
 
 - `computer_use_poc/sso_session_runner.py` is a controlled real executor for unified login log, not `dry_run_only`.
+- `bin/sso_session_runner` is a safeBin wrapper entrypoint that delegates to `computer_use_poc/sso_session_runner.py`; do not maintain a second runner implementation.
+- Weapon runner actions are present for controlled `/apiv2/graphData` and `/apiv2/riskData` reads only.
 - Runner imports `ks_aimate.sso_login_client.SmartSSOSession` as the preferred live executor.
 - Runner has a controlled `.ks_sso/sso-state.json` cookie-state fallback for `kuaishou.com` cookies only.
 - Runner supports:
@@ -35,6 +37,8 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 ## Overlay Before Live Apply
 
 - Do not copy old overlay packages over newer runtime files.
+- Focused overlays must not include top-level `AGENTS.md` or `TOOLS.md` unless explicitly declared as a `main-entry patch`.
+- `TOOLS.md` must contain `TOOLS_MAIN_ENTRY_GUARD_FULL`; a focused overlay must not replace it with a short stub.
 - Verify overlay file list is generated from the canonical baseline, not from historical patch folders.
 - Verify no full deep skill source, full prompt, historical run logs, raw observations, auth state, cookie, token, session, header, or risky fixtures are included.
 - Verify release notes explicitly distinguish:
@@ -48,7 +52,9 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 - Live `openclaw.json` has a dedicated `dennis-risk-agent` entry.
 - `dennis-risk-agent` does not inherit full-profile defaults.
 - `exec.security=allowlist` is active.
+- `exec.security=full` is forbidden for `dennis-risk-agent`.
 - `safeBins` includes only approved controlled runners.
+- exec approvals / allowlist for `dennis-risk-agent` is non-empty and includes the `sso_session_runner` wrapper plus `python3`.
 - `tools.deny` blocks write/edit and direct unsafe platform access paths.
 - `fs.workspaceOnly=true` is active.
 - `loopDetection` is active.
