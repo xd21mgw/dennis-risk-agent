@@ -154,6 +154,10 @@ browser_session_bridge:
 
 - 不得在报告、run log、KIM 回复或调试日志中打印 cookie / token / session / header。
 - 如果无法把 SSO cookie 安全注入 agent-browser Chrome，返回 `cookie_bridge_missing` 或 `permission_or_runtime_gap`。
+- SSO state 存在不等于 API direct 可用；`sso_session.py` 认证注入成功不代表 browser session 或 API data fetch 一定成功。
+- curl + cookie 返回 302 redirect 时，标记 `auth_session_issue`，不得把 redirect 当 no_data。
+- browser fetch 必须 same-origin；未进入正确域名或跨源失败时标记 `same_origin_error`。
+- agent-browser profile lock / SingletonLock 时标记 `profile_lock`，快速降级，不反复启动浏览器。
 - `cookie_bridge_missing` 不等于平台无数据，不等于用户无风险。
 - 不得反复重试 browser 登录导致 timeout；一次 preflight 失败后应快速降级为 partial evidence card。
 - 如果同源页面已登录，可使用 same-origin fetch / DOM read；如返回 HTML auth page，应标记 `auth_session_issue`，不得当 JSON 解析。

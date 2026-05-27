@@ -135,6 +135,10 @@ Behavior:
 - Default total budget is 180s. If any P0/P1 source has completed, stop extending P2 browser sources at the 120s or 150s checkpoint and emit partial evidence before the overall timeout.
 - Source priority: P0 = unified login log, Weapon riskData/graphData, Tianshi strategy hit summary; P1 = archives profile, track-analysis stats-first; P2 = RCP browser, archives browser recoverable_preflight, track-analysis SPA detail.
 - Observation logging must start with a skeleton record and append per-source checkpoints. A timeout must still leave a partial or timeout observation record.
+- Main agent must not take over direct platform execution after dennis-risk-agent timeout. It may record `subagent_timeout` and return partial / retry plan, but must not run `sso_session.py`, curl with cookie, agent-browser state load, or same-origin fetch by itself.
+- Unified login log readonly observation must use the controlled wrapper / dennis-risk-agent source orchestration. Temporary curl + cookie is not an allowed fallback.
+- SSO state presence does not prove API direct availability. Redirect / 302, same-origin failure, browser profile lock, and auth failure must be recorded as source quality issues: `auth_session_issue`, `same_origin_error`, `profile_lock`, or `auth_failed`.
+- For 3-9 user ATO complaint batches, default to `small_batch_plan_mode`. If execution is explicitly approved, only P0 sources are allowed and each user/source must checkpoint independently.
 
 ### B. plan mode
 

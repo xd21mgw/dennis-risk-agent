@@ -11,6 +11,17 @@ status: get_only_validated / api_readonly_poc
 
 API hand 优先用于结构化读取统一登录日志。UI hand 保留为 auth bootstrap / fallback / 字段发现。
 
+认证态桥接边界：
+
+- 统一登录日志只读查询必须走受控 wrapper / dennis-risk-agent source orchestration，不使用临时 curl + cookie。
+- `sso_session.py` / `sso_session_runner.py` 只代表认证注入或 wrapper 能力，不保证每次都能稳定返回 API 数据。
+- SSO state 存在不等于 API direct 可用。
+- curl + cookie 返回 302 redirect 时，标记 `auth_session_issue`，不得继续拼 cookie 重试。
+- browser fetch 必须在 `user-center-workbench` 正确同源域名内执行；否则标记 `same_origin_error`。
+- agent-browser profile lock / SingletonLock 标记 `profile_lock` 并快速降级。
+- `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都进入 `source_quality`，不得解释为 no_data。
+- main agent 在 dennis-risk-agent timeout 后不得自己接管统一登录日志查询；只能记录 `subagent_timeout`，输出 partial / retry plan。
+
 ## 2. 标准请求参数
 
 标准用户查询必须使用 `userId` 参数：
@@ -73,6 +84,9 @@ user_login_log_api_observation:
     code:
     auth_blocked:
     redirected_to_login:
+    auth_session_issue:
+    same_origin_error:
+    profile_lock:
   pagination_discovery:
     total_count:
     logSearchModels_length:

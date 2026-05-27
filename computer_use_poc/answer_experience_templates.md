@@ -414,6 +414,24 @@ ATO 单案 source orchestration：
 - browser 操作失败 3 次或超过单 source 时间预算必须停止，标入 timeout_sources / blocked_sources / auth_failed_sources。
 - execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation，不允许日志无记录。
 
+统一登录日志 auth bridge / direct exec 边界：
+
+- dennis-risk-agent timeout 后，main agent 不得自行接管平台查询。
+- main agent 不得用 `sso_session.py`、curl + cookie、agent-browser state load、same-origin fetch 临时查询统一登录日志。
+- 统一登录日志只读查询必须走受控 wrapper / dennis-risk-agent source orchestration。
+- SSO state 存在不等于 API direct 可用。
+- curl + cookie 返回 302 时标 `auth_session_issue`。
+- browser fetch 必须 same-origin；不在正确域名时标 `same_origin_error`。
+- profile lock / SingletonLock 标 `profile_lock` 并快速降级。
+- `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都进入 `source_quality`，不得写成 no_data。
+
+小批量 ATO 3-9 用户：
+
+- 默认 `small_batch_plan_mode`。
+- 如明确授权执行，只执行 P0 source。
+- 每个 user/source 独立 checkpoint。
+- 单用户 auth 失败不导致整体无输出。
+
 partial 状态 routing_metadata 示例：
 
 ```yaml
@@ -435,12 +453,17 @@ routing_metadata:
     - no_data_not_risk_exclusion
     - timeout_not_counter_evidence
     - blocked_source_not_counter_evidence
+    - auth_session_issue_not_no_data
+    - main_agent_no_direct_tool_bypass
     - user_claim_not_standalone_evidence
   source_quality:
     completed_sources: []
     no_data_sources: []
     blocked_sources: []
     auth_failed_sources: []
+    auth_session_issue_sources: []
+    same_origin_error_sources: []
+    profile_lock_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []

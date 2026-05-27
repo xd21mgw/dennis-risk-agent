@@ -248,6 +248,39 @@ Step 3: ATO 单 case 精简 execution
 
 不要把整个混合请求都当成 execution task。
 
+### main agent direct exec / unified login auth bridge boundary
+
+当 main agent 已 spawn `dennis-risk-agent`，但子 agent 因 SSO / browser / source timeout 卡住时，main agent 不得自行接管统一登录日志、Weapon、档案中心或天狮查询。
+
+禁止：
+
+- main agent 在 dennis-risk-agent timeout 后直接调用 `sso_session.py`、curl、cookie 拼接、agent-browser state load 或 same-origin fetch 查统一登录日志。
+- 临时 curl + cookie 查询统一登录日志。
+- 输出或转存 cookie / token / session / header。
+- 将 `direct_tool_bypass` 标成 false 同时实际由 main agent 自行查平台。
+
+正确行为：
+
+- 记录 subagent timeout / source timeout。
+- 输出 partial evidence card 或 retry plan。
+- 如需统一登录日志，只能通过受控 wrapper / dennis-risk-agent source orchestration 执行。
+- `routing_metadata.direct_tool_bypass=false` 仅在 main agent 未自行执行平台查询时成立。
+
+统一登录日志认证态桥接边界：
+
+- SSO state 存在不等于 API direct 可用。
+- `curl + cookie` 返回 302 redirect 时标 `auth_session_issue`。
+- browser fetch 必须先进入正确同源域名；same-origin 失败标 `same_origin_error`。
+- agent-browser profile lock / SingletonLock 标 `profile_lock`，快速降级。
+- `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都必须进入 `source_quality`，不得解释为 no_data。
+
+批量 ATO 小样本 3-9 用户：
+
+- 默认 `small_batch_plan_mode`。
+- 如被授权执行，只执行 P0 source：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
+- 每个 `user_id/source` 独立 checkpoint。
+- 单用户 auth 失败不得导致整体无输出。
+
 ## Semi-open Experience Patch v1
 
 半开放 Pilot 已上线且 P0=0。以下体验规则用于修复路由一致性、显式查询空研判、批量误执行、browser/auth 卡点和 timeout 体感。

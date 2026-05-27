@@ -110,6 +110,8 @@ Semi-open experience patch v1 路由补丁：
 - `single_ato_source_checkpoint`：ATO 单案每个 source 结束后必须 checkpoint，字段包含 source_name / source_type / source_status / evidence_summary / evidence_time_range / source_quality / raw_reference_safe_id / collected_at / failure_reason / next_source_decision。completed source 不得因后续 timeout 丢失，no_data 也算 completed 且标 `no_data_not_risk_exclusion`。
 - `single_ato_overall_deadline`：ATO 单案默认 180s 总预算。任一 P0/P1 source completed 后，在 120s 或 150s checkpoint 必须停止扩展 P2 browser source 并输出 partial evidence card；P2 browser 不得阻塞 P0/P1 已完成 evidence。
 - `single_ato_source_priority`：P0=统一登录日志、Weapon riskData/graphData、天师策略命中摘要；P1=档案中心画像、track-analysis stats-first；P2=RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+- `BC-AUTH-BRIDGE-UNIFIED-LOGIN-001`：dennis-risk-agent timeout 后，main agent 不得直接接管统一登录日志查询；不得临时使用 `sso_session.py`、curl + cookie、agent-browser state load 或 same-origin fetch。统一登录日志只读查询必须走受控 wrapper / dennis source orchestration；auth 302 / same-origin error / profile lock / auth_failed 进入 source_quality。
+- `small_batch_ato_auth_bridge_guard`：3-9 个 ATO 客诉用户默认 `small_batch_plan_mode`；如执行只跑 P0 source，每个 user/source 独立 checkpoint，单用户 auth 失败不得导致整体无输出。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
 - `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
 - `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。
