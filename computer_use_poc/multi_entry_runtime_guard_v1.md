@@ -52,12 +52,17 @@ Platform call preflight:
 
 - Before any realtime platform source, read `computer_use_poc/platform_call_playbook_index.md` and the referenced platform playbook.
 - If memory retrieval fails, fall back to files; do not guess platform paths.
+- Do not classify platform capabilities as only "API direct" or "not API direct". Use `api_direct_confirmed`, `same_origin_api_confirmed`, `partial_api_direct`, or `pending_api_direct_confirmation`.
+- Prefer low-cost structured sources: `api_direct_confirmed` before `same_origin_api_confirmed`, same-origin fetch before DOM, precise `sourceId/eventId/deviceId/eventType` before broad scan, realtime readonly API before DataAgent / Hive.
 - 实时只读 API 查询不需要用户确认 when required fields are complete.
 - DataAgent / Hive / 大批量 / 写操作 / 高风险操作需要确认 or query plan.
 - DataAgent / Hive confirmation is per call, not session-wide. A previous user approval only authorizes that one query.
 - Each source must produce a checkpoint and source_quality.
 - P1/P2 browser source must not block P0 partial evidence output.
 - Old observations must not be used as "no-cache" realtime results.
+- Low-cost source `no_data`, `blocked`, `timeout`, or `auth_failed` must enter `source_quality`; it is not low-risk / no-risk evidence.
+- If source coverage is incomplete, mark `source_window_boundary`, `missing_evidence`, or `offline_hive_required`.
+- If later higher-quality evidence conflicts with an earlier low-cost source, recompute the conclusion and prefer longer-window, fuller-chain, raw-behavior evidence over strategy names or model scores.
 
 DataAgent / Hive registry preflight:
 

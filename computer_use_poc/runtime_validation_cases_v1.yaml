@@ -1488,3 +1488,65 @@ dataagent_per_call_authorization_regression:
       - dataagent_requires_per_call_confirmation
       - source_quality_separated
     pass_fail_criteria: "统一登录日志 / Weapon / 档案中心 same-origin API / 天师只读 API 在字段齐备时可自动执行；DataAgent / Hive 必须逐次确认。"
+
+platform_capability_status_and_cost_priority_regression:
+  - case_id: PLATFORM-CAPABILITY-STATUS-TAXONOMY-001
+    input: "为统一登录日志、Weapon、track-analysis、档案中心、RCP、发布行为审计标注平台能力状态。"
+    expected_routing_mode: platform_capability_preflight
+    expected_output_boundary:
+      - api_direct_confirmed
+      - same_origin_api_confirmed
+      - partial_api_direct
+      - pending_api_direct_confirmation
+    pass_fail_criteria: "不得只用 API direct / 非 API direct 二分；必须给出四档状态和对应边界。"
+  - case_id: LOW-COST-SOURCE-FIRST-001
+    input: "同一问题既可查实时 API，也可查 browser DOM，还可查 Hive。"
+    expected_routing_mode: low_cost_source_priority
+    expected_output_boundary:
+      - api_direct_before_browser
+      - same_origin_before_dom
+      - realtime_api_before_dataagent
+      - p1_p2_not_block_partial
+    pass_fail_criteria: "必须优先选择低成本、稳定、结构化 source；不得先走高成本 browser / Hive。"
+  - case_id: API-DIRECT-BEFORE-BROWSER-001
+    input: "track-analysis profile/useDuration/deviceIds/latestDateTime 已是 api_direct_confirmed。"
+    expected_routing_mode: frontend_activity_profile_api_direct
+    expected_output_boundary:
+      - track_analysis_api_direct_confirmed
+      - no_default_spa_dom
+      - source_quality_on_failure
+    pass_fail_criteria: "track-analysis covered fields 不应默认走 SPA DOM；API 失败也只能标 source_quality。"
+  - case_id: REALTIME-API-BEFORE-DATAAGENT-001
+    input: "实时只读 API 能回答当前窗口问题，但也可以离线 Hive 补查。"
+    expected_routing_mode: realtime_readonly_first
+    expected_output_boundary:
+      - realtime_api_before_dataagent
+      - dataagent_per_call_confirmation
+      - offline_hive_only_for_window_gap_or_cross_table
+    pass_fail_criteria: "实时 API 可答时不得先调用 DataAgent / Hive；Hive 只在长周期、跨表、离线历史或窗口不足时触发并逐次确认。"
+  - case_id: PRECISE-EVENTID-BEFORE-BROAD-SCAN-001
+    input: "有 eventId/sourceId/deviceId/eventType 可精确下钻，也可按大窗口扫描。"
+    expected_routing_mode: precise_source_context_first
+    expected_output_boundary:
+      - precise_event_context_before_broad_scan
+      - partial_api_direct_boundary
+      - missing_required_fields_if_context_absent
+    pass_fail_criteria: "必须优先精确 event/source/device context；缺字段时 query plan / missing fields，不做大窗口扫描。"
+  - case_id: LOW-COST-NODATA-NOT-FINAL-001
+    input: "低成本 API direct 返回 no_data / blocked / timeout / auth_failed。"
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - low_cost_nodata_not_final
+      - source_quality_required
+      - source_window_boundary
+      - missing_evidence_or_offline_hive_required
+    pass_fail_criteria: "低成本 source 失败或 no_data 不得输出低风险 / 无风险；必须进入 source_quality 和 missing evidence。"
+  - case_id: SOURCE-CONFLICT-RECOMPUTE-001
+    input: "在线 API no_data，但后续 Hive 返回历史异常行为链路。"
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - conclusion_recompute_after_new_evidence
+      - hive_historical_coverage_explained
+      - api_window_short_boundary
+      - raw_behavior_evidence_priority
+    pass_fail_criteria: "必须重算结论，解释在线窗口短 / Hive 历史覆盖更完整；不得保留 API no_data 初判。"

@@ -12,6 +12,44 @@ This index is the mandatory preflight reading list before Dennis Risk Agent call
 - `no_data`, `blocked`, `timeout`, and `auth_failed` are source states, not no-risk counter evidence.
 - Browser UI is fallback, not default.
 
+## Platform Capability Status Taxonomy
+
+Do not use a binary "API direct / non API direct" classification. Every platform source must be labeled with one of the following capability statuses:
+
+- `api_direct_confirmed`: HTTP + SSO / controlled cookie-state can call a structured API directly. Highest priority. Examples: unified login log runner, Weapon `graphData` / `riskData`, track-analysis `profile` / `getUseDuration` / `getDeviceIds` / `getLastestDateTime`, Tianshi `fastQueryHbase`.
+- `same_origin_api_confirmed`: API is structured but requires browser / SPA auth activation before same-origin fetch. Priority is lower than API direct and higher than DOM. Example: Archives Center partially validated same-origin APIs after profile SPA activation.
+- `partial_api_direct`: API exists but depends on precise `eventId` / `sourceId` / `deviceId` / `eventType` / time-window context, or only some event types succeed while others timeout. Examples: RCP event detail and some Tianshi event drilldown paths.
+- `pending_api_direct_confirmation`: API likely exists but is not stable enough to claim automatic read support. Examples: publish audit, long-window token / OAuth / passToken chains if not yet validated.
+
+Capability status must be carried into `source_quality` or platform preflight when relevant.
+
+## Low-cost Source Priority
+
+When multiple sources can answer the same question, select the lowest-cost, most stable, most structured source first:
+
+1. `api_direct_confirmed`
+2. `same_origin_api_confirmed`
+3. `partial_api_direct` with precise required fields
+4. browser UI / DOM / selector observation
+5. DataAgent / Hive for long-window, cross-table, offline history, or realtime window gaps
+
+Routing rules:
+
+- If API direct can answer, do not start with browser.
+- If same-origin fetch can answer, do not parse DOM.
+- If precise `sourceId` / `eventId` / `deviceId` / `eventType` can answer, do not broad-scan a large time window.
+- If realtime readonly API can answer, do not call DataAgent / Hive first.
+- If completed low-cost sources can support a partial evidence card, do not block the main conclusion on P1/P2 browser sources.
+- DataAgent / Hive remains per-call authorized and is used for long-period history, cross-table joins, offline evidence, or realtime source-window gaps.
+
+Boundary rules:
+
+- Low-cost source `no_data`, `blocked`, `timeout`, or `auth_failed` is not a low-risk or no-risk conclusion.
+- If source coverage is incomplete, mark `source_window_boundary`, `missing_evidence`, or `offline_hive_required`.
+- If a later higher-quality source returns new evidence, recompute the conclusion with `conclusion_recompute_after_new_evidence`.
+- When sources conflict, prefer the source with longer time window, fuller behavior chain, and closer raw behavior evidence. Strategy hits, model scores, and rule names remain cross-validation leads only.
+- If API `no_data` conflicts with Hive abnormal evidence, do not keep the API-first initial judgement; explain that the online API window was shorter and Hive historical coverage is more complete.
+
 ## General Source Quality Semantics
 
 These source states affect evidence quality only. They cannot directly become risk conclusions:
@@ -68,6 +106,8 @@ Source status mapping:
 - Request timeout: `timeout`
 - Non-JSON response: `parse_error` or `auth_failed` if HTML/login-like.
 
+Capability status: `api_direct_confirmed`.
+
 ## Weapon
 
 Reference:
@@ -103,6 +143,8 @@ Source status mapping:
 - no relation found: `no_data` with relation boundary.
 - auth / permission issue: `blocked` or `auth_failed`
 - timeout: `timeout`
+
+Capability status: `api_direct_confirmed` for validated `graphData` / `riskData` readonly paths.
 
 ## Tianshi Strategy Platform
 
@@ -145,6 +187,12 @@ Source status mapping:
 - missing fields: `skipped / missing_required_fields`
 - timeout/auth/parse: `timeout`, `auth_failed`, `parse_error`
 
+Capability status:
+
+- `fastQueryHbase`: `api_direct_confirmed`.
+- Event detail / event drilldown: `partial_api_direct` when it depends on event type, exact event context, or has known timeout behavior.
+- Do not generalize one successful event type into all event types.
+
 ## Archives Center
 
 Reference:
@@ -182,6 +230,8 @@ Source status mapping:
 - auth page / 2FA / redirect: `auth_failed`
 - profile lock or browser session issue: `blocked`
 - SPA loop: `timeout` with `operation_loop_detected`
+
+Capability status: `same_origin_api_confirmed` for validated APIs that require SPA / browser auth activation before same-origin fetch. Do not declare Archives unavailable before recoverable preflight; do not treat same-origin support as generic API direct.
 
 ## Track Analysis
 
@@ -241,6 +291,8 @@ Source status mapping:
 - HTML / login page / redirect: `auth_failed`
 - unexpected field shape: `parse_error`
 - timeout / SPA loop: `timeout`
+
+Capability status: `api_direct_confirmed` for `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime` as recorded in `track_analysis_api_direct_contract_current.md`. Do not default to SPA / DOM for these covered fields.
 
 Evidence boundary:
 

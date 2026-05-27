@@ -98,6 +98,52 @@ routing_metadata:
 
 方法论 / plan mode 可不输出完整 evidence card；但只要引用真实证据，也必须标注 `source` 和 `evidence_type`。
 
+### 平台能力状态与低成本优先模板
+
+不要再使用“API direct / 非 API direct”的二分。平台 source 必须标记能力状态：
+
+- `api_direct_confirmed`：HTTP + SSO / controlled cookie-state 可直接调用结构化 API，优先级最高。例：统一登录日志 runner、Weapon `graphData/riskData`、track-analysis `profile/getUseDuration/getDeviceIds/getLastestDateTime`、天师 `fastQueryHbase`。
+- `same_origin_api_confirmed`：需要先 browser / SPA 激活认证态，再 same-origin fetch。优先级低于 API direct，高于 DOM。例：档案中心部分接口。
+- `partial_api_direct`：有 API，但依赖 `eventId/sourceId/deviceId/eventType/时间窗口`，或部分 eventType timeout。例：RCP event detail、部分天师事件下钻。
+- `pending_api_direct_confirmation`：怀疑有 API，但尚未稳定验证，不能宣称自动可查。例：发布行为审计、部分 token/OAuth/passToken 长周期链路。
+
+低成本 source 选择顺序：
+
+1. 能 API direct，不走 browser。
+2. 能 same-origin fetch，不做 DOM 解析。
+3. 能按 `sourceId/eventId/deviceId/eventType` 精确查，不做大窗口扫描。
+4. 能实时只读 API 回答，不先调用 DataAgent / Hive。
+5. 能用已完成 source 输出 partial evidence card，不因 P1/P2 source 阻塞主结论。
+
+证据冲突规则：
+
+- 低成本 source 的 `no_data` / `blocked` / `timeout` / `auth_failed` 只能进入 `source_quality`，不能变成低风险 / 无风险结论。
+- source 时间窗口不足或覆盖不完整时，标 `source_window_boundary` / `missing_evidence` / `offline_hive_required`。
+- 后续更高质量 source 返回新证据时，必须 `conclusion_recompute_after_new_evidence`。
+- 多 source 冲突时，优先更长时间窗口、更完整链路、更接近 raw behavior evidence 的 source。
+- 策略命中、模型分、规则名只能作为交叉验证方向。
+- API `no_data` 与 Hive 异常冲突时，必须解释“在线窗口短 / Hive 历史覆盖更完整”，不能保留 API 初判。
+
+输出片段：
+
+```yaml
+source_selection:
+  selected_source:
+  capability_status: api_direct_confirmed | same_origin_api_confirmed | partial_api_direct | pending_api_direct_confirmation
+  access_method:
+  skipped_higher_cost_sources:
+    - source:
+      reason:
+  source_window_boundary:
+  offline_hive_required:
+source_conflict_resolution:
+  conflict_detected:
+  prior_conclusion:
+  new_evidence_source:
+  recomputed_conclusion:
+  recompute_reason:
+```
+
 ## 0. 专家认知先判回答模板
 
 ### 适用问题

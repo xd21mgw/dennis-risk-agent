@@ -6798,3 +6798,73 @@
 - input: 字段齐备的实时只读 API + 离线 Hive 补证混合问题。
 - expected_runtime_behavior: realtime_auto_dataagent_confirm
 - expected_output_boundary: 实时只读 API 可自动触发；DataAgent / Hive 必须逐次确认；pending Hive 不得继续追加新查询。
+
+## 695. Platform capability status taxonomy
+
+- test_id: PLATFORM-CAPABILITY-STATUS-TAXONOMY-001
+- input: 平台 source 能力状态标注。
+- expected_runtime_behavior: four_level_platform_capability_status
+- expected_output_boundary: 必须使用 `api_direct_confirmed` / `same_origin_api_confirmed` / `partial_api_direct` / `pending_api_direct_confirmation`，不得只用 API direct 二分。
+
+## 696. Low-cost source first
+
+- test_id: LOW-COST-SOURCE-FIRST-001
+- input: 同一问题存在 API direct、same-origin fetch、DOM、DataAgent 多种 source。
+- expected_runtime_behavior: low_cost_structured_source_selected_first
+- expected_output_boundary: 能 API direct 不走 browser；能 same-origin fetch 不做 DOM；能实时 API 回答不先 DataAgent；P1/P2 不阻塞 partial evidence。
+
+## 697. Track-analysis API direct before browser
+
+- test_id: API-DIRECT-BEFORE-BROWSER-001
+- input: track-analysis `profile/getUseDuration/getDeviceIds/getLastestDateTime`。
+- expected_runtime_behavior: track_analysis_api_direct_confirmed
+- expected_output_boundary: track-analysis 已是 `api_direct_confirmed` 时不应默认走 SPA DOM；失败只进入 source_quality。
+
+## 698. Realtime API before DataAgent
+
+- test_id: REALTIME-API-BEFORE-DATAAGENT-001
+- input: 实时只读 API 可覆盖当前问题。
+- expected_runtime_behavior: realtime_readonly_before_hive
+- expected_output_boundary: 不得直接调用 DataAgent/Hive；Hive 只在长周期、跨表、离线历史或实时窗口不足时触发，且每次确认。
+
+## 699. Precise event context before broad scan
+
+- test_id: PRECISE-EVENTID-BEFORE-BROAD-SCAN-001
+- input: 有 sourceId / eventId / deviceId / eventType 可精确查询。
+- expected_runtime_behavior: precise_event_context_first
+- expected_output_boundary: 先按精确实体下钻；缺字段标 missing_required_fields 或 query plan，不做大窗口扫描。
+
+## 700. Low-cost no_data is not final
+
+- test_id: LOW-COST-NODATA-NOT-FINAL-001
+- input: API direct / same-origin source 返回 no_data / blocked / timeout / auth_failed。
+- expected_runtime_behavior: source_quality_not_final_judgement
+- expected_output_boundary: 不得输出低风险 / 无风险；必须标 `source_quality`、`source_window_boundary`、`missing_evidence` 或 `offline_hive_required`。
+
+## 701. Source conflict triggers recompute
+
+- test_id: SOURCE-CONFLICT-RECOMPUTE-001
+- input: 在线 API no_data，后续 Hive / 更完整 raw behavior source 返回异常。
+- expected_runtime_behavior: conclusion_recompute_after_new_evidence
+- expected_output_boundary: 必须重算结论，解释在线窗口短 / Hive 覆盖更完整；策略命中、模型分、规则名仅作交叉验证方向。
+
+## 702. Archives Center same-origin status
+
+- test_id: ARCHIVES-SAME-ORIGIN-API-CONFIRMED-001
+- input: 档案中心部分接口。
+- expected_runtime_behavior: same_origin_api_confirmed_boundary
+- expected_output_boundary: 档案中心是 `same_origin_api_confirmed`，需 SPA 激活后 same-origin fetch；不能直接判不可用，也不能说是普通 API direct。
+
+## 703. RCP event detail partial API direct
+
+- test_id: RCP-EVENT-DETAIL-PARTIAL-API-DIRECT-001
+- input: RCP event detail / 天师部分事件下钻。
+- expected_runtime_behavior: partial_api_direct_boundary
+- expected_output_boundary: 标 `partial_api_direct`；部分 eventType timeout 不能泛化成全部不可用。
+
+## 704. Pending API direct confirmation boundary
+
+- test_id: PENDING-API-DIRECT-CONFIRMATION-001
+- input: 发布行为审计、token/OAuth/passToken 长周期链路。
+- expected_runtime_behavior: pending_api_direct_confirmation_boundary
+- expected_output_boundary: 若仍是 `pending_api_direct_confirmation`，不能宣称已自动 API 查询；只能 query plan / missing evidence / wait validation。

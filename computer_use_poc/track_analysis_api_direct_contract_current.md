@@ -184,6 +184,12 @@ Current default:
 - DOM / SPA / selector fallback is not the default for these covered fields.
 - Browser fallback should only be used for auth activation, response-shape investigation, or fields not covered by API direct.
 
+Capability status:
+
+- `api_direct_confirmed` for `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime`.
+- Do not route these covered fields to SPA DOM by default.
+- If API direct returns `auth_failed`, `timeout`, or `parse_error`, record source quality and consider scoped fallback; do not convert the failure into a risk conclusion.
+
 ## Evidence Boundary
 
 Track-analysis activity evidence can support:
