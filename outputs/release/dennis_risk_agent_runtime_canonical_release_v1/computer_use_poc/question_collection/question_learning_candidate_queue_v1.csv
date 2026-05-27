@@ -1,0 +1,3 @@
+candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes
+cand_demo_001,2026-05-22T10:00:00+08:00,KIM,obs_demo_001,"safe_ref_user_001 说没发过作品，是不是盗号？","回答偏方法论，缺少证据卡。",too_generic,"太泛了","template_gap",answer_template,P2,pending,"Demo only; runtime must write to runtime_logs/question_collection/question_learning_candidate_queue_v1.csv"
+cand_demo_002,2026-05-22T10:01:00+08:00,KIM,obs_demo_002,"这个接口后端请求很多但用户前端没操作，是不是反爬或协议？","用户要求补数据计划。",needs_data,"查一下吧","needs_data",execution_or_evidence_plan,P1,pending,"Demo only; do not append live feedback here"

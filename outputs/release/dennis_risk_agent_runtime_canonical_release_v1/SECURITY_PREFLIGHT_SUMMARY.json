@@ -1,0 +1,28 @@
+{
+  "schema_version": "release_preflight_safe_summary_v1",
+  "target": "/Users/pengcheng/dennis-risk-agent/outputs/release/dennis_risk_agent_runtime_canonical_release_v1",
+  "release_type": "full_runtime_release",
+  "preflight_pass": true,
+  "scanner_pass": true,
+  "package_should_block": false,
+  "scanner_status": "warning",
+  "scanner_returncode": 0,
+  "scanner_summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 31,
+    "low": 0,
+    "pass": 2,
+    "total_findings": 33
+  },
+  "required_files_pass": true,
+  "missing_required_files": [],
+  "explicitly_allowed_high_rules": [],
+  "finding_safe_summary": {
+    "blocking_finding_count": 0,
+    "unallowed_high_count": 0,
+    "blocking_rule_counts": {},
+    "blocking_category_counts": {}
+  },
+  "output_policy": "safe_summary_only_no_raw_file_content"
+}
