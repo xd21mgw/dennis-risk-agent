@@ -349,6 +349,15 @@ Runtime fallback rules:
 - Single source timeout must not become a bare timeout response.
 - Batch single-user failure must not block the whole batch plan or summary.
 
+No live auth repair in business case:
+
+- Applies to KNC case execution, single-user account security execution, small batch execution, batch execution, and normal user risk investigation.
+- If any platform redirects to a login page / SSO page / `account.p` page, returns HTML login content, reports auth failure, permission blocked, or path error, stop that source within 30 seconds.
+- Mark `source_status=auth_session_issue` or `source_gap`, add it to `remaining_source_gaps`, and do not block completed P0 evidence card output.
+- Do not treat `auth_session_issue` / `source_gap` as low-risk or no-risk counter evidence.
+- Forbidden in business case execution: click login page, type username/account, complete SSO interactively, guess URL/domain/API path, search historical sessions for URL, debug cookie/session/header, or repair auth state for a conditional source.
+- Archives Center special rule: use only `admin.p.adm-corp.kuaishou.com` as the confirmed entry. If it redirects to `account.p.adm-corp.kuaishou.com`, mark `archives_auth_session_issue`; do not click "next" / "下一步" in the business case. "下一步" is allowed only in a separate auth activation task.
+
 Answer length:
 
 - Expert cognition answers default to about 500 Chinese characters.

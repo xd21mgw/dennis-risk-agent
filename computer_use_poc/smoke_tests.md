@@ -7141,3 +7141,10 @@
 - input: Weapon graphData empty，track-analysis getDeviceIds 返回 deviceId 后用于 Weapon riskData。
 - expected_runtime_behavior: cross_source_device_id_marker_required
 - expected_output_boundary: Weapon riskData 使用 track-analysis deviceId 时必须标 `cross_source_device_id=true`，并保留 source provenance。
+
+## 744. Archives auth in business case no live fix
+
+- test_id: ARCHIVES-AUTH-IN-CASE-NO-LIVE-FIX-001
+- input: KNC / 单用户 / 批量业务 case 中，档案中心跳 `account.p` 登录页。
+- expected_runtime_behavior: auth_session_issue_without_live_auth_repair
+- expected_output_boundary: 不点击登录页、不输入账号、不猜 URL、不搜历史 session；30 秒内标 `archives_auth_session_issue` / `auth_session_issue`，写入 `remaining_source_gaps`，不阻塞 P0 evidence card，不作为低风险反证。

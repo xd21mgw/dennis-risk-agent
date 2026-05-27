@@ -1060,6 +1060,48 @@ required_validation:
 - 当前结论降级为 partial / source_gap。
 ```
 
+### 业务 case 认证态未就绪模板
+
+适用：KNC case、单用户账号安全研判、小批量 / 批量研判、普通用户风险研判中，任一平台跳登录页 / SSO 页 / `account.p` 页，或 API 返回 HTML 登录页、auth failed、permission blocked、path error。
+
+```yaml
+platform_source_observation:
+  source_name: "<platform_source>"
+  source_status: auth_session_issue
+  failure_reason: "auth/session not ready; business case does not perform live auth repair"
+  source_quality:
+    permission_status: auth_not_ready
+    no_data_not_risk_exclusion: true
+    not_executed_as_low_risk_evidence: true
+    retry_count: 0
+    elapsed_ms: "<=30000"
+  remaining_gap: "requires separate auth activation before retry"
+```
+
+业务 case 中禁止：
+
+- 点击登录页。
+- 输入账号。
+- 现场完成 SSO。
+- 猜 URL / 猜域名 / 猜 API path。
+- 搜历史 session 找 URL。
+- 调试 cookie / session / header。
+- 为 conditional source 现场修认证态。
+
+档案中心专项输出：
+
+```yaml
+archives_publish_detail_observation:
+  source_name: archives_publish_detail_if_violation_publish_claimed
+  source_status: auth_session_issue
+  failure_reason: "admin.p/account.p 登录态未完成，业务 case 中不进行现场认证修复"
+  source_quality:
+    permission_status: auth_not_ready
+    no_data_not_risk_exclusion: true
+    not_executed_as_low_risk_evidence: true
+  remaining_gap: "需要单独执行 archives_center_auth_activation_fix 后再重试"
+```
+
 ### BC-HARMONY-ATO-001 批量 ATO 攻击类型纠偏模板
 
 适用：一批 ATO 用户同时出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败。
