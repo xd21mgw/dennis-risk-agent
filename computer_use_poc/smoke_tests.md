@@ -6966,3 +6966,31 @@
 - input: track-analysis 合同存在但当前 runtime 缺已验证可执行 endpoint。
 - expected_runtime_behavior: pending_api_direct_confirmation_or_source_gap
 - expected_output_boundary: 不得把 track-analysis 标为 completed source；应标 `pending_api_direct_confirmation` / `source_gap`，且不阻塞账号安全 P0 evidence card。
+
+## 719. Source orchestration plan required
+
+- test_id: SOURCE-PLAN-REQUIRED-001
+- input: 检查 `computer_use_poc/source_orchestration_plan_v1.yaml`。
+- expected_runtime_behavior: source_plan_exists_and_defines_required_p0
+- expected_output_boundary: 必须定义 `single_user_account_security` 的 required P0 sources：`user_login_unified_log`、`weapon_user_to_device_graph`、`weapon_device_risk`；stop condition 必须禁止 login_log-only 停止和无 source matrix 完整结论。
+
+## 720. Login-log only cannot conclude
+
+- test_id: LOGIN-LOG-ONLY-CANNOT-CONCLUDE-001
+- input: `source_completion_matrix` 只有 `user_login_unified_log`。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: validator 必须返回 `login_log_only_cannot_conclude`，不得允许完整风险结论。
+
+## 721. Source completion matrix required
+
+- test_id: SOURCE-COMPLETION-MATRIX-REQUIRED-001
+- input: evidence mode 最终回答缺 source completion matrix。
+- expected_runtime_behavior: source_completion_matrix_hard_gate
+- expected_output_boundary: `allow_final_conclusion_without_source_completion_matrix=false`；缺 matrix 时只能 partial / needs_input / missing_evidence。
+
+## 722. Runtime preflight includes source orchestration validator
+
+- test_id: SOURCE-ORCHESTRATION-PREFLIGHT-001
+- input: 执行 `python3 computer_use_poc/runtime_preflight_check.py`。
+- expected_runtime_behavior: source_orchestration_validator_checked
+- expected_output_boundary: preflight 必须检查 `source_orchestration_plan_v1.yaml` 存在、`source_orchestration_check.py` 可运行、login_log-only 禁止规则存在。

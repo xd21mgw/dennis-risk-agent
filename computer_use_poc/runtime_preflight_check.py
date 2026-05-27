@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,8 @@ def main() -> int:
     guard = read_text(REPO_ROOT / "computer_use_poc" / "multi_entry_runtime_guard_v1.md")
     routing = read_text(REPO_ROOT / "computer_use_poc" / "scene_to_capability_routing.md")
     playbook_index = read_text(REPO_ROOT / "computer_use_poc" / "platform_call_playbook_index.md")
+    source_plan = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_plan_v1.yaml")
+    source_check = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py")
     tools = read_text(REPO_ROOT / "TOOLS.md")
     validation = read_text(REPO_ROOT / "computer_use_poc" / "runtime_validation_cases_v1.yaml")
 
@@ -212,6 +215,92 @@ def main() -> int:
             "SINGLE-USER-P0-MULTISOURCE-62950989-001",
         ],
     )
+    findings += check_contains(
+        "source_orchestration_plan_required",
+        source_plan,
+        [
+            "single_user_account_security",
+            "user_login_unified_log",
+            "weapon_user_to_device_graph",
+            "weapon_device_risk",
+            "allow_stop_after_login_log_only",
+            "allow_final_conclusion_without_source_completion_matrix",
+            "allow_low_risk_from_no_data_only",
+        ],
+    )
+    findings += check_contains(
+        "source_orchestration_validator_contract",
+        source_check,
+        [
+            "--task-type",
+            "--entity-count",
+            "--no-cache",
+            "source_completion_matrix",
+            "login_log_only_cannot_conclude",
+            "/apiv2/graphData",
+            "/apiv2/riskData",
+            "track_analysis_endpoint_not_confirmed_not_completed",
+        ],
+    )
+    source_check_path = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"
+    if not source_check_path.exists():
+        findings.append(
+            {
+                "check": "source_orchestration_validator_runnable",
+                "severity": "critical",
+                "status": "fail",
+                "reason": "computer_use_poc/source_orchestration_check.py missing",
+            }
+        )
+    else:
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(source_check_path),
+                    "--task-type",
+                    "single_user_account_security",
+                    "--entity-count",
+                    "1",
+                    "--no-cache",
+                    "--format",
+                    "json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if proc.returncode != 0:
+                findings.append(
+                    {
+                        "check": "source_orchestration_validator_runnable",
+                        "severity": "critical",
+                        "status": "fail",
+                        "reason": f"source_orchestration_check.py returned {proc.returncode}: {proc.stderr.strip()}",
+                    }
+                )
+            else:
+                output = json.loads(proc.stdout)
+                if not output.get("plan_selected"):
+                    findings.append(
+                        {
+                            "check": "source_orchestration_validator_runnable",
+                            "severity": "critical",
+                            "status": "fail",
+                            "reason": "source_orchestration_check.py did not select a plan",
+                        }
+                    )
+        except Exception as exc:  # noqa: BLE001 - preflight should report fail-closed reason.
+            findings.append(
+                {
+                    "check": "source_orchestration_validator_runnable",
+                    "severity": "critical",
+                    "status": "fail",
+                    "reason": f"source_orchestration_check.py failed to run: {exc}",
+                }
+            )
 
     tools_status = "present" if tools else "optional_absent_using_platform_call_playbook_index"
     blocking = [item for item in findings if item["severity"] in {"critical", "high"}]
@@ -228,6 +317,8 @@ def main() -> int:
             "computer_use_poc/multi_entry_runtime_guard_v1.md",
             "computer_use_poc/scene_to_capability_routing.md",
             "computer_use_poc/platform_call_playbook_index.md",
+            "computer_use_poc/source_orchestration_plan_v1.yaml",
+            "computer_use_poc/source_orchestration_check.py",
             "computer_use_poc/runtime_validation_cases_v1.yaml",
         ],
         "tools_md_status": tools_status,

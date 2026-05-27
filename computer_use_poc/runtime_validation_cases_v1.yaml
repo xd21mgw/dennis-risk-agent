@@ -1680,3 +1680,28 @@ p0_multisource_orchestration_gate_regression:
       - not_completed_source
       - no_blocking_p0_evidence_card
     pass_fail_criteria: "track-analysis 合同存在但 endpoint 未验证时，不得标 completed；应降级为 pending/source_gap，且不阻塞 P0 partial evidence card。"
+
+source_orchestration_validator_regression:
+  - case_id: SOURCE-PLAN-REQUIRED-001
+    input: "single_user_account_security / ATO 单用户任务启动。"
+    expected_routing_mode: source_orchestration_plan_lookup
+    expected_output_boundary:
+      - source_orchestration_plan_v1_required
+      - required_p0_sources_present
+      - stop_conditions_enforced
+    pass_fail_criteria: "`source_orchestration_plan_v1.yaml` 必须返回 user_login_unified_log、weapon_user_to_device_graph、weapon_device_risk，并声明 login_log-only 不可停止。"
+  - case_id: LOGIN-LOG-ONLY-CANNOT-CONCLUDE-001
+    input: "source_completion_matrix 只有 user_login_unified_log。"
+    expected_routing_mode: source_orchestration_validation
+    expected_output_boundary:
+      - login_log_only_cannot_conclude
+      - validation_fail
+      - missing_weapon_sources
+    pass_fail_criteria: "`source_orchestration_check.py` 必须 fail，并指出 login log only 不足以完成单用户账号安全 / ATO 研判。"
+  - case_id: SOURCE-COMPLETION-MATRIX-REQUIRED-001
+    input: "evidence mode 最终回答缺 source_completion_matrix。"
+    expected_routing_mode: source_orchestration_validation
+    expected_output_boundary:
+      - source_completion_matrix_required
+      - allow_final_conclusion_without_source_completion_matrix_false
+    pass_fail_criteria: "最终证据模式不得在缺 source_completion_matrix 时给完整结论。"
