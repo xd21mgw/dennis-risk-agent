@@ -6868,3 +6868,52 @@
 - input: 发布行为审计、token/OAuth/passToken 长周期链路。
 - expected_runtime_behavior: pending_api_direct_confirmation_boundary
 - expected_output_boundary: 若仍是 `pending_api_direct_confirmation`，不能宣称已自动 API 查询；只能 query plan / missing evidence / wait validation。
+
+## 705. Track-analysis capability registered
+
+- test_id: TRACK-ANALYSIS-CAPABILITY-REGISTERED-001
+- input: 检查 `computer_use_poc/capability_registry.md`。
+- expected_runtime_behavior: track_analysis_activity_profile_api_direct_registered
+- expected_output_boundary: 包含 `track_analysis_activity_profile_api_direct`；类型 `platform_source`，状态 `api_direct_confirmed`，成本 low，执行模式 `realtime_readonly_api`，actions 覆盖 `getLastestDateTime/getDeviceIds/getUseDuration/profile`。
+
+## 706. Track-analysis routed for activity/profile questions
+
+- test_id: TRACK-ANALYSIS-ROUTED-FOR-ACTIVITY-QUESTION-001
+- input: 用户/设备近30天活跃、长期不活跃后突然激活、异常设备当天是否活跃、账号画像/低活跃账号风险。
+- expected_runtime_behavior: route_to_track_analysis_activity_profile_api_direct
+- expected_output_boundary: `scene_to_capability_routing.md` 包含活跃/画像场景路由；不默认 SPA DOM，不先 DataAgent/Hive。
+
+## 707. Track-analysis low-cost before DataAgent
+
+- test_id: TRACK-ANALYSIS-LOW-COST-BEFORE-DATAAGENT-001
+- input: 异常设备当天是否有活跃。
+- expected_runtime_behavior: realtime_track_analysis_before_hive
+- expected_output_boundary: track-analysis 是低成本实时只读 source，应先于 DataAgent/Hive；Hive 后续补证仍逐次确认。
+
+## 708. Track-analysis no DOM by default
+
+- test_id: TRACK-ANALYSIS-NO-DOM-BY-DEFAULT-001
+- input: profile / useDuration / deviceIds / latestDateTime 查询。
+- expected_runtime_behavior: no_spa_dom_by_default
+- expected_output_boundary: 已是 `api_direct_confirmed` 时不默认走 SPA DOM；API no_data/blocked/timeout/auth_failed 只进入 source_quality。
+
+## 709. Track-analysis evidence boundary
+
+- test_id: TRACK-ANALYSIS-EVIDENCE-BOUNDARY-001
+- input: 活跃突增、低活跃画像、设备当天活跃异常。
+- expected_runtime_behavior: activity_profile_supporting_evidence_only
+- expected_output_boundary: 只能作为行为补证，不能单独定性 ATO / 协议 / 群控 / 无风险。
+
+## 710. Track-analysis event day activity alignment
+
+- test_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-ALIGNMENT-001
+- input: 登录/扫码/设备切换/策略命中日期与 getUseDuration day rows 对齐。
+- expected_runtime_behavior: day_level_activity_alignment
+- expected_output_boundary: event day duration=0 或无前端活跃时标 `front_backend_activity_mismatch`，进入 medium/weak evidence 或 missing/counter 解释，不能单独定性。
+
+## 711. Login day no frontend activity signal
+
+- test_id: LOGIN-DAY-NO-FRONTEND-ACTIVITY-SIGNAL-001
+- input: 后端登录/扫码/异常设备登录存在，但当天前端 duration=0。
+- expected_runtime_behavior: front_backend_activity_mismatch_signal
+- expected_output_boundary: 作为协议上号 / token/session / 非真实客户端行为候选线索；必须结合登录链路、设备风险、策略命中、发布/行为链路交叉验证。

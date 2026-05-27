@@ -144,6 +144,66 @@ source_conflict_resolution:
   recompute_reason:
 ```
 
+### Track-analysis 活跃画像与事件日对齐模板
+
+适用问题：
+
+- 用户 / 设备近 30 天活跃。
+- 账号是否长期不活跃后突然激活。
+- 异常设备当天是否有活跃。
+- 协议上号 vs 传统 ATO 辅助判断。
+- 群控 / 设备异常活跃补证。
+- 账号画像 / 低活跃账号风险。
+- 反爬 / 流量异常中涉及 userId/deviceId 活跃差异。
+
+默认 source：
+
+```yaml
+selected_capability: track_analysis_activity_profile_api_direct
+capability_type: platform_source
+capability_status: api_direct_confirmed
+cost: low
+execution_mode: realtime_readonly_api
+user_confirmation_required: false
+dataagent_required: false
+actions:
+  - getLastestDateTime
+  - getDeviceIds
+  - getUseDuration
+  - profile
+```
+
+输出 observation：
+
+```yaml
+track_analysis_activity_observation:
+  profile_card:
+  device_ids:
+  latest_datetime:
+  uid_did_relation_latest_datetime:
+  daily_duration_rows:
+  total_duration:
+  peak_duration:
+  first_active_date:
+  register_time:
+  fan_distribution:
+  active_days_bucket:
+  event_day_alignment:
+    event_date:
+    event_type: login_success | scan_login | device_switch | strategy_hit | abnormal_device_login
+    user_duration:
+    device_duration:
+    front_backend_activity_mismatch:
+```
+
+解释规则：
+
+- 登录成功日 / 扫码日 / 设备切换日 / 策略命中日，如果后端有事件但 userId 或 deviceId 前端 duration=0 / 无活跃，标 `front_backend_activity_mismatch`。
+- 该信号可作为协议上号、token/session 使用、非真实客户端行为的中高价值线索。
+- 不能单独定性；必须与登录链路、设备风险标签、策略命中、发布 / 行为链路交叉验证。
+- 在 evidence card 中通常放入 medium / weak evidence；如果 source 窗口不足或字段缺失，放入 `missing_evidence` / `counter_evidence` 解释。
+- track-analysis no_data / blocked / timeout 只能进入 `source_quality`，不得作为风险排除。
+
 ## 0. 专家认知先判回答模板
 
 ### 适用问题

@@ -116,6 +116,15 @@ Source quality:
 - Duration is behavior-supporting evidence.
 - Activity spikes, long inactivity followed by activation, or user/device duration mismatch can raise suspicion but require cross-validation.
 
+Day-level alignment:
+
+- `getUseDuration` is not only for monthly active days, total duration, and peak duration.
+- It must support day-level alignment against login success date, scan-login date, device-switch date, abnormal-device-login date, and strategy-hit date.
+- If backend login / scan / abnormal-device login / strategy hit exists on a day, but track-analysis `userId` or `deviceId` duration is `0` or no frontend activity, record `front_backend_activity_mismatch`.
+- `front_backend_activity_mismatch` is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior.
+- It is not standalone final judgement; it must be cross-validated with login chain, device risk tags, strategy hits, publish / request / interaction behavior, and follow-up raw evidence.
+- If the event day is outside track-analysis source window, mark `source_window_boundary` / `missing_evidence`, not no risk.
+
 ### profile
 
 Purpose: read profile card and behavior-profile statistics for `userId` or `deviceId`.
@@ -197,6 +206,7 @@ Track-analysis activity evidence can support:
 - long inactivity followed by sudden activation
 - abnormal activity on a specific day
 - userId vs deviceId activity inconsistency
+- backend login / scan / strategy-hit day with frontend duration=0 as `front_backend_activity_mismatch`
 - KUAISHOU vs NEBULA app-scope differences
 - profile-statistics mismatch with other sources
 

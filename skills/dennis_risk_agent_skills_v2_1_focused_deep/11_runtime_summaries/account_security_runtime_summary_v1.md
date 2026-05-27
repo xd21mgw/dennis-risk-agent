@@ -135,6 +135,13 @@ source 优先级：
 - P1：档案中心画像、track-analysis stats-first。
 - P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
 
+Track-analysis low-cost补证：
+
+- 当登录日志、Hive、Weapon 或档案中心发现异常手机端设备、非历史设备、新设备登录、扫码后新设备、设备风险标签或策略命中时，默认触发 `track_analysis_activity_profile_api_direct` 作为低成本实时补证。
+- 优先检查登录成功日、扫码日、设备切换日、策略命中日的 `getUseDuration`。
+- 若后端登录 / 扫码 / 异常设备登录 / 策略命中存在，但对应 userId 或 deviceId 当天前端 duration=0 或无活跃，标记 `front_backend_activity_mismatch`。
+- 该信号是协议上号、token/session 使用、非真实客户端行为的中高价值线索，但不能单独定性 ATO；必须与登录链路、设备风险、策略命中、发布 / 行为链路交叉验证。
+
 规则：
 
 - completed source 不得因后续 source timeout / blocked / parse_error 丢失。

@@ -121,6 +121,9 @@ Semi-open experience patch v1 路由补丁：
 - `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。
 - `single_case_evidence_card_required`：明确单个 user_id / case 查询必须输出 evidence card；平台 blocked / timeout / loop 时输出 partial evidence card，不裸 timeout。
 - `track_analysis_stats_first`：track-analysis 用户细查优先读统计层字段（月活跃天数、设备类型、地区、注册时间、粉丝分布、用户画像/设备画像），明细行为序列只是可选补证。
+- `track_analysis_activity_profile_api_direct`：当问题涉及 user_id / device_id 的近 30 天活跃、画像、设备当天是否活跃、长期不活跃后突然激活、账号画像 / 低活跃账号风险、协议上号 vs 传统 ATO 辅助判断、群控 / 设备异常活跃补证、反爬 / 流量异常中的 userId/deviceId 活跃差异时，路由到该能力。该能力为 `platform_source`，状态 `api_direct_confirmed`，成本 low，执行模式 `realtime_readonly_api`，不需要用户确认，不需要 DataAgent。
+- `track_analysis_event_day_alignment`：当登录日志、Hive、Weapon 或档案中心发现异常手机端设备、非历史设备、新设备登录、扫码后新设备、设备风险标签或策略命中时，默认触发 `track_analysis_activity_profile_api_direct` 做低成本补证。重点检查登录成功日、扫码日、设备切换日、策略命中日的 `getUseDuration`；若后端登录 / 扫码 / 命中存在但对应 userId/deviceId 前端 duration=0 或无活跃，标 `front_backend_activity_mismatch`，作为协议上号、token/session 使用、非真实客户端行为线索，但不得单独定性。
+- `track_analysis_scene_routing`：用户/设备近 30 天活跃、长期不活跃后突然激活、异常设备当天是否有活跃、协议上号 vs 传统 ATO 辅助判断、群控/设备异常活跃、账号画像/低活跃账号风险、反爬/流量异常中的 userId/deviceId 活跃差异，均优先走 `track_analysis_activity_profile_api_direct`，不默认 SPA DOM，不先 DataAgent/Hive。
 - `browser_spa_loop_guard`：档案中心 / track-analysis / 天狮同一 browser 动作失败超过 3 次必须停止，标记 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`。
 - `macro_dashboard_context_isolation`：流量反作弊大盘分析必须先基于当前大盘指标；历史 case 只能是 hypothesis，缺 join key 时不得写“同一团伙 / 完整攻击链 / 基础设施共用”。
 - `context_boundary_guard`：任何入口都必须先生成 task fingerprint，再决定 `fresh_context` / `same_task_continuation` / `same_batch_continuation` / `methodology_mode`。只有 same task / same batch 且 fingerprint 匹配时，才允许继承上一轮 evidence。

@@ -1550,3 +1550,65 @@ platform_capability_status_and_cost_priority_regression:
       - api_window_short_boundary
       - raw_behavior_evidence_priority
     pass_fail_criteria: "必须重算结论，解释在线窗口短 / Hive 历史覆盖更完整；不得保留 API no_data 初判。"
+  - case_id: TRACK-ANALYSIS-CAPABILITY-REGISTERED-001
+    input: "检查 track-analysis API direct 是否注册为正式 platform source 能力。"
+    expected_routing_mode: capability_registry_check
+    expected_output_boundary:
+      - capability_name_track_analysis_activity_profile_api_direct
+      - platform_source
+      - api_direct_confirmed
+      - cost_low
+      - realtime_readonly_api
+      - no_user_confirmation
+      - no_dataagent_required
+    pass_fail_criteria: "`capability_registry.md` 必须包含 `track_analysis_activity_profile_api_direct`，并列出输入、actions 和 observation 字段。"
+  - case_id: TRACK-ANALYSIS-ROUTED-FOR-ACTIVITY-QUESTION-001
+    input: "帮我看这个 user_id / device_id 近 30 天活跃、是否长期不活跃后突然激活、异常设备当天是否有活跃。"
+    expected_routing_mode: track_analysis_activity_profile_api_direct
+    expected_output_boundary:
+      - activity_profile_route
+      - no_default_spa_dom
+      - no_dataagent_first
+    pass_fail_criteria: "活跃 / 画像 / 近 30 天行为 / 设备当天活跃问题必须优先路由到 track-analysis API direct 能力。"
+  - case_id: TRACK-ANALYSIS-LOW-COST-BEFORE-DATAAGENT-001
+    input: "这个异常设备当天有没有前端活跃？如果没有再考虑 Hive。"
+    expected_routing_mode: track_analysis_activity_profile_api_direct
+    expected_output_boundary:
+      - low_cost_realtime_source_first
+      - realtime_api_before_dataagent
+      - dataagent_per_call_confirmation_if_needed
+    pass_fail_criteria: "track-analysis 可实时只读回答时，不得先调用 DataAgent/Hive；如后续 Hive 补证必须再次确认。"
+  - case_id: TRACK-ANALYSIS-NO-DOM-BY-DEFAULT-001
+    input: "查询 track-analysis profile/useDuration/deviceIds/latestDateTime。"
+    expected_routing_mode: track_analysis_activity_profile_api_direct
+    expected_output_boundary:
+      - api_direct_confirmed
+      - browser_dom_not_default
+      - source_quality_on_api_failure
+    pass_fail_criteria: "covered fields 已是 api_direct_confirmed，不默认走 SPA DOM；API 失败只进入 source_quality。"
+  - case_id: TRACK-ANALYSIS-EVIDENCE-BOUNDARY-001
+    input: "track-analysis 显示长期不活跃后突然激活，是否能直接定性 ATO / 协议 / 群控？"
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - activity_evidence_not_final_judgement
+      - require_login_device_strategy_behavior_cross_validation
+      - source_quality_required
+    pass_fail_criteria: "活跃画像只能作为行为补证，不能单独定性。"
+  - case_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-ALIGNMENT-001
+    input: "登录成功日 / 扫码日 / 设备切换日 / 策略命中日，对齐 track-analysis useDuration。"
+    expected_routing_mode: track_analysis_event_day_alignment
+    expected_output_boundary:
+      - day_level_alignment
+      - front_backend_activity_mismatch
+      - medium_or_weak_evidence_only
+      - not_standalone_final_judgement
+    pass_fail_criteria: "必须按事件日对齐 userId/deviceId duration；后端事件存在但前端 duration=0 时标 mismatch，但不能单独定性。"
+  - case_id: LOGIN-DAY-NO-FRONTEND-ACTIVITY-SIGNAL-001
+    input: "登录日志 / 扫码 / 异常设备登录当天，track-analysis userId 或 deviceId duration=0。"
+    expected_routing_mode: account_security_evidence_mode
+    expected_output_boundary:
+      - front_backend_activity_mismatch
+      - protocol_or_token_session_use_candidate
+      - require_cross_validation
+      - no_single_source_final_judgement
+    pass_fail_criteria: "该信号应进入 evidence card 的 medium/weak evidence 或 missing/counter 解释，不得单独定性。"

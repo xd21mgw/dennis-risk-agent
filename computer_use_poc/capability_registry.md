@@ -19,6 +19,7 @@
 | `user_profile_read` | 读取用户基础画像、账号状态、历史风险、档案补证 | 档案中心 home/profile/risk/label/punish APIs 或 browser fallback | single_user readonly summary | formal_readonly | 不做自动风险定性，不输出敏感明文 |
 | `login_log_read` | 读取登录、验证、token 生命周期、登录失败原因 | 用户登录统一日志 API / UI fallback | single_user_or_did reliable window | formal_readonly | 必须先做 `reliable_window_precheck`；`recallSource=2,0,1,3` 必须出现在 online URL；over-window no_data 是 data_gap，不是 counter_evidence |
 | `frontend_activity_read` | 读取前端活跃画像和使用时长信号 | 埋点分析“用户属性及时长”区域 | single_user_or_device profile summary | validated_but_not_default_real_execution | 只能说明前端活跃信号，不证明真人/本人/具体动作 |
+| `track_analysis_activity_profile_api_direct` | 读取 user_id / device_id 的近 30 天活跃、画像、设备关联和事件日活跃对齐信号 | track-analysis `getLastestDateTime` / `getDeviceIds` / `getUseDuration` / `profile` | platform_source; single user/device realtime readonly | api_direct_confirmed; cost=low; execution_mode=realtime_readonly_api | 输入支持 `user_id` / `device_id` / `appName=KUAISHOU|NEBULA`；不需要用户确认，不需要 DataAgent；输出 profile_card / device_ids / latest_datetime / uid_did_relation_latest_datetime / daily_duration_rows / total_duration / peak_duration / first_active_date / register_time / fan_distribution / active_days_bucket；活跃信号不能单独定性 |
 | `user_device_resolution` | 做 user ↔ device 双向实体转译 | Weapon graphData，档案中心近期设备作为补充排序 | single_entity candidates | formal_readonly | 关联关系是候选实体关系，不是风险结论 |
 | `device_risk_read` | 读取设备环境风险、hook/root/frida/模拟器/多开等设备侧补证 | Device SDK / Weapon riskData | single_device readonly summary | formal_readonly | 设备异常不能单独定性用户作弊或盗号 |
 | `strategy_hit_read` | 判断 source/request 在窗口内是否命中生产风控策略；作为 strategy_hit_inventory 首选批量入口 | 天狮 fastQueryHbase HTTP+SSO | single_source bounded window | formal_readonly | `eventTypeCodes=""` 表示全事件类型；策略命中是证据，不等于最终作弊定性 |
@@ -75,7 +76,14 @@
   - 它不同于 `strategy_hit_read`：后者只回答是否命中策略；策略治理能力回答策略定义、策略树资产、事件归因和发布记录。
   - 用户风险研判只把天狮作为 `strategy_hit_evidence` 候选；只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才进入 `single_event_policy_attribution`。
 - `multi_evidence_orchestration_contracts` 是完整风险研判问题的 planner 层：默认三源为 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`；只有请求级字段问题才触发 `tianshi_eventlist_api_read`。
-- `frontend_activity_read` 当前适合作为前端活跃存在性证据，不承载完整行为序列。
+- `frontend_activity_read` 是早期 stats-first / frontend activity 抽象；当前优先使用 `track_analysis_activity_profile_api_direct` 作为低成本 realtime readonly platform source。
+- `track_analysis_activity_profile_api_direct` 支持：
+  - actions：`getLastestDateTime`、`getDeviceIds`、`getUseDuration`、`profile`。
+  - input：`user_id` / `device_id` / `appName=KUAISHOU|NEBULA`。
+  - observation：`profile_card`、`device_ids`、`latest_datetime`、`uid_did_relation_latest_datetime`、`daily_duration_rows`、`total_duration`、`peak_duration`、`first_active_date`、`register_time`、`fan_distribution`、`active_days_bucket`。
+  - event-day alignment：登录成功日、扫码日、设备切换日、策略命中日若后端有登录 / 扫码 / 命中但对应 userId/deviceId 前端 duration=0 或无活跃，应标 `front_backend_activity_mismatch`。
+  - boundary：`front_backend_activity_mismatch` 是协议上号、token/session 使用、非真实客户端行为的中高价值线索，但不得单独定性；必须与登录链路、设备风险、策略命中、发布 / 行为链路交叉验证。
+- ATO / account_security 场景中，如果登录日志、Hive、Weapon 或档案中心发现异常手机端设备、非历史设备、新设备登录、扫码后新设备或设备风险标签，默认触发 `track_analysis_activity_profile_api_direct` 作为低成本补证 source，优先检查登录成功日 / 扫码日 / 设备切换日 / 策略命中日的 `getUseDuration`。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。
 - `batch_risk_clustering_analysis` 是跨场景批量风险分簇研判包，用于 10+ 标准批量分簇、50+ aggregation / DataAgent-Hive query plan、异常相关性矩阵和代表样本抽样；不表示已开放大批量在线查询。

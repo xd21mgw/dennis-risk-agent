@@ -63,6 +63,11 @@ Platform call preflight:
 - Low-cost source `no_data`, `blocked`, `timeout`, or `auth_failed` must enter `source_quality`; it is not low-risk / no-risk evidence.
 - If source coverage is incomplete, mark `source_window_boundary`, `missing_evidence`, or `offline_hive_required`.
 - If later higher-quality evidence conflicts with an earlier low-cost source, recompute the conclusion and prefer longer-window, fuller-chain, raw-behavior evidence over strategy names or model scores.
+- If the user question involves `user_id` / `device_id` activity, profile, recent-30-day behavior, whether a device was active on a given day, or long-inactive-then-sudden-activation, prefer `track_analysis_activity_profile_api_direct`.
+- `track_analysis_activity_profile_api_direct` is `api_direct_confirmed`, low cost, `realtime_readonly_api`; do not default to SPA DOM and do not call DataAgent / Hive first.
+- If login log, Hive, Weapon, Archives, or strategy-hit evidence shows abnormal mobile device, non-historical device, new-device login, post-scan new device, device risk tag, or event-day strategy hit, trigger track-analysis event-day alignment as a low-cost supporting source.
+- Track-analysis `no_data`, `blocked`, or `timeout` must enter `source_quality`; it cannot exclude risk.
+- If backend login / scan / device switch / strategy hit exists on a day but track-analysis userId/deviceId duration is `0` or no frontend activity, mark `front_backend_activity_mismatch`. This is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior, but it is not standalone final judgement.
 
 DataAgent / Hive registry preflight:
 

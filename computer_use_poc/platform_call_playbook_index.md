@@ -298,6 +298,9 @@ Evidence boundary:
 
 - Activity duration, active days, profile card, and device activity are behavior-supporting evidence.
 - They can support long-inactive-then-active, abnormal same-day activity, or user/device activity mismatch analysis.
+- Use `getUseDuration` for day-level alignment against login success date, scan-login date, device-switch date, abnormal-device-login date, and strategy-hit date.
+- If backend login / scan / abnormal device login / strategy hit exists on a day but track-analysis userId/deviceId duration is `0` or no frontend activity, mark `front_backend_activity_mismatch`.
+- `front_backend_activity_mismatch` is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior, but not standalone final judgement.
 - They cannot independently prove ATO, protocol attack, group control, or no risk.
 - Cross-validate with login chain, device risk, strategy hit, publish / request / interaction behavior, and other raw evidence.
 
