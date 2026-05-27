@@ -140,6 +140,128 @@ Fix:
 - Contract status and execution status are separate.
 - Unverified executable endpoint means `pending_api_direct_confirmation` / `source_gap`.
 
+## 9. Source Plan Not Executed
+
+Manifestation:
+- The agent outputs a source plan, but `executed_sources` / `source_completion_matrix` does not match planned required sources.
+- Example: the plan contains Weapon graph/risk sources, but runtime only executes login log.
+
+Risk:
+- The answer looks planned and complete while required evidence was never attempted.
+
+Detection:
+- Compare planned required sources with `source_completion_matrix`.
+- Required sources must appear with a real status or an explicit `blocked`, `auth_failed`, `not_checked`, `missing_required_fields`, `timeout`, or `parse_error` explanation.
+
+Fix:
+- Fail validation with `source_plan_not_executed` if planned required sources are missing without explanation.
+
+## 10. Source Status Mismatch
+
+Manifestation:
+- A source is marked `completed` without a real request.
+- HTTP 302 / HTML login page is written as `no_data`.
+- File-level or contract-level validation is described as live execution.
+
+Risk:
+- Authentication or environment failures become false evidence.
+
+Detection:
+- `completed` requires `real_platform_request_executed=true`, `http_status=200`, `response_type=json`, and an execution observation id.
+- `no_data` requires `http_status=200`, `response_type=json`, and `records_count=0`.
+- `auth_failed` must map to 302 / login page / access proxy redirect.
+
+Fix:
+- Fail validation with `source_status_mismatch`; keep auth / parse / blocked separate from no_data.
+
+## 11. Cross Source Entity Misuse
+
+Manifestation:
+- A device id from track-analysis / Archives is used for Weapon riskData, but the answer implies Weapon graphData resolved it.
+
+Risk:
+- Entity provenance is lost and downstream device risk appears stronger than it is.
+
+Detection:
+- If `device_id_source` is not Weapon graphData, require `cross_source_device_id=true`.
+- If Weapon graphData returned zero edges and downstream riskData uses a device id, require `weapon_graphData_empty=true`.
+
+Fix:
+- Mark cross-source device provenance explicitly and keep relation strength separate.
+
+## 12. Capability Registry Overtrust
+
+Manifestation:
+- `capability_registry.md` says `api_direct_confirmed`, and runtime marks a source `completed` without current execution observation.
+
+Risk:
+- Capability availability is confused with evidence collection.
+
+Detection:
+- `completed` requires current execution observation metadata.
+
+Fix:
+- `api_direct_confirmed` means executable capability, not source completion.
+
+## 13. Environment Issue As Platform Gap
+
+Manifestation:
+- Sandbox missing browser, expired SSO ticket, missing node/macOS capability, or tool absence is written as platform unavailable.
+
+Risk:
+- A local runtime issue is mistaken for platform evidence.
+
+Detection:
+- `source_gap_type` must distinguish `platform_gap`, `environment_gap`, `auth_gap`, `tool_gap`, and generic `source_gap`.
+- Environment/tool/auth markers cannot be labelled as `platform_gap`.
+
+Fix:
+- Label environment and tool failures precisely; do not conclude platform unavailability.
+
+## 14. Manual Exploration Creep
+
+Manifestation:
+- Normal risk execution tries unverified URLs such as `/api/profile`, `/rest/profile`, or `/api/user/profile`.
+
+Risk:
+- Endpoint discovery leaks into routine case handling and creates inconsistent path usage.
+
+Detection:
+- `unapproved_endpoint_attempts` is forbidden outside explicit `endpoint_discovery`.
+- Endpoints not in playbook / contract / source plan fail validation during normal execution.
+
+Fix:
+- Use registered endpoints only; endpoint discovery must be a separate explicit task.
+
+## 15. Summary Overclaim Drift
+
+Manifestation:
+- Evidence card says `needs_more_evidence` / partial, but the one-line summary says low risk, no risk, or tends to exclude ATO.
+
+Risk:
+- Human readers follow the stronger summary and ignore evidence limitations.
+
+Detection:
+- `final_summary_conclusion` must match `evidence_card.conclusion_state`.
+- Incomplete source matrices cannot support `low_risk`, `no_risk`, or `data_against_ato_suspicion`.
+
+Fix:
+- Use `insufficient_support` / partial conclusion until source coverage is complete.
+
+## 16. Overlay Manifest Path Drift
+
+Manifestation:
+- The release / overlay manifest path differs from the live fallback path, but fallback is not recorded.
+
+Risk:
+- Runtime reads different files than reviewers expect.
+
+Detection:
+- If `actual_path != manifest_path`, require `fallback_path_used=true`, `fallback_reason`, and `runtime_readable=true`.
+
+Fix:
+- Treat this as a warning first, not a critical blocker, but make fallback explicit.
+
 ## Offline Validation Assets
 
 - `source_orchestration_plan_v1.yaml`

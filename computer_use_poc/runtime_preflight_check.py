@@ -245,6 +245,14 @@ def main() -> int:
             "forbidden_tool_boundary_drift",
             "weapon_forbidden_api_graphdata_path",
             "nodata_timeout_blocked_not_counter_evidence",
+            "source_plan_not_executed",
+            "source_status_mismatch",
+            "cross_source_entity_misuse",
+            "capability_registry_overtrust",
+            "environment_issue_as_platform_gap",
+            "manual_exploration_creep",
+            "summary_overclaim_drift",
+            "overlay_manifest_path_drift_warning",
         ],
     )
     findings += check_contains(
@@ -259,6 +267,14 @@ def main() -> int:
             "Evidence Semantic Drift",
             "Stale Data Drift",
             "Capability Status Drift",
+            "Source Plan Not Executed",
+            "Source Status Mismatch",
+            "Cross Source Entity Misuse",
+            "Capability Registry Overtrust",
+            "Environment Issue As Platform Gap",
+            "Manual Exploration Creep",
+            "Summary Overclaim Drift",
+            "Overlay Manifest Path Drift",
         ],
     )
     source_check_path = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"

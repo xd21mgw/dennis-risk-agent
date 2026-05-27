@@ -1772,3 +1772,126 @@ internal_agent_drift_audit_regression:
       - pending_api_direct_confirmation
       - source_gap
     pass_fail_criteria: "api_direct_confirmed 合同不能替代 executable endpoint 验证。"
+  - case_id: DRIFT-SOURCE-PLAN-NOT-EXECUTED-001
+    input: "planned_required_sources 包含 Weapon，但 executed_sources / source_completion_matrix 只有 login_log。"
+    expected_routing_mode: source_orchestration_validation
+    expected_output_boundary:
+      - source_plan_not_executed
+      - planned_required_sources_must_match_execution
+      - missing_required_source_explanation_required
+    pass_fail_criteria: "planned required source 未执行且无 blocked/auth_failed/not_checked/missing_required_fields 解释时必须 fail。"
+  - case_id: DRIFT-SOURCE-STATUS-MISMATCH-001
+    input: "source 未真实请求却标 completed；HTTP 302/HTML 写成 no_data。"
+    expected_routing_mode: source_status_validation
+    expected_output_boundary:
+      - source_status_mismatch
+      - completed_requires_real_request_http_200_json
+      - no_data_requires_http_200_json_records_zero
+      - auth_failed_maps_to_redirect_or_login_page
+    pass_fail_criteria: "source_status 必须与真实请求、HTTP 状态、response_type 和 records_count 一致。"
+  - case_id: DRIFT-CROSS-SOURCE-ENTITY-MISUSE-001
+    input: "track-analysis getDeviceIds 返回 deviceId 后用于 Weapon riskData，但未标 cross_source_device_id。"
+    expected_routing_mode: entity_provenance_validation
+    expected_output_boundary:
+      - cross_source_entity_misuse
+      - cross_source_device_id_true_required
+      - device_id_source_required
+      - weapon_graphData_empty_required_when_graph_empty
+    pass_fail_criteria: "非 Weapon graphData 来源的 deviceId 必须标 cross_source_device_id=true 和 device_id_source；graph empty 后补 riskData 必须标 weapon_graphData_empty=true。"
+  - case_id: DRIFT-CAPABILITY-REGISTRY-OVERTRUST-001
+    input: "capability_registry 写 api_direct_confirmed，但 source completed 没有本次 execution observation。"
+    expected_routing_mode: capability_status_validation
+    expected_output_boundary:
+      - capability_registry_overtrust
+      - completed_requires_execution_observation
+      - api_direct_confirmed_not_completed
+    pass_fail_criteria: "能力可执行不等于本次 source completed；completed 必须来自当前 observation。"
+  - case_id: DRIFT-ENVIRONMENT-ISSUE-AS-PLATFORM-GAP-001
+    input: "sandbox 缺 browser / SSO ticket 过期 / node 缺失，被写成 platform_unavailable。"
+    expected_routing_mode: source_gap_classification
+    expected_output_boundary:
+      - environment_issue_as_platform_gap
+      - environment_gap_or_tool_gap_or_auth_gap_required
+      - platform_gap_not_for_runtime_issue
+    pass_fail_criteria: "环境、认证、工具问题必须区分，不得写成平台不可用。"
+  - case_id: DRIFT-MANUAL-EXPLORATION-CREEP-001
+    input: "普通 execution 尝试 /api/profile / /rest/profile / 未登记 URL。"
+    expected_routing_mode: endpoint_attempt_validation
+    expected_output_boundary:
+      - manual_exploration_creep
+      - endpoint_discovery_required_for_unregistered_url
+      - unapproved_endpoint_attempts_forbidden
+    pass_fail_criteria: "非 endpoint_discovery 任务不得执行未登记 endpoint。"
+  - case_id: DRIFT-SUMMARY-OVERCLAIM-001
+    input: "source matrix partial / needs_more_evidence，但一句话结论写 low_risk / no_risk / data_against_ato_suspicion。"
+    expected_routing_mode: evidence_summary_validation
+    expected_output_boundary:
+      - summary_overclaim_drift
+      - final_summary_matches_evidence_card
+      - incomplete_matrix_cannot_support_low_risk
+    pass_fail_criteria: "summary conclusion 必须与 evidence_card.conclusion_state 一致。"
+  - case_id: DRIFT-OVERLAY-MANIFEST-PATH-001
+    input: "manifest_path 与 actual_path 不一致，但未标 fallback。"
+    expected_routing_mode: overlay_path_validation
+    expected_output_boundary:
+      - overlay_manifest_path_drift_warning
+      - fallback_path_used_required
+      - fallback_reason_required
+      - runtime_readable_required
+    pass_fail_criteria: "路径漂移先作为 warning，但必须显式标 fallback_path_used/fallback_reason/runtime_readable。"
+
+myflicker_weapon_track_analysis_endpoint_regression:
+  - case_id: WEAPON-APIV2-CONFIRMED-PATH-001
+    input: "Weapon user-to-device graph and device risk source matrix."
+    expected_routing_mode: platform_path_validation
+    expected_output_boundary:
+      - weapon_apiv2_graphdata_required
+      - weapon_apiv2_riskdata_required
+      - no_api_graphdata_default
+    pass_fail_criteria: "Weapon 默认路径必须为 `/apiv2/graphData` 和 `/apiv2/riskData`；`/api/graphData` 必须 fail。"
+  - case_id: WEAPON-DEVICE-ID-PREFIX-PRESERVED-001
+    input: "Weapon riskData receives ANDROID_ / IOS_ device id."
+    expected_routing_mode: platform_path_validation
+    expected_output_boundary:
+      - device_id_prefix_preserved
+      - prefix_removed_fails
+    pass_fail_criteria: "不得默认去掉 `ANDROID_` / `IOS_` 前缀；validator 应拦截 prefix_removed。"
+  - case_id: WEAPON-GRAPHDATA-EMPTY-NOT-NO-DEVICE-001
+    input: "Weapon graphData returns count=0 / no_data."
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - weapon_graph_no_relation_not_no_device
+      - track_analysis_getDeviceIds_supplement_allowed
+      - no_data_not_risk_exclusion
+    pass_fail_criteria: "graphData=0 只代表 Weapon 图谱无关联边，不得写用户无设备；可用 track-analysis deviceIds 补证。"
+  - case_id: TRACK-ANALYSIS-DP-ENDPOINTS-001
+    input: "track-analysis getLastestDateTime / getDeviceIds / getUseDuration / profile."
+    expected_routing_mode: track_analysis_endpoint_validation
+    expected_output_boundary:
+      - dp_sequence_endpoint_required
+      - getDeviceIds_post
+      - getUseDuration_post
+      - profile_post_startTime_endTime_ms
+    pass_fail_criteria: "必须使用 `/dp/platform/app/analytics/v2/sequence/*` 已验证路径；profile 使用 `startTime/endTime` 毫秒时间戳。"
+  - case_id: TRACK-ANALYSIS-NO-GUESSED-ENDPOINTS-001
+    input: "track-analysis source uses /api/profile / /rest/profile / /api/user/profile."
+    expected_routing_mode: track_analysis_endpoint_validation
+    expected_output_boundary:
+      - track_analysis_forbidden_guessed_endpoint
+      - validation_fail
+    pass_fail_criteria: "不得临场猜 profile URL； guessed endpoints 必须 fail。"
+  - case_id: TRACK-USE-DURATION-ROWS-OBJECT-ARRAY-001
+    input: "getUseDuration rows parsed as two-dimensional array."
+    expected_routing_mode: track_analysis_shape_validation
+    expected_output_boundary:
+      - rows_object_array_date_duration
+      - two_dimensional_array_parse_fails
+    pass_fail_criteria: "`getUseDuration.rows` 必须按 `{date, duration}` object array 解析。"
+  - case_id: CROSS-SOURCE-DEVICE-ID-RISKDATA-001
+    input: "Weapon graphData no_data, track-analysis getDeviceIds returns deviceId used for Weapon riskData."
+    expected_routing_mode: cross_source_device_risk_validation
+    expected_output_boundary:
+      - cross_source_device_id_true_required
+      - weapon_riskdata_after_track_deviceids
+      - source_provenance_required
+    pass_fail_criteria: "使用 track-analysis deviceId 补查 Weapon riskData 时必须标 `cross_source_device_id=true`。"

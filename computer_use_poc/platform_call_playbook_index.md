@@ -135,6 +135,7 @@ Hard rules:
 
 - `/apiv2/graphData` and `/apiv2/riskData` are the default readonly API paths.
 - Do not use `/api/graphData` as default execution guidance.
+- Do not strip mobile device prefixes such as `ANDROID_` or `IOS_` before calling Weapon riskData. Preserve the observed device id string unless a validated platform contract explicitly says otherwise.
 - Do not switch to arbitrary frontend or guessed API paths when `/apiv2/*` returns `auth_failed`, `blocked`, or `timeout`; record the source status and continue the evidence card.
 - In single-user account security / ATO / login anomaly cases, Weapon graphData/riskData is part of the P0 default sequence after unified login log. Login log `no_data` does not end the judgement.
 
@@ -143,6 +144,7 @@ Common errors:
 - Treating `user_id` as `device_id` in riskData.
 - Using riskData for entity resolution.
 - Treating graph no relation as no risk.
+- Treating Weapon graphData count `0` as "user has no device". It only means the Weapon graph source currently returned no relation edge. Use track-analysis `getDeviceIds` as a cross-source device candidate supplement, then mark `cross_source_device_id=true` if the device id is used for Weapon riskData.
 
 Fallback:
 
@@ -270,10 +272,15 @@ Preferred path:
 
 Supported API groups:
 
-- `getLastestDateTime`
-- `getDeviceIds`
-- `getUseDuration`
-- `profile`
+- `getLastestDateTime`: `GET /dp/platform/app/analytics/v2/sequence/getLastestDateTime`
+- `getDeviceIds`: `POST /dp/platform/app/analytics/v2/sequence/getDeviceIds`
+- `getUseDuration`: `POST /dp/platform/app/analytics/v2/sequence/getUseDuration`
+- `profile`: `POST /dp/platform/app/analytics/v2/sequence/profile`
+
+Request shape:
+
+- `profile` uses millisecond `startTime` / `endTime`; do not use `startDate` / `endDate`.
+- Do not guess `/api/profile`, `/rest/profile`, or `/api/user/profile`.
 
 Field shape:
 
@@ -284,6 +291,8 @@ Field shape:
 Common errors:
 
 - Treating track-analysis as SPA-only after API direct coverage exists.
+- Guessing `/api/profile`, `/rest/profile`, or `/api/user/profile`.
+- Sending `startDate` / `endDate` to `profile` instead of millisecond `startTime` / `endTime`.
 - Parsing `getUseDuration.rows` as a two-dimensional array.
 - Looking for register time / fans / active days only under `firstLevelProfile`.
 - Treating NEBULA zero duration as account inactivity.
@@ -305,7 +314,7 @@ Source status mapping:
 - unexpected field shape: `parse_error`
 - timeout / SPA loop: `timeout`
 
-Capability status: `api_direct_confirmed` for `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime` as recorded in `track_analysis_api_direct_contract_current.md`. Do not default to SPA / DOM for these covered fields.
+Capability status: `api_direct_confirmed_with_cookie_state_fallback` for `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime` as recorded in `track_analysis_api_direct_contract_current.md`. Do not default to SPA / DOM for these covered fields.
 
 Execution warning:
 

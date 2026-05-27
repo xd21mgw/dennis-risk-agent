@@ -7036,3 +7036,108 @@
 - input: 执行 `python3 computer_use_poc/runtime_preflight_check.py`。
 - expected_runtime_behavior: drift_audit_preflight_checks_present
 - expected_output_boundary: preflight 必须检查 drift audit 文档、source_orchestration_check drift markers，并验证 login-log-only 负例会 fail。
+
+## 729. Source plan not executed drift
+
+- test_id: DRIFT-SOURCE-PLAN-NOT-EXECUTED-001
+- input: planned required sources 有 Weapon，但 executed matrix 没有 Weapon 且无解释。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: 返回 `source_plan_not_executed`；缺失 source 必须有 blocked/auth_failed/not_checked/missing_required_fields 等解释。
+
+## 730. Source status mismatch drift
+
+- test_id: DRIFT-SOURCE-STATUS-MISMATCH-001
+- input: completed 缺 real request / HTTP 200 / JSON，或 no_data 缺 records_count=0。
+- expected_runtime_behavior: source_status_validation_fail
+- expected_output_boundary: 返回 `source_status_mismatch`；auth_failed 必须对应 302/login_page/access_proxy_redirect。
+
+## 731. Cross-source entity misuse drift
+
+- test_id: DRIFT-CROSS-SOURCE-ENTITY-MISUSE-001
+- input: track-analysis deviceId 用于 Weapon riskData，但未标 `cross_source_device_id=true`。
+- expected_runtime_behavior: entity_provenance_validation_fail
+- expected_output_boundary: 返回 `cross_source_entity_misuse`；若 Weapon graphData empty，必须标 `weapon_graphData_empty=true`。
+
+## 732. Capability registry overtrust drift
+
+- test_id: DRIFT-CAPABILITY-REGISTRY-OVERTRUST-001
+- input: source completed 但缺本次 execution observation id。
+- expected_runtime_behavior: completed_source_requires_observation
+- expected_output_boundary: 返回 `capability_registry_overtrust`；`api_direct_confirmed` 不等于 completed。
+
+## 733. Environment issue as platform gap drift
+
+- test_id: DRIFT-ENVIRONMENT-ISSUE-AS-PLATFORM-GAP-001
+- input: sandbox/browser/node/SSO 问题被标为 `platform_gap`。
+- expected_runtime_behavior: source_gap_type_validation_fail
+- expected_output_boundary: 环境/工具/认证问题必须标 `environment_gap` / `tool_gap` / `auth_gap`，不能写平台不可用。
+
+## 734. Manual exploration creep drift
+
+- test_id: DRIFT-MANUAL-EXPLORATION-CREEP-001
+- input: 普通 execution mode 出现 `/api/profile` / `/rest/profile` / 未登记 URL。
+- expected_runtime_behavior: unapproved_endpoint_attempt_fails
+- expected_output_boundary: 返回 `manual_exploration_creep`；endpoint discovery 必须是显式任务。
+
+## 735. Summary overclaim drift
+
+- test_id: DRIFT-SUMMARY-OVERCLAIM-001
+- input: evidence card 是 partial / insufficient，但 final summary 写 low_risk / no_risk。
+- expected_runtime_behavior: summary_evidence_consistency_validation_fail
+- expected_output_boundary: 返回 `summary_overclaim_drift`；summary 必须与 evidence card conclusion_state 一致。
+
+## 736. Overlay manifest path drift warning
+
+- test_id: DRIFT-OVERLAY-MANIFEST-PATH-001
+- input: `actual_path != manifest_path` 且没有 fallback metadata。
+- expected_runtime_behavior: overlay_path_warning
+- expected_output_boundary: 返回 `overlay_manifest_path_drift_warning`；要求 `fallback_path_used=true`、`fallback_reason`、`runtime_readable=true`。
+
+## 737. Weapon APIV2 confirmed path from myflicker
+
+- test_id: WEAPON-APIV2-CONFIRMED-PATH-001
+- input: Weapon graph / risk source matrix.
+- expected_runtime_behavior: weapon_apiv2_confirmed_paths_only
+- expected_output_boundary: 默认 `/apiv2/graphData` 和 `/apiv2/riskData`；`/api/graphData` 必须被 validator 拦截。
+
+## 738. Weapon device id prefix preserved
+
+- test_id: WEAPON-DEVICE-ID-PREFIX-PRESERVED-001
+- input: `ANDROID_` / `IOS_` device id before riskData.
+- expected_runtime_behavior: preserve_mobile_device_prefix
+- expected_output_boundary: 不得默认去掉前缀；`prefix_removed=true` 或变更后的 device_id 必须 fail。
+
+## 739. Weapon graphData empty is not no-device conclusion
+
+- test_id: WEAPON-GRAPHDATA-EMPTY-NOT-NO-DEVICE-001
+- input: Weapon graphData 返回 `0` / `no_data`。
+- expected_runtime_behavior: graph_no_relation_boundary
+- expected_output_boundary: 只能写 Weapon 图谱 source 当前无关联边；可由 track-analysis `getDeviceIds` 补证，不能写用户无设备。
+
+## 740. Track-analysis DP endpoints confirmed
+
+- test_id: TRACK-ANALYSIS-DP-ENDPOINTS-001
+- input: track-analysis API direct source plan.
+- expected_runtime_behavior: dp_sequence_endpoints_required
+- expected_output_boundary: getLastestDateTime=`GET /dp/platform/app/analytics/v2/sequence/getLastestDateTime`；getDeviceIds/getUseDuration/profile 使用对应 `/dp/platform/app/analytics/v2/sequence/*` POST endpoint。
+
+## 741. Track-analysis guessed endpoints forbidden
+
+- test_id: TRACK-ANALYSIS-NO-GUESSED-ENDPOINTS-001
+- input: `/api/profile`、`/rest/profile`、`/api/user/profile`。
+- expected_runtime_behavior: guessed_endpoint_validation_fail
+- expected_output_boundary: 不得临场猜 URL；validator 必须返回 `track_analysis_forbidden_guessed_endpoint`。
+
+## 742. Track-analysis useDuration rows object array
+
+- test_id: TRACK-USE-DURATION-ROWS-OBJECT-ARRAY-001
+- input: `getUseDuration.rows` 按二维数组解析。
+- expected_runtime_behavior: rows_shape_validation_fail
+- expected_output_boundary: rows 必须是 `{date, duration}` object array / dict structure，不是二维数组。
+
+## 743. Cross-source device id for Weapon riskData
+
+- test_id: CROSS-SOURCE-DEVICE-ID-RISKDATA-001
+- input: Weapon graphData empty，track-analysis getDeviceIds 返回 deviceId 后用于 Weapon riskData。
+- expected_runtime_behavior: cross_source_device_id_marker_required
+- expected_output_boundary: Weapon riskData 使用 track-analysis deviceId 时必须标 `cross_source_device_id=true`，并保留 source provenance。

@@ -26,11 +26,34 @@
           "expected_query_shape": "product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2"
         },
         {
-          "source_name": "weapon_device_risk",
+          "source_name": "weapon_device_risk_if_device_id_available",
           "source_type": "realtime_readonly_api",
           "required": true,
           "required_path_contains": "/apiv2/riskData",
           "expected_query_shape": "product=KUAISHOU&deviceIds={deviceId}"
+        },
+        {
+          "source_name": "track_analysis_getDeviceIds",
+          "source_type": "realtime_readonly_api",
+          "required": true,
+          "required_path_contains": "/dp/platform/app/analytics/v2/sequence/getDeviceIds",
+          "method": "POST"
+        },
+        {
+          "source_name": "track_analysis_getUseDuration",
+          "source_type": "realtime_readonly_api",
+          "required": true,
+          "required_path_contains": "/dp/platform/app/analytics/v2/sequence/getUseDuration",
+          "method": "POST",
+          "expected_rows_shape": "object_array_date_duration"
+        },
+        {
+          "source_name": "track_analysis_profile",
+          "source_type": "realtime_readonly_api",
+          "required": true,
+          "required_path_contains": "/dp/platform/app/analytics/v2/sequence/profile",
+          "method": "POST",
+          "expected_time_fields": "startTime/endTime_ms"
         }
       ],
       "conditional_sources": [
@@ -43,13 +66,13 @@
           "source_name": "tianshi_if_event_or_source_id_available",
           "condition": "event_id_or_source_id_available",
           "fallback_status": "missing_required_fields_or_not_checked"
-        },
-        {
-          "source_name": "track_analysis_if_endpoint_verified",
-          "condition": "track_analysis_executable_endpoint_verified",
-          "fallback_status": "pending_api_direct_confirmation_or_source_gap"
         }
       ],
+      "cross_source_rules": {
+        "weapon_graphdata_empty_not_no_device": true,
+        "allow_track_analysis_device_id_for_weapon_riskdata": true,
+        "cross_source_device_id_marker_required": true
+      },
       "stop_conditions": {
         "allow_stop_after_login_log_only": false,
         "allow_final_conclusion_without_source_completion_matrix": false,

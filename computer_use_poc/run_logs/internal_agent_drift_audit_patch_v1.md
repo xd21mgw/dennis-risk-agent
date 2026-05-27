@@ -14,6 +14,14 @@ Systematically audit execution drift risks in Dennis Risk Agent and turn the sta
 6. Evidence semantic drift.
 7. Stale data drift.
 8. Capability status drift.
+9. Source plan not executed.
+10. Source status mismatch.
+11. Cross source entity misuse.
+12. Capability registry overtrust.
+13. Environment issue as platform gap.
+14. Manual exploration creep.
+15. Summary overclaim drift.
+16. Overlay manifest path drift.
 
 ## Files Added
 
@@ -42,6 +50,14 @@ Systematically audit execution drift risks in Dennis Risk Agent and turn the sta
 - auth failure before refresh requires controlled refresh attempt.
 - no_data / timeout / blocked / auth_failed cannot support low-risk or no-risk final conclusion.
 - track-analysis cannot be `completed` without executable endpoint verification.
+- planned required sources must be represented in the source completion matrix or explicitly explained.
+- completed/no_data/auth_failed statuses must match request/HTTP/response evidence.
+- cross-source device ids must be marked with `cross_source_device_id=true` and `device_id_source`.
+- capability registry status cannot substitute for current execution observation.
+- environment/auth/tool gaps must not be reported as platform unavailable.
+- unapproved endpoint attempts are blocked outside explicit endpoint discovery.
+- final summary must not overclaim beyond evidence card conclusion state.
+- overlay manifest path fallback must be marked when actual path differs from manifest path.
 
 ## Preflight Additions
 
