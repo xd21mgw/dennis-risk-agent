@@ -1102,6 +1102,53 @@ archives_publish_detail_observation:
   remaining_gap: "需要单独执行 archives_center_auth_activation_fix 后再重试"
 ```
 
+### 档案中心 auth recovery 结果模板
+
+适用：独立 `archives_center_auth_activation_fix` / `platform_auth_activation_task` / pre-case auth recovery。该模板不适用于 KNC、单用户研判、小批量 / 批量研判等业务 case；业务 case 中仍使用 `auth_session_issue` / source gap 模板。
+
+```yaml
+archives_auth_recovery_observation:
+  task_type: archives_center_auth_activation_fix
+  source_name: archives_center_admin
+  login_domain_seen: account.p.adm-corp.kuaishou.com
+  not_ip_whitelist_failure: true
+  username_source: prefilled | user_provided | unknown
+  username_auto_filled: true
+  repeated_username_prompt_avoided: true
+  next_button_clicked: true
+  manual_sso_required: false
+  blocked_after_next:
+    password_required:
+    qr_required:
+    sms_required:
+    mfa_required:
+  state_saved:
+    state_file: archives_auth_state.json
+    sensitive_auth_output: false
+  health_check:
+    browser_closed:
+    state_loaded:
+    user_home_opened:
+    redirected_to_login:
+    same_origin_home_info_path: /archives/user/home/info?userId=<user_id>
+    same_origin_home_info_http_status:
+    hasData:
+    archives_auth_health_check_passed:
+  failure_mapping:
+    auth_state_expired: false
+    manual_sso_required: false
+    ip_whitelist_blocked: false
+  safe_to_use_in_business_case:
+```
+
+边界：
+
+- `account.p` 登录页本身不是 IP 白名单失败证据。
+- 只有用户名输入框且 username 已知 / 已提供时，可在 auth recovery 任务中自动填 username 并点击“下一步”。
+- 后续出现密码、二维码、短信或 MFA 时暂停等待用户手动完成。
+- `archives_auth_state.json` 过期应标 `auth_state_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网。
+- 不输出 cookie / token / session / header，不把认证态细节写入报告。
+
 ### BC-HARMONY-ATO-001 批量 ATO 攻击类型纠偏模板
 
 适用：一批 ATO 用户同时出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败。

@@ -223,14 +223,18 @@ Input:
 
 Preferred path:
 
-1. Open SPA profile URL for the correct domain when browser auth activation is needed.
-2. If `account.p` login page has prefilled username, click next to activate the session.
-3. After same-origin is active, use API direct read such as `/archives/user/home/info?userId=...`.
-4. Use DOM / selector only as fallback.
+1. Use the confirmed entry `https://admin.p.adm-corp.kuaishou.com` and SPA profile URL for the correct domain when browser auth activation is needed.
+2. In a separate `archives_center_auth_activation_fix` / platform auth activation task, if `account.p.adm-corp.kuaishou.com` shows only a username input and the username is prefilled, known, or provided in the current conversation, fill it and click next. If password / QR / SMS / MFA appears, pause for manual SSO.
+3. Save `archives_auth_state.json` after user SSO completes, then health check by closing browser, state loading `archives_auth_state.json`, opening the Archives user home page, confirming no login redirect, and same-origin fetching `/archives/user/home/info?userId=...` with HTTP 200 and `hasData=true`.
+4. After same-origin is active, use API direct read such as `/archives/user/home/info?userId=...`.
+5. Use DOM / selector only as fallback.
 
 Common errors:
 
 - Declaring Archives unavailable before recoverable preflight.
+- Treating the `account.p.adm-corp.kuaishou.com` login page as IP whitelist failure without explicit AccessProxy / IP allowlist evidence.
+- Re-asking for username that is already known or provided in the current conversation.
+- Performing username entry / next click inside KNC, single-user, or batch business case execution instead of a separate auth activation task.
 - Direct browser UI scraping before API direct read.
 - Treating empty result as no risk or no behavior.
 
@@ -243,10 +247,11 @@ Source status mapping:
 
 - API JSON parsed: `completed` or `no_data`
 - auth page / 2FA / redirect: `auth_failed`
+- saved state redirects to `account.p`: `auth_state_expired` / `manual_sso_required`, not IP block
 - profile lock or browser session issue: `blocked`
 - SPA loop: `timeout` with `operation_loop_detected`
 
-Capability status: `same_origin_api_confirmed` for validated APIs that require SPA / browser auth activation before same-origin fetch. Do not declare Archives unavailable before recoverable preflight; do not treat same-origin support as generic API direct.
+Capability status: `same_origin_api_confirmed_if_auth_ready` for validated APIs that require SPA / browser auth activation before same-origin fetch. Do not declare Archives unavailable before recoverable preflight; do not treat same-origin support as generic API direct. In business case execution, auth recovery is not performed inline; `account.p` redirect becomes `archives_auth_session_issue` and a remaining source gap.
 
 ## Track Analysis
 

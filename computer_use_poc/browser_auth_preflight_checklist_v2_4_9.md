@@ -165,15 +165,28 @@ browser_session_bridge:
 #### 2.5.1 档案中心 independent login recoverable preflight
 
 档案中心可能先跳转到 `account.p.adm-corp.kuaishou.com` 独立登录页。该状态是 auth preflight，不是页面无数据。
+`account.p.adm-corp.kuaishou.com` 登录页也不应直接定性为 IP 白名单失败；只有明确的 AccessProxy / IP allowlist 错误页才可标 `permission_blocked`。
 
 规则：
 
-- 如果账号 / 用户名输入框已预填，可先点击“下一步”尝试恢复会话。
-- 点击后进入档案中心 direct URL，标记 `recoverable_preflight_success=true`，并继续执行只读查询。
-- 点击后仍要求密码 / 扫码 / MFA，标记 `archives_independent_login_required`。
-- 如果账号 / 用户名未预填，不得猜测或输入账号，应标记 `wait_for_manual_login` 或 `blocked_by_independent_login`。
+- 该恢复动作只允许在独立 `archives_center_auth_activation_fix` / `platform_auth_activation_task` / pre-case auth recovery 中执行；KNC / 单用户研判 / 批量研判等业务 case 中仍必须快速标 `archives_auth_session_issue`，不得现场修登录态。
+- 如果页面只有账号 / 用户名输入框，且 username 已预填、已知或用户已在当前对话提供，可自动填入 username 并点击“下一步”尝试恢复会话；不得重复询问已知 username。
+- 点击后进入档案中心 direct URL，标记 `recoverable_preflight_success=true`，并继续执行只读 health check。
+- 点击后仍要求密码 / 扫码 / 短信 / MFA，标记 `manual_sso_required` 或 `archives_independent_login_required`，暂停等待用户手动完成。
+- 如果账号 / 用户名未知且未预填，不得猜测或输入账号，应标记 `wait_for_manual_login` 或 `blocked_by_independent_login`。
+- 用户完成 SSO 后必须保存 `archives_auth_state.json`，但报告和 run log 不得输出 cookie / token / session / header。
+- `archives_auth_state.json` 过期或 state load 后仍跳登录页时，标记 `auth_state_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网或档案中心平台不可用。
 - 禁止把登录页 / 认证页解释为页面无数据、用户无记录、档案无数据或用户无风险。
 - 规则部分不得绑定具体账号名；具体预填账号只能在 run log 中作为本次运行样例记录。
+
+保存 state 后的 health check：
+
+1. 关闭 browser。
+2. state load `archives_auth_state.json`。
+3. 打开档案中心用户主页。
+4. 确认未跳转登录页。
+5. 在同源上下文 fetch `/archives/user/home/info?userId=...`。
+6. 仅当 HTTP 200 且 `hasData=true` 时，标记 `archives_auth_health_check_passed=true`。
 
 标准输出：
 
@@ -181,10 +194,24 @@ browser_session_bridge:
 archives_independent_login_preflight:
   redirected_to_independent_login: true
   login_domain: account.p.adm-corp.kuaishou.com
+  allowed_context: archives_center_auth_activation_fix
+  username_source: prefilled | user_provided | unknown
   username_prefilled:
+  username_auto_filled:
   next_clicked:
   recoverable_preflight_success:
   still_requires_password_or_mfa:
+  manual_sso_required:
+  state_saved:
+  auth_state_expired:
+  health_check:
+    browser_closed:
+    state_loaded:
+    user_home_opened:
+    redirected_to_login:
+    same_origin_home_info_http_status:
+    hasData:
+    archives_auth_health_check_passed:
   query_status_after_recovery:
   blocker:
   forbidden_interpretation:
@@ -192,6 +219,7 @@ archives_independent_login_preflight:
     - 档案无数据
     - 用户无风险
     - 平台查询成功但无风险
+    - IP 白名单失败（无明确 IP / AccessProxy 证据时）
 ```
 
 ### 2.6 SPA route guardrail

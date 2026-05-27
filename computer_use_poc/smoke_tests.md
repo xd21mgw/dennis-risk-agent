@@ -7148,3 +7148,24 @@
 - input: KNC / 单用户 / 批量业务 case 中，档案中心跳 `account.p` 登录页。
 - expected_runtime_behavior: auth_session_issue_without_live_auth_repair
 - expected_output_boundary: 不点击登录页、不输入账号、不猜 URL、不搜历史 session；30 秒内标 `archives_auth_session_issue` / `auth_session_issue`，写入 `remaining_source_gaps`，不阻塞 P0 evidence card，不作为低风险反证。
+
+## 745. Archives auth username prefill in activation task
+
+- test_id: ARCHIVES-AUTH-USERNAME-PREFILL-001
+- input: 独立 `archives_center_auth_activation_fix` 中，`account.p` 登录页只有用户名输入框，当前对话已提供 username。
+- expected_runtime_behavior: username_prefill_next_allowed_only_in_auth_activation
+- expected_output_boundary: 不把 `account.p` 登录页直接判 IP 白名单失败；可自动使用已知 username 并点击“下一步”；后续密码/二维码/短信/MFA 必须暂停等待用户；不重复询问已知 username；不输出 cookie/token/session/header。
+
+## 746. Archives expired auth state is not IP block
+
+- test_id: ARCHIVES-AUTH-STATE-EXPIRED-NOT-IP-BLOCK-001
+- input: `archives_auth_state.json` state load 后仍跳 `account.p` 登录页。
+- expected_runtime_behavior: auth_state_expired_manual_sso_required
+- expected_output_boundary: 标 `auth_state_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网、IP 未授权或档案中心平台不可用。
+
+## 747. Archives auth state health check
+
+- test_id: ARCHIVES-AUTH-HEALTH-CHECK-001
+- input: 用户完成员工 SSO 后保存 `archives_auth_state.json`。
+- expected_runtime_behavior: state_reload_same_origin_health_check
+- expected_output_boundary: 必须 browser close、state load、打开档案中心用户主页、确认不跳登录页、same-origin fetch `/archives/user/home/info?userId=...`，HTTP 200 且 hasData=true 才算 health check passed。
