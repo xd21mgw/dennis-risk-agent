@@ -41,6 +41,9 @@
 
 正式能力与平台适配器关系：
 
+- P0 source capability 的 wrapper-first 是 runtime 约束，不只是文档建议。`login_log_read`、`strategy_hit_read`、`user_device_resolution` / Weapon read 等 P0 source 需要 dedicated dennis runtime config、`safeBins`、source wrapper 和 `tools.deny` 同时生效。
+- 如果 live `openclaw.json` 没有独立 `dennis-risk-agent` entry，或 dennis 继承 full-profile defaults，必须标 `runtime_config_not_applied`，不得宣称 wrapper-first 已 runtime 生效。
+- Browser fallback 必须显式记录 `access_method=browser_same_origin_fetch` 或 `browser_ui_observation`；不得把 browser fallback 成功包装成 wrapper-first 成功。
 - `user_profile_read` 可由档案中心 API-first 或 browser fallback 实现。
 - `login_log_read` 优先 API direct read，UI hand 作为 fallback / 字段发现。
 - `login_log_read` 的 online URL 必须保留 `recallSource=2,0,1,3`；缺失可能导致 `code=10045`，这属于 wrapper URL 映射缺口，不应误判为登录行为不存在。

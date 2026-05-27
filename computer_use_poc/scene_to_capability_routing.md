@@ -114,6 +114,8 @@ Semi-open experience patch v1 路由补丁：
 - `small_batch_ato_execution_with_checkpoint`：2-9 个 ATO 客诉用户默认 `small_batch_execution_with_checkpoint`；允许逐个查 P0 source，优先统一登录日志；只对异常用户补 P1 source；默认不进入 P2 browser。每个 user/source 独立 checkpoint，单用户 auth 失败不得导致整体无输出。
 - `login_log_source_boundary`：统一登录日志在线 API 约 7 天可靠窗口，主要覆盖 APP 登录 / refresh token / 密码验证。客诉时间超窗标 `login_log_window_incomplete` / `source_time_range_gap`；APP 登录正常只能写 `app_login_visible_window_no_strong_anomaly`，不能输出低风险 / 无风险 / 排除 ATO。
 - `app_login_only_source_gap`：扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉，即使 APP 登录日志正常，也必须标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+- `runtime_config_not_applied`：风控问题 routing 到 dennis-risk-agent 的前置假设是 live `openclaw.json` 已存在独立 dennis entry。若未 apply，属于 runtime config gap；main agent 不得以 fallback 名义直接接管平台查询。
+- `template_not_runtime`：仓库存在 readonly runtime config template、release overlay 或 AGENTS.md 规则，不等于 live runtime 已生效；必须检查 live `openclaw.json`。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
 - `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
 - `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。

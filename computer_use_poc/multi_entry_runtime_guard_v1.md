@@ -143,6 +143,9 @@ Behavior:
 - Unified login log online API is reliable only for about 7 days and mainly covers APP login / refresh token / password verification. Complaint time outside that window must be marked `login_log_window_incomplete` and `source_time_range_gap`.
 - APP login no_data, single DID, or stable IP can only support `app_login_visible_window_no_strong_anomaly`; it cannot output low risk, no risk, or ATO exclusion without other counter evidence.
 - For scan/OAuth, offline promotion fraud, unfamiliar link, violation posting, or friend deletion complaints, normal APP login logs must still carry `app_login_only_source_gap`, `missing_oauth_or_scan_chain`, `missing_publish_audit`, `missing_device_sdk`, and `missing_strategy_hit` as relevant.
+- Runtime guard depends on runtime config apply. A readonly template in the repo is not enough: live `openclaw.json` must contain a dedicated `dennis-risk-agent` entry with `exec.security=allowlist`, `safeBins`, `tools.deny`, `fs.workspaceOnly=true`, and `loopDetection`.
+- If dennis is still inheriting full-profile defaults, mark `runtime_config_not_applied`. Do not claim semi-open safety boundaries are active, and do not treat wrapper-first / tools deny / safeBins as hard constraints.
+- When `runtime_config_not_applied` appears, risk answers must expose `source_quality` / `runtime_config_gap`, and main agent still must not directly take over platform querying.
 
 ### B. plan mode
 

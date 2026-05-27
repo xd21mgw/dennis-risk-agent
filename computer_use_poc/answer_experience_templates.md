@@ -513,6 +513,31 @@ routing_metadata:
   final_status: partial
 ```
 
+### Runtime config not applied / wrapper unavailable
+
+当 live runtime 未确认 dennis-risk-agent 独立 entry，或 source wrapper 不可用时，不要伪装成完整研判。
+
+标准短答：
+
+```text
+当前不能把这次结果视为完整 readonly runtime 执行结果：dennis-risk-agent 的 runtime config 尚未确认 apply，或 source wrapper 不可用。本轮只能输出 partial evidence / source gap，不能把 browser fallback 或 auth 失败包装成 wrapper-first 成功。
+```
+
+必须输出：
+
+- `runtime_config_not_applied` 或 `source_wrapper_unavailable`
+- `source_quality`
+- `missing_evidence`
+- `next_action`
+- 是否需要 runtime owner apply live `openclaw.json`
+
+禁止：
+
+- 不得把 template 存在写成 runtime 已生效。
+- 不得把 release overlay 完成写成 live 已 apply。
+- 不得把 browser same-origin fetch 成功写成 wrapper-first 成功。
+- 不得在 dennis timeout 后让 main agent 直接 curl / cookie / browser 接管查询。
+
 边界：timeout / no_data / blocked 不是无风险反证；查不了要说明原因，不能只给方法论。
 
 ### evidence boundary 短答模板

@@ -40,6 +40,10 @@ This checklist validates whether the semi-open runtime, feedback loop, evidence 
 | RUNTIME-INTEGRATION-012E | small batch | 8-user ATO complaint batch requests execution. | Runtime uses `small_batch_execution_with_checkpoint`, queries P0 sources per user, excludes P2 browser by default, and returns per-user source status. | pending |
 | RUNTIME-INTEGRATION-012F | login window | Complaint time is outside unified login log online reliable window. | Output marks `login_log_window_incomplete` and `source_time_range_gap`; no low-risk / no-risk / ATO-excluded wording. | pending |
 | RUNTIME-INTEGRATION-012G | source gap | OAuth / scan / promotion fraud / violation-posting complaint has normal APP login logs. | Output marks `app_login_only_source_gap` and missing OAuth / publish / device / strategy evidence. | pending |
+| RUNTIME-INTEGRATION-012H | runtime config | Live `openclaw.json` is inventoried before semi-open validation. | `agents.list` contains a dedicated `dennis-risk-agent` entry; not only `main`. | pending |
+| RUNTIME-INTEGRATION-012I | runtime config | Dedicated dennis entry is inspected. | `exec.security=allowlist`, `safeBins`, `tools.deny`, `fs.workspaceOnly=true`, and `loopDetection` are applied. | pending |
+| RUNTIME-INTEGRATION-012J | runtime config | Dennis spawn target is checked. | Main agent spawns the dedicated dennis-risk-agent entry rather than full-profile defaults. | pending |
+| RUNTIME-INTEGRATION-012K | runtime config | Dennis timeout is simulated. | Main records timeout and returns partial / retry / missing-source output; main does not take over curl/cookie/browser platform querying. | pending |
 | RUNTIME-INTEGRATION-013 | track analysis | Track-analysis task starts stats-first. | Aggregate stats or query plan comes before browser exploration. | pending |
 | RUNTIME-INTEGRATION-014 | browser | Track-analysis SPA loop fails 3 times. | Runtime downgrades to partial evidence card and stops looping. | pending |
 | RUNTIME-INTEGRATION-015 | context | Cross-task context contamination regression is replayed. | Historical evidence is not reused as current task fact evidence. | pending |

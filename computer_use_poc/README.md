@@ -8,8 +8,10 @@
 4. `computer_use_poc/scene_to_capability_routing.md`：按业务场景理解如何拆能力和 fallback。
 5. `computer_use_poc/multi_evidence_orchestration_contracts/README.md`：多源证据编排能力入口。
 6. `computer_use_poc/tianshi_strategy_platform_contracts/README.md`：天狮策略平台取证能力入口。
-7. `computer_use_poc/observation_contract_v2_4_6.md`：observation 和 evidence summary 契约。
-8. `computer_use_poc/smoke_tests.md`：文档级回归和存在性检查。
+7. `computer_use_poc/runtime_config_apply_checklist_v1.md`：半开放前确认 live `openclaw.json` 是否真正 apply dennis readonly runtime config。
+8. `computer_use_poc/runtime_canonical_baseline_v1.md`：main / dennis / source wrapper / browser fallback / observation writer / candidate queue 的 canonical baseline。
+9. `computer_use_poc/observation_contract_v2_4_6.md`：observation 和 evidence summary 契约。
+10. `computer_use_poc/smoke_tests.md`：文档级回归和存在性检查。
 
 补充视角：
 
@@ -26,8 +28,28 @@
 - `computer_use_poc/scene_to_capability_routing.md`
 - `computer_use_poc/user_experience_golden_cases.md`
 - `computer_use_poc/answer_experience_templates.md`
+- `computer_use_poc/runtime_config_apply_checklist_v1.md`
+- `computer_use_poc/runtime_canonical_baseline_v1.md`
 - `computer_use_poc/security_preflight_coverage_matrix.md`
 - `computer_use_poc/smoke_tests.md`
+
+## 0-B. Runtime Config Apply / Canonical Baseline
+
+半开放 readonly runtime config template 只是设计文档，不等于 live runtime 已生效。live 生效必须以 `openclaw.json` 的 `agents.list` 存在独立 `dennis-risk-agent` entry 为准，并检查 `safeBins`、`tools.deny`、`exec.security=allowlist`、`fs.workspaceOnly=true` 和 `loopDetection`。
+
+新增入口：
+
+- `computer_use_poc/runtime_config_apply_checklist_v1.md`：打包 / overlay / live 验收前的 runtime config apply checklist。
+- `computer_use_poc/runtime_canonical_baseline_v1.md`：canonical runtime baseline，定义 main agent、dennis-risk-agent、source wrapper、browser fallback、observation writer 和 candidate queue 的分层。
+
+template / release / overlay / live apply 区别：
+
+- template：设计样例，不代表 runtime 生效。
+- release：文件集合，不代表 live 已加载。
+- overlay：同步候选，不代表 openclaw 已 apply。
+- live apply：`openclaw.json` 独立 dennis entry + safeBins / tools.deny / workspaceOnly / loopDetection 通过验证。
+
+上一轮 ATO single / small batch / auth bridge / source boundary patch 不回退。它解决规则层、模板层、regression 层问题；本轮 runtime config apply / canonical baseline 解决 live 生效前置问题。推荐顺序：先 apply dennis readonly runtime config，再验证 safeBins/tools.deny，再 overlay ATO checkpoint / small batch 规则，最后做单案和 small batch 回归。
 
 ## 1. POC 目标
 

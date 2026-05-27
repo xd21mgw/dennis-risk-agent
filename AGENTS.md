@@ -147,6 +147,24 @@ release 打包的完整 Skill / Prompt 原文。
 
 ## Multi-entry Runtime Guard
 
+### Runtime Config Apply 前置条件
+
+半开放 readonly runtime config template 不等于 live runtime 已生效。只有 live `openclaw.json` 的 `agents.list` 中存在独立 `dennis-risk-agent` entry，并且该 entry 应用了 `exec.security=allowlist`、`safeBins`、`tools.deny`、`fs.workspaceOnly=true` 和 `loopDetection`，AGENTS.md 中的 wrapper-first / browser fallback / direct exec guard 才是 runtime 硬约束。
+
+如果 live `openclaw.json` 只有 `main`，或 dennis-risk-agent 仍继承 full-profile defaults，则必须标记 `runtime_config_not_applied`。此时不得宣称半开放安全边界已生效，不得把仓库里的 template / overlay / AGENTS.md 规则当作 runtime enforcement。
+
+Canonical runtime baseline：
+
+- main agent：入口、意图识别、spawn、日志；不直接查风控平台。
+- dennis-risk-agent：风控研判、source orchestration、evidence card。
+- source wrapper：统一登录日志 / Weapon / 天师等 P0 source 的受控只读入口。
+- browser same-origin fetch：wrapper 不可用或平台必须 same-origin 时的 fallback。
+- browser UI：P1/P2 补证，不阻塞 P0/P1 completed evidence 输出。
+- observation writer：`semi_open_pilot_logs` 唯一日志沉淀。
+- candidate queue：用户反馈 / case learning 唯一候选沉淀。
+
+main agent 不得在 dennis timeout 后接管风控平台查询。dennis timeout 应输出 partial evidence card / source_quality / next_action，或由 main 记录 `subagent_timeout` 后重新 spawn dennis / 输出 retry plan；不得由 main 临时使用 curl、cookie、browser 或 same-origin fetch 补查。
+
 以下规则适用于 KIM、APP、Web 和未来其他入口。所有入口在调用 Dennis 或 `sessions_spawn` 前，都必须先经过统一 runtime guard，不能只停留在 `computer_use_poc/scene_to_capability_routing.md`、`answer_experience_templates.md`、`runtime_validation_cases_v1.yaml` 或 `smoke_tests.md`。
 
 统一入口处理必须先完成：
