@@ -45,6 +45,18 @@ Platform call preflight:
 - P1/P2 browser source must not block P0 partial evidence output.
 - Old observations must not be used as "no-cache" realtime results.
 
+DataAgent / Hive registry preflight:
+
+- Before any DataAgent/Hive call for account security, ATO, login anomaly, password reset, passToken, kick out, login success/failure, or historical login-chain analysis, read `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md`.
+- The DataAgent prompt must include Dennis registry-recommended tables, table purpose, time window, partition requirements, key fields, and no-data interpretation.
+- Successful login must prioritize `ks_rc_bs.ks_account_login_basic_info`.
+- Login failure / credential stuffing / brute force / resetPwd must prioritize `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` with `p_action_type='login'` or `p_action_type='resetPwd'` as applicable.
+- Web RCP and App RCP should use registry tables before generic warehouse discovery.
+- If DataAgent suggests a non-registry table such as a general business login fact table, mark it `candidate_secondary_source`; it must not replace the registry table unless the registry table is unavailable or does not contain required fields.
+- If registry table permission or fields are unavailable, then DataAgent may search candidate tables, but the answer must preserve the registry gap and explain the fallback.
+- Output must separate `online_api_evidence`, `hive_registry_recommended_source`, `dataagent_candidate_source`, and `missing_hive_result`.
+- A submitted or pending Hive/DataAgent job is not an evidence result. Mark it `missing_hive_result` or `hive_query_pending`, not completed evidence.
+
 This guard is a main-agent routing contract, not only a prompt paragraph. The main agent entry layer must produce a normalized routing decision before any downstream task:
 
 ```yaml
@@ -273,7 +285,7 @@ Main-agent routing contract:
 - ATO single case -> `execution_readonly`.
 - ATO expansion / 举一返三 -> `plan_mode_only`.
 - black_market_account_matrix paused branch -> `fast_ack` / `async_ack`.
-- DataAgent request -> `plan_only` / `require_confirmation` unless explicitly authorized in a separate offline flow.
+- DataAgent request -> `plan_only` / `require_confirmation` unless explicitly authorized in a separate offline flow; account security / ATO DataAgent prompts must run `hive_source_registry_preflight` first and cite `account_security_hive_source_registry_v1.md`.
 - write / mutation / disposition request -> `deny` or `plan_only` with manual review boundary.
 - credential or high-sensitive raw output request -> `deny` / `redact`.
 

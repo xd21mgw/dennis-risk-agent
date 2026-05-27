@@ -1509,6 +1509,11 @@ evidence_card:
 当用户问历史盗号、异设备成功登录、撞库、改密或 App/Web 风控命中，且在线日志窗口不足时，不要空泛写“补充登录日志”，必须给出选表计划：
 
 ```yaml
+hive_source_registry_preflight:
+  registry_read: computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+  dataagent_must_start_from_registry: true
+  generic_login_table_as_primary: false
+  candidate_secondary_source_allowed: true
 login_log_window_incomplete: true
 offline_hive_required: true
 DataAgent_plan_needed: true
@@ -1533,6 +1538,37 @@ RCP 补证：
 - Web/H5 风控：`ks_rc_arch.antispam_feature_map_default_partitioned`，30 天，必须限制 `p_date + p_hourmin + p_action_type`。
 - App 风控：`ks_raw_log_v2.antispam_feature_map_partitioned`，50 天，必须限制 `p_date + p_hourmin + p_action_type`，禁止全表扫描。
 - DataAgent 只作为 Hive / 数仓取数分析能力，不是万能风控执行器。
+
+DataAgent prompt 必须显式携带：
+
+- `hive_registry_recommended_source`：Dennis registry 推荐表及用途。
+- `time_window`：查询日期范围和是否超出在线窗口。
+- `key_fields`：输出字段，如 `user_id`、`op_time`、`device_id`、`source_ip`、`login_type`、`finalloginresult`、`code`、`punish`、`hit_policies`。
+- `no_data_interpretation`：no_data 不得作为无 ATO 反证。
+
+如果 DataAgent 建议 `ks_dw_fact.dw_fact_user_login_di` 或其他非 registry 表，应写为：
+
+```yaml
+dataagent_candidate_source:
+  table:
+  status: candidate_secondary_source
+  reason:
+  cannot_replace_registry_source: true
+  fallback_allowed_only_if:
+    - registry_permission_unavailable
+    - registry_fields_insufficient
+```
+
+输出必须区分：
+
+```yaml
+online_api_evidence:
+hive_registry_recommended_source:
+dataagent_candidate_source:
+missing_hive_result:
+```
+
+Hive 查询提交后等待中，只能写 `hive_query_pending` / `missing_hive_result`，不能写成已完成结果。
 
 ## 2. 原因解释类回答模板
 

@@ -200,6 +200,58 @@ Source status mapping:
 - detail unavailable: `no_data` or `skipped` with `partial_source`
 - SPA loop: `timeout`
 
+## DataAgent / Hive Registry Preflight
+
+Reference:
+
+- `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md`
+- `computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md`
+
+Applies to:
+
+- ATO / account security historical login-chain analysis.
+- Login anomaly, successful login, failed login, credential stuffing, password reset, passToken, kick out.
+- Web/App RCP risk hit evidence when online source is over-window or incomplete.
+
+Required preflight:
+
+```yaml
+hive_source_registry_preflight:
+  registry_read: computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+  scenario:
+  recommended_tables:
+    - table:
+      purpose:
+      time_window:
+      partition_filters:
+      key_fields:
+      no_data_interpretation:
+  dataagent_prompt_includes_registry_sources: true
+```
+
+Recommended account-security tables:
+
+- Successful login: `ks_rc_bs.ks_account_login_basic_info`.
+- Login success + failure + resetPwd: `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`.
+- Web RCP: `ks_rc_arch.antispam_feature_map_default_partitioned`.
+- App RCP: `ks_raw_log_v2.antispam_feature_map_partitioned`.
+
+Rules:
+
+- DataAgent must not start by guessing generic login tables when registry sources apply.
+- Non-registry sources, including `ks_dw_fact.dw_fact_user_login_di`, are `candidate_secondary_source` unless registry tables are unavailable or insufficient.
+- DataAgent prompt must include table name, use, time window, partition filters and key fields.
+- Pending Hive execution is not evidence. Output `missing_hive_result` or `hive_query_pending`.
+
+Output separation:
+
+```yaml
+online_api_evidence:
+hive_registry_recommended_source:
+dataagent_candidate_source:
+missing_hive_result:
+```
+
 ## Platform Call Preflight Output
 
 Before calling a source, the agent must be able to state:

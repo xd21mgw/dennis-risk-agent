@@ -6637,3 +6637,31 @@
 - input: 任一平台 source 返回 no_data / blocked / timeout / auth_failed。
 - expected_runtime_behavior: source_quality_boundary
 - expected_output_boundary: 必须进入 `source_quality`，不得输出无风险、低风险、排除 ATO 或策略未命中即无风险。
+
+## 675. DataAgent Hive registry preflight required
+
+- test_id: DATAAGENT-HIVE-REGISTRY-PREFLIGHT-001
+- input: 账号安全 / ATO / 登录异常 / passToken / kick out / 改密场景调用 DataAgent 前。
+- expected_runtime_behavior: hive_source_registry_preflight
+- expected_output_boundary: 必须先读取 `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md`；DataAgent prompt 必须显式携带推荐表名、用途、时间窗口、分区条件和关键字段。
+
+## 676. ATO Hive login table selection follows registry
+
+- test_id: ATO-HIVE-LOGIN-TABLE-SELECTION-001
+- input: 历史异设备成功登录、登录失败、撞库、重置密码 Hive query plan。
+- expected_runtime_behavior: account_security_registry_tables_selected
+- expected_output_boundary: 成功登录首选 `ks_rc_bs.ks_account_login_basic_info`；登录失败 / 撞库 / 改密首选 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`；不得让 DataAgent 从通用登录表起步。
+
+## 677. DataAgent candidate source is secondary
+
+- test_id: DATAAGENT-CANDIDATE-SOURCE-NOT-AUTHORITATIVE-001
+- input: DataAgent 建议 `ks_dw_fact.dw_fact_user_login_di` 或其他非 registry 表。
+- expected_runtime_behavior: candidate_secondary_source
+- expected_output_boundary: 非 registry 表标记为 `candidate_secondary_source`；只有 registry 表权限不可用或字段不满足时才可降级；不能直接替代 Dennis 推荐表。
+
+## 678. Hive pending result is not completed evidence
+
+- test_id: DATAAGENT-HIVE-PENDING-NOT-EVIDENCE-001
+- input: Hive 查询已提交但仍在等待结果。
+- expected_runtime_behavior: missing_hive_result_or_hive_query_pending
+- expected_output_boundary: 不得把等待中的 Hive 查询说成已完成结果；输出区分 `online_api_evidence`、`hive_registry_recommended_source`、`dataagent_candidate_source`、`missing_hive_result`。

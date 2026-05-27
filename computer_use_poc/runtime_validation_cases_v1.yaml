@@ -507,6 +507,69 @@ runtime_validation_suite:
       redaction_required: true
       pass_criteria: "62950989 单用户实时研判至少完成 runner 链路或结构化 blocked/auth_failed/timeout；必须输出 partial evidence card 和 source_quality。"
 
+    - case_id: DATAAGENT-HIVE-REGISTRY-PREFLIGHT-001
+      test_name: DataAgent Hive registry preflight before account security query
+      input_prompt: "查吧，DataAgent。帮我补 62950989 的历史 ATO 登录链路、passToken、kick out 和改密证据。"
+      expected_route:
+        - dataagent_hive_query_plan
+        - account_security_hive_registry_preflight
+      expected_preflight:
+        registry_read: computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+        hive_source_registry_preflight: true
+        dataagent_prompt_includes_registry_sources: true
+      expected_output:
+        - online_api_evidence
+        - hive_registry_recommended_source
+        - dataagent_candidate_source
+        - missing_hive_result
+      expected_boundary:
+        - dataagent_not_called_without_confirmation
+        - hive_query_pending_not_completed_result
+        - no_data_not_risk_exclusion
+      redaction_required: true
+      pass_criteria: "账号安全 / ATO DataAgent prompt 前必须先读 Hive registry，并显式携带推荐表、用途、时间窗口和关键字段。"
+
+    - case_id: ATO-HIVE-LOGIN-TABLE-SELECTION-001
+      test_name: ATO Hive login table selection follows Dennis registry
+      input_prompt: "用户 62950989 历史上有没有异设备成功登录、登录失败、重置密码？请生成 DataAgent/Hive 取数计划。"
+      expected_route:
+        - dataagent_hive_query_plan
+      expected_selected_tables:
+        successful_login: ks_rc_bs.ks_account_login_basic_info
+        login_failure_or_reset: ks_rc_bs.dwd_risk_usr_accnt_login_orign_info
+      expected_partition_rules:
+        successful_login: p_date_required
+        login_failure: "p_date + p_action_type='login'"
+        reset_password: "p_date + p_action_type='resetPwd'"
+      expected_denied_tables_as_primary:
+        - ks_dw_fact.dw_fact_user_login_di
+      expected_output:
+        - query_goal
+        - selected_table
+        - reason_for_table_selection
+        - partition_filters
+        - key_fields
+        - no_data_interpretation
+      redaction_required: true
+      pass_criteria: "成功登录优先 ks_account_login_basic_info；失败 / 撞库 / 改密优先 dwd_risk_usr_accnt_login_orign_info；通用登录表不能作为首选。"
+
+    - case_id: DATAAGENT-CANDIDATE-SOURCE-NOT-AUTHORITATIVE-001
+      test_name: DataAgent candidate source cannot override registry source
+      input_prompt: "DataAgent 建议用 dw_fact_user_login_di 查登录，是否可以直接替代 Dennis 推荐表？"
+      expected_route:
+        - dataagent_hive_query_plan
+      expected_output:
+        - dataagent_candidate_source
+        - candidate_secondary_source
+        - hive_registry_recommended_source
+        - cannot_replace_registry_source
+      expected_boundary:
+        - registry_source_primary
+        - fallback_only_if_registry_permission_or_field_gap
+        - missing_hive_result_until_query_returns
+      redaction_required: true
+      pass_criteria: "非 registry 表只能作为 candidate_secondary_source；除非 registry 权限不可用或字段不满足，否则不得替代 Dennis 推荐表。"
+
     - case_id: RT-ATO-003
       test_name: ATO expansion planning
       input_prompt: "基于已确认 ATO case 设计举一返三扩量查询问题"
