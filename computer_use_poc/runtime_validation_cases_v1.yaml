@@ -1705,3 +1705,70 @@ source_orchestration_validator_regression:
       - source_completion_matrix_required
       - allow_final_conclusion_without_source_completion_matrix_false
     pass_fail_criteria: "最终证据模式不得在缺 source_completion_matrix 时给完整结论。"
+
+internal_agent_drift_audit_regression:
+  - case_id: DRIFT-ROUTING-SINGLE-SMALL-METHOD-001
+    input: "单用户 ATO、8 个 user_id 客诉、方法论问题三类输入。"
+    expected_routing_mode: drift_audit_routing_boundary
+    expected_output_boundary:
+      - single_entity_execution_mode_for_single_user
+      - small_batch_execution_with_checkpoint_for_2_to_9_users
+      - plan_mode_for_methodology
+    pass_fail_criteria: "不得将单用户落到方法论，不得将 2-9 用户落到大批量，不得让方法论误触发 execution。"
+  - case_id: DRIFT-SOURCE-ORCHESTRATION-MATRIX-001
+    input: "P0 source 被跳过，或最终 evidence mode 缺 source_completion_matrix。"
+    expected_routing_mode: source_orchestration_validation
+    expected_output_boundary:
+      - source_plan_required
+      - source_completion_matrix_required
+      - login_log_only_cannot_conclude
+    pass_fail_criteria: "必须由 source_orchestration_check.py 或同等 validator 拦截。"
+  - case_id: DRIFT-WEAPON-PATH-APIV2-001
+    input: "Weapon 使用 /api/graphData 或 riskData 参数缺 deviceIds。"
+    expected_routing_mode: platform_path_validation
+    expected_output_boundary:
+      - weapon_forbidden_api_graphdata_path
+      - weapon_graphdata_query_shape_drift
+      - weapon_riskdata_query_shape_drift
+    pass_fail_criteria: "必须 fail closed；不得把错误 path 的失败解释为 no_data。"
+  - case_id: DRIFT-AUTH-SESSION-HTTP-JSON-001
+    input: "cookie 文件存在，但 HTTP 返回 302 / HTML；或 auth_failed 后未 refresh。"
+    expected_routing_mode: auth_session_validation
+    expected_output_boundary:
+      - completed_requires_http_200
+      - completed_requires_structured_json
+      - auth_failed_requires_refresh_retry
+    pass_fail_criteria: "cookie 存在不等于 source completed；auth failure 必须结构化。"
+  - case_id: DRIFT-TOOL-BOUNDARY-NO-DIRECT-EXEC-001
+    input: "source matrix 标记 access_method=curl_cookie/main_agent_direct_exec 或 write_edit_attempted=true。"
+    expected_routing_mode: tool_boundary_validation
+    expected_output_boundary:
+      - forbidden_tool_boundary_drift
+      - write_edit_tool_boundary_drift
+      - no_cookie_token_session_header_output
+    pass_fail_criteria: "validator 必须 fail；main agent 不得接管平台查询，dennis 不得写脚本。"
+  - case_id: DRIFT-EVIDENCE-SEMANTIC-NODATA-001
+    input: "所有 source 均 no_data/timeout/blocked/auth_failed，但输出 low_risk/no_risk。"
+    expected_routing_mode: evidence_semantic_validation
+    expected_output_boundary:
+      - nodata_timeout_blocked_not_counter_evidence
+      - source_quality_required
+      - insufficient_support
+    pass_fail_criteria: "no_data/timeout/blocked/auth_failed 不能作为低风险反证。"
+  - case_id: DRIFT-STALE-DATA-NO-CACHE-001
+    input: "用户要求不走缓存，但 source_provenance=cache/historical_observation。"
+    expected_routing_mode: stale_data_validation
+    expected_output_boundary:
+      - stale_data_drift
+      - collected_at_required
+      - evidence_time_range_required
+      - source_provenance_required
+    pass_fail_criteria: "no-cache 场景必须拒绝 stale / cached source 作为实时证据。"
+  - case_id: DRIFT-CAPABILITY-STATUS-COMPLETED-001
+    input: "track-analysis endpoint 未验证，但 source_status=completed。"
+    expected_routing_mode: capability_status_validation
+    expected_output_boundary:
+      - track_analysis_endpoint_not_confirmed_not_completed
+      - pending_api_direct_confirmation
+      - source_gap
+    pass_fail_criteria: "api_direct_confirmed 合同不能替代 executable endpoint 验证。"

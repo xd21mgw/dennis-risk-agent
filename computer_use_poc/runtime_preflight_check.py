@@ -78,6 +78,7 @@ def main() -> int:
     playbook_index = read_text(REPO_ROOT / "computer_use_poc" / "platform_call_playbook_index.md")
     source_plan = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_plan_v1.yaml")
     source_check = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py")
+    drift_audit = read_text(REPO_ROOT / "computer_use_poc" / "internal_agent_drift_audit_v1.md")
     tools = read_text(REPO_ROOT / "TOOLS.md")
     validation = read_text(REPO_ROOT / "computer_use_poc" / "runtime_validation_cases_v1.yaml")
 
@@ -240,6 +241,24 @@ def main() -> int:
             "/apiv2/graphData",
             "/apiv2/riskData",
             "track_analysis_endpoint_not_confirmed_not_completed",
+            "stale_data_drift",
+            "forbidden_tool_boundary_drift",
+            "weapon_forbidden_api_graphdata_path",
+            "nodata_timeout_blocked_not_counter_evidence",
+        ],
+    )
+    findings += check_contains(
+        "internal_agent_drift_audit_required",
+        drift_audit,
+        [
+            "Routing Drift",
+            "Source Orchestration Drift",
+            "Platform Path Drift",
+            "Auth / Session Drift",
+            "Tool Boundary Drift",
+            "Evidence Semantic Drift",
+            "Stale Data Drift",
+            "Capability Status Drift",
         ],
     )
     source_check_path = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"
@@ -292,6 +311,34 @@ def main() -> int:
                             "reason": "source_orchestration_check.py did not select a plan",
                         }
                     )
+            negative_proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(source_check_path),
+                    "--task-type",
+                    "single_user_account_security",
+                    "--entity-count",
+                    "1",
+                    "--source-completion-matrix",
+                    '[{"source_name":"user_login_unified_log","source_status":"no_data","source_quality":"no_data_not_risk_exclusion","evidence_time_range":"last_30_days","collected_at":"2026-05-27T00:00:00+08:00","source_provenance":"realtime"}]',
+                    "--format",
+                    "json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if negative_proc.returncode == 0 or "login_log_only_cannot_conclude" not in negative_proc.stdout:
+                findings.append(
+                    {
+                        "check": "source_orchestration_negative_case",
+                        "severity": "critical",
+                        "status": "fail",
+                        "reason": "source_orchestration_check.py did not fail login-log-only matrix",
+                    }
+                )
         except Exception as exc:  # noqa: BLE001 - preflight should report fail-closed reason.
             findings.append(
                 {
@@ -319,6 +366,7 @@ def main() -> int:
             "computer_use_poc/platform_call_playbook_index.md",
             "computer_use_poc/source_orchestration_plan_v1.yaml",
             "computer_use_poc/source_orchestration_check.py",
+            "computer_use_poc/internal_agent_drift_audit_v1.md",
             "computer_use_poc/runtime_validation_cases_v1.yaml",
         ],
         "tools_md_status": tools_status,

@@ -6994,3 +6994,45 @@
 - input: 执行 `python3 computer_use_poc/runtime_preflight_check.py`。
 - expected_runtime_behavior: source_orchestration_validator_checked
 - expected_output_boundary: preflight 必须检查 `source_orchestration_plan_v1.yaml` 存在、`source_orchestration_check.py` 可运行、login_log-only 禁止规则存在。
+
+## 723. Internal Agent drift audit document exists
+
+- test_id: INTERNAL-AGENT-DRIFT-AUDIT-DOC-001
+- input: 检查 `computer_use_poc/internal_agent_drift_audit_v1.md`。
+- expected_runtime_behavior: drift_audit_documented
+- expected_output_boundary: 文档必须覆盖 routing/source orchestration/platform path/auth session/tool boundary/evidence semantic/stale data/capability status 8 类 drift。
+
+## 724. Drift validator rejects forbidden tool boundary
+
+- test_id: DRIFT-TOOL-BOUNDARY-NO-DIRECT-EXEC-001
+- input: `source_completion_matrix` 包含 `access_method=curl_cookie` 或 `main_agent_direct_exec`。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: 返回 `forbidden_tool_boundary_drift`；不得允许 curl+cookie / main agent direct exec 作为合法 source。
+
+## 725. Drift validator rejects stale no-cache evidence
+
+- test_id: DRIFT-STALE-DATA-NO-CACHE-001
+- input: `--no-cache` 且 source_provenance 为 cache / historical_observation。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: 返回 `stale_data_drift`；必须要求 `collected_at` / `evidence_time_range` / `source_provenance`。
+
+## 726. Drift validator rejects no-data low-risk conclusion
+
+- test_id: DRIFT-EVIDENCE-SEMANTIC-NODATA-001
+- input: 所有 source 为 no_data / timeout / blocked / auth_failed，但 final_conclusion=low_risk。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: 返回 `nodata_timeout_blocked_not_counter_evidence`；只能 partial / insufficient_support。
+
+## 727. Drift validator rejects unverified completed track-analysis
+
+- test_id: DRIFT-CAPABILITY-STATUS-COMPLETED-001
+- input: track-analysis source_status=completed 且 endpoint_verified=false。
+- expected_runtime_behavior: source_orchestration_check_fails
+- expected_output_boundary: 返回 `track_analysis_endpoint_not_confirmed_not_completed`；应降级为 pending/source_gap。
+
+## 728. Runtime preflight includes drift audit checks
+
+- test_id: INTERNAL-AGENT-DRIFT-PREFLIGHT-001
+- input: 执行 `python3 computer_use_poc/runtime_preflight_check.py`。
+- expected_runtime_behavior: drift_audit_preflight_checks_present
+- expected_output_boundary: preflight 必须检查 drift audit 文档、source_orchestration_check drift markers，并验证 login-log-only 负例会 fail。
