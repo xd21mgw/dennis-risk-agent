@@ -4,6 +4,8 @@
 
 本 summary 支撑半开放 runtime 下的账号安全 / ATO / 盗号判断。重点是避免把批量统计直接解释成攻击本质。
 
+通用研判纪律：本 summary 必须遵守 `computer_use_poc/general_evidence_reasoning_contract_v1.md`。登录日志 no_data、策略命中、模型分、用户反馈、Hive pending 结果都不能单独作为最终定性；必须区分 raw_evidence / strategy_hit / model_score / inference / user_claim / counter_evidence / missing_evidence，并在新证据到达后重算结论。
+
 ## 2. ATO 攻击类型识别
 
 ### 2.1 撞库 ATO

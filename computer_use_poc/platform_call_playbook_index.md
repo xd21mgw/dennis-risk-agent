@@ -11,6 +11,21 @@ This index is the mandatory preflight reading list before Dennis Risk Agent call
 - `no_data`, `blocked`, `timeout`, and `auth_failed` are source states, not no-risk counter evidence.
 - Browser UI is fallback, not default.
 
+## General Source Quality Semantics
+
+These source states affect evidence quality only. They cannot directly become risk conclusions:
+
+- `no_data`: queried source returned no records under current filters; not risk exclusion.
+- `no_data_due_to_window`: source window does not cover target event time; requires offline or alternate source.
+- `blocked`: permission, profile lock, or runtime boundary blocked the source; source gap only.
+- `auth_failed`: authentication or session issue; not no-data.
+- `timeout`: source did not finish in budget; not counter evidence.
+- `parse_error`: response could not be parsed; source quality degraded.
+- `partial_source`: some fields or pages were read, but key fields are missing.
+- `stale_source`: old observation or cache; cannot satisfy no-cache realtime request.
+
+Any answer using these states must reflect them in `source_quality`, `missing_evidence`, and conclusion confidence.
+
 ## Unified Login Log
 
 Reference:

@@ -6,6 +6,8 @@
 它既防奖励被薅，也防活动机制被大量复制或转卖。
 本场景默认轻量支持，不默认调 DataAgent。
 
+通用研判纪律：遵守 `computer_use_poc/general_evidence_reasoning_contract_v1.md`。活动策略命中、奖励领取异常、渠道异常或 no_data 不能单独定性作弊；需要注册-活跃-任务-奖励-提现链路、设备/IP/账号聚集、后验质量和时间序列交叉验证。source 不完整时只输出 partial / insufficient conclusion。
+
 ## 二、核心判断问题
 
 - 活动是不是被假量、套利或任务化参与污染了。

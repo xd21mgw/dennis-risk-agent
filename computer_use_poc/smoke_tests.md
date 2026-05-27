@@ -6686,3 +6686,52 @@
 - input: Hive 查询已提交但仍在等待结果。
 - expected_runtime_behavior: missing_hive_result_or_hive_query_pending
 - expected_output_boundary: 不得把等待中的 Hive 查询说成已完成结果；输出区分 `online_api_evidence`、`hive_registry_recommended_source`、`dataagent_candidate_source`、`missing_hive_result`。
+
+## 679. General no_data is not risk exclusion
+
+- test_id: GENERAL-NODATA-NOT-RISK-EXCLUSION-001
+- input: 任一风险场景 source 返回 `no_data`。
+- expected_runtime_behavior: no_data_recorded_as_source_quality
+- expected_output_boundary: `no_data` 必须说明时间窗口 / 覆盖边界；不得输出无风险、低风险或排除风险。
+
+## 680. Strategy hit is not final judgement
+
+- test_id: GENERAL-STRATEGY-HIT-NOT-FINAL-JUDGEMENT-001
+- input: 用户 / 接口 / 活动 / 批次命中高风险策略、模型分或黑名单。
+- expected_runtime_behavior: strategy_hit_as_lead_only
+- expected_output_boundary: 策略命中、规则命中、模型分、黑名单命中只能作为线索或交叉验证方向；不得单独强判。
+
+## 681. New evidence requires conclusion recompute
+
+- test_id: GENERAL-NEW-EVIDENCE-RECOMPUTE-001
+- input: 初判之后新增 Hive / 平台 / 策略归因 / 人工补证。
+- expected_runtime_behavior: conclusion_recompute_after_new_evidence
+- expected_output_boundary: 必须重算结论并说明 evidence_delta；不得保留过时初判。
+
+## 682. Evidence type separation is required
+
+- test_id: GENERAL-EVIDENCE-TYPE-SEPARATION-001
+- input: raw log、策略命中、模型分、用户反馈和推断同时存在。
+- expected_runtime_behavior: evidence_type_separation
+- expected_output_boundary: 每条证据必须区分 `raw_evidence` / `strategy_hit` / `model_score` / `inference` / `user_claim` / `counter_evidence` / `missing_evidence`。
+
+## 683. Evidence mode hard gate
+
+- test_id: GENERAL-EVIDENCE-CARD-HARD-GATE-001
+- input: 判断某用户 / 设备 / 接口 / 批次 / 策略命中是否有风险。
+- expected_runtime_behavior: evidence_mode_structure_check
+- expected_output_boundary: evidence mode 必须输出 `evidence_card` / `source_quality` / `routing_metadata`；不得只有自然语言结论。
+
+## 684. Partial source is not final conclusion
+
+- test_id: GENERAL-PARTIAL-SOURCE-NOT-FINAL-001
+- input: 关键 source blocked / timeout / auth_failed / parse_error。
+- expected_runtime_behavior: partial_source_quality_boundary
+- expected_output_boundary: blocked / timeout / auth_failed / parse_error 必须进入 `source_quality`；只能输出 partial / insufficient / needs_more_evidence，不得作为反证。
+
+## 685. Source window boundary
+
+- test_id: GENERAL-SOURCE-WINDOW-BOUNDARY-001
+- input: source 时间窗口或覆盖链路不包含风险事件窗口。
+- expected_runtime_behavior: source_window_boundary
+- expected_output_boundary: 必须标 `source_gap` / `required_offline_check` / `missing_evidence`；窗口外 no_data 不能排除风险。

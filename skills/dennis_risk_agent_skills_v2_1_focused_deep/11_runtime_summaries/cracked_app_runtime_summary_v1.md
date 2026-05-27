@@ -6,6 +6,8 @@
 常见结果是 SDK 缺失、埋点缺失、设备环境失真、风控信号被绕过。
 本场景默认轻量支持，不默认调 DataAgent。
 
+通用研判纪律：遵守 `computer_use_poc/general_evidence_reasoning_contract_v1.md`。单一 SDK 缺失、版本异常、策略命中或 no_data 不能单独定性破解包；需包签名、版本渠道、端侧采集、runtime 行为、hook/frida/注入、前后端一致性等 raw evidence 交叉验证。
+
 ## 二、核心判断问题
 
 - 客户端是不是被改造过。

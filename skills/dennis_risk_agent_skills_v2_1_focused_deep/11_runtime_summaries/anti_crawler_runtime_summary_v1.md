@@ -6,6 +6,8 @@
 它既可能表现为接口爬取，也可能表现为站外跟价、资产泄露、未登录态访问、真人伪装访问。
 本场景默认先判断风险与链路，不默认调 DataAgent。
 
+通用研判纪律：遵守 `computer_use_poc/general_evidence_reasoning_contract_v1.md`。QPS 上升、UA 异常、单一策略命中或 source no_data 不能单独定性爬虫；必须结合接口路径、IP/账号/设备聚集、请求分布、成本模式、正常流量基线和资产访问目的。blocked / timeout / auth_failed 只降低 source_quality，不是反证。
+
 ## 二、核心判断问题
 
 - 这次访问是在正常消费，还是在系统性获取资产。

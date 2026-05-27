@@ -1300,3 +1300,110 @@ batch_routing_guard_regression:
       - denominator_required
       - required_validation
     pass_fail_criteria: "50+ 实体必须输出聚合分析 / DataAgent-Hive query plan 和抽样计划；不得在线逐个查。"
+
+general_evidence_reasoning_regression:
+  - case_id: GENERAL-NODATA-NOT-RISK-EXCLUSION-001
+    input: "某个风控 source 返回 no_data，是否可以据此排除风险？"
+    applicable_scenes:
+      - account_security
+      - protocol_attack
+      - group_control
+      - anti_crawler
+      - activity_anti_cheating
+      - traffic_diversion
+      - traffic_anti_cheating
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - no_data_not_risk_exclusion
+      - source_window_boundary
+      - source_quality_required
+    pass_fail_criteria: "必须把 no_data 写入 source_quality 并说明窗口 / 覆盖边界；不得输出无风险、低风险或排除风险。"
+  - case_id: GENERAL-STRATEGY-HIT-NOT-FINAL-JUDGEMENT-001
+    input: "某用户 / 接口 / 活动命中了高风险策略，是否可以直接定性作弊？"
+    applicable_scenes:
+      - strategy_attribution
+      - account_security
+      - anti_crawler
+      - activity_anti_cheating
+      - traffic_anti_cheating
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - strategy_hit_not_final_judgement
+      - raw_evidence_first
+      - require_cross_validation
+    pass_fail_criteria: "策略命中只能作为线索或交叉验证方向；不得把策略名、模型分或 confidenceLevel 当作唯一强证据。"
+  - case_id: GENERAL-NEW-EVIDENCE-RECOMPUTE-001
+    input: "初判 no_data 证据不足，后续 Hive / 平台补证返回异常行为链路。"
+    applicable_scenes:
+      - account_security
+      - batch_risk_clustering
+      - strategy_attribution
+      - anti_crawler
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - conclusion_recompute_after_new_evidence
+      - obsolete_initial_judgement_not_kept
+      - evidence_delta_explained
+    pass_fail_criteria: "新证据到达后必须重算结论并说明证据变化；不得继续沿用旧的初判。"
+  - case_id: GENERAL-EVIDENCE-TYPE-SEPARATION-001
+    input: "用户反馈、策略命中、模型分、平台原始日志、人工推断同时存在，请给风险判断。"
+    applicable_scenes:
+      - account_security
+      - protocol_attack
+      - group_control
+      - traffic_diversion
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - evidence_type_separation
+      - raw_evidence
+      - strategy_hit
+      - model_score
+      - inference
+      - user_claim
+      - missing_evidence
+    pass_fail_criteria: "每条证据必须标 evidence_type；不得把 inference / user_claim 写成 raw evidence。"
+  - case_id: GENERAL-EVIDENCE-CARD-HARD-GATE-001
+    input: "判断这个用户 / 设备 / 接口 / 批次 / 策略命中是否有风险。"
+    applicable_scenes:
+      - account_security
+      - protocol_attack
+      - anti_crawler
+      - activity_anti_cheating
+      - traffic_anti_cheating
+      - batch_risk_clustering
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - template_hard_gate
+      - evidence_card_required
+      - source_quality_required
+      - routing_metadata_required
+    pass_fail_criteria: "进入 evidence mode 后不得只输出自然语言结论；必须包含 evidence_card / source_quality / routing_metadata。"
+  - case_id: GENERAL-PARTIAL-SOURCE-NOT-FINAL-001
+    input: "关键 source blocked / timeout / auth_failed，但部分 source 已完成。"
+    applicable_scenes:
+      - account_security
+      - anti_crawler
+      - strategy_attribution
+      - batch_risk_clustering
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - partial_not_final
+      - blocked_source_not_counter_evidence
+      - timeout_not_counter_evidence
+      - partial_evidence_card
+    pass_fail_criteria: "必须输出 partial / insufficient / needs_more_evidence；不得把 blocked / timeout / auth_failed 当作反证。"
+  - case_id: GENERAL-SOURCE-WINDOW-BOUNDARY-001
+    input: "source 覆盖窗口与风险事件窗口不一致，或数据源只覆盖部分行为链路。"
+    applicable_scenes:
+      - account_security
+      - protocol_attack
+      - anti_crawler
+      - traffic_diversion
+      - activity_anti_cheating
+    expected_routing_mode: evidence_mode
+    expected_output_boundary:
+      - source_window_boundary
+      - required_offline_check
+      - missing_evidence
+      - source_gap
+    pass_fail_criteria: "必须说明 source 的时间窗口和覆盖边界；窗口外或链路外数据缺失只能标 missing/source_gap，不能作无风险反证。"

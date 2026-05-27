@@ -2,6 +2,102 @@
 
 本文沉淀 Dennis Agent 面向策略同学的标准回答体验模板。模板不是平台字段说明，而是把 observation 转成可读、可行动、有边界的业务回答。
 
+## 0.0 General Evidence Reasoning Contract
+
+适用范围：账号安全、协议上号、群控、反爬、活动反作弊、导流、流量反作弊、策略命中归因、批量风险分簇等所有风险研判。
+
+通用硬规则：
+
+- `no_data_not_risk_exclusion`：任何 source no_data 都不能单独作为无风险反证。
+- `strategy_hit_not_final_judgement`：策略命中、规则命中、模型分、黑名单命中只能作为线索或交叉验证方向，不能单独最终定性。
+- `raw_evidence_first`：优先用 raw behavior evidence / entity relation / time sequence / device-IP-action consistency 做判断。
+- `evidence_type_separation`：区分 `raw_evidence`、`strategy_hit`、`model_score`、`inference`、`user_claim`、`counter_evidence`、`missing_evidence`。
+- `conclusion_recompute_after_new_evidence`：新证据到达后必须重算结论，不保留过时初判。
+- `source_window_boundary`：任何 source 都必须说明时间窗口和覆盖边界，窗口外标 `missing_evidence` / `required_offline_check`。
+- `partial_not_final`：source 不完整时只能输出 `partial_support` / `insufficient_support` / `needs_more_evidence`。
+- `template_hard_gate`：进入 evidence mode 的回答必须包含 `evidence_card` / `source_quality` / `routing_metadata`。
+
+### 通用单案 evidence card
+
+```yaml
+evidence_card:
+  conclusion:
+  confidence:
+  conclusion_state: partial_support | insufficient_support | needs_more_evidence | data_supports_risk | data_against_risk
+  strong_evidence:
+    - evidence_type: raw_evidence | strategy_hit | model_score | inference | user_claim | counter_evidence | missing_evidence
+      source:
+      source_quality:
+      time_window:
+      statement:
+  medium_evidence: []
+  weak_evidence: []
+  counter_evidence: []
+  missing_evidence: []
+  completed_sources: []
+  source_quality:
+    completed_sources: []
+    no_data_sources: []
+    blocked_sources: []
+    auth_failed_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    partial_sources: []
+    stale_sources: []
+    missing_sources: []
+  recompute_state:
+    recomputed_after_new_evidence:
+    previous_conclusion:
+    changed_by:
+  next_action:
+routing_metadata:
+```
+
+### 通用批量 pattern evidence card
+
+```yaml
+batch_evidence_card:
+  conclusion:
+  confidence:
+  batch_size:
+  pattern_hypothesis:
+  strong_pattern_evidence: []
+  medium_pattern_evidence: []
+  weak_pattern_evidence: []
+  counter_evidence: []
+  missing_evidence: []
+  denominator_check:
+  confounder_check:
+  representative_samples:
+  source_quality:
+  conclusion_boundary:
+  next_action:
+routing_metadata:
+```
+
+### 策略命中归因 evidence card
+
+```yaml
+strategy_attribution_evidence_card:
+  conclusion:
+  confidence:
+  strategy_hit_summary:
+  condition_attribution:
+  node_attribution:
+  raw_event_evidence:
+  strategy_hit_evidence:
+  counter_evidence:
+  missing_evidence:
+  source_quality:
+  conclusion_boundary:
+    - strategy_hit_not_final_judgement
+    - attribution_not_cheating_judgement
+  next_action:
+routing_metadata:
+```
+
+方法论 / plan mode 可不输出完整 evidence card；但只要引用真实证据，也必须标注 `source` 和 `evidence_type`。
+
 ## 0. 专家认知先判回答模板
 
 ### 适用问题

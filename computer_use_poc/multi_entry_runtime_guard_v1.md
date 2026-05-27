@@ -28,6 +28,19 @@ All entries must pass through the same runtime guard before calling Dennis:
 
 The guard must run before tool call, browser access, DataAgent call, or `sessions_spawn`.
 
+General evidence reasoning hard gate:
+
+- Applies to account security, protocol attack, group control, anti-crawler, activity anti-cheating, traffic diversion, traffic anti-cheating, strategy attribution, and batch risk clustering.
+- If an answer judges whether a user, device, interface, batch, campaign, channel, strategy hit, or event is risky, route to evidence mode unless the user explicitly asks for pure methodology.
+- Evidence mode output must include `evidence_card`, `source_quality`, and `routing_metadata`.
+- If any required block is missing, self-correct before final output.
+- Do not output natural-language judgement only.
+- `no_data`, `timeout`, `blocked`, `auth_failed`, stale source, and partial source are quality states, not no-risk counter evidence.
+- Strategy hit, rule hit, model score, blacklist hit, risk tag, or confidence level cannot be the only strong evidence.
+- Separate `raw_evidence`, `strategy_hit`, `model_score`, `inference`, `user_claim`, `counter_evidence`, and `missing_evidence`.
+- When new evidence arrives after an initial answer, recompute conclusion and mark `conclusion_recompute_after_new_evidence`.
+- Every source must expose time window and coverage boundary; out-of-window gaps become `required_offline_check` / `missing_evidence`.
+
 Release / overlay readiness gate:
 
 - Before any release or live overlay, run `python3 computer_use_poc/runtime_preflight_check.py`.
