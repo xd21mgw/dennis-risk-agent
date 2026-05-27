@@ -21,6 +21,9 @@ API hand 优先用于结构化读取统一登录日志。UI hand 保留为 auth 
 - agent-browser profile lock / SingletonLock 标记 `profile_lock` 并快速降级。
 - `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都进入 `source_quality`，不得解释为 no_data。
 - main agent 在 dennis-risk-agent timeout 后不得自己接管统一登录日志查询；只能记录 `subagent_timeout`，输出 partial / retry plan。
+- 统一登录日志线上 API 按约 7 天可靠窗口处理；客诉时间不在窗口内时必须标记 `login_log_window_incomplete` 和 `source_time_range_gap`。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为；扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉不能只靠 APP 登录日志排除 ATO。
+- APP 登录日志 no_data、单 DID、IP 稳定只能输出 `app_login_visible_window_no_strong_anomaly`，不得写低风险 / 无风险 / 排除 ATO。
 
 ## 2. 标准请求参数
 
@@ -87,6 +90,9 @@ user_login_log_api_observation:
     auth_session_issue:
     same_origin_error:
     profile_lock:
+    login_log_window_incomplete:
+    source_time_range_gap:
+    app_login_only_source_gap:
   pagination_discovery:
     total_count:
     logSearchModels_length:

@@ -177,8 +177,8 @@ routing_metadata:
   capability: "<selected_capability>"
   sub_capability: "<selected_sub_capability_or_null>"
   intent_type: "<user_intent_type>"
-  execution_mode: "plan_mode | execution_mode | single_entity_execution_mode | batch_clustering_mode | expert_mode | denied"
-  evidence_mode: "evidence_card | expert_reasoning | batch_pattern_summary | strategy_recommendation | partial_evidence"
+  execution_mode: "single_entity_execution_mode | small_batch_execution_with_checkpoint | batch_clustering_mode | plan_mode | expert_mode | denied"
+  evidence_mode: "evidence_card | partial_evidence | small_batch_evidence_summary | batch_pattern_summary | strategy_recommendation | expert_reasoning"
   query_plan_only: false
   platform_called: false
   platform_call_summary:
@@ -425,12 +425,49 @@ ATO 单案 source orchestration：
 - profile lock / SingletonLock 标 `profile_lock` 并快速降级。
 - `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都进入 `source_quality`，不得写成 no_data。
 
-小批量 ATO 3-9 用户：
+小批量 ATO 2-9 用户：
 
-- 默认 `small_batch_plan_mode`。
-- 如明确授权执行，只执行 P0 source。
+- 默认 `small_batch_execution_with_checkpoint`，不是纯 plan-only。
+- 允许逐个查询 P0 source，优先统一登录日志。
+- 只有异常用户再补 P1 source。
+- 默认不进入 P2 browser source。
 - 每个 user/source 独立 checkpoint。
 - 单用户 auth 失败不导致整体无输出。
+
+统一登录日志 source boundary：
+
+- 在线 API 约 7 天可靠窗口。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为。
+- 客诉时间不在在线窗口内：标 `login_log_window_incomplete` / `source_time_range_gap`。
+- APP 登录日志 no_data / 单 DID / IP 稳定只能写 `app_login_visible_window_no_strong_anomaly`。
+- 禁止直接写“低风险 / 无风险 / 排除 ATO”。
+- 扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉：标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+
+Small batch 输出模板：
+
+```text
+batch_id:
+user_count:
+execution_mode: small_batch_execution_with_checkpoint
+per_user_evidence_card:
+per_user_source_status:
+completed_users:
+blocked_users:
+timeout_users:
+users_with_login_log_window_gap:
+users_with_app_login_only_source_gap:
+high_suspicion_users:
+insufficient_support_users:
+missing_evidence_by_user:
+batch_summary:
+next_action:
+```
+
+结论口径：
+
+- “低风险”统一改成“登录日志侧可见窗口内未见强异常，ATO 证据不足”。
+- “无数据”统一改成 `source_gap` / `login_log_window_incomplete`。
+- 用户反馈只能作为 `user_claim`，不得作为 strong evidence。
 
 partial 状态 routing_metadata 示例：
 
@@ -455,6 +492,8 @@ routing_metadata:
     - blocked_source_not_counter_evidence
     - auth_session_issue_not_no_data
     - main_agent_no_direct_tool_bypass
+    - login_log_window_incomplete
+    - app_login_only_source_gap
     - user_claim_not_standalone_evidence
   source_quality:
     completed_sources: []
@@ -464,6 +503,8 @@ routing_metadata:
     auth_session_issue_sources: []
     same_origin_error_sources: []
     profile_lock_sources: []
+    source_time_range_gap_sources: []
+    app_login_only_source_gap_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []

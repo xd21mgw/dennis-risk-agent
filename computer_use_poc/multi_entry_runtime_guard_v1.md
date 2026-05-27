@@ -138,7 +138,11 @@ Behavior:
 - Main agent must not take over direct platform execution after dennis-risk-agent timeout. It may record `subagent_timeout` and return partial / retry plan, but must not run `sso_session.py`, curl with cookie, agent-browser state load, or same-origin fetch by itself.
 - Unified login log readonly observation must use the controlled wrapper / dennis-risk-agent source orchestration. Temporary curl + cookie is not an allowed fallback.
 - SSO state presence does not prove API direct availability. Redirect / 302, same-origin failure, browser profile lock, and auth failure must be recorded as source quality issues: `auth_session_issue`, `same_origin_error`, `profile_lock`, or `auth_failed`.
-- For 3-9 user ATO complaint batches, default to `small_batch_plan_mode`. If execution is explicitly approved, only P0 sources are allowed and each user/source must checkpoint independently.
+- For 2-9 user ATO complaint batches, default to `small_batch_execution_with_checkpoint`, not pure plan-only. Query P0 sources per user, starting with unified login log. Add P1 sources only for anomalous users. P2 browser sources are excluded from the default small-batch path.
+- Single user/source auth failure, timeout, blocked, or parse error must not collapse the whole small batch into no output.
+- Unified login log online API is reliable only for about 7 days and mainly covers APP login / refresh token / password verification. Complaint time outside that window must be marked `login_log_window_incomplete` and `source_time_range_gap`.
+- APP login no_data, single DID, or stable IP can only support `app_login_visible_window_no_strong_anomaly`; it cannot output low risk, no risk, or ATO exclusion without other counter evidence.
+- For scan/OAuth, offline promotion fraud, unfamiliar link, violation posting, or friend deletion complaints, normal APP login logs must still carry `app_login_only_source_gap`, `missing_oauth_or_scan_chain`, `missing_publish_audit`, `missing_device_sdk`, and `missing_strategy_hit` as relevant.
 
 ### B. plan mode
 
@@ -179,7 +183,8 @@ Rules:
 - If the input contains 10 or more `user_id`, `device_id`, `did`, `ip`, `account`, or entity identifiers, execution mode is blocked unless the user explicitly says "逐个查每个用户", "逐个在线查询", or "每个都调平台查".
 - For 10-49 entities, select `batch_clustering_mode`.
 - For 50+ entities, select aggregation / DataAgent-Hive query plan and do not run online one-by-one checks.
-- For 3-9 entities, default to `batch_plan_mode`; if the user asks for small-sample execution, ask for confirmation or limit to representative samples.
+- For 2-9 ATO complaint users, use `small_batch_execution_with_checkpoint` and P0-only default execution.
+- For 3-9 non-ATO entities, default to `batch_plan_mode`; if the user asks for small-sample execution, ask for confirmation or limit to representative samples.
 - Strategy recommendation, expansion, grey release, false-positive control, monitoring, and governance requests remain plan mode even when user ids are attached.
 - Required batch output fields: `batch_clustering_mode`, `relation_family`, `evidence_basis`, `denominator_status`, `relationship_strength`, `reverse_check_result`, `confounder_risk`, `cannot_conclude_boundary`, `representative_cases`, `pattern_summary`, `required_validation`, `candidate_strategy_direction`.
 

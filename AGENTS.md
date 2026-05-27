@@ -274,10 +274,12 @@ Step 3: ATO 单 case 精简 execution
 - agent-browser profile lock / SingletonLock 标 `profile_lock`，快速降级。
 - `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都必须进入 `source_quality`，不得解释为 no_data。
 
-批量 ATO 小样本 3-9 用户：
+批量 ATO 小样本 2-9 用户：
 
-- 默认 `small_batch_plan_mode`。
-- 如被授权执行，只执行 P0 source：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
+- 默认 `small_batch_execution_with_checkpoint`，不是纯 plan-only，也不是大批量分簇。
+- 允许逐个查询 P0 source，优先统一登录日志。
+- 只有异常用户再补 P1 source：Weapon / 天师策略命中 / 设备 SDK / 档案中心画像等低成本只读补证。
+- 默认不进入 P2 browser source。
 - 每个 `user_id/source` 独立 checkpoint。
 - 单用户 auth 失败不得导致整体无输出。
 
@@ -389,17 +391,26 @@ execution 开始时先写 observation skeleton：`user_prompt`、`routing_mode`�
 - 输出策略框架、灰度实验、误伤控制、监控指标、样本分层、取证字段。
 - 只有用户明确说“查这些用户 / 调平台 / 看登录日志 / 看 OAuth 授权记录”时才 execution。
 
-### 3+ 实体批量默认 batch plan_mode，10+ 强制 batch_clustering / plan_mode
+### ATO small batch execution 与大批量边界
 
 - 1-2 个实体：可进入 execution，timeout=180s。
-- 3+ `user_id` / `device_id` 或出现“这批 / 批量 / 多个 / 5个 / 100个 / pattern summary / 共性归因 / 分层判断”：默认 `batch_plan_mode`。
-- 不逐个在线查；输出 batch analysis plan、DataAgent/Hive query plan、case registry 字段、证据分层框架。
-- 用户确认成本后才允许 batch execution。
+- 2-9 个 `user_id` ATO 客诉：默认 `small_batch_execution_with_checkpoint`；允许逐个查 P0 source，优先统一登录日志；只对异常用户补 P1 source；默认不进 P2 browser。
+- 3+ 非 ATO 实体，或用户问共性归因 / 分层判断但未授权 execution：默认 `batch_plan_mode`。
 - 10+ `user_id` / `device_id` / `did` / `ip` / `account` / entity：强制 `batch_clustering_mode` 或 plan mode；默认禁止逐个 online execution。
 - 10-49 个实体：`batch_clustering_mode`，必须输出异常相关性矩阵、代表样本、pattern summary、required_validation 和 candidate_strategy_direction。
 - 50+ 个实体：aggregation / DataAgent-Hive query plan，不在线逐个查。
 - 除非用户明确说“逐个查每个用户 / 逐个在线查询 / 每个都调平台查”，否则不得逐个查 10+ 实体。
 - 策略推荐 / 举一返三 / 灰度 / 误伤控制，即使带 user_id，也仍 plan_mode。
+
+### 统一登录日志 source boundary
+
+- 统一登录日志线上 API 按约 7 天可靠窗口处理。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为。
+- `complaint_time` / 被盗自述时间不在在线窗口内时，必须标 `login_log_window_incomplete` 与 `source_time_range_gap`。
+- APP 登录日志 no_data / 单 DID / IP 稳定，只能写 `app_login_visible_window_no_strong_anomaly`。
+- 不得据此输出“低风险 / 无风险 / 排除 ATO”，除非补齐其他反证。
+- 扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉，即使 APP 登录日志正常，也必须标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+- 无登录日志应标 source_gap / login_log_window_incomplete，不得当无风险。
 
 ### 非 ATO 不默认 browser
 
@@ -505,8 +516,8 @@ routing_metadata:
   capability: "<selected_capability>"
   sub_capability: "<selected_sub_capability_or_null>"
   intent_type: "<user_intent_type>"
-  execution_mode: "plan_mode | execution_mode | single_entity_execution_mode | batch_clustering_mode | expert_mode | denied"
-  evidence_mode: "evidence_card | expert_reasoning | batch_pattern_summary | strategy_recommendation | partial_evidence"
+  execution_mode: "single_entity_execution_mode | small_batch_execution_with_checkpoint | batch_clustering_mode | plan_mode | expert_mode | denied"
+  evidence_mode: "evidence_card | partial_evidence | small_batch_evidence_summary | batch_pattern_summary | strategy_recommendation | expert_reasoning"
   query_plan_only: false
   platform_called: false
   platform_call_summary: []
@@ -539,8 +550,8 @@ routing_metadata:
 - 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
 - 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
-- `execution_mode` 必须使用标准枚举：`plan_mode`、`execution_mode`、`single_entity_execution_mode`、`batch_clustering_mode`、`expert_mode`、`denied`。
-- `evidence_mode` 必须使用标准枚举：`evidence_card`、`expert_reasoning`、`batch_pattern_summary`、`strategy_recommendation`、`partial_evidence`。
+- `execution_mode` 必须使用标准枚举：`single_entity_execution_mode`、`small_batch_execution_with_checkpoint`、`batch_clustering_mode`、`plan_mode`、`expert_mode`、`denied`。
+- `evidence_mode` 必须使用标准枚举：`evidence_card`、`partial_evidence`、`small_batch_evidence_summary`、`batch_pattern_summary`、`strategy_recommendation`、`expert_reasoning`。
 - 未调用真实平台时，`platform_called=false`，`platform_call_summary=[]`。
 - 未调用 DataAgent 时，`dataagent_called=false`。
 - 未发生 main agent direct exec bypass 时，`direct_tool_bypass=false`。

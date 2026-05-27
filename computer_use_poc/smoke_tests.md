@@ -2158,7 +2158,7 @@
 
 - 输入：专家问答、单案、批量、策略推荐、拒绝类回答。
 - 场景：metadata enum。
-- 预期：`execution_mode` 只能使用 `plan_mode` / `execution_mode` / `single_entity_execution_mode` / `batch_clustering_mode` / `expert_mode` / `denied`；`evidence_mode` 只能使用 `evidence_card` / `expert_reasoning` / `batch_pattern_summary` / `strategy_recommendation` / `partial_evidence`。
+- 预期：`execution_mode` 只能使用 `single_entity_execution_mode` / `small_batch_execution_with_checkpoint` / `batch_clustering_mode` / `plan_mode` / `expert_mode` / `denied`；`evidence_mode` 只能使用 `evidence_card` / `partial_evidence` / `small_batch_evidence_summary` / `batch_pattern_summary` / `strategy_recommendation` / `expert_reasoning`。
 - 状态：guardrail added。
 
 ## 191-CD. routing_metadata anticrawl query plan only
@@ -5598,9 +5598,23 @@
 ## 535E. Small batch ATO auth bridge guard
 
 - test_id: SMALL-BATCH-ATO-AUTH-BRIDGE-001
-- input: 3-9 个 ATO 客诉用户，需要统一登录日志补证。
-- expected_runtime_behavior: small_batch_plan_mode_or_p0_only_execution
-- expected_output_boundary: 默认 `small_batch_plan_mode`；如执行，只执行 P0 source；每个 user/source 独立 checkpoint；单用户 auth_failed 不导致整体无输出。
+- input: 2-9 个 ATO 客诉用户，需要统一登录日志补证。
+- expected_runtime_behavior: small_batch_execution_with_checkpoint
+- expected_output_boundary: 默认 `small_batch_execution_with_checkpoint`；逐个查 P0 source，优先统一登录日志；只对异常用户补 P1 source；默认不进入 P2 browser；每个 user/source 独立 checkpoint；单用户 auth_failed 不导致整体无输出。
+
+## 535F. SMALL-BATCH-LOGIN-WINDOW-BOUNDARY-001
+
+- test_id: SMALL-BATCH-LOGIN-WINDOW-BOUNDARY-001
+- input: 8 用户客诉时间早于统一登录日志在线可靠窗口，登录日志 no_data / 单 DID / IP 稳定。
+- expected_runtime_behavior: login_log_window_boundary_preserved
+- expected_output_boundary: 标记 `login_log_window_incomplete` / `source_time_range_gap` / `app_login_visible_window_no_strong_anomaly`；不得输出低风险 / 无风险 / 排除 ATO。
+
+## 535G. APP-LOGIN-ONLY-SOURCE-GAP-001
+
+- test_id: APP-LOGIN-ONLY-SOURCE-GAP-001
+- input: 扫码/OAuth/地推欺诈/陌生链接诱导/发布违规类客诉，APP 登录日志正常。
+- expected_runtime_behavior: app_login_only_source_gap
+- expected_output_boundary: 标记 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`；APP 登录日志正常不得排除 ATO。
 
 ## 536. API SSO JSON parse failure degrades safely
 

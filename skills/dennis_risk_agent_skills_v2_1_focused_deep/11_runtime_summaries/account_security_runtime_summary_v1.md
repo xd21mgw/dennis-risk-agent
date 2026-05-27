@@ -142,6 +142,27 @@ source 优先级：
 - P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。
 - execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation。
 
+## 5.2 ATO 小批量客诉执行与登录日志边界
+
+2-9 个 `user_id` 的 ATO 客诉小批量默认进入 `small_batch_execution_with_checkpoint`，不是纯 plan-only，也不是 10+ 的 batch clustering。
+
+执行规则：
+
+- 允许逐个查 P0 source，优先统一登录日志。
+- 只对异常用户补 P1 source：Weapon、天师策略命中、设备 SDK、档案中心画像等。
+- 默认不进入 P2 browser source。
+- 每个 user/source 独立 checkpoint。
+- 单用户 auth_failed / timeout / blocked / parse_error 不得导致整体无输出。
+
+统一登录日志 source boundary：
+
+- 在线 API 约 7 天可靠窗口。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为。
+- 客诉时间不在在线窗口内时，必须标 `login_log_window_incomplete` 与 `source_time_range_gap`。
+- APP 登录日志 no_data、单 DID、IP 稳定，只能写“登录日志侧可见窗口内未见强异常，ATO 证据不足”。
+- 不得仅凭 APP 登录日志输出“低风险 / 无风险 / 排除 ATO”。
+- 扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉，必须标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+
 ## 6. ATO 离线 Hive 数据源运行态规则
 
 在线统一登录日志只按近 7 天可靠窗口处理。历史 ATO / 盗号 case、超窗 case、批量 ATO case 不能把在线 no_data / 超窗 no_data 写成“无登录异常”或“无 ATO 风险”反证。
