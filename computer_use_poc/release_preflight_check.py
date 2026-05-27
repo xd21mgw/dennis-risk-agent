@@ -26,6 +26,22 @@ DEFAULT_REQUIRED_FILES = [
     "computer_use_poc/multi_entry_runtime_guard_v1.md",
     "computer_use_poc/answer_experience_templates.md",
 ]
+FOCUSED_SAFE_SUMMARY_PATCH_REQUIRED_FILES = [
+    "README.md",
+    "PATCH_MANIFEST.md",
+    "CAPABILITY_DELTA_SUMMARY.md",
+    "ROUTING_DELTA_SUMMARY.md",
+    "ANSWER_TEMPLATE_DELTA_SUMMARY.md",
+    "ROUTING_METADATA_CONTRACT_SUMMARY.md",
+    "VALIDATION_SUMMARY.md",
+    "OVERLAY_INSTRUCTIONS.md",
+    "SAFETY_BOUNDARIES.md",
+    "PATCH_CHECKLIST.md",
+]
+RELEASE_TYPES = {
+    "full_runtime_release": DEFAULT_REQUIRED_FILES,
+    "focused_safe_summary_patch": FOCUSED_SAFE_SUMMARY_PATCH_REQUIRED_FILES,
+}
 MANIFEST_PATTERNS = ["*manifest*.md", "*manifest*.json", "*manifest*.yaml", "*manifest*.yml"]
 EXPLICITLY_ALLOWED_HIGH_RULES: set[str] = set()
 
@@ -59,12 +75,15 @@ def manifest_present(target: Path) -> bool:
     return any(target.glob(pattern) for pattern in MANIFEST_PATTERNS)
 
 
-def check_required_files(target: Path) -> dict[str, Any]:
-    missing = [rel for rel in DEFAULT_REQUIRED_FILES if not (target / rel).is_file()]
-    manifest_ok = manifest_present(target)
-    if not manifest_ok:
-        missing.append("<release_manifest: *manifest*.md|json|yaml|yml>")
+def check_required_files(target: Path, release_type: str) -> dict[str, Any]:
+    required_files = RELEASE_TYPES[release_type]
+    missing = [rel for rel in required_files if not (target / rel).is_file()]
+    if release_type == "full_runtime_release":
+        manifest_ok = manifest_present(target)
+        if not manifest_ok:
+            missing.append("<release_manifest: *manifest*.md|json|yaml|yml>")
     return {
+        "release_type": release_type,
         "required_files_pass": not missing,
         "missing_required_files": missing,
     }
@@ -88,7 +107,11 @@ def summarize_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def build_safe_summary(target: Path, scanner_result: dict[str, Any], required: dict[str, Any]) -> dict[str, Any]:
+def build_safe_summary(
+    target: Path,
+    scanner_result: dict[str, Any],
+    required: dict[str, Any],
+) -> dict[str, Any]:
     summary = scanner_result.get("summary", {})
     finding_summary = summarize_findings(scanner_result.get("findings", []))
     package_should_block = bool(scanner_result.get("package_should_block"))
@@ -108,7 +131,9 @@ def build_safe_summary(target: Path, scanner_result: dict[str, Any], required: d
     return {
         "schema_version": "release_preflight_safe_summary_v1",
         "target": str(target),
+        "release_type": required["release_type"],
         "preflight_pass": preflight_pass,
+        "scanner_pass": scanner_returncode == 0 and not package_should_block and critical == 0 and unallowed_high == 0,
         "package_should_block": package_should_block,
         "scanner_status": scanner_result.get("status", "unknown"),
         "scanner_returncode": scanner_returncode,
@@ -129,7 +154,9 @@ def build_safe_summary(target: Path, scanner_result: dict[str, Any], required: d
 
 
 def print_summary(summary: dict[str, Any]) -> None:
+    print(f"release_type={summary['release_type']}")
     print(f"release_preflight preflight_pass={str(summary['preflight_pass']).lower()}")
+    print(f"scanner_pass={str(summary['scanner_pass']).lower()}")
     print(f"package_should_block={str(summary['package_should_block']).lower()}")
     scanner = summary["scanner_summary"]
     print(
@@ -150,6 +177,13 @@ def print_summary(summary: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run release package preflight checks.")
     parser.add_argument("target", help="Release directory to validate before packaging/upload.")
+    parser.add_argument(
+        "--release-type",
+        "--package-type",
+        choices=sorted(RELEASE_TYPES),
+        default="full_runtime_release",
+        help="Package type to validate. full_runtime_release checks runtime files; focused_safe_summary_patch checks summary patch files only.",
+    )
     parser.add_argument("--json", action="store_true", help="Output safe summary JSON.")
     return parser.parse_args()
 
@@ -161,7 +195,9 @@ def main() -> int:
         error_summary = {
             "schema_version": "release_preflight_safe_summary_v1",
             "target": str(target),
+            "release_type": args.release_type,
             "preflight_pass": False,
+            "scanner_pass": False,
             "package_should_block": True,
             "failure_reason": "target_directory_missing",
             "output_policy": "safe_summary_only_no_raw_file_content",
@@ -180,7 +216,9 @@ def main() -> int:
         error_summary = {
             "schema_version": "release_preflight_safe_summary_v1",
             "target": str(target),
+            "release_type": args.release_type,
             "preflight_pass": False,
+            "scanner_pass": False,
             "package_should_block": True,
             "failure_reason": scanner_error or "scanner_unknown_error",
             "output_policy": "safe_summary_only_no_raw_file_content",
@@ -194,7 +232,7 @@ def main() -> int:
             print("output_policy=safe_summary_only_no_raw_file_content")
         return 1
 
-    required = check_required_files(target)
+    required = check_required_files(target, args.release_type)
     summary = build_safe_summary(target, scanner_result, required)
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
