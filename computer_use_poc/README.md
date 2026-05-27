@@ -627,3 +627,22 @@ ATO 批量 case analysis 当前新增 v1 输入输出契约，入口位于：
 - 未修改 auth / gateway。
 - 未重新打包 release。
 - 后续如要 runtime 生效，需要 overlay 或重新打 patch release。
+
+## SSO Session Runner / Unified Login Log Executor
+
+`computer_use_poc/sso_session_runner.py` 已从 URL construction / dry-run contract 升级为统一登录日志 P0 的受控 SSO API executor。
+
+推荐入口：
+
+```bash
+python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id <user_id> --timeout 30 --format json
+```
+
+边界：
+
+- 只支持白名单 platform/action：`login_log` + `query_user_login_log`。
+- 不接受 `target_url` / arbitrary URL。
+- 通过 live `sso_session.SmartSSOSession.get()` 发起 GET。
+- 本地没有 `SmartSSOSession` 时 fail closed 为结构化 `blocked` observation。
+- 输出统一 observation，不输出 cookie/token/session/header。
+- `auth_failed` / `timeout` / `parse_error` / `blocked` 不得解释为 no_data 或无风险反证。

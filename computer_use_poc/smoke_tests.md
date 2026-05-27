@@ -4571,12 +4571,12 @@
 - expected_runtime_behavior: reject_non_digit_timestamp
 - expected_output_boundary: from/to timestamp 必须为 1-20 位纯数字且成对出现。
 
-## 394. sso_session_runner builds user login URL with explicit window
+## 394. sso_session_runner executes user login query with explicit window
 
 - test_id: SSO-RUNNER-005
 - input: `--platform_key user_login_unified_log --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
-- expected_runtime_behavior: construct_whitelisted_user_login_url
-- expected_output_boundary: URL 包含 `userId`、`did=`、`query=`、`from_timestamp`、`to_timestamp`；不调用真实平台。
+- expected_runtime_behavior: controlled_real_http_executor_or_fail_closed
+- expected_output_boundary: 通过白名单 URL + `SmartSSOSession.get()` 执行；输出 `source_name` / `source_status` / `records_count` / `source_quality`；本地缺少 SSO executor 时结构化 `blocked`，不得退回 dry_run_only 成功。
 
 ## 395. sso_session_runner defaults user login to reliable seven-day window
 
@@ -4596,8 +4596,8 @@
 
 - test_id: SSO-RUNNER-008
 - input: `--platform_key archives_center_profile --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
-- expected_runtime_behavior: ignore_timestamp_for_non_login_platform
-- expected_output_boundary: 非 user_login_unified_log 不拼接 from/to timestamp。
+- expected_runtime_behavior: fail_closed_unsupported_platform
+- expected_output_boundary: 当前 runner 只支持统一登录日志 P0 查询；非 login_log platform/action fail closed，不扩大到档案中心或任意 URL。
 
 ## 398. sso_session_runner requires recallSource for unified login url
 
@@ -4605,6 +4605,13 @@
 - input: `--platform_key user_login_unified_log --user_id 4910098437 --from_timestamp 1710000000000 --to_timestamp 1710000001000`
 - expected_runtime_behavior: construct_recall_source_whitelisted_login_url
 - expected_output_boundary: 有效 URL 必须包含 `recallSource=2,0,1,3`；缺失时属于 wrapper URL 映射缺口，可能触发 `code=10045`。
+
+## SSO-RUNNER-REAL-EXECUTOR-001
+
+- test_id: SSO-RUNNER-REAL-EXECUTOR-001
+- input: `python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id 62950989 --timeout 30 --format json`
+- expected_runtime_behavior: controlled_sso_real_http_executor
+- expected_output_boundary: 不只返回 constructed URL；成功或失败都输出结构化 observation，字段包含 `source_name=user_login_unified_log`、`source_status`、`user_id`、`records_count`、`evidence_summary`、`source_quality`、`collected_at`、`redaction_applied=true`、`real_platform_request_executed`；不得输出 cookie/token/session/header。
 
 ## 399. missing recallSource may cause api 10045
 

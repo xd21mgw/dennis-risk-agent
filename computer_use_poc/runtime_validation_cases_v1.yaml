@@ -326,6 +326,45 @@ runtime_validation_suite:
       redaction_required: true
       pass_criteria: "full-profile 继承必须被标为 runtime_config_gap；正确修复是 apply runtime config，不是继续堆 routing 文档。"
 
+    - case_id: SSO-RUNNER-REAL-EXECUTOR-001
+      test_name: sso_session_runner controlled real HTTP executor
+      input_prompt: "python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id 62950989 --timeout 30 --format json"
+      expected_route:
+        - login_log_read
+      expected_capability:
+        - controlled_sso_api_executor
+      expected_tool_boundary:
+        arbitrary_url_allowed: false
+        curl_cookie_allowed: false
+        write_or_edit_allowed: false
+        dataagent_called: false
+      expected_output:
+        - source_name
+        - source_status
+        - user_id
+        - records_count
+        - evidence_summary
+        - source_quality
+        - collected_at
+        - redaction_applied
+        - real_platform_request_executed
+      expected_source_status_values:
+        - completed
+        - no_data
+        - auth_failed
+        - timeout
+        - parse_error
+        - blocked
+      expected_denied_outputs:
+        - constructed_url_only_success
+        - dry_run_only_true_success
+        - cookie
+        - token
+        - session
+        - header
+      redaction_required: true
+      pass_criteria: "runner 使用白名单 platform/action 和 SmartSSOSession.get 执行统一登录日志 GET；本地缺少 SSO executor 时 fail closed 为 blocked，不退回 dry_run_only 成功。"
+
     - case_id: RT-ATO-003
       test_name: ATO expansion planning
       input_prompt: "基于已确认 ATO case 设计举一返三扩量查询问题"

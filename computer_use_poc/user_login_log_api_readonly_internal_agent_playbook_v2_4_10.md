@@ -11,10 +11,24 @@ status: get_only_validated / api_readonly_poc
 
 API hand 优先用于结构化读取统一登录日志。UI hand 保留为 auth bootstrap / fallback / 字段发现。
 
+受控 runner：
+
+```bash
+python3 computer_use_poc/sso_session_runner.py \
+  --platform login_log \
+  --action query_user_login_log \
+  --user-id <user_id> \
+  --timeout 30 \
+  --format json
+```
+
+`sso_session_runner.py` 是受控 SSO API executor，不是任意 HTTP 客户端。它只支持白名单 platform/action 构造统一登录日志 URL，并通过 live 环境提供的 `sso_session.SmartSSOSession.get()` 发起 GET。它不接受 `target_url` / arbitrary URL，不输出 cookie/token/session/header，不调用 DataAgent，不执行写操作。本地环境缺少 `SmartSSOSession` 时必须 fail closed，输出结构化 `blocked` observation。
+
 认证态桥接边界：
 
 - 统一登录日志只读查询必须走受控 wrapper / dennis-risk-agent source orchestration，不使用临时 curl + cookie。
-- `sso_session.py` / `sso_session_runner.py` 只代表认证注入或 wrapper 能力，不保证每次都能稳定返回 API 数据。
+- `sso_session_runner.py` 是统一登录日志 P0 的受控 real HTTP executor；认证失败、HTML 登录页、重定向、timeout、parse error 都必须输出结构化 observation。
+- `sso_session.py` 代表认证注入能力；不能由 main agent 临时调用来拼接 curl/cookie 查询。
 - SSO state 存在不等于 API direct 可用。
 - curl + cookie 返回 302 redirect 时，标记 `auth_session_issue`，不得继续拼 cookie 重试。
 - browser fetch 必须在 `user-center-workbench` 正确同源域名内执行；否则标记 `same_origin_error`。
@@ -24,6 +38,22 @@ API hand 优先用于结构化读取统一登录日志。UI hand 保留为 auth 
 - 统一登录日志线上 API 按约 7 天可靠窗口处理；客诉时间不在窗口内时必须标记 `login_log_window_incomplete` 和 `source_time_range_gap`。
 - admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为；扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉不能只靠 APP 登录日志排除 ATO。
 - APP 登录日志 no_data、单 DID、IP 稳定只能输出 `app_login_visible_window_no_strong_anomaly`，不得写低风险 / 无风险 / 排除 ATO。
+
+runner observation 必填：
+
+```yaml
+source_name: user_login_unified_log
+source_status: completed | no_data | auth_failed | timeout | parse_error | blocked
+user_id:
+records_count:
+evidence_time_range:
+evidence_summary:
+source_quality:
+raw_reference_safe_id:
+collected_at:
+redaction_applied: true
+real_platform_request_executed:
+```
 
 ## 2. 标准请求参数
 
