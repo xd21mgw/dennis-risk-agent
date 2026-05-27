@@ -276,6 +276,65 @@ Step 3: ATO 单 case 精简 execution
 - ATO 单案结论必须区分 `data_supports_ato_suspicion` / `insufficient_support` / `data_against_ato_suspicion`。
 - DataAgent / Hive 只在超窗、3+ 批量、长窗口离线补查、复杂 SQL / Hive、发布链路 / token 长周期 / 跨表分析时，经用户确认后进入 query plan 或离线流程。
 
+### ATO 单案 source checkpoint / deadline
+
+明确 `user_id` 的 ATO 单案执行时，每个 source 查询结束后，无论成功失败，都必须立即形成 checkpoint。后续 source 失败不得覆盖或丢弃已完成 source。
+
+checkpoint 字段：
+
+- `source_name`
+- `source_type`
+- `source_status: completed | no_data | blocked | auth_failed | timeout | parse_error | skipped`
+- `evidence_summary`
+- `evidence_time_range`
+- `source_quality`
+- `raw_reference_safe_id`
+- `collected_at`
+- `failure_reason`
+- `next_source_decision`
+
+强制规则：
+
+- `completed` source 必须保留到最终 partial evidence card。
+- `no_data` 也算完成 source，但必须标 `no_data_not_risk_exclusion`。
+- 统一登录日志已 `completed` 时，后续 Weapon / RCP / 档案中心 browser timeout 也必须输出 partial evidence card。
+- Weapon `auth_required` 进入 `auth_failed_sources` 或 `blocked_sources`；Weapon timeout 进入 `timeout_sources`。
+- RCP / 档案中心 / track-analysis browser timeout 进入 `timeout_sources`，IP 白名单 / auth blocked 进入 `blocked_sources` 或 `auth_failed_sources`。
+- parse error 进入 `parse_error_sources`。
+
+总预算默认 180s。只要任一 P0/P1 source completed，在 120s 或 150s checkpoint 时必须停止扩展 P2 browser source 并开始输出 partial evidence card。P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。接近 timeout 时，无论 source 完成多少，都必须输出 partial evidence card、source_quality、missing_evidence、next_action 和 routing_metadata。
+
+source 优先级：
+
+- P0：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
+- P1：档案中心画像、track-analysis stats-first。
+- P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+
+P0 source completed 后，应具备输出 partial evidence card 的最低条件。browser 操作失败 3 次或超过单 source 时间预算必须停止并降级。
+
+ATO partial evidence card 必填：
+
+- `case_id`
+- `user_id`
+- `final_status: partial`
+- `conclusion_state`
+- `completed_sources`
+- `no_data_sources`
+- `blocked_sources`
+- `auth_failed_sources`
+- `timeout_sources`
+- `parse_error_sources`
+- `missing_evidence`
+- `source_quality`
+- `strong_evidence`
+- `medium_evidence`
+- `weak_evidence`
+- `counter_evidence`
+- `caveats`
+- `next_action`
+
+execution 开始时先写 observation skeleton：`user_prompt`、`routing_mode`、`execution_mode`、`final_status=running`、`started_at`、`subagent_session_id`、`main_session_id`。每个 source checkpoint 后追加 observation。最终 timeout 也必须写 `final_status=partial` 或 `timeout`、各 source 列表和 `partial_reason`，不得出现 timeout 后无 observation log 记录。
+
 ### 证据边界问题默认纯分析
 
 以下问题默认进入 `evidence_boundary_mode`，30s 内纯分析，不自动查平台：
@@ -426,7 +485,9 @@ routing_metadata:
     - "<boundary_flag>"
   source_quality:
     completed_sources: []
+    no_data_sources: []
     blocked_sources: []
+    auth_failed_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []

@@ -5574,6 +5574,20 @@
 - expected_runtime_behavior: single_entity_execution_mode_with_partial_fallback
 - expected_output_boundary: 可查只读平台，但不调用 DataAgent、不扩量；平台 timeout / auth blocked / parse error 时输出 partial evidence card，包含 completed_sources / blocked_sources / timeout_sources / parse_error_sources / missing_evidence / source_quality / next_action；no_data / timeout / blocked 不作为无风险反证；结论状态为 `data_supports_ato_suspicion` / `insufficient_support` / `data_against_ato_suspicion`。
 
+## 535B. SINGLE-ATO-SOURCE-CHECKPOINT-001
+
+- test_id: SINGLE-ATO-SOURCE-CHECKPOINT-001
+- input: `user_id=290534602 ATO 单案，统一登录日志 completed，RCP / 档案中心 browser timeout。`
+- expected_runtime_behavior: per_source_checkpoint_preserves_completed_evidence
+- expected_output_boundary: 每个 source 查询结束后立即 checkpoint；completed_sources 包含 `unified_login_log`；timeout_sources 包含 `rcp_browser` / `archives_browser`；输出 partial evidence card、observation log 记录和 `routing_metadata.final_status=partial`；不裸 timeout。
+
+## 535C. SINGLE-ATO-OVERALL-DEADLINE-001
+
+- test_id: SINGLE-ATO-OVERALL-DEADLINE-001
+- input: ATO 单案 P0 source completed，P2 browser source 长时间未完成。
+- expected_runtime_behavior: overall_deadline_partial_before_timeout
+- expected_output_boundary: 默认总预算 180s；任一 P0/P1 source completed 后在 120s 或 150s checkpoint 停止扩展 P2 browser source；输出 partial evidence card；P2 browser 标 timeout_sources；completed P0 evidence 不丢失。
+
 ## 536. API SSO JSON parse failure degrades safely
 
 - test_id: SEMI-OPEN-EXP-009

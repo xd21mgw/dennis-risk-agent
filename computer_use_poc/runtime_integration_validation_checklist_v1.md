@@ -33,6 +33,8 @@ This checklist validates whether the semi-open runtime, feedback loop, evidence 
 | RUNTIME-INTEGRATION-010 | evidence | Evidence type separation is applied. | Output separates `raw_evidence`, `behavior_event`, `user_claim`, `inference`, `hypothesis`, and `missing_evidence`. | pending |
 | RUNTIME-INTEGRATION-011 | evidence | Single case ATO response uses the evidence card. | Output contains source quality, completed/blocked/timeout sources, current confidence, and required follow-up. | pending |
 | RUNTIME-INTEGRATION-012 | boundary | `no_data`, timeout, blocked, or partial source appears. | It is marked as `source_gap` / `permission_or_runtime_gap`, not as no-risk counter-evidence. | pending |
+| RUNTIME-INTEGRATION-012A | orchestration | ATO single case has unified login log completed, then Weapon / RCP / archives browser timeout. | Completed source checkpoint is preserved; partial evidence card is emitted with routing_metadata `final_status=partial`; no bare timeout. | pending |
+| RUNTIME-INTEGRATION-012B | deadline | ATO single case P0/P1 source completes before P2 browser source hangs. | Runtime stops P2 expansion at 120s/150s checkpoint and emits partial evidence before 180s overall deadline. | pending |
 | RUNTIME-INTEGRATION-013 | track analysis | Track-analysis task starts stats-first. | Aggregate stats or query plan comes before browser exploration. | pending |
 | RUNTIME-INTEGRATION-014 | browser | Track-analysis SPA loop fails 3 times. | Runtime downgrades to partial evidence card and stops looping. | pending |
 | RUNTIME-INTEGRATION-015 | context | Cross-task context contamination regression is replayed. | Historical evidence is not reused as current task fact evidence. | pending |

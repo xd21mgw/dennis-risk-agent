@@ -110,6 +110,38 @@
 
 平台 blocked、timeout、browser loop 时，输出 partial evidence card，不裸 timeout。
 
+## 5.1 ATO 单案 source checkpoint 与 deadline
+
+明确 `user_id` 的 ATO 单案允许进入 `single_entity_execution_mode` 并查询只读平台，但必须按 source 编排，不能让后续高耗时 source 吞掉已完成证据。
+
+每个 source 查询结束后必须立即记录 checkpoint：
+
+- `source_name`
+- `source_type`
+- `source_status`: completed / no_data / blocked / auth_failed / timeout / parse_error / skipped
+- `evidence_summary`
+- `evidence_time_range`
+- `source_quality`
+- `raw_reference_safe_id`
+- `collected_at`
+- `failure_reason`
+- `next_source_decision`
+
+source 优先级：
+
+- P0：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
+- P1：档案中心画像、track-analysis stats-first。
+- P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+
+规则：
+
+- completed source 不得因后续 source timeout / blocked / parse_error 丢失。
+- no_data 也算 completed source，但必须标 `no_data_not_risk_exclusion`。
+- P0 source completed 后，已具备输出 partial evidence card 的最低条件。
+- 默认总预算 180s；任一 P0/P1 source completed 后，在 120s 或 150s checkpoint 应停止扩展 P2 browser source 并输出 partial evidence card。
+- P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。
+- execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation。
+
 ## 6. ATO 离线 Hive 数据源运行态规则
 
 在线统一登录日志只按近 7 天可靠窗口处理。历史 ATO / 盗号 case、超窗 case、批量 ATO case 不能把在线 no_data / 超窗 no_data 写成“无登录异常”或“无 ATO 风险”反证。

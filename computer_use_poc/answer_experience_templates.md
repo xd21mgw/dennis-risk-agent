@@ -193,7 +193,9 @@ routing_metadata:
     - "<boundary_flag_1>"
   source_quality:
     completed_sources: []
+    no_data_sources: []
     blocked_sources: []
+    auth_failed_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []
@@ -266,7 +268,9 @@ routing_metadata:
     - attribution_not_cheating_judgement
   source_quality:
     completed_sources: []
+    no_data_sources: []
     blocked_sources: []
+    auth_failed_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []
@@ -299,7 +303,9 @@ routing_metadata:
     - generic_risk_no_default_specialized_capability
   source_quality:
     completed_sources: []
+    no_data_sources: []
     blocked_sources: []
+    auth_failed_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []
@@ -347,14 +353,20 @@ routing_metadata:
 ```text
 结论：当前只能形成 partial evidence card，不能空研判。
 
+case_id:
+user_id:
+final_status: partial
+
 结论状态:
-- conclusion_status: data_supports_ato_suspicion | insufficient_support | data_against_ato_suspicion
+- conclusion_state: data_supports_ato_suspicion | insufficient_support | data_against_ato_suspicion
 
 已完成来源:
 - completed_sources:
+- no_data_sources:
 
 受阻来源:
 - blocked_sources:
+- auth_failed_sources:
 - timeout_sources:
 - parse_error_sources:
 
@@ -366,9 +378,23 @@ routing_metadata:
 - missing_evidence:
 
 source quality:
+- source_checkpoints:
+  - source_name:
+    source_type:
+    source_status: completed | no_data | blocked | auth_failed | timeout | parse_error | skipped
+    evidence_summary:
+    evidence_time_range:
+    source_quality:
+    raw_reference_safe_id:
+    collected_at:
+    failure_reason:
+    next_source_decision:
 - freshness_status:
 - permission_status:
 - reliability_level:
+
+补充边界:
+- caveats:
 
 下一步:
 - next_action:
@@ -376,6 +402,52 @@ source quality:
 ```
 
 ATO 单案明确 `user_id` 时仍然是 `single_entity_execution_mode`，不是默认 plan-only。只读平台可以查询，但任一 source timeout / auth blocked / parse error 都必须降级为 partial evidence card。Weapon 超时但登录日志完成时，基于登录日志等已完成 source 输出 partial judgement；所有平台都失败时，输出 query plan + missing evidence，不得裸 timeout。
+
+ATO 单案 source orchestration：
+
+- 每个 source 查询结束后必须立即写 checkpoint；completed source 不得因后续 source 失败而丢失。
+- `no_data` 也算 completed source，但必须标注 `no_data_not_risk_exclusion`，不得作为无风险反证。
+- P0 source：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
+- P1 source：档案中心画像、track-analysis stats-first。
+- P2 source：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+- 默认总预算 180s；任一 P0/P1 source completed 后，在 120s 或 150s checkpoint 停止扩展 P2 browser source，输出 partial evidence card。
+- browser 操作失败 3 次或超过单 source 时间预算必须停止，标入 timeout_sources / blocked_sources / auth_failed_sources。
+- execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation，不允许日志无记录。
+
+partial 状态 routing_metadata 示例：
+
+```yaml
+routing_metadata:
+  route: ato_case_analysis
+  capability: account_security_expert_mode
+  sub_capability: null
+  intent_type: single_entity_ato_investigation
+  execution_mode: single_entity_execution_mode
+  evidence_mode: partial_evidence
+  query_plan_only: false
+  platform_called: true
+  platform_call_summary: []
+  dataagent_called: false
+  direct_tool_bypass: false
+  sensitive_output: false
+  redaction_applied: true
+  boundary_flags:
+    - no_data_not_risk_exclusion
+    - timeout_not_counter_evidence
+    - blocked_source_not_counter_evidence
+    - user_claim_not_standalone_evidence
+  source_quality:
+    completed_sources: []
+    no_data_sources: []
+    blocked_sources: []
+    auth_failed_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
+  missing_required_fields: []
+  partial_reason: "<why partial>"
+  final_status: partial
+```
 
 边界：timeout / no_data / blocked 不是无风险反证；查不了要说明原因，不能只给方法论。
 

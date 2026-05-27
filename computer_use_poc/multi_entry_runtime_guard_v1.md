@@ -130,6 +130,11 @@ Behavior:
 - ATO single case with explicit `user_id` stays in `single_entity_execution_mode`; do not downgrade it to plan-only by default.
 - Weapon / login log / archives / strategy hit timeout, auth block, or parse error must degrade to partial evidence card. If all sources fail, output query plan plus missing evidence instead of a bare timeout.
 - Single-case ATO conclusion status must be one of `data_supports_ato_suspicion`, `insufficient_support`, or `data_against_ato_suspicion`.
+- Per-source checkpoint is mandatory. After each source finishes, record `source_name`, `source_type`, `source_status`, `evidence_summary`, `evidence_time_range`, `source_quality`, `raw_reference_safe_id`, `collected_at`, `failure_reason`, and `next_source_decision`.
+- Completed P0/P1 sources must be retained even if later P2 browser sources time out. `no_data` is still a completed source and must carry `no_data_not_risk_exclusion`.
+- Default total budget is 180s. If any P0/P1 source has completed, stop extending P2 browser sources at the 120s or 150s checkpoint and emit partial evidence before the overall timeout.
+- Source priority: P0 = unified login log, Weapon riskData/graphData, Tianshi strategy hit summary; P1 = archives profile, track-analysis stats-first; P2 = RCP browser, archives browser recoverable_preflight, track-analysis SPA detail.
+- Observation logging must start with a skeleton record and append per-source checkpoints. A timeout must still leave a partial or timeout observation record.
 
 ### B. plan mode
 

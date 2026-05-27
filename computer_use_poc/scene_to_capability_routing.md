@@ -107,6 +107,9 @@ Semi-open experience patch v1 路由补丁：
 - `browser_session_bridge` / `auth_html_fast_fallback`：browser auth blocked、2FA、HTML/auth page、cookie bridge missing 均快速降级，不反复尝试。
 - `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
 - `single_ato_execution_partial_fallback`：明确 `user_id` 的 ATO 单案可查统一登录日志、Weapon、档案中心、策略命中等只读平台；任一平台 timeout / auth blocked / parse error 时必须输出 partial evidence card。Weapon 超时但其他来源完成时基于 completed source 输出 partial judgement；所有平台失败时输出 query plan + missing evidence，不裸 timeout。结论状态只能是 `data_supports_ato_suspicion` / `insufficient_support` / `data_against_ato_suspicion`。
+- `single_ato_source_checkpoint`：ATO 单案每个 source 结束后必须 checkpoint，字段包含 source_name / source_type / source_status / evidence_summary / evidence_time_range / source_quality / raw_reference_safe_id / collected_at / failure_reason / next_source_decision。completed source 不得因后续 timeout 丢失，no_data 也算 completed 且标 `no_data_not_risk_exclusion`。
+- `single_ato_overall_deadline`：ATO 单案默认 180s 总预算。任一 P0/P1 source completed 后，在 120s 或 150s checkpoint 必须停止扩展 P2 browser source 并输出 partial evidence card；P2 browser 不得阻塞 P0/P1 已完成 evidence。
+- `single_ato_source_priority`：P0=统一登录日志、Weapon riskData/graphData、天师策略命中摘要；P1=档案中心画像、track-analysis stats-first；P2=RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
 - `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
 - `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。
@@ -641,7 +644,9 @@ routing_metadata:
     - "<boundary_flag>"
   source_quality:
     completed_sources: []
+    no_data_sources: []
     blocked_sources: []
+    auth_failed_sources: []
     timeout_sources: []
     parse_error_sources: []
     missing_sources: []

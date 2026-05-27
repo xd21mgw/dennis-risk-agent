@@ -84,6 +84,63 @@ runtime_validation_suite:
       redaction_required: true
       pass_criteria: "明确 user_id 的 ATO 单案进入 single_entity_execution_mode；只读平台失败时输出 partial evidence card，不裸 timeout，不调用 DataAgent，不扩量。"
 
+    - case_id: SINGLE-ATO-SOURCE-CHECKPOINT-001
+      test_name: ATO single case source checkpoint preserves completed evidence
+      input_prompt: "user_id=290534602 ATO 单案，统一登录日志 completed，RCP / 档案中心 browser timeout。"
+      expected_route:
+        - ato_case_analysis
+        - account_security_expert_mode
+      expected_routing_mode: single_entity_execution_mode
+      expected_source_orchestration:
+        checkpoint_required_after_each_source: true
+        completed_source_preserved: true
+        no_data_marked_not_risk_exclusion: true
+      expected_output:
+        - partial_evidence_card
+        - completed_sources_contains_unified_login_log
+        - timeout_sources_contains_rcp_browser
+        - timeout_sources_contains_archives_browser
+        - source_quality
+        - missing_evidence
+        - next_action
+        - routing_metadata_final_status_partial
+      expected_observation_log:
+        skeleton_written_at_start: true
+        checkpoint_appended_after_source: true
+        timeout_still_has_record: true
+      expected_boundary:
+        - no_bare_timeout
+        - no_data_timeout_blocked_not_counter_evidence
+        - completed_unified_login_log_not_lost
+      redaction_required: true
+      pass_criteria: "统一登录日志 completed 后，后续 RCP / 档案中心 browser timeout 不得吞掉已完成证据；必须输出 partial evidence card、observation 记录和 routing_metadata。"
+
+    - case_id: SINGLE-ATO-OVERALL-DEADLINE-001
+      test_name: ATO single case deadline emits partial before P2 browser timeout
+      input_prompt: "ATO 单案多 source 查询，P0 source completed，但 P2 browser source 长时间未完成。"
+      expected_route:
+        - ato_case_analysis
+        - account_security_expert_mode
+      expected_routing_mode: single_entity_execution_mode
+      expected_deadline_policy:
+        total_budget_seconds: 180
+        checkpoint_seconds:
+          - 120
+          - 150
+        stop_p2_browser_after_p0_or_p1_completed: true
+      expected_output:
+        - partial_evidence_card_before_overall_timeout
+        - completed_p0_sources_preserved
+        - p2_browser_marked_timeout_sources
+        - source_quality
+        - missing_evidence
+        - routing_metadata_final_status_partial
+      expected_boundary:
+        - p2_browser_must_not_block_completed_p0_evidence
+        - timeout_not_counter_evidence
+      redaction_required: true
+      pass_criteria: "任一 P0/P1 source completed 后，整体 deadline 前停止扩展 P2 browser，输出 partial evidence card，不裸 timeout。"
+
     - case_id: RT-ATO-003
       test_name: ATO expansion planning
       input_prompt: "基于已确认 ATO case 设计举一返三扩量查询问题"
