@@ -1,5 +1,7 @@
 # Multi-entry Runtime Guard v1
 
+Guard marker: `DENNIS_ROUTING_GUARD_V1`.
+
 ## 1. Supported Entry Points
 
 This guard applies before any Dennis Risk Agent execution from:
@@ -25,6 +27,23 @@ All entries must pass through the same runtime guard before calling Dennis:
 - response length / channel constraint.
 
 The guard must run before tool call, browser access, DataAgent call, or `sessions_spawn`.
+
+Release / overlay readiness gate:
+
+- Before any release or live overlay, run `python3 computer_use_poc/runtime_preflight_check.py`.
+- A checked-in template is not live runtime. Live config must still be validated separately.
+- If runtime config is not applied, mark `runtime_config_not_applied`.
+- If source wrapper is unavailable, expose `source_quality` and do not pretend wrapper-first succeeded.
+
+Platform call preflight:
+
+- Before any realtime platform source, read `computer_use_poc/platform_call_playbook_index.md` and the referenced platform playbook.
+- If memory retrieval fails, fall back to files; do not guess platform paths.
+- 实时只读 API 查询不需要用户确认 when required fields are complete.
+- DataAgent / Hive / 大批量 / 写操作 / 高风险操作需要确认 or query plan.
+- Each source must produce a checkpoint and source_quality.
+- P1/P2 browser source must not block P0 partial evidence output.
+- Old observations must not be used as "no-cache" realtime results.
 
 This guard is a main-agent routing contract, not only a prompt paragraph. The main agent entry layer must produce a normalized routing decision before any downstream task:
 

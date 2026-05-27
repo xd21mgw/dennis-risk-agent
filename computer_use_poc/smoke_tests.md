@@ -6567,3 +6567,73 @@
 - input: `App 发布行为有没有风控命中？`
 - expected_runtime_behavior: app_rcp_hive_source_selected_with_partitions
 - expected_output_boundary: 使用 `ks_raw_log_v2.antispam_feature_map_partitioned`，生命周期 50 天，必须限制 `p_date + p_hourmin + p_action_type`，不得全表扫。
+
+## 665. Release overlay readiness checklist exists
+
+- test_id: RELEASE-OVERLAY-GATE-001
+- input: 检查 `computer_use_poc/release_overlay_readiness_checklist.md`。
+- expected_runtime_behavior: release_overlay_gate_documented
+- expected_output_boundary: 文档覆盖 release 前、overlay 前、live 验证、rollback、不允许项和必须项。
+
+## 666. Runtime preflight check must pass before release or overlay
+
+- test_id: RELEASE-OVERLAY-GATE-002
+- input: `python3 computer_use_poc/runtime_preflight_check.py`
+- expected_runtime_behavior: runtime_preflight_json_summary
+- expected_output_boundary: 输出 JSON，包含 `preflight_pass`、`release_overlay_ready`、`findings`；critical/high 缺口时 fail closed。
+
+## 667. Runner must not regress to dry-run success
+
+- test_id: RELEASE-OVERLAY-GATE-003
+- input: 检查 `computer_use_poc/sso_session_runner.py`。
+- expected_runtime_behavior: controlled_sso_executor_present
+- expected_output_boundary: 不允许 `dry_run_only` success / `constructed_url` only；必须支持 `--platform login_log --action query_user_login_log --user-id --timeout --format`。
+
+## 668. Single user 62950989 realtime regression
+
+- test_id: SINGLE-USER-P0-MULTISOURCE-62950989-001
+- input: `这个用户是不是有问题？从风控角度看一下，user_id=62950989，不走缓存`
+- expected_runtime_behavior: single_entity_execution_mode_with_p0_source_checkpoint
+- expected_output_boundary: 至少完成 runner 链路或结构化 `blocked/auth_failed/timeout`；必须输出 partial evidence card、source_quality 和 routing_metadata；不得使用旧缓存冒充实时结果。
+
+## 669. Realtime readonly API does not ask for user confirmation
+
+- test_id: REALTIME-API-NO-USER-CONFIRM-001
+- input: 字段齐备的单用户实时只读查询。
+- expected_runtime_behavior: readonly_api_executes_or_structured_failure
+- expected_output_boundary: 不允许中途问用户“要不要继续补查”统一登录日志 / Weapon / 天师这类 P0 readonly source；DataAgent / Hive / 大批量 / 写操作 / 高风险操作才需要确认。
+
+## 670. Platform playbook preflight required
+
+- test_id: PLATFORM-PLAYBOOK-PREFLIGHT-001
+- input: 执行统一登录日志 / Weapon / 天师 / 档案中心 / track-analysis 前。
+- expected_runtime_behavior: platform_call_playbook_index_read
+- expected_output_boundary: 必须先读 `platform_call_playbook_index.md` 或对应 playbook；不得因未读 playbook 走错天师 sourceId 链路、档案中心 SPA 激活链路、Weapon user/device 链路。
+
+## 671. Archives Center recoverable preflight
+
+- test_id: ARCHIVES-CENTER-RECOVERABLE-PREFLIGHT-001
+- input: 档案中心用户画像实时读取。
+- expected_runtime_behavior: spa_profile_activation_then_same_origin_api
+- expected_output_boundary: 正确流程是 SPA profile URL / account.p 预填用户名下一步激活 / same-origin fetch `/archives/user/home/info?userId=...`；不得直接定性不可用。
+
+## 672. Tianshi sourceId routing
+
+- test_id: TIANSHI-SOURCEID-ROUTING-001
+- input: 用户策略命中查询。
+- expected_runtime_behavior: fastQueryHbase_sourceid_event_context
+- expected_output_boundary: 天师不是简单 userId 直查；必须按 sourceId / eventId / deviceId 和 fastQueryHbase / rcpEvent 链路，缺字段标 missing_evidence 或 query plan。
+
+## 673. Weapon user-device routing
+
+- test_id: WEAPON-USER-DEVICE-ROUTING-001
+- input: 用户关联设备和设备风险查询。
+- expected_runtime_behavior: graphdata_before_riskdata
+- expected_output_boundary: USER_ID 先走 graphData 到 DEVICE_ID；riskData 只查 device risk，不得把 userId 当 deviceId。
+
+## 674. no_data / blocked / timeout source states are not counter evidence
+
+- test_id: SOURCE-QUALITY-BOUNDARY-001
+- input: 任一平台 source 返回 no_data / blocked / timeout / auth_failed。
+- expected_runtime_behavior: source_quality_boundary
+- expected_output_boundary: 必须进入 `source_quality`，不得输出无风险、低风险、排除 ATO 或策略未命中即无风险。

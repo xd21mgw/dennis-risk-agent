@@ -365,6 +365,148 @@ runtime_validation_suite:
       redaction_required: true
       pass_criteria: "runner 使用白名单 platform/action 和 SmartSSOSession.get 执行统一登录日志 GET；本地缺少 SSO executor 时 fail closed 为 blocked，不退回 dry_run_only 成功。"
 
+    - case_id: PLATFORM-PLAYBOOK-PREFLIGHT-001
+      test_name: platform source call must read playbook first
+      input_prompt: "帮我实时查 user_id=62950989 的登录日志、天师策略命中和档案中心画像，不走缓存。"
+      expected_route:
+        - single_entity_execution_mode
+      expected_preflight:
+        platform_call_playbook_read: true
+        fallback_to_file_when_memory_missing: true
+        selected_index: computer_use_poc/platform_call_playbook_index.md
+      expected_output:
+        - platform_call_preflight
+        - selected_platform
+        - access_method
+        - source_quality
+      expected_denied_actions:
+        - guess_platform_path_without_playbook
+        - old_cache_as_realtime_result
+      redaction_required: true
+      pass_criteria: "执行平台 source 前必须读取 platform_call_playbook_index / 对应 playbook；记忆检索失败时回退到文件，不得猜路径。"
+
+    - case_id: REALTIME-API-NO-USER-CONFIRM-001
+      test_name: realtime readonly API does not require confirmation
+      input_prompt: "这个用户是不是有问题？从风控角度看一下，user_id=62950989，不走缓存。"
+      expected_route:
+        - single_entity_execution_mode
+      expected_runtime_behavior: realtime_readonly_api_executes_without_user_confirmation
+      expected_tool_boundary:
+        readonly_platform_observation_allowed: true
+        user_confirmation_required_for_realtime_api: false
+        dataagent_or_hive_confirmation_required: true
+        write_action_confirmation_required: true
+      expected_output:
+        - evidence_card_or_partial_evidence_card
+        - source_checkpoint
+        - source_quality
+      expected_denied_actions:
+        - ask_user_whether_to_continue_realtime_readonly_source
+        - call_dataagent_without_confirmation
+      redaction_required: true
+      pass_criteria: "字段齐备的实时只读 API 不需要向用户二次确认；DataAgent / Hive / 大批量 / 写操作 / 高风险操作才需要确认。"
+
+    - case_id: ARCHIVES-CENTER-RECOVERABLE-PREFLIGHT-001
+      test_name: archives center SPA recoverable preflight before unavailable judgement
+      input_prompt: "查一下 user_id=62950989 的档案中心画像，不走缓存。"
+      expected_route:
+        - single_entity_execution_mode
+      expected_preflight:
+        playbook_read: true
+        spa_profile_url_first: true
+        account_login_next_step_if_prefilled: true
+        same_origin_fetch_after_activation: true
+      expected_output:
+        - archives_source_status
+        - access_method
+        - source_quality
+      expected_denied_actions:
+        - declare_archives_unavailable_without_recoverable_preflight
+        - browser_ui_loop
+      redaction_required: true
+      pass_criteria: "档案中心正确流程为 SPA 入口 / token 激活 / same-origin fetch 后 API 读取；不能未做 recoverable preflight 就定性不可用。"
+
+    - case_id: TIANSHI-SOURCEID-ROUTING-001
+      test_name: tianshi strategy hit uses sourceId/eventId routing
+      input_prompt: "查一下 user_id=62950989 最近有没有命中过天师策略。"
+      expected_route:
+        - tianshi_strategy_hit_inventory
+        - strategy_hit_overview_lookup
+      expected_preflight:
+        playbook_read: true
+        source_id_or_event_context_required: true
+        fastQueryHbase_preferred: true
+      expected_output:
+        - missing_required_fields_or_strategy_hit_overview
+        - source_quality
+      expected_denied_actions:
+        - simple_user_id_direct_strategy_hit_query
+        - strategy_hit_as_final_risk_judgement
+      redaction_required: true
+      pass_criteria: "天师策略命中不做简单 userId 直查；按 sourceId / eventId / deviceId 和 fastQueryHbase / rcpEvent 链路走，缺字段则 query plan 或 missing_evidence。"
+
+    - case_id: WEAPON-USER-DEVICE-ROUTING-001
+      test_name: Weapon user-device routing separates graphData and riskData
+      input_prompt: "帮我看 user_id=62950989 关联设备和设备风险。"
+      expected_route:
+        - entity_resolution_user_device
+        - device_risk_read
+      expected_preflight:
+        playbook_read: true
+        user_to_device_graphdata_first: true
+        riskdata_only_after_device_id: true
+      expected_denied_actions:
+        - use_user_id_as_device_id_for_riskData
+        - treat_no_relation_as_no_risk
+      expected_output:
+        - graphData_status
+        - device_risk_status_if_device_available
+        - source_quality
+      redaction_required: true
+      pass_criteria: "Weapon USER_ID 先走 graphData 得到 DEVICE_ID；riskData 只查设备风险，不得把 userId 当 deviceId。"
+
+    - case_id: NO-CACHE-NO-STALE-DATA-001
+      test_name: no-cache realtime request must not reuse stale observation
+      input_prompt: "这个用户重新实时查一下，不走缓存，user_id=62950989。"
+      expected_route:
+        - single_entity_execution_mode
+      expected_runtime_behavior: realtime_source_or_structured_source_failure
+      expected_denied_actions:
+        - stale_observation_as_realtime_result
+        - old_cache_without_timestamp
+      expected_output:
+        - collected_at
+        - source_status
+        - source_quality
+        - real_platform_request_executed_or_blocked_reason
+      redaction_required: true
+      pass_criteria: "用户明确不走缓存时，必须调用实时 readonly source 或输出结构化 blocked/auth_failed/timeout；不得用旧数据冒充实时结果。"
+
+    - case_id: SINGLE-USER-P0-MULTISOURCE-62950989-001
+      test_name: single user P0 multisource realtime regression
+      input_prompt: "这个用户是不是有问题？从风控角度看一下，user_id=62950989，不走缓存。"
+      expected_route:
+        - single_entity_execution_mode
+        - ato_case_analysis
+        - multi_evidence_orchestration
+      expected_p0_sources:
+        - unified_login_log
+        - Weapon_graphData_if_needed
+        - tianshi_strategy_hit_summary_if_relevant
+      expected_output:
+        - partial_evidence_card
+        - source_checkpoint
+        - completed_sources_or_blocked_sources
+        - source_quality
+        - routing_metadata
+      expected_boundary:
+        - no_data_not_risk_exclusion
+        - blocked_not_counter_evidence
+        - timeout_not_counter_evidence
+        - no_stale_cache
+      redaction_required: true
+      pass_criteria: "62950989 单用户实时研判至少完成 runner 链路或结构化 blocked/auth_failed/timeout；必须输出 partial evidence card 和 source_quality。"
+
     - case_id: RT-ATO-003
       test_name: ATO expansion planning
       input_prompt: "基于已确认 ATO case 设计举一返三扩量查询问题"

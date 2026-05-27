@@ -147,6 +147,8 @@ release 打包的完整 Skill / Prompt 原文。
 
 ## Multi-entry Runtime Guard
 
+Guard marker: `DENNIS_ROUTING_GUARD_V1`.
+
 ### Runtime Config Apply 前置条件
 
 半开放 readonly runtime config template 不等于 live runtime 已生效。只有 live `openclaw.json` 的 `agents.list` 中存在独立 `dennis-risk-agent` entry，并且该 entry 应用了 `exec.security=allowlist`、`safeBins`、`tools.deny`、`fs.workspaceOnly=true` 和 `loopDetection`，AGENTS.md 中的 wrapper-first / browser fallback / direct exec guard 才是 runtime 硬约束。
@@ -175,6 +177,47 @@ main agent 不得在 dennis timeout 后接管风控平台查询。dennis timeout
 - field output policy selection；
 - DataAgent execution boundary；
 - response length / channel constraint。
+
+### Release / Overlay Readiness Gate
+
+每次 release、overlay 或 live apply 前必须先跑本地门禁：
+
+- 阅读 `computer_use_poc/release_overlay_readiness_checklist.md`。
+- 执行 `python3 computer_use_poc/runtime_preflight_check.py`。
+- 确认 `sso_session_runner.py` 不是 `dry_run_only` / `constructed_url` only。
+- 确认 live config 中 `dennis-risk-agent` 独立 entry、safeBins、tools.deny、workspaceOnly、loopDetection 已实际生效。
+- 确认 `DENNIS_ROUTING_GUARD_V1`、single/small/batch 路由、source checkpoint、partial evidence card、source_quality 均存在。
+
+仓库中存在 template、README、overlay 或 playbook 不等于 live runtime 已生效。若 live config 未 apply，必须标记 `runtime_config_not_applied`，不得宣称 wrapper-first / safeBins / tools.deny 已成为硬约束。
+
+### Platform Call Preflight
+
+执行任何平台 source 前，必须先读取 `computer_use_poc/platform_call_playbook_index.md` 以及对应平台 playbook / TOOLS 条目。不能因为记忆检索失败就假设平台知识丢失；必须回退到仓库内 playbook 文件。
+
+必须先形成：
+
+```yaml
+platform_call_preflight:
+  playbook_read: true
+  selected_platform:
+  selected_source:
+  input_fields:
+  required_fields_missing: []
+  access_method: readonly_wrapper_api | browser_same_origin_fetch | browser_ui_observation
+  fallback_allowed:
+  no_data_boundary:
+```
+
+实时只读 API 查询不需要用户确认，只要必要字段齐备即可执行受控 readonly source。DataAgent / Hive / 大批量 / 写操作 / 高风险操作需要确认或进入 query plan。
+
+禁止：
+
+- 用旧 observation / 历史缓存冒充“不走缓存”的实时查询结果。
+- 在未读 playbook 的情况下猜平台路径。
+- 因档案中心需要 SPA 激活就直接定性为不可用。
+- 把天师策略命中简化为 userId 直查。
+- 把 Weapon `riskData` 的 device risk 当作 userId risk 查询。
+- 把 `no_data` / `blocked` / `timeout` / `auth_failed` 当成无风险反证。
 
 ### ATO 举一返三 / 类似受害者 / 同类攻击 / 扩展排查
 

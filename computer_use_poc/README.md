@@ -646,3 +646,25 @@ python3 computer_use_poc/sso_session_runner.py --platform login_log --action que
 - 本地没有 `SmartSSOSession` 时 fail closed 为结构化 `blocked` observation。
 - 输出统一 observation，不输出 cookie/token/session/header。
 - `auth_failed` / `timeout` / `parse_error` / `blocked` 不得解释为 no_data 或无风险反证。
+
+## Release / Overlay Readiness Gate
+
+新增发布 / overlay 前置门禁：
+
+- `release_overlay_readiness_checklist.md`：release、overlay、live apply、rollback 必检项。
+- `runtime_preflight_check.py`：本地静态 preflight，输出 JSON summary，关键项缺失时 fail closed。
+- `platform_call_playbook_index.md`：统一登录日志、Weapon、天师、档案中心、track-analysis 的平台调用顺序索引。
+
+推荐执行：
+
+```bash
+python3 computer_use_poc/runtime_preflight_check.py
+```
+
+关键口径：
+
+- runner 不能回退到 dry-run URL 构造器。
+- 实时只读 API 查询不需要用户确认；DataAgent / Hive / 大批量 / 写操作 / 高风险操作才需要确认。
+- 执行平台 source 前必须先读 `platform_call_playbook_index.md` 和对应 playbook。
+- `no_data` / `blocked` / `timeout` / `auth_failed` 必须进入 `source_quality`，不得当无风险反证。
+- `62950989` 单用户实时研判作为端到端回归 case 固化。
