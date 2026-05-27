@@ -127,6 +127,9 @@ Behavior:
 - No DataAgent unless explicitly authorized by a separate offline analysis flow.
 - If a source is blocked, timed out, or unavailable, output partial evidence card instead of empty methodology.
 - Required partial fields: `completed_sources`, `blocked_sources`, `timeout_sources`, `parse_error_sources`, `missing_evidence`, `source_quality`, `freshness_status`, `permission_status`, `next_action`.
+- ATO single case with explicit `user_id` stays in `single_entity_execution_mode`; do not downgrade it to plan-only by default.
+- Weapon / login log / archives / strategy hit timeout, auth block, or parse error must degrade to partial evidence card. If all sources fail, output query plan plus missing evidence instead of a bare timeout.
+- Single-case ATO conclusion status must be one of `data_supports_ato_suspicion`, `insufficient_support`, or `data_against_ato_suspicion`.
 
 ### B. plan mode
 

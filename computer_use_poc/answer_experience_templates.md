@@ -163,10 +163,11 @@ Routing Summary:
 - `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- metadata 必须使用 YAML block，不得输出 JSON routing metadata。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - 如果本轮未调用平台，`platform_called=false` 且 `platform_call_summary: []`。
 - 如果本轮未调用 DataAgent，`dataagent_called=false`。
-- 正常情况下 `sensitive_output=false`；如发生安全拒绝，仍应保持 `sensitive_output=false` 并标 `execution_mode=refusal`。
+- 正常情况下 `sensitive_output=false`；如发生安全拒绝，仍应保持 `sensitive_output=false` 并标 `execution_mode=denied`。
 
 标准 schema：
 
@@ -176,18 +177,26 @@ routing_metadata:
   capability: "<selected_capability>"
   sub_capability: "<selected_sub_capability_or_null>"
   intent_type: "<user_intent_type>"
-  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
-  query_plan_only: true
+  execution_mode: "plan_mode | execution_mode | single_entity_execution_mode | batch_clustering_mode | expert_mode | denied"
+  evidence_mode: "evidence_card | expert_reasoning | batch_pattern_summary | strategy_recommendation | partial_evidence"
+  query_plan_only: false
   platform_called: false
   platform_call_summary:
     - platform:
       action:
       status:
   dataagent_called: false
+  direct_tool_bypass: false
   sensitive_output: false
   redaction_applied: true
   boundary_flags:
     - "<boundary_flag_1>"
+  source_quality:
+    completed_sources: []
+    blocked_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
   missing_required_fields:
     - "<field_name>"
   partial_reason: "<reason_or_null>"
@@ -201,18 +210,22 @@ routing_metadata:
 - `sub_capability`：子能力，例如 `policy_detail_lookup`、`attach_policy_attribution`；无子能力时为 `null`。
 - `intent_type`：用户意图类型，例如 `strategy_governance`、`strategy_hit_inventory`、`generic_risk_review`、`real_name_boundary`。
 - `execution_mode`：
-  - `execution`：允许的只读执行。
-  - `query_plan`：只输出查询计划，不执行。
-  - `expert_analysis`：专家分析，不调平台。
-  - `refusal`：安全拒绝。
-  - `partial`：部分完成 / 降级。
+  - `execution_mode`：允许的只读执行。
+  - `single_entity_execution_mode`：明确单用户 / 单设备 / 单 case 只读执行。
+  - `plan_mode`：只输出查询计划，不执行。
+  - `expert_mode`：专家分析，不调平台。
+  - `batch_clustering_mode`：批量聚类 / 分层分析，不逐个在线查。
+  - `denied`：安全拒绝。
+- `evidence_mode`：回答证据形态，标准值为 `evidence_card`、`expert_reasoning`、`batch_pattern_summary`、`strategy_recommendation`、`partial_evidence`。
 - `query_plan_only`：是否属于 asset map / ANTICRAWL candidate / real-name partial contract 这类只能 query plan 的能力。
 - `platform_called`：本轮是否实际调用真实平台。
 - `platform_call_summary`：如调用平台，列出平台、动作和状态；无调用时为空数组。
 - `dataagent_called`：本轮是否调用 DataAgent。
+- `direct_tool_bypass`：main agent 是否绕过 dennis-risk-agent 直接执行工具；正常必须为 `false`。
 - `sensitive_output`：是否输出敏感原文；正常必须为 `false`。
 - `redaction_applied`：是否进行了脱敏或安全摘要化。
 - `boundary_flags`：关键边界标记。
+- `source_quality`：本轮来源完成、受阻、超时、解析失败和缺失情况；没有来源时使用空数组。
 - `missing_required_fields`：缺失字段，例如 `eventId`、`eventType`、`queryTime`、`policyCode`、`sourceId`、`time_window`。
 - `partial_reason`：partial 原因，例如 `event_detail_timeout`、`session_history_visibility_restricted`、`missing_input`；无则为 `null`。
 - `final_status`：最终状态。
@@ -240,15 +253,23 @@ routing_metadata:
   capability: tianshi_strategy_governance_readonly
   sub_capability: single_event_policy_attribution
   intent_type: strategy_governance
-  execution_mode: query_plan
+  execution_mode: plan_mode
+  evidence_mode: expert_reasoning
   query_plan_only: false
   platform_called: false
   platform_call_summary: []
   dataagent_called: false
+  direct_tool_bypass: false
   sensitive_output: false
   redaction_applied: true
   boundary_flags:
     - attribution_not_cheating_judgement
+  source_quality:
+    completed_sources: []
+    blocked_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
   missing_required_fields:
     - eventId
     - eventType
@@ -265,15 +286,23 @@ routing_metadata:
   capability: account_security_expert_mode
   sub_capability: null
   intent_type: generic_risk_review
-  execution_mode: expert_analysis
+  execution_mode: expert_mode
+  evidence_mode: expert_reasoning
   query_plan_only: false
   platform_called: false
   platform_call_summary: []
   dataagent_called: false
+  direct_tool_bypass: false
   sensitive_output: false
   redaction_applied: true
   boundary_flags:
     - generic_risk_no_default_specialized_capability
+  source_quality:
+    completed_sources: []
+    blocked_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
   missing_required_fields: []
   partial_reason: null
   final_status: answered
@@ -283,14 +312,14 @@ routing_metadata:
 
 | 场景 | route | capability | sub_capability | execution_mode | query_plan_only | 必须包含 boundary_flags |
 |---|---|---|---|---|---|---|
-| 单事件策略归因 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `query_plan` 或 `execution` | false | `attribution_not_cheating_judgement` |
-| 策略详情 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `query_plan` 或 `expert_analysis` | false | `expression_not_business_causality` |
-| 策略命中盘点 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `query_plan` 或 `execution` | false | `strategy_hit_not_final_risk_judgement` |
-| live attach | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `partial` 或 `query_plan` | false | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
-| 业务安全资产地图 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | null | `query_plan` | true | `asset_map_not_executable` |
-| ANTICRAWL | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | null | `query_plan` | true | `anticrawl_candidate_only`, `not_executable_runtime` |
-| 实名字段边界 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | null | `refusal` 或 `query_plan` | true | `real_name_no_raw_identity`, `not_identity_runtime` |
-| 泛风险问题 | `multi_evidence_orchestration` | `account_security_expert_mode` 或 `multi_evidence_orchestration_contracts` | null | `expert_analysis` 或 `query_plan` | false | `generic_risk_no_default_specialized_capability` |
+| 单事件策略归因 | `single_event_policy_attribution` | `tianshi_strategy_governance_readonly` | `single_event_policy_attribution` | `plan_mode` 或 `execution_mode` | false | `attribution_not_cheating_judgement` |
+| 策略详情 | `policy_detail_lookup` | `tianshi_strategy_governance_readonly` | `policy_detail_lookup` | `plan_mode` 或 `expert_mode` | false | `expression_not_business_causality` |
+| 策略命中盘点 | `tianshi_strategy_hit_inventory` | `tianshi_strategy_hit_inventory` | `strategy_hit_overview_lookup` | `plan_mode` 或 `execution_mode` | false | `strategy_hit_not_final_risk_judgement` |
+| live attach | `tianshi_live_attach_attribution_candidate` | `tianshi_live_attach_attribution_candidate` | `attach_policy_attribution` | `plan_mode` 或 `execution_mode` | false | `live_attach_beta_partial`, `event_detail_timeout_not_no_data` |
+| 业务安全资产地图 | `business_security_scene_asset_mapping` | `business_security_scene_asset_mapping` | null | `plan_mode` | true | `asset_map_not_executable` |
+| ANTICRAWL | `tianshi_anticrawl_family_candidate` | `tianshi_anticrawl_family_candidate` | null | `plan_mode` | true | `anticrawl_candidate_only`, `not_executable_runtime` |
+| 实名字段边界 | `real_name_feature_service_partial_contract` | `real_name_feature_service_partial_contract` | null | `denied` 或 `plan_mode` | true | `real_name_no_raw_identity`, `not_identity_runtime` |
+| 泛风险问题 | `multi_evidence_orchestration` | `account_security_expert_mode` 或 `multi_evidence_orchestration_contracts` | null | `expert_mode` 或 `plan_mode` | false | `generic_risk_no_default_specialized_capability` |
 
 标准名称映射表：
 
@@ -318,6 +347,9 @@ routing_metadata:
 ```text
 结论：当前只能形成 partial evidence card，不能空研判。
 
+结论状态:
+- conclusion_status: data_supports_ato_suspicion | insufficient_support | data_against_ato_suspicion
+
 已完成来源:
 - completed_sources:
 
@@ -342,6 +374,8 @@ source quality:
 - next_action:
 - whether_dataagent_required:
 ```
+
+ATO 单案明确 `user_id` 时仍然是 `single_entity_execution_mode`，不是默认 plan-only。只读平台可以查询，但任一 source timeout / auth blocked / parse error 都必须降级为 partial evidence card。Weapon 超时但登录日志完成时，基于登录日志等已完成 source 输出 partial judgement；所有平台都失败时，输出 query plan + missing evidence，不得裸 timeout。
 
 边界：timeout / no_data / blocked 不是无风险反证；查不了要说明原因，不能只给方法论。
 

@@ -24,6 +24,9 @@ from typing import Any
 
 DEFAULT_LOG_DIR_RELATIVE = Path("semi_open_pilot_logs")
 DEFAULT_CANDIDATE_QUEUE_RELATIVE = Path("runtime_logs/question_collection/question_learning_candidate_queue_v1.csv")
+SOURCE_TEMPLATE_QUEUE_SUFFIX = "computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv"
+RELEASE_TEMPLATE_QUEUE_MARKER = "/outputs/release/"
+RELEASE_TEMPLATE_QUEUE_SUFFIX = "/question_collection/question_learning_candidate_queue_v1.csv"
 
 CANDIDATE_QUEUE_HEADER = [
     "candidate_id",
@@ -128,7 +131,22 @@ def resolve_log_dir_path(log_dir_arg: str | None) -> tuple[Path, str]:
 
 
 def resolve_candidate_queue_path(candidate_queue_arg: str | None) -> tuple[Path, str]:
-    return resolve_runtime_path(candidate_queue_arg, DEFAULT_CANDIDATE_QUEUE_RELATIVE, "explicit_candidate_queue")
+    candidate_queue, resolution = resolve_runtime_path(
+        candidate_queue_arg,
+        DEFAULT_CANDIDATE_QUEUE_RELATIVE,
+        "explicit_candidate_queue",
+    )
+    assert_candidate_queue_path_allowed(candidate_queue)
+    return candidate_queue, resolution
+
+
+def assert_candidate_queue_path_allowed(candidate_queue: Path) -> None:
+    """Prevent runtime writes to source-tree or release template queues."""
+    candidate_posix = candidate_queue.as_posix()
+    if candidate_posix.endswith(SOURCE_TEMPLATE_QUEUE_SUFFIX):
+        raise ValueError("candidate_queue_must_not_target_source_template_csv")
+    if RELEASE_TEMPLATE_QUEUE_MARKER in candidate_posix and candidate_posix.endswith(RELEASE_TEMPLATE_QUEUE_SUFFIX):
+        raise ValueError("candidate_queue_must_not_target_release_template_csv")
 
 
 def combine_path_resolution(log_resolution: str, candidate_resolution: str) -> str:

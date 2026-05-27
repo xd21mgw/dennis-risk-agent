@@ -31,14 +31,20 @@ semi_open_pilot_logs/YYYY-MM-DD.md
 High-value feedback candidates may be appended to:
 
 ```text
-runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+If `DENNIS_AGENT_HOME` is absent, the local writer must resolve the `dennis-risk-agent` repo root from `pilot_observation_writer.py` and append to:
+
+```text
+<dennis-risk-agent-repo-root>/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 ```
 
 This runtime CSV is separate from the source-tree template CSV.
 
 Observation log and candidate queue path resolution must be stable:
 
-1. `pilot_observation_writer.py --log-dir <path>` and `--candidate-queue <path>` use explicit paths.
+1. `pilot_observation_writer.py --log-dir <path>` and `--candidate-queue <path>` use explicit paths for local tests only; `--candidate-queue` must not point to the source-tree template CSV or release package template CSV.
 2. `DENNIS_AGENT_HOME` uses `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
 3. If the env var is absent, the writer resolves the repo root from the script path.
 4. Only if repo-root detection fails, the writer may use CWD and must report `path_resolution=fallback_cwd`.
@@ -77,6 +83,8 @@ outputs/release/<release_name>/question_collection/question_learning_candidate_q
 ```
 
 The release copy of the CSV remains a template. It is not a live learning queue.
+
+`pilot_observation_writer.py` must fail closed before appending if an explicit candidate queue path resolves to either forbidden template target.
 
 ## 5. Required Record Shape
 

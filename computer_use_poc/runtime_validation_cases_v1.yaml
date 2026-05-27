@@ -51,6 +51,39 @@ runtime_validation_suite:
       redaction_required: true
       pass_criteria: "输出 batch-level finding，不自动扩量"
 
+    - case_id: SINGLE-ATO-EXECUTION-PARTIAL-FALLBACK-001
+      test_name: ATO single case execution partial fallback
+      input_prompt: "这个用户疑似被盗，user_id=290534602，帮我判断是否疑似 ATO。"
+      expected_route:
+        - ato_case_analysis
+        - account_security_expert_mode
+      expected_routing_mode: single_entity_execution_mode
+      expected_tool_boundary:
+        readonly_platform_observation_allowed: true
+        platform_called_allowed: true
+        dataagent_called: false
+        auto_batch_expansion_allowed: false
+      expected_output:
+        - partial_evidence_card_if_any_source_fails
+        - completed_sources
+        - blocked_sources
+        - timeout_sources
+        - parse_error_sources
+        - missing_evidence
+        - source_quality
+        - next_action
+        - conclusion_status
+      expected_conclusion_status_values:
+        - data_supports_ato_suspicion
+        - insufficient_support
+        - data_against_ato_suspicion
+      expected_boundary:
+        - no_data_timeout_blocked_not_counter_evidence
+        - weapon_timeout_does_not_block_completed_sources
+        - all_sources_failed_outputs_query_plan_and_missing_evidence
+      redaction_required: true
+      pass_criteria: "明确 user_id 的 ATO 单案进入 single_entity_execution_mode；只读平台失败时输出 partial evidence card，不裸 timeout，不调用 DataAgent，不扩量。"
+
     - case_id: RT-ATO-003
       test_name: ATO expansion planning
       input_prompt: "基于已确认 ATO case 设计举一返三扩量查询问题"

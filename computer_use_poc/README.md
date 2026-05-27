@@ -185,7 +185,7 @@ Security Preflight Current Status：
 - 当前暂放 `computer_use_poc/question_collection/`；长期建议迁移到 `runtime/question_collection/` 或 `learning/question_collection/`。
 - 不访问真实内部平台，不调用 DataAgent，不保存 cookie / token / session / header。
 - 半开放 runtime 真实问题必须 append-only 写入 `runtime_logs/question_collection/question_records_YYYYMMDD.jsonl`；`question_learning_candidate_queue_v1.csv` 只是只读模板，不能被覆盖写入。
-- 半开放用户后续反馈通过 `pilot_observation_writer.py` 追加写入 `semi_open_pilot_logs/YYYY-MM-DD.md`；高价值反馈追加到 `runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`，不覆盖模板 CSV。
+- 半开放用户后续反馈通过 `pilot_observation_writer.py` 追加写入 `semi_open_pilot_logs/YYYY-MM-DD.md`；高价值反馈追加到 `$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`，无 `DENNIS_AGENT_HOME` 时从脚本路径解析 repo root 后写入 `<repo-root>/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`，不覆盖模板 CSV。
 
 本阶段新增资产：
 
@@ -441,7 +441,7 @@ v2.4.5 archives center user profile P0 tabs deep-read validated
 - 非注册 / 登录 runtime candidate dry-run 已新增：`computer_use_poc/run_logs/non_register_login_runtime_candidate_dryrun_v1.md`。本轮轻量接入 `tianshi_live_attach_attribution_candidate`、`business_security_scene_asset_mapping`、`tianshi_anticrawl_family_candidate` 的 registry / routing / answer templates；其中 live attach 是 beta partial candidate，资产地图和 ANTICRAWL 仅为 asset_index / query_plan，不是可执行完整研判能力。
 - 实名数据服务 partial contract 已新增：`computer_use_poc/real_name_feature_service_partial_contract_v1.md`。该文档沉淀 `EB_USER_REAL_NAME_VERILY__1` 最小复测结果：`sourceId` 映射为 userId，`activityName` 是调用条件字段且当前可用值为 `MERCHANT_NEWSHOP_OPEN_AWARD`，`sid=kuaishou.api` 由特征配置自动填充；当前实际只返回 `idNo`，输出只能使用省份、城市级可用性、年龄段、性别等派生摘要，不输出姓名、身份证号、身份证前 6 位、完整生日或手机号，也不注册 identity runtime 能力。
 - 实名数据服务 partial contract 已完成轻量 registry / routing / template 接入：capability 为 `real_name_feature_service_partial_contract`，状态为 `partial_contract / redaction_schema_only / query_plan_only`。它只输出调用契约、参数映射和脱敏 schema，不执行真实查询，不新增接口，不注册 identity runtime，不包装本人 / 盗号判断能力。
-- `routing_metadata` 输出契约已新增：`answer_experience_templates.md`、`scene_to_capability_routing.md` 和 `AGENTS.md` 要求 dennis-risk-agent 所有正式回答末尾追加机器可读 routing block，包含 route、capability、sub_capability、execution_mode、platform_called、dataagent_called、sensitive_output、boundary_flags、missing_required_fields 和 final_status。该契约用于 main agent / 观测日志 / 验收测试读取子 agent 内部路由结果，不依赖跨 session history，不新增接口，不改变风控判断逻辑。
+- `routing_metadata` 输出契约已新增：`answer_experience_templates.md`、`scene_to_capability_routing.md` 和 `AGENTS.md` 要求 dennis-risk-agent 所有正式回答末尾追加机器可读 YAML routing block，包含 route、capability、sub_capability、execution_mode、evidence_mode、platform_called、dataagent_called、direct_tool_bypass、sensitive_output、boundary_flags、source_quality、missing_required_fields 和 final_status。该契约用于 main agent / 观测日志 / 验收测试读取子 agent 内部路由结果，不依赖跨 session history，不新增接口，不改变风控判断逻辑。
 - `routing_metadata` 命名稳定性已补强：`route` 必须使用 `scene_to_capability_routing.md` 的正式 route，`capability` 必须使用 `capability_registry.md` 的正式 capability，`sub_capability` 和 `boundary_flags` 必须使用标准名。禁止把 `route` 写成 `dennis-risk-agent`，禁止把 capability 写成 `strategy_attribution`、`user_risk_profile` 等自创名；不确定时优先使用 `multi_evidence_orchestration`。
 
 Auth preflight：

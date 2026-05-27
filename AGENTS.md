@@ -269,7 +269,11 @@ Step 3: ATO 单 case 精简 execution
 - 优先在线只读 observation：登录日志、Weapon、档案中心、策略命中、前端行为。
 - 不默认走 DataAgent，不默认只给方法论。
 - timeout 默认 180s，复杂单用户 240s。
-- 失败时输出 partial evidence card。
+- 任一只读平台 timeout / auth blocked / parse error 时必须输出 partial evidence card，不得裸 timeout。
+- partial evidence card 必须包含 `completed_sources`、`blocked_sources`、`timeout_sources`、`parse_error_sources`、`missing_evidence`、`source_quality`、`next_action`。
+- 如果 Weapon 超时但登录日志等来源已完成，应基于已完成 source 输出 partial judgement。
+- 如果所有平台都失败，也必须输出 query plan + missing evidence，不得卡死或空研判。
+- ATO 单案结论必须区分 `data_supports_ato_suspicion` / `insufficient_support` / `data_against_ato_suspicion`。
 - DataAgent / Hive 只在超窗、3+ 批量、长窗口离线补查、复杂 SQL / Hive、发布链路 / token 长周期 / 跨表分析时，经用户确认后进入 query plan 或离线流程。
 
 ### 证据边界问题默认纯分析
@@ -409,15 +413,23 @@ routing_metadata:
   capability: "<selected_capability>"
   sub_capability: "<selected_sub_capability_or_null>"
   intent_type: "<user_intent_type>"
-  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
-  query_plan_only: true
+  execution_mode: "plan_mode | execution_mode | single_entity_execution_mode | batch_clustering_mode | expert_mode | denied"
+  evidence_mode: "evidence_card | expert_reasoning | batch_pattern_summary | strategy_recommendation | partial_evidence"
+  query_plan_only: false
   platform_called: false
   platform_call_summary: []
   dataagent_called: false
+  direct_tool_bypass: false
   sensitive_output: false
   redaction_applied: true
   boundary_flags:
     - "<boundary_flag>"
+  source_quality:
+    completed_sources: []
+    blocked_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
   missing_required_fields: []
   partial_reason: null
   final_status: "answered | needs_input | partial | refused | failed"
@@ -429,11 +441,15 @@ routing_metadata:
 - `capability` 必须使用 `computer_use_poc/capability_registry.md` 中的正式 capability 名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- `routing_metadata` 必须是 YAML block，不得输出 JSON metadata。
 - 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
 - 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
+- `execution_mode` 必须使用标准枚举：`plan_mode`、`execution_mode`、`single_entity_execution_mode`、`batch_clustering_mode`、`expert_mode`、`denied`。
+- `evidence_mode` 必须使用标准枚举：`evidence_card`、`expert_reasoning`、`batch_pattern_summary`、`strategy_recommendation`、`partial_evidence`。
 - 未调用真实平台时，`platform_called=false`，`platform_call_summary=[]`。
 - 未调用 DataAgent 时，`dataagent_called=false`。
+- 未发生 main agent direct exec bypass 时，`direct_tool_bypass=false`。
 - 正常必须 `sensitive_output=false`。
 - asset map / ANTICRAWL candidate / real-name partial contract 必须 `query_plan_only=true`。
 - 缺字段时 `final_status=needs_input`，`missing_required_fields` 非空。

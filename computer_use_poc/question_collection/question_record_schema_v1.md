@@ -75,12 +75,12 @@ Required fields:
 | `should_enter_candidate_queue` | boolean | yes | true for non-useful high-value feedback |
 | `sanitized_feedback_text` | string | yes | no cookie/token/session/header/phone plaintext |
 
-High-value feedback can be appended to the runtime candidate queue. The source-tree `question_learning_candidate_queue_v1.csv` remains a template and must not be overwritten by runtime.
+High-value feedback can be appended to the runtime candidate queue. The source-tree `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv` remains a template and must not be overwritten by runtime.
 
 Runtime observation log and candidate queue path resolution:
 
 1. explicit `--log-dir <path>` and / or `--candidate-queue <path>`
-2. `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`
+2. `$DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and `$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`
 3. repo root detected from `pilot_observation_writer.py`
 4. current CWD fallback with `path_resolution=fallback_cwd`
 
@@ -123,7 +123,7 @@ Runtime candidate queue CSV schema:
 candidate_id,timestamp,source_channel,linked_log_id,user_prompt,agent_answer_summary,feedback_type,feedback_text,issue_tags,suggested_fix_area,priority,review_status,notes
 ```
 
-The template CSV may contain demo rows only. Runtime rows must be written to `runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`, not the source-tree template.
+The template CSV may contain demo rows only. Runtime rows must be written to `$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv` when `DENNIS_AGENT_HOME` is set, otherwise to `<dennis-risk-agent-repo-root>/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`. Runtime must not write to the source-tree template or release package template CSV.
 
 ## 3. agent_observed
 

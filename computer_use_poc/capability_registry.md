@@ -88,7 +88,7 @@
 
 | mode | trigger | default behavior | boundary |
 |---|---|---|---|
-| `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card；每条证据带 `evidence_type` / `strength` | 不默认 DataAgent，不空研判；不把 user_claim / behavior_event / inference 写成 raw_evidence |
+| `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card；每条证据带 `evidence_type` / `strength`；ATO 单案 source timeout / auth blocked / parse error 时仍输出 completed / blocked / timeout / parse_error / missing evidence、source_quality 和 next_action | 不默认 DataAgent，不空研判；不把 user_claim / behavior_event / inference 写成 raw_evidence；不把 no_data / timeout / blocked 当无风险反证 |
 | `evidence_boundary_mode` | no_data / timeout / blocked / 设备关联 / 模型分 / 用户反馈是否能定性 | 纯分析，30s 内短答 | 不自动查平台，不把弱信号当强证据 |
 | `strategy_recommendation_plan_mode` | 灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案 | 输出策略框架、补证字段、DataAgent/Hive query plan | 即使带 user_id 也不自动 execution |
 | `batch_plan_mode` | 3+ 用户 / 设备、批量、共性归因、分层判断 | 输出 batch plan、case registry 字段、证据分层框架 | 不逐个在线查，确认后才 batch execution |

@@ -104,14 +104,20 @@ High-value feedback types enter the runtime candidate queue:
 The runtime candidate queue path is:
 
 ```text
-runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+$DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
 ```
 
-The source-tree `question_learning_candidate_queue_v1.csv` remains a demo template and must not be overwritten by runtime.
+If `DENNIS_AGENT_HOME` is not set, the writer resolves the `dennis-risk-agent` repo root from `pilot_observation_writer.py` and writes to:
+
+```text
+<dennis-risk-agent-repo-root>/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv
+```
+
+The source-tree `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv` remains a demo template and must not be overwritten by runtime. Release package copies of `question_collection/question_learning_candidate_queue_v1.csv` are also templates and must not receive runtime writes.
 
 Runtime path resolution is stable and does not depend on arbitrary CWD. Observation logs and candidate queue use the same resolution order:
 
-1. `--log-dir <path>` wins for observation logs; `--candidate-queue <path>` wins for candidate queue.
+1. `--log-dir <path>` wins for observation logs; `--candidate-queue <path>` is allowed only for explicit local testing and must not point to the source-tree or release template CSV.
 2. If `DENNIS_AGENT_HOME` is set, writer uses:
    `DENNIS_AGENT_HOME/semi_open_pilot_logs/YYYY-MM-DD.md` and
    `DENNIS_AGENT_HOME/runtime_logs/question_collection/question_learning_candidate_queue_v1.csv`.
@@ -133,6 +139,7 @@ python3 computer_use_poc/question_collection/pilot_observation_writer.py \
 
 Writer output always includes `candidate_queue_path` and `path_resolution`.
 It also includes `log_path_resolution` and `candidate_queue_path_resolution`.
+If a caller attempts to write the runtime queue into `computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv` or a release package template CSV, the writer fails closed before appending.
 
 Observation log format is markdown-only for this writer. Each record is a markdown block containing one JSON metadata block. The metadata block must include:
 

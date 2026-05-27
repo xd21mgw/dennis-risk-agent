@@ -98,7 +98,7 @@ Multi-entry runtime guard：
 Semi-open experience patch v1 路由补丁：
 
 - `explicit_query_not_empty_analysis`：用户明确说“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中 / 判断这个具体 case”等，默认 `single_entity_execution_mode` 或 partial evidence card；不能只输出方法论。
-- `single_entity_execution_mode`：ATO 单案有明确 `user_id` / `event_time` / `abnormal_action` 时，优先在线只读 observation，不默认绕 DataAgent；超窗、3+ 批量、长窗口离线补查、复杂 SQL/Hive 时才生成 DataAgent/Hive plan 并等待确认。
+- `single_entity_execution_mode`：ATO 单案有明确 `user_id` / `event_time` / `abnormal_action` 时，优先在线只读 observation，不默认绕 DataAgent，也不得改成默认 plan-only；超窗、3+ 批量、长窗口离线补查、复杂 SQL/Hive 时才生成 DataAgent/Hive plan 并等待确认。
 - `evidence_boundary_mode`：登录日志 no_data、设备关联、模型分、用户反馈、blocked/timeout/no_data 解释类问题默认纯分析，不自动查平台。
 - `strategy_plan_mode_priority`：灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案类问题即使带 `user_id`，也默认 `strategy_recommendation_plan_mode`。
 - `batch_plan_mode`：3+ `user_id` / `device_id` 或“这批 / 批量 / 多个 / 5个 / 100个 / 共性归因 / 分层判断”默认 plan_mode，不逐个在线查。
@@ -106,6 +106,7 @@ Semi-open experience patch v1 路由补丁：
 - `non_ato_browser_guard`：反爬、协议、导流截流、活动作弊、渠道套利、群控泛化分析先专家分析，不默认 browser / 档案中心。
 - `browser_session_bridge` / `auth_html_fast_fallback`：browser auth blocked、2FA、HTML/auth page、cookie bridge missing 均快速降级，不反复尝试。
 - `timeout_fallback`：任何 timeout 必须输出 partial evidence card，包含 completed / timeout / blocked / parse_error / missing evidence 和 next_action。
+- `single_ato_execution_partial_fallback`：明确 `user_id` 的 ATO 单案可查统一登录日志、Weapon、档案中心、策略命中等只读平台；任一平台 timeout / auth blocked / parse error 时必须输出 partial evidence card。Weapon 超时但其他来源完成时基于 completed source 输出 partial judgement；所有平台失败时输出 query plan + missing evidence，不裸 timeout。结论状态只能是 `data_supports_ato_suspicion` / `insufficient_support` / `data_against_ato_suspicion`。
 - `answer_length_control`：专家问答约 500 字内，批量分析约 800 字内，失败降级短答优先。
 - `BC-HARMONY-ATO-001`：批量 ATO 中出现 kick_out、password fail、CAPTCHA、同 IP、多设备切换，且部分日志出现 `HARMONY_` 设备、token issued、token revoke、后续小米 / Android 改密或密码验证失败时，不得直接定性撞库；必须抽 3-5 个代表用户做逐条 timeline，并对比“撞库 ATO vs 一键登录 / 三方授权 / 鸿蒙一键登录 ATO”。
 - `evidence_type_separation`：单案证据卡必须区分 `raw_evidence` / `behavior_event` / `user_claim` / `inference` / `hypothesis` / `missing_evidence`；用户反馈被盗是 weak `user_claim`，违规发布是 `behavior_event`，未查到的钓鱼页 / OAuth / 前端行为必须写 missing。
@@ -627,15 +628,23 @@ routing_metadata:
   capability: "<selected_capability>"
   sub_capability: "<selected_sub_capability_or_null>"
   intent_type: "<user_intent_type>"
-  execution_mode: "execution | query_plan | expert_analysis | refusal | partial"
-  query_plan_only: true
+  execution_mode: "plan_mode | execution_mode | single_entity_execution_mode | batch_clustering_mode | expert_mode | denied"
+  evidence_mode: "evidence_card | expert_reasoning | batch_pattern_summary | strategy_recommendation | partial_evidence"
+  query_plan_only: false
   platform_called: false
   platform_call_summary: []
   dataagent_called: false
+  direct_tool_bypass: false
   sensitive_output: false
   redaction_applied: true
   boundary_flags:
     - "<boundary_flag>"
+  source_quality:
+    completed_sources: []
+    blocked_sources: []
+    timeout_sources: []
+    parse_error_sources: []
+    missing_sources: []
   missing_required_fields: []
   partial_reason: null
   final_status: "answered | needs_input | partial | refused | failed"
@@ -647,6 +656,7 @@ routing_metadata:
 - `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
+- `routing_metadata` 必须是 YAML block，不得输出 JSON 或自定义字段名替代标准字段。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - `single_event_policy_attribution`：capability=`tianshi_strategy_governance_readonly`，boundary 包含 `attribution_not_cheating_judgement`；缺 `eventId` / `eventType` / `queryTime` 时 `final_status=needs_input`。
 - `policy_detail_lookup`：capability=`tianshi_strategy_governance_readonly`，sub_capability=`policy_detail_lookup`。
@@ -654,7 +664,7 @@ routing_metadata:
 - `tianshi_live_attach_attribution_candidate`：boundary 必须包含 `live_attach_beta_partial` 和 `event_detail_timeout_not_no_data`。
 - `business_security_scene_asset_mapping`：`query_plan_only=true`，boundary 包含 `asset_map_not_executable`。
 - `tianshi_anticrawl_family_candidate`：`query_plan_only=true`，boundary 包含 `anticrawl_candidate_only` 和 `not_executable_runtime`。
-- `real_name_feature_service_partial_contract`：`query_plan_only=true`；敏感字段请求时 `execution_mode=refusal`，boundary 包含 `real_name_no_raw_identity` 和 `not_identity_runtime`。
+- `real_name_feature_service_partial_contract`：`query_plan_only=true`；敏感字段请求时 `execution_mode=denied`，boundary 包含 `real_name_no_raw_identity` 和 `not_identity_runtime`。
 - 泛风险问题：route=`multi_evidence_orchestration`，boundary 包含 `generic_risk_no_default_specialized_capability`；不得默认标完整策略治理、attach、ANTICRAWL 或实名能力为执行能力。
 
 ## 0G. Agent Safety Routing Guardrails
