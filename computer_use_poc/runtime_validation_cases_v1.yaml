@@ -1642,3 +1642,41 @@ sso_runner_auth_refresh_retry_regression:
       - final_auth_failed
       - source_quality_auth_session_issue
     pass_fail_criteria: "最多 refresh + retry 一次；retry 后仍失败必须返回 auth_failed，不进入循环。"
+
+p0_multisource_orchestration_gate_regression:
+  - case_id: SINGLE-USER-P0-MULTISOURCE-NO-STOP-AFTER-LOGINLOG-001
+    input: "单用户账号安全 / ATO 研判，user_login_unified_log 返回 no_data。"
+    expected_routing_mode: single_entity_execution_mode
+    expected_output_boundary:
+      - p0_multisource_orchestration_gate
+      - login_log_not_terminal_source
+      - weapon_graphdata_next_source
+      - partial_evidence_card_if_p0_incomplete
+    pass_fail_criteria: "不得在 login_log no_data 后停止；必须继续尝试 Weapon USER_ID->DEVICE_ID graphData、device riskData、天师/档案中心可用性补查，并按 source checkpoint 输出。"
+  - case_id: WEAPON-APIV2-PATH-HARD-RULE-001
+    input: "ATO 单案需要从 user_id 解析设备并查设备风险。"
+    expected_routing_mode: account_security_p0_source_orchestration
+    expected_output_boundary:
+      - weapon_apiv2_graphdata_required
+      - weapon_apiv2_riskdata_required
+      - no_api_graphdata_default
+      - source_quality_on_apiv2_failure
+    pass_fail_criteria: "默认路径必须使用 `/apiv2/graphData` 和 `/apiv2/riskData`；不得把 `/api/graphData` 写成默认路径，也不得在 `/apiv2/*` 失败后自由探索错误路径。"
+  - case_id: LOGINLOG-NODATA-DOES-NOT-END-JUDGEMENT-001
+    input: "统一登录日志 source_status=no_data，用户问这个账号是否有问题。"
+    expected_routing_mode: single_entity_execution_mode
+    expected_output_boundary:
+      - no_data_not_risk_exclusion
+      - login_log_not_terminal_source
+      - missing_evidence_required
+      - source_quality_required
+    pass_fail_criteria: "login_log no_data 只能进入 source_quality / missing_evidence，不能输出低风险、无风险或结束研判。"
+  - case_id: TRACK-ANALYSIS-ENDPOINT-NOT-CONFIRMED-NOT-COMPLETED-001
+    input: "账号安全 P0 编排中提到 track-analysis，但当前 runtime 未验证可执行 endpoint。"
+    expected_routing_mode: supporting_source_boundary
+    expected_output_boundary:
+      - pending_api_direct_confirmation
+      - source_gap
+      - not_completed_source
+      - no_blocking_p0_evidence_card
+    pass_fail_criteria: "track-analysis 合同存在但 endpoint 未验证时，不得标 completed；应降级为 pending/source_gap，且不阻塞 P0 partial evidence card。"

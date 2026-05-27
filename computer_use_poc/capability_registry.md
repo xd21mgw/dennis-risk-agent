@@ -83,6 +83,7 @@
   - observation：`profile_card`、`device_ids`、`latest_datetime`、`uid_did_relation_latest_datetime`、`daily_duration_rows`、`total_duration`、`peak_duration`、`first_active_date`、`register_time`、`fan_distribution`、`active_days_bucket`。
   - event-day alignment：登录成功日、扫码日、设备切换日、策略命中日若后端有登录 / 扫码 / 命中但对应 userId/deviceId 前端 duration=0 或无活跃，应标 `front_backend_activity_mismatch`。
   - boundary：`front_backend_activity_mismatch` 是协议上号、token/session 使用、非真实客户端行为的中高价值线索，但不得单独定性；必须与登录链路、设备风险、策略命中、发布 / 行为链路交叉验证。
+  - execution boundary：能力合同为 `api_direct_confirmed` 不等于当前 runtime source 已 completed。只有 live wrapper / playbook 中存在已验证可执行 endpoint 时才可标 completed；否则执行输出必须降级为 `pending_api_direct_confirmation` / `source_gap`，不得阻塞账号安全 P0 evidence card。
 - ATO / account_security 场景中，如果登录日志、Hive、Weapon 或档案中心发现异常手机端设备、非历史设备、新设备登录、扫码后新设备或设备风险标签，默认触发 `track_analysis_activity_profile_api_direct` 作为低成本补证 source，优先检查登录成功日 / 扫码日 / 设备切换日 / 策略命中日的 `getUseDuration`。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。

@@ -6938,3 +6938,31 @@
 - input: refresh 后 retry 仍 302 / HTML 登录页。
 - expected_runtime_behavior: max_one_refresh_retry
 - expected_output_boundary: 最多重试一次；最终 `source_status=auth_failed`，记录 `source_quality`，不进入循环。
+
+## 715. Single-user P0 multisource gate does not stop after login log
+
+- test_id: SINGLE-USER-P0-MULTISOURCE-NO-STOP-AFTER-LOGINLOG-001
+- input: 单用户账号安全 / ATO，统一登录日志返回 `no_data`。
+- expected_runtime_behavior: continue_p0_sources_after_login_log
+- expected_output_boundary: 必须继续 Weapon USER_ID -> DEVICE_ID `/apiv2/graphData`、Weapon `/apiv2/riskData`、天师 / 档案中心可用性补查；不可停在单源结论。
+
+## 716. Weapon APIV2 path hard rule
+
+- test_id: WEAPON-APIV2-PATH-HARD-RULE-001
+- input: 从 user_id 查关联设备并补设备风险。
+- expected_runtime_behavior: weapon_apiv2_only_default_path
+- expected_output_boundary: 默认只写 `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2` 和 `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}`；不得默认使用 `/api/graphData`。
+
+## 717. Login log no_data does not end judgement
+
+- test_id: LOGINLOG-NODATA-DOES-NOT-END-JUDGEMENT-001
+- input: 统一登录日志 no_data 后用户问“是不是没问题”。
+- expected_runtime_behavior: no_data_boundary_and_continue_or_partial
+- expected_output_boundary: `no_data` 进入 source_quality / missing_evidence；不得输出低风险 / 无风险 / 排除 ATO；若 P0 未完成，输出 partial evidence card。
+
+## 718. Track-analysis endpoint not confirmed is not completed
+
+- test_id: TRACK-ANALYSIS-ENDPOINT-NOT-CONFIRMED-NOT-COMPLETED-001
+- input: track-analysis 合同存在但当前 runtime 缺已验证可执行 endpoint。
+- expected_runtime_behavior: pending_api_direct_confirmation_or_source_gap
+- expected_output_boundary: 不得把 track-analysis 标为 completed source；应标 `pending_api_direct_confirmation` / `source_gap`，且不阻塞账号安全 P0 evidence card。

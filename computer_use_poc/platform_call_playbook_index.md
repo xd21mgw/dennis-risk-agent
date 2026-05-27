@@ -127,9 +127,16 @@ Input:
 
 Preferred path:
 
-1. USER_ID to DEVICE_ID graph: `graphData` with `groupKey=USER_ID`, `dimKey=DEVICE_ID`.
-2. DEVICE_ID to USER_ID graph: `graphData` with `groupKey=DEVICE_ID`, `dimKey=USER_ID`.
-3. Device risk uses `riskData` only after a device id is available.
+1. USER_ID to DEVICE_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2`.
+2. DEVICE_ID to USER_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2`.
+3. Device risk uses `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}` only after a device id is available.
+
+Hard rules:
+
+- `/apiv2/graphData` and `/apiv2/riskData` are the default readonly API paths.
+- Do not use `/api/graphData` as default execution guidance.
+- Do not switch to arbitrary frontend or guessed API paths when `/apiv2/*` returns `auth_failed`, `blocked`, or `timeout`; record the source status and continue the evidence card.
+- In single-user account security / ATO / login anomaly cases, Weapon graphData/riskData is part of the P0 default sequence after unified login log. Login log `no_data` does not end the judgement.
 
 Common errors:
 
@@ -141,6 +148,7 @@ Fallback:
 
 - If graphData blocked, mark `blocked_sources`.
 - If device id missing, mark `missing_required_fields`.
+- If `/apiv2/*` auth fails, times out, or is blocked, mark `auth_failed_sources`, `timeout_sources`, or `blocked_sources`; do not silently replace it with `/api/graphData`.
 
 Source status mapping:
 
@@ -149,7 +157,7 @@ Source status mapping:
 - auth / permission issue: `blocked` or `auth_failed`
 - timeout: `timeout`
 
-Capability status: `api_direct_confirmed` for validated `graphData` / `riskData` readonly paths.
+Capability status: `api_direct_confirmed` for validated `/apiv2/graphData` / `/apiv2/riskData` readonly paths.
 
 ## Tianshi Strategy Platform
 
@@ -298,6 +306,12 @@ Source status mapping:
 - timeout / SPA loop: `timeout`
 
 Capability status: `api_direct_confirmed` for `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime` as recorded in `track_analysis_api_direct_contract_current.md`. Do not default to SPA / DOM for these covered fields.
+
+Execution warning:
+
+- A source can be marked `completed` only when the current runtime has a verified executable endpoint for the selected track-analysis action.
+- If the contract exists but the executable endpoint is not available or not verified in live runtime, mark `pending_api_direct_confirmation` / `source_gap`, not `completed`.
+- Do not block the account-security P0 evidence card on track-analysis endpoint probing; this source remains supporting evidence until executable endpoint verification is present.
 
 Evidence boundary:
 
