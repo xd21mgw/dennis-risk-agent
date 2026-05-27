@@ -1407,3 +1407,84 @@ general_evidence_reasoning_regression:
       - missing_evidence
       - source_gap
     pass_fail_criteria: "必须说明 source 的时间窗口和覆盖边界；窗口外或链路外数据缺失只能标 missing/source_gap，不能作无风险反证。"
+
+track_analysis_api_direct_regression:
+  - case_id: TRACK-ANALYSIS-API-DIRECT-COVERAGE-001
+    input: "需要用 track-analysis 判断 userId / deviceId 的前端活跃画像。"
+    expected_routing_mode: frontend_activity_profile_api_direct
+    expected_api_groups:
+      - getLastestDateTime
+      - getDeviceIds
+      - getUseDuration
+      - profile
+    expected_output_boundary:
+      - api_direct_first
+      - dom_fallback_not_default
+      - activity_evidence_not_final_judgement
+    pass_fail_criteria: "必须优先 API direct；不得默认进入 SPA / DOM；活跃画像只作为行为补证。"
+  - case_id: TRACK-ANALYSIS-USE-DURATION-ROWS-SHAPE-001
+    input: "解析 getUseDuration 返回的 rows。"
+    expected_routing_mode: frontend_activity_profile_api_direct
+    expected_output_boundary:
+      - rows_is_object_array
+      - not_two_dimensional_array
+      - parse_by_object_keys
+    pass_fail_criteria: "`getUseDuration.rows` 必须按对象数组 / dict 解析，不得按二维数组固定列偏移解析。"
+  - case_id: TRACK-ANALYSIS-SECOND-LEVEL-PROFILE-FIELDS-001
+    input: "从 profile 读取注册时间、粉丝分布、月活跃天数。"
+    expected_routing_mode: frontend_activity_profile_api_direct
+    expected_output_boundary:
+      - register_time_in_secondLevelProfile
+      - fan_distribution_in_secondLevelProfile
+      - active_days_bucket_in_secondLevelProfile
+    pass_fail_criteria: "必须从 `secondLevelProfile` label-value pair 查找这些字段，不得只查 `firstLevelProfile`。"
+  - case_id: TRACK-ANALYSIS-USERID-SUPPORTED-001
+    input: "用 userId 查询 track-analysis profile 和使用时长。"
+    expected_routing_mode: frontend_activity_profile_api_direct
+    expected_output_boundary:
+      - userId_api_supported
+      - profile_may_return_deviceIds
+      - kuaishou_nebula_scope_separated
+    pass_fail_criteria: "userId 路径可用；KUAISHOU / NEBULA 必须分开解释。"
+  - case_id: TRACK-ANALYSIS-ACTIVITY-NOT-FINAL-JUDGEMENT-001
+    input: "某用户 30 天使用时长异常或 NEBULA duration=0，是否可直接定性 ATO / 协议 / 群控？"
+    expected_routing_mode: evidence_boundary_mode
+    expected_output_boundary:
+      - activity_evidence_is_supporting_evidence
+      - nebula_zero_not_account_inactive
+      - require_cross_validation
+    pass_fail_criteria: "活跃、画像、时长只能作为行为补证，必须结合登录链路、设备风险、策略命中和行为链路交叉验证。"
+
+dataagent_per_call_authorization_regression:
+  - case_id: DATAAGENT-PER-CALL-AUTHORIZATION-001
+    input: "请执行 DataAgent 查询历史登录链路。"
+    expected_routing_mode: dataagent_confirmation_required
+    expected_output_boundary:
+      - dataagent_confirmation_request
+      - per_call_authorization
+      - no_dataagent_call_before_confirmation
+    pass_fail_criteria: "执行前必须说明查询原因、推荐表、范围、目标问题和成本风险，并等待用户确认。"
+  - case_id: DATAAGENT-FIRST-CONSENT-NOT-SESSION-WIDE-001
+    input: "用户已确认一次 DataAgent 查询后，Agent 准备继续查第二个 SQL / 第二张表。"
+    expected_routing_mode: dataagent_confirmation_required
+    expected_output_boundary:
+      - first_consent_not_session_wide
+      - new_sql_requires_confirmation
+      - new_table_requires_confirmation
+    pass_fail_criteria: "第一次授权只覆盖当次查询；后续新 SQL / 新表 / 新范围必须再次确认。"
+  - case_id: DATAAGENT-FOLLOWUP-STILL-REQUIRES-CONFIRMATION-001
+    input: "继续查一下异常设备当天有没有活跃。"
+    expected_routing_mode: dataagent_confirmation_required_if_hive_needed
+    expected_output_boundary:
+      - followup_requires_new_confirmation_if_dataagent
+      - query_plan_allowed_without_confirmation
+      - no_auto_hive_execution
+    pass_fail_criteria: "follow-up 如果需要 DataAgent / Hive，必须重新说明查询并等待确认；可直接生成 query plan。"
+  - case_id: REALTIME-API-AUTO-BUT-DATAAGENT-CONFIRM-001
+    input: "同一问题中既有实时只读 API source，也有离线 Hive 补证。"
+    expected_routing_mode: mixed_realtime_and_dataagent_boundary
+    expected_output_boundary:
+      - realtime_readonly_api_auto_allowed
+      - dataagent_requires_per_call_confirmation
+      - source_quality_separated
+    pass_fail_criteria: "统一登录日志 / Weapon / 档案中心 same-origin API / 天师只读 API 在字段齐备时可自动执行；DataAgent / Hive 必须逐次确认。"

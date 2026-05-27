@@ -6,6 +6,7 @@ This index is the mandatory preflight reading list before Dennis Risk Agent call
 
 - Realtime readonly API calls do not require user confirmation when required fields are present.
 - DataAgent / Hive / big batch / write / high-risk operations require query plan or explicit confirmation.
+- DataAgent / Hive confirmation is per call. A previous "查吧 DataAgent" only authorizes that one query; every new SQL, table, time window, question, or evidence direction requires a new confirmation.
 - Do not use old observations as "no-cache" realtime results.
 - Every source call must produce a checkpoint and source_quality.
 - `no_data`, `blocked`, `timeout`, and `auth_failed` are source states, not no-risk counter evidence.
@@ -186,34 +187,67 @@ Source status mapping:
 
 Reference:
 
+- `computer_use_poc/track_analysis_api_direct_contract_current.md`
 - `computer_use_poc/answer_experience_templates.md`
 - `computer_use_poc/multi_entry_runtime_guard_v1.md`
 
 Input:
 
 - `user_id` or `device_id`
+- `appName`: `KUAISHOU` or `NEBULA`
 
 Preferred path:
 
-1. stats-first.
-2. Read monthly active days, device type, region, register time, fans distribution, user/device profile.
-3. Behavior sequence detail is optional supplement, not prerequisite.
+1. API direct first, not SPA / DOM first.
+2. Call `profile` first to read profile card, `deviceIds`, register time, fan distribution, and active-days bucket.
+3. Call `getUseDuration` to read 30-day activity-day and duration distribution.
+4. If device-level judgement is needed, query deviceId dimension after userId profile / deviceIds resolution.
+5. Interpret `KUAISHOU` and `NEBULA` separately.
+6. Behavior sequence detail remains optional supplement, not prerequisite.
+
+Supported API groups:
+
+- `getLastestDateTime`
+- `getDeviceIds`
+- `getUseDuration`
+- `profile`
+
+Field shape:
+
+- `getUseDuration.rows` is an object-array / dict structure, not a two-dimensional array.
+- `register_time`, `fan_distribution`, and `active_days_bucket` are in `secondLevelProfile` label-value pairs, not `firstLevelProfile`.
+- `NEBULA` duration `0` means no NEBULA activity in the queried app scope; it does not mean no account activity.
 
 Common errors:
 
+- Treating track-analysis as SPA-only after API direct coverage exists.
+- Parsing `getUseDuration.rows` as a two-dimensional array.
+- Looking for register time / fans / active days only under `firstLevelProfile`.
+- Treating NEBULA zero duration as account inactivity.
 - Infinite SPA date picker / dropdown loop.
 - Treating detail sequence unavailable as platform fully unavailable.
 
 Fallback:
 
+- DOM / SPA fallback only when API direct fails, auth activation is needed, response shape changes, or key fields are missing.
 - Detail unavailable becomes `partial_source`.
 - Three repeated failed UI actions become `operation_loop_detected`.
 
 Source status mapping:
 
-- stats read: `completed`
-- detail unavailable: `no_data` or `skipped` with `partial_source`
-- SPA loop: `timeout`
+- API JSON parsed with fields: `completed`
+- API JSON empty / zero app-scope activity: `no_data` or `completed` with zero-activity summary, depending on app scope
+- missing key labels: `partial_source`
+- HTML / login page / redirect: `auth_failed`
+- unexpected field shape: `parse_error`
+- timeout / SPA loop: `timeout`
+
+Evidence boundary:
+
+- Activity duration, active days, profile card, and device activity are behavior-supporting evidence.
+- They can support long-inactive-then-active, abnormal same-day activity, or user/device activity mismatch analysis.
+- They cannot independently prove ATO, protocol attack, group control, or no risk.
+- Cross-validate with login chain, device risk, strategy hit, publish / request / interaction behavior, and other raw evidence.
 
 ## DataAgent / Hive Registry Preflight
 
@@ -254,9 +288,28 @@ Recommended account-security tables:
 Rules:
 
 - DataAgent must not start by guessing generic login tables when registry sources apply.
+- DataAgent / Hive execution requires explicit user confirmation for each query.
+- A prior confirmation authorizes only the current query. New SQL, new time range, new table, new question, or new evidence direction requires a new confirmation.
 - Non-registry sources, including `ks_dw_fact.dw_fact_user_login_di`, are `candidate_secondary_source` unless registry tables are unavailable or insufficient.
 - DataAgent prompt must include table name, use, time window, partition filters and key fields.
 - Pending Hive execution is not evidence. Output `missing_hive_result` or `hive_query_pending`.
+
+Allowed without confirmation:
+
+- Generate a DataAgent query plan.
+- Generate recommended SQL.
+- List tables and fields to query.
+- Summarize already returned DataAgent / Hive results.
+- Analyze existing Hive results.
+
+Before asking for confirmation, output:
+
+- why DataAgent / Hive is needed
+- recommended table
+- query scope and time window
+- question to be answered
+- cost / scan risk if relevant
+- explicit confirmation request
 
 Output separation:
 

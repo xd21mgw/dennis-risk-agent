@@ -18,6 +18,10 @@
 
 以下动作需要用户确认范围后再执行：
 
+- DataAgent / Hive 每一次真实查询。
+- 每一个新 SQL。
+- 每一个新时间范围。
+- 每一个新表或新补证方向。
 - 多平台串联查询。
 - 关联实体扩散。
 - 查询范围扩大。
@@ -60,6 +64,8 @@
 | 单用户基础画像只读 | allow | false | 已登记 capability 且输出脱敏 |
 | 单设备风险标签只读 | allow | false | 设备侧证据，不直接定性 |
 | 单 request_id 策略命中解释 | allow | false | 输出策略证据和边界 |
+| 生成 DataAgent / Hive query plan | allow | false | 只生成计划 / SQL / 推荐表，不执行 |
+| 执行 DataAgent / Hive 查询 | confirm_scope | true_user_confirm | 每次查询逐次确认，首次授权不覆盖后续查询 |
 | 多平台串联补证 | confirm_scope | true_user_confirm | 需要确认范围和目标 |
 | 用户到设备 / 设备到用户一层关联 | confirm_scope | true_user_confirm | 输出候选关系，不直接定性 |
 | 多层关联扩散 | require_security_approval | true_security | 防止无限扩散 |
@@ -84,4 +90,10 @@
 这个请求涉及批量关联扩散，当前研判 Agent 默认不直接执行。
 我可以先给出只读排查计划，或在你确认范围后只查 top 候选。
 如需全量扩散，需要走安全审批。
+```
+
+DataAgent / Hive 确认口径：
+
+```text
+我可以生成 DataAgent / Hive 查询计划，但不会直接执行。若要执行，请确认这一次查询的表、时间范围和目标问题。该确认只覆盖本次查询；后续换 SQL、换表、换时间范围或追加补证方向，需要再次确认。
 ```

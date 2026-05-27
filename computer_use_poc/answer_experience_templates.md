@@ -1032,9 +1032,19 @@ required_validation:
 
 原则：
 
-- 首选直达 `USER_PROFILE_QUERY`。
-- 先读统计层 evidence，不把明细行为序列作为必需前置。
+- 当前 API direct coverage 下，优先 API direct，不再优先 SPA / DOM。
+- 先读 `profile`，拿 profile_card / deviceIds / active_days_bucket / register_time / fan_distribution。
+- 再读 `getUseDuration`，看 30 天活跃天数和时长分布。
+- 如需要设备级判断，再查 deviceId 维度。
+- KUAISHOU / NEBULA 必须分开解释。
 - 明细不可用时标 `partial_source`，不裸 timeout。
+
+API direct 注意事项：
+
+- 支持接口：`getLastestDateTime`、`getDeviceIds`、`getUseDuration`、`profile`。
+- `getUseDuration.rows` 是对象数组 / dict，不是二维数组。
+- `register_time`、`fan_distribution`、`active_days_bucket` 在 `secondLevelProfile` label-value pair 中。
+- NEBULA duration=0 只能解释为当前 app scope 无活跃，不等于账号无活跃。
 
 可用统计层字段：
 
@@ -1058,11 +1068,14 @@ track-analysis 当前只形成 partial_source：
 - 是否存在前端活跃信号
 - 活跃强度
 - 设备 / 地区 / 注册时间是否与其他来源冲突
+- 长期不活跃后突然激活
+- userId 与 deviceId 活跃是否不一致
 
 统计层不能说明：
 - 具体业务动作已经发生
 - 本人操作
 - 真人操作
+- 协议上号 / ATO / 群控已成立
 ```
 
 ### Browser / SPA loop 降级模板
@@ -1665,6 +1678,59 @@ missing_hive_result:
 ```
 
 Hive 查询提交后等待中，只能写 `hive_query_pending` / `missing_hive_result`，不能写成已完成结果。
+
+### DataAgent / Hive 逐次授权模板
+
+实时只读 API 在字段齐备时可以自动执行受控 source；DataAgent / Hive 不同。每一次 DataAgent / Hive 执行都必须获得用户明确同意，不能把第一次“查吧 DataAgent”解释为本轮后续所有 Hive 查询的 blanket consent。
+
+需要确认的情况：
+
+- 每一个新 SQL。
+- 每一个新问题。
+- 每一个新时间范围。
+- 每一个新表。
+- 每一个新补证方向。
+- follow-up 中的“继续查 / 再查一下 / 看设备活跃 / 查同设备其他账号”，只要需要 DataAgent / Hive，也必须重新说明并等待确认。
+
+无需确认即可输出：
+
+- DataAgent 查询计划。
+- 推荐 SQL。
+- 推荐表和字段。
+- 已返回 Hive 结果的分析。
+- 已有 DataAgent 结果的汇总。
+
+确认前输出结构：
+
+```yaml
+dataagent_confirmation_request:
+  reason_for_hive:
+  recommended_table:
+  query_scope:
+  time_window:
+  question_to_answer:
+  estimated_cost_or_scan_risk:
+  waiting_for_user_confirmation: true
+```
+
+标准话术：
+
+```text
+这个问题需要离线 Hive / DataAgent 补证。我先不直接执行。建议查询：
+- 表：
+- 时间范围：
+- 目标问题：
+- 关键字段：
+- 成本 / 扫描风险：
+
+请确认是否执行这一次 DataAgent 查询。这个确认只覆盖本次查询；如果后续要换表、换时间范围或追加新 SQL，需要再次确认。
+```
+
+禁止写法：
+
+- “你刚才已经授权过 DataAgent，所以我继续查下一张表。”
+- “我顺手再查一下同设备其他账号。”
+- “Hive 还在跑，但我继续追加一个新 SQL。”
 
 ## 2. 原因解释类回答模板
 

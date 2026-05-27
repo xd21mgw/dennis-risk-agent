@@ -6735,3 +6735,66 @@
 - input: source 时间窗口或覆盖链路不包含风险事件窗口。
 - expected_runtime_behavior: source_window_boundary
 - expected_output_boundary: 必须标 `source_gap` / `required_offline_check` / `missing_evidence`；窗口外 no_data 不能排除风险。
+
+## 686. Track-analysis API direct contract exists
+
+- test_id: TRACK-ANALYSIS-API-DIRECT-COVERAGE-001
+- input: 检查 `computer_use_poc/track_analysis_api_direct_contract_current.md`。
+- expected_runtime_behavior: track_analysis_api_direct_contract_documented
+- expected_output_boundary: 文档包含 `getLastestDateTime` / `getDeviceIds` / `getUseDuration` / `profile`，并说明 API direct 优先、DOM fallback 非默认。
+
+## 687. Track-analysis use duration rows shape
+
+- test_id: TRACK-ANALYSIS-USE-DURATION-ROWS-SHAPE-001
+- input: 解析 `getUseDuration.rows`。
+- expected_runtime_behavior: rows_object_array_parser_boundary
+- expected_output_boundary: `rows` 是对象数组 / dict，不是二维数组；不得按固定列偏移解析。
+
+## 688. Track-analysis secondLevelProfile field paths
+
+- test_id: TRACK-ANALYSIS-SECOND-LEVEL-PROFILE-FIELDS-001
+- input: 读取注册时间、粉丝分布、月活跃天数。
+- expected_runtime_behavior: second_level_profile_label_value_lookup
+- expected_output_boundary: 字段路径在 `secondLevelProfile` label-value pair；不得只查 `firstLevelProfile`。
+
+## 689. Track-analysis userId path supported
+
+- test_id: TRACK-ANALYSIS-USERID-SUPPORTED-001
+- input: userId 维度查询 profile / duration。
+- expected_runtime_behavior: userId_api_supported
+- expected_output_boundary: 支持 userId 路径，并可从 profile 获取 deviceIds；KUAISHOU / NEBULA 分开解释。
+
+## 690. Track-analysis activity is not final judgement
+
+- test_id: TRACK-ANALYSIS-ACTIVITY-NOT-FINAL-JUDGEMENT-001
+- input: 月活跃天数、使用时长或设备活跃异常。
+- expected_runtime_behavior: activity_evidence_supporting_only
+- expected_output_boundary: 活跃画像只能作为行为补证；不能单独判定协议上号、ATO、群控或无风险。
+
+## 691. DataAgent per-call authorization required
+
+- test_id: DATAAGENT-PER-CALL-AUTHORIZATION-001
+- input: 用户要求执行 DataAgent / Hive 查询。
+- expected_runtime_behavior: dataagent_confirmation_request
+- expected_output_boundary: 必须先输出为什么查、推荐表、查询范围、目标问题、成本风险，并等待用户确认；不得直接执行。
+
+## 692. First DataAgent consent is not session-wide
+
+- test_id: DATAAGENT-FIRST-CONSENT-NOT-SESSION-WIDE-001
+- input: 用户已确认第一次 DataAgent 查询，Agent 准备追加第二个 SQL / 第二张表。
+- expected_runtime_behavior: new_dataagent_call_requires_confirmation
+- expected_output_boundary: 第一次“查吧 DataAgent”只授权当次查询；新 SQL / 新时间范围 / 新表 / 新补证方向必须再次确认。
+
+## 693. DataAgent follow-up still requires confirmation
+
+- test_id: DATAAGENT-FOLLOWUP-STILL-REQUIRES-CONFIRMATION-001
+- input: 用户说“继续查 / 再查一下 / 看设备活跃 / 查同设备其他账号”。
+- expected_runtime_behavior: followup_hive_confirmation_required
+- expected_output_boundary: 如果需要 DataAgent / Hive，必须重新说明查询并等待确认；可无确认生成 query plan / 推荐 SQL。
+
+## 694. Realtime API automatic, DataAgent confirmed
+
+- test_id: REALTIME-API-AUTO-BUT-DATAAGENT-CONFIRM-001
+- input: 字段齐备的实时只读 API + 离线 Hive 补证混合问题。
+- expected_runtime_behavior: realtime_auto_dataagent_confirm
+- expected_output_boundary: 实时只读 API 可自动触发；DataAgent / Hive 必须逐次确认；pending Hive 不得继续追加新查询。

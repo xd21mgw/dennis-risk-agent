@@ -54,6 +54,7 @@ Platform call preflight:
 - If memory retrieval fails, fall back to files; do not guess platform paths.
 - 实时只读 API 查询不需要用户确认 when required fields are complete.
 - DataAgent / Hive / 大批量 / 写操作 / 高风险操作需要确认 or query plan.
+- DataAgent / Hive confirmation is per call, not session-wide. A previous user approval only authorizes that one query.
 - Each source must produce a checkpoint and source_quality.
 - P1/P2 browser source must not block P0 partial evidence output.
 - Old observations must not be used as "no-cache" realtime results.
@@ -61,6 +62,9 @@ Platform call preflight:
 DataAgent / Hive registry preflight:
 
 - Before any DataAgent/Hive call for account security, ATO, login anomaly, password reset, passToken, kick out, login success/failure, or historical login-chain analysis, read `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md`.
+- Before every DataAgent / Hive execution, ask for explicit user confirmation. This applies to each new SQL, new problem, new time range, new table, and new evidence direction.
+- "查吧 DataAgent" authorizes only the current described query. Follow-up prompts such as "继续查", "再查一下", "看设备活跃", or "查同设备其他账号" must produce a new query description and wait for confirmation if they require DataAgent / Hive.
+- DataAgent / Hive plans, recommended SQL, table selection, and analysis of already returned results can be produced without confirmation.
 - The DataAgent prompt must include Dennis registry-recommended tables, table purpose, time window, partition requirements, key fields, and no-data interpretation.
 - Successful login must prioritize `ks_rc_bs.ks_account_login_basic_info`.
 - Login failure / credential stuffing / brute force / resetPwd must prioritize `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` with `p_action_type='login'` or `p_action_type='resetPwd'` as applicable.
