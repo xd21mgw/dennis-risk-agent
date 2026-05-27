@@ -107,6 +107,7 @@ def main() -> int:
         runner,
         [
             "real_platform_request_executed",
+            "executor_mode",
             "source_status",
             "source_quality",
             "redaction_applied",
@@ -120,6 +121,25 @@ def main() -> int:
             "--target_url",
             "--target-url",
             "arbitrary_url",
+        ],
+    )
+    findings += check_contains(
+        "runner_live_dependency_contract",
+        runner,
+        [
+            "ks_aimate.sso_login_client",
+            "cookie_state_fallback",
+            ".ks_sso",
+            "sso-state.json",
+            "kuaishou.com",
+        ],
+    )
+    findings += check_absent(
+        "runner_no_legacy_sso_session_import_dependency",
+        runner,
+        [
+            'importlib.import_module("sso_session")',
+            "importlib.import_module('sso_session')",
         ],
     )
 
@@ -193,6 +213,10 @@ def main() -> int:
         "tools_md_status": tools_status,
         "real_platform_called": False,
         "dataagent_called": False,
+        "warnings": [
+            "static_preflight_pass_does_not_prove_live_auth_success",
+            "live SmartSSOSession / cookie-state validation must be tested in live runtime",
+        ],
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if not blocking else 1

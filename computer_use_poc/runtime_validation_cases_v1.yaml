@@ -348,6 +348,7 @@ runtime_validation_suite:
         - collected_at
         - redaction_applied
         - real_platform_request_executed
+        - executor_mode
       expected_source_status_values:
         - completed
         - no_data
@@ -364,6 +365,60 @@ runtime_validation_suite:
         - header
       redaction_required: true
       pass_criteria: "runner 使用白名单 platform/action 和 SmartSSOSession.get 执行统一登录日志 GET；本地缺少 SSO executor 时 fail closed 为 blocked，不退回 dry_run_only 成功。"
+
+    - case_id: SSO-RUNNER-LIVE-DEPENDENCY-001
+      test_name: sso_session_runner live dependency prefers ks_aimate SmartSSOSession
+      input_prompt: "检查 sso_session_runner live executor import 顺序。"
+      expected_runtime_behavior:
+        - prefer_ks_aimate_sso_login_client
+        - no_legacy_sso_session_module_as_only_dependency
+      expected_output:
+        - executor_mode
+        - smart_sso
+        - unavailable_if_dependency_missing
+      expected_denied_actions:
+        - depend_only_on_importlib_import_module_sso_session
+        - import_skill_cli_script_as_stable_module
+      redaction_required: true
+      pass_criteria: "runner 优先 `ks_aimate.sso_login_client.SmartSSOSession`；不能把 skill CLI 脚本 `sso_session.py` 当稳定 import module。"
+
+    - case_id: SSO-RUNNER-COOKIE-STATE-FALLBACK-001
+      test_name: sso_session_runner controlled cookie state fallback
+      input_prompt: "SmartSSOSession 不可用或认证失败时，使用 .ks_sso/sso-state.json fallback 查询统一登录日志。"
+      expected_runtime_behavior:
+        - cookie_state_fallback
+        - whitelist_url_only
+      expected_boundary:
+        read_only_file: ".ks_sso/sso-state.json"
+        cookie_domain_filter: "kuaishou.com"
+        arbitrary_url_allowed: false
+        sensitive_output: false
+      expected_output:
+        - executor_mode
+        - cookie_state_fallback
+        - source_status
+        - source_quality
+      expected_denied_outputs:
+        - cookie
+        - header
+        - session
+        - token
+      redaction_required: true
+      pass_criteria: "cookie-state fallback 只读取固定 state 文件，只对 runner 内部白名单 URL 发 GET，不输出任何认证态。"
+
+    - case_id: PREFLIGHT-RUNTIME-IMPORT-CHECK-001
+      test_name: runtime preflight checks live runner dependency markers
+      input_prompt: "python3 computer_use_poc/runtime_preflight_check.py"
+      expected_runtime_behavior:
+        - check_ks_aimate_dependency_marker
+        - check_cookie_state_fallback_marker
+        - check_no_legacy_only_sso_session_import
+      expected_output:
+        - preflight_pass
+        - warnings
+        - static_preflight_pass_does_not_prove_live_auth_success
+      redaction_required: true
+      pass_criteria: "preflight 静态检查 runner live dependency 和 fallback 安全边界，并提醒静态通过不等于 live auth 通过。"
 
     - case_id: PLATFORM-PLAYBOOK-PREFLIGHT-001
       test_name: platform source call must read playbook first

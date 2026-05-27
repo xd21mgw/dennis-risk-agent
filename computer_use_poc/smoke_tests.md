@@ -4611,7 +4611,28 @@
 - test_id: SSO-RUNNER-REAL-EXECUTOR-001
 - input: `python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id 62950989 --timeout 30 --format json`
 - expected_runtime_behavior: controlled_sso_real_http_executor
-- expected_output_boundary: 不只返回 constructed URL；成功或失败都输出结构化 observation，字段包含 `source_name=user_login_unified_log`、`source_status`、`user_id`、`records_count`、`evidence_summary`、`source_quality`、`collected_at`、`redaction_applied=true`、`real_platform_request_executed`；不得输出 cookie/token/session/header。
+- expected_output_boundary: 不只返回 constructed URL；成功或失败都输出结构化 observation，字段包含 `source_name=user_login_unified_log`、`source_status`、`user_id`、`records_count`、`evidence_summary`、`source_quality`、`collected_at`、`redaction_applied=true`、`real_platform_request_executed`、`executor_mode`；不得输出 cookie/token/session/header。
+
+## 399A. SSO-RUNNER-LIVE-DEPENDENCY-001
+
+- test_id: SSO-RUNNER-LIVE-DEPENDENCY-001
+- input: 检查 `computer_use_poc/sso_session_runner.py` 的 live dependency。
+- expected_runtime_behavior: ks_aimate_smart_sso_preferred
+- expected_output_boundary: runner 优先 `from ks_aimate.sso_login_client import SmartSSOSession`；不得仅依赖 `importlib.import_module("sso_session")`；SmartSSOSession 不可用时结构化 `blocked` 或进入受控 cookie-state fallback。
+
+## 399B. SSO-RUNNER-COOKIE-STATE-FALLBACK-001
+
+- test_id: SSO-RUNNER-COOKIE-STATE-FALLBACK-001
+- input: SmartSSOSession 不可用或认证失败，`.ks_sso/sso-state.json` 存在。
+- expected_runtime_behavior: controlled_cookie_state_fallback
+- expected_output_boundary: 只读取 `.ks_sso/sso-state.json`，只提取 `kuaishou.com` 域 cookies，只请求 runner 内部白名单 URL；不接受 target_url/arbitrary URL；不输出 cookie/header/session/token；HTML/302 标 auth_failed，timeout 标 timeout，网络错误标 blocked。
+
+## 399C. PREFLIGHT-RUNTIME-IMPORT-CHECK-001
+
+- test_id: PREFLIGHT-RUNTIME-IMPORT-CHECK-001
+- input: `python3 computer_use_poc/runtime_preflight_check.py`
+- expected_runtime_behavior: live_dependency_static_check
+- expected_output_boundary: preflight 检查 runner 包含 `ks_aimate.sso_login_client`、cookie-state fallback、安全边界、禁止 target_url/arbitrary URL，并输出 warning：静态通过不等于 live auth 通过。
 
 ## 399. missing recallSource may cause api 10045
 

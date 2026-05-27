@@ -10,21 +10,22 @@ This runner is intentionally narrow:
 - authentication material and request headers are never printed.
 
 The live runtime is expected to provide ``sso_session.SmartSSOSession``. In
-local environments where that module is unavailable, the runner fails closed
-with a structured ``blocked`` observation instead of falling back to curl or
-manual credential handling.
+live environments the preferred dependency is
+``ks_aimate.sso_login_client.SmartSSOSession``. If that executor is unavailable
+or cannot authenticate, the only fallback is reading `.ks_sso/sso-state.json`
+and applying kuaishou.com cookies to the runner-built whitelist URL.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import re
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -57,6 +58,7 @@ SENSITIVE_KEY_RE = re.compile(
     r"(cookie|token|session|header|authorization|password|passwd|api[_-]?key)",
     re.IGNORECASE,
 )
+AUTH_CODE_RE = re.compile(r"(login|sso|auth|unauthorized|forbidden|redirect)", re.IGNORECASE)
 
 
 def now_iso() -> str:
@@ -79,7 +81,11 @@ def sanitize_text(value: Any) -> str:
 
 def safe_error_message(value: Any) -> str:
     text = str(value)
-    if "sso_session module unavailable" in text or "SmartSSOSession unavailable" in text:
+    if (
+        "ks_aimate SmartSSOSession unavailable" in text
+        or "SmartSSOSession unavailable" in text
+        or "cookie state unavailable" in text
+    ):
         return "SSO executor module unavailable"
     return sanitize_text(text)
 
@@ -229,6 +235,7 @@ def build_observation(
     raw_reference_safe_id: str | None = None,
     error_message: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
+    executor_mode: str = "unavailable",
 ) -> dict[str, Any]:
     observation: dict[str, Any] = {
         "schema_version": "sso_runner_observation_v2",
@@ -243,6 +250,7 @@ def build_observation(
         "collected_at": now_iso(),
         "redaction_applied": True,
         "real_platform_request_executed": real_platform_request_executed,
+        "executor_mode": executor_mode,
         "dataagent_called": False,
         "platform_write_action": False,
         "sensitive_output": False,
@@ -257,19 +265,16 @@ def build_observation(
     return observation
 
 
-def load_sso_session() -> Any:
+def load_smart_sso_session() -> Any:
     try:
-        module = importlib.import_module("sso_session")
+        from ks_aimate.sso_login_client import SmartSSOSession  # type: ignore
     except ImportError as exc:
-        raise RuntimeError("sso_session module unavailable") from exc
-    session_cls = getattr(module, "SmartSSOSession", None)
-    if session_cls is None:
-        raise RuntimeError("SmartSSOSession unavailable")
-    return session_cls()
+        raise RuntimeError("ks_aimate SmartSSOSession unavailable") from exc
+    return SmartSSOSession()
 
 
-def call_sso_get(url: str, timeout: int) -> Any:
-    session = load_sso_session()
+def call_smart_sso_get(url: str, timeout: int) -> Any:
+    session = load_smart_sso_session()
     get = getattr(session, "get", None)
     if get is None:
         raise RuntimeError("SmartSSOSession.get unavailable")
@@ -277,6 +282,62 @@ def call_sso_get(url: str, timeout: int) -> Any:
         return get(url, timeout=timeout)
     except TypeError:
         return get(url)
+
+
+def load_kuaishou_cookies_from_state() -> list[dict[str, Any]]:
+    state_path = Path(".ks_sso") / "sso-state.json"
+    if not state_path.exists():
+        raise RuntimeError("cookie state unavailable")
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise RuntimeError("cookie state unavailable") from exc
+
+    cookies_raw = state.get("cookies") if isinstance(state, dict) else None
+    if not isinstance(cookies_raw, list):
+        raise RuntimeError("cookie state unavailable")
+
+    cookies: list[dict[str, Any]] = []
+    for cookie in cookies_raw:
+        if not isinstance(cookie, dict):
+            continue
+        domain = str(cookie.get("domain") or "")
+        name = str(cookie.get("name") or "")
+        value = str(cookie.get("value") or "")
+        if not name or not value:
+            continue
+        if "kuaishou.com" not in domain:
+            continue
+        cookies.append({"name": name, "value": value, "domain": domain})
+    if not cookies:
+        raise RuntimeError("cookie state unavailable")
+    return cookies
+
+
+def call_cookie_state_get(url: str, timeout: int) -> Any:
+    try:
+        import requests  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError("cookie state fallback unavailable") from exc
+
+    cookies = load_kuaishou_cookies_from_state()
+    session = requests.Session()
+    for cookie in cookies:
+        session.cookies.set(cookie["name"], cookie["value"], domain=cookie["domain"])
+    return session.get(url, timeout=timeout, allow_redirects=False)
+
+
+def call_executor_get(url: str, timeout: int) -> tuple[Any, str]:
+    smart_error: Exception | None = None
+    try:
+        return call_smart_sso_get(url, timeout), "smart_sso"
+    except Exception as exc:
+        smart_error = exc
+
+    try:
+        return call_cookie_state_get(url, timeout), "cookie_state_fallback"
+    except Exception as cookie_exc:
+        raise RuntimeError(f"{safe_error_message(smart_error)}; {safe_error_message(cookie_exc)}") from cookie_exc
 
 
 def response_status(response: Any) -> int | None:
@@ -336,6 +397,20 @@ def extract_records(payload: Any) -> list[Any]:
 
 
 def classify_json_payload(payload: Any) -> tuple[str, int, str, dict[str, Any]]:
+    if isinstance(payload, dict) and "code" in payload and str(payload.get("code")) not in {"0", "0.0"}:
+        code_text = sanitize_text(payload.get("code"))
+        message_text = sanitize_text(payload.get("message") or payload.get("msg") or "")
+        permission_status = "auth_failed" if AUTH_CODE_RE.search(f"{code_text} {message_text}") else "blocked"
+        summary = "Unified login log returned JSON but did not return code=0."
+        quality = {
+            "permission_status": permission_status,
+            "reliability_level": "api_json_error_summary",
+            "failure_reason": "api_code_not_ok",
+            "api_code_safe": code_text,
+            "raw_response_redacted": True,
+        }
+        return permission_status, 0, summary, quality
+
     records = extract_records(payload)
     records_count = len(records)
     if records_count > 0:
@@ -359,7 +434,7 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
     request_safe_id = metadata.pop("request_safe_id")
 
     try:
-        response = call_sso_get(url, timeout)
+        response, executor_mode = call_executor_get(url, timeout)
     except TimeoutError as exc:
         return build_observation(
             source_status="timeout",
@@ -371,25 +446,25 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
             raw_reference_safe_id=request_safe_id,
             error_message=str(exc),
             extra_metadata=metadata,
+            executor_mode="unavailable",
         )
     except Exception as exc:
         raw_message = str(exc)
-        unavailable = "sso_session module unavailable" in raw_message or "SmartSSOSession unavailable" in raw_message
-        status = "blocked" if unavailable else "auth_failed"
         return build_observation(
-            source_status=status,
+            source_status="blocked",
             user_id=user_id,
             evidence_time_range=evidence_time_range,
             evidence_summary="Unified login log request could not complete through controlled SSO executor.",
             source_quality={
-                "permission_status": "blocked" if unavailable else "auth_failed",
-                "failure_reason": "sso_executor_unavailable" if unavailable else "sso_request_failed",
+                "permission_status": "blocked",
+                "failure_reason": "sso_executor_unavailable",
                 "no_data_not_risk_exclusion": True,
             },
-            real_platform_request_executed=not unavailable,
+            real_platform_request_executed=False,
             raw_reference_safe_id=request_safe_id,
             error_message=safe_error_message(exc),
             extra_metadata=metadata,
+            executor_mode="unavailable",
         )
 
     status_code = response_status(response)
@@ -404,6 +479,7 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
             real_platform_request_executed=True,
             raw_reference_safe_id=request_safe_id,
             extra_metadata=metadata,
+            executor_mode=executor_mode,
         )
     if looks_like_auth_html(text):
         return build_observation(
@@ -415,6 +491,7 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
             real_platform_request_executed=True,
             raw_reference_safe_id=request_safe_id,
             extra_metadata=metadata,
+            executor_mode=executor_mode,
         )
 
     try:
@@ -430,6 +507,7 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
             raw_reference_safe_id=request_safe_id,
             error_message=str(exc),
             extra_metadata=metadata,
+            executor_mode=executor_mode,
         )
 
     source_status, records_count, summary, quality = classify_json_payload(payload)
@@ -443,6 +521,7 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
         records_count=records_count,
         raw_reference_safe_id=request_safe_id,
         extra_metadata=metadata,
+        executor_mode=executor_mode,
     )
 
 

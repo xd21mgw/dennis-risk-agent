@@ -12,14 +12,17 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 ## Release Before Package
 
 - `computer_use_poc/sso_session_runner.py` is a controlled real executor for unified login log, not `dry_run_only`.
+- Runner imports `ks_aimate.sso_login_client.SmartSSOSession` as the preferred live executor.
+- Runner has a controlled `.ks_sso/sso-state.json` cookie-state fallback for `kuaishou.com` cookies only.
 - Runner supports:
   - `--platform login_log`
   - `--action query_user_login_log`
   - `--user-id`
   - `--timeout`
   - `--format json`
-- Runner emits structured observation with `source_status`, `source_quality`, `redaction_applied`, and `real_platform_request_executed`.
+- Runner emits structured observation with `source_status`, `source_quality`, `redaction_applied`, `real_platform_request_executed`, and `executor_mode`.
 - No `target_url`, arbitrary URL, curl+cookie, or manual header handoff path is introduced.
+- Static preflight pass does not prove live auth success; live runner command must still be tested after overlay.
 - `DENNIS_ROUTING_GUARD_V1` appears in runtime guard docs.
 - `single_entity_execution_mode`, `small_batch_execution_with_checkpoint`, `batch_clustering_mode`, and `strategy_recommendation_plan_mode` are documented.
 - `source checkpoint` and `partial evidence card` are mandatory for ATO execution.
@@ -69,6 +72,7 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 
 - `dry_run_only` runner success.
 - `constructed_url`-only success.
+- Legacy-only `sso_session` import dependency.
 - Arbitrary URL / `target_url` runner input.
 - curl + cookie as a runtime platform access path.
 - main agent direct platform bypass after Dennis timeout.
