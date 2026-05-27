@@ -21,6 +21,8 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
   - `--timeout`
   - `--format json`
 - Runner emits structured observation with `source_status`, `source_quality`, `redaction_applied`, `real_platform_request_executed`, and `executor_mode`.
+- Runner emits auth refresh fields: `auth_refresh_attempted`, `auth_refresh_status`, `retry_after_refresh`, and `source_status_before_refresh`.
+- Runner handles initial 302 / HTML login page / access proxy redirect by running one controlled SSO refresh through `skills/kuaishou-sso-login-client/scripts/sso_session.py` with the runner-built whitelist URL, then retrying once.
 - No `target_url`, arbitrary URL, curl+cookie, or manual header handoff path is introduced.
 - Static preflight pass does not prove live auth success; live runner command must still be tested after overlay.
 - `DENNIS_ROUTING_GUARD_V1` appears in runtime guard docs.
@@ -52,6 +54,7 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 - `loopDetection` is active.
 - Main agent can spawn `dennis-risk-agent`.
 - Main agent does not take over platform querying after Dennis timeout.
+- Expired SSO cookie / ticket triggers runner auth refresh + single retry; refresh failure returns structured `auth_failed` / `blocked`, not a direct bypass.
 - Real-time readonly API calls do not ask the user for confirmation when required fields are present.
 - DataAgent / Hive / big batch / write / high-risk operations require plan or confirmation.
 - Source checkpoints are written after each source.
@@ -74,6 +77,7 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 - `constructed_url`-only success.
 - Legacy-only `sso_session` import dependency.
 - Arbitrary URL / `target_url` runner input.
+- Multiple auth refresh retries or auth refresh loops.
 - curl + cookie as a runtime platform access path.
 - main agent direct platform bypass after Dennis timeout.
 - Using old cached data as "no-cache" realtime result.

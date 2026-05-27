@@ -118,11 +118,18 @@ def main() -> int:
         "runner_no_arbitrary_url_input",
         runner,
         [
-            "--target_url",
-            "--target-url",
             "arbitrary_url",
         ],
     )
+    if re.search(r"parser\.add_argument\([\"']--target[_-]url", runner):
+        findings.append(
+            {
+                "check": "runner_no_target_url_cli_argument",
+                "severity": "critical",
+                "status": "fail",
+                "reason": "runner must not accept target_url / arbitrary URL from CLI",
+            }
+        )
     findings += check_contains(
         "runner_live_dependency_contract",
         runner,
@@ -132,6 +139,19 @@ def main() -> int:
             ".ks_sso",
             "sso-state.json",
             "kuaishou.com",
+        ],
+    )
+    findings += check_contains(
+        "runner_auth_refresh_retry_contract",
+        runner,
+        [
+            "auth_refresh_attempted",
+            "auth_refresh_status",
+            "retry_after_refresh",
+            "source_status_before_refresh",
+            "sso_session.py",
+            "--target_url",
+            "refresh_sso_for_whitelist_url",
         ],
     )
     findings += check_absent(

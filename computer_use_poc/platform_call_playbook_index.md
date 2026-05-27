@@ -81,14 +81,18 @@ Preferred path:
 
 1. Use controlled runner:
    `python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id <user_id> --timeout 30 --format json`
-2. If SSO executor is unavailable, return structured `blocked`.
-3. If auth fails, return `auth_failed`.
-4. If timeout, return `timeout`.
+2. If the first request returns HTTP 302, HTML login page, SSO login URL, access-proxy redirect, or `auth_failed`, the runner performs one controlled SSO refresh with its internally built whitelist URL.
+3. After refresh, retry the same runner request once.
+4. If refresh fails or the retry still returns auth failure, return structured `auth_failed`.
+5. If SSO executor is unavailable, return structured `blocked`.
+6. If timeout, return `timeout`.
 
 Common errors:
 
 - Missing `SmartSSOSession`: `blocked / sso_executor_unavailable`
 - HTTP redirect / login page: `auth_failed / auth_session_issue`
+- auth expired before refresh: `auth_failed_before_refresh`, then one controlled refresh and retry
+- refresh script missing / failed: `auth_failed` or `blocked` with `auth_refresh_status=failed`
 - JSON parse failure: `parse_error`
 - Online window gap: `login_log_window_incomplete`
 
@@ -105,6 +109,7 @@ Source status mapping:
 - SSO blocked or runner unavailable: `blocked` or `auth_failed`
 - Request timeout: `timeout`
 - Non-JSON response: `parse_error` or `auth_failed` if HTML/login-like.
+- `auth_refresh_attempted`, `auth_refresh_status`, `retry_after_refresh`, and `source_status_before_refresh` must be present in runner output.
 
 Capability status: `api_direct_confirmed`.
 

@@ -22,6 +22,8 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -236,6 +238,10 @@ def build_observation(
     error_message: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
     executor_mode: str = "unavailable",
+    auth_refresh_attempted: bool = False,
+    auth_refresh_status: str = "skipped",
+    retry_after_refresh: bool = False,
+    source_status_before_refresh: str | None = None,
 ) -> dict[str, Any]:
     observation: dict[str, Any] = {
         "schema_version": "sso_runner_observation_v2",
@@ -251,6 +257,10 @@ def build_observation(
         "redaction_applied": True,
         "real_platform_request_executed": real_platform_request_executed,
         "executor_mode": executor_mode,
+        "auth_refresh_attempted": auth_refresh_attempted,
+        "auth_refresh_status": auth_refresh_status,
+        "retry_after_refresh": retry_after_refresh,
+        "source_status_before_refresh": source_status_before_refresh,
         "dataagent_called": False,
         "platform_write_action": False,
         "sensitive_output": False,
@@ -338,6 +348,40 @@ def call_executor_get(url: str, timeout: int) -> tuple[Any, str]:
         return call_cookie_state_get(url, timeout), "cookie_state_fallback"
     except Exception as cookie_exc:
         raise RuntimeError(f"{safe_error_message(smart_error)}; {safe_error_message(cookie_exc)}") from cookie_exc
+
+
+def sso_refresh_script_path() -> Path:
+    return Path(__file__).resolve().parents[1] / "skills" / "kuaishou-sso-login-client" / "scripts" / "sso_session.py"
+
+
+def refresh_sso_for_whitelist_url(url: str, timeout: int) -> tuple[bool, str]:
+    script = sso_refresh_script_path()
+    if not script.exists():
+        return False, "sso_refresh_script_missing"
+
+    uv = shutil.which("uv")
+    if uv:
+        cmd = [uv, "run", str(script), "--target_url", url]
+    else:
+        cmd = [sys.executable, str(script), "--target_url", url]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=max(1, min(timeout, MAX_TIMEOUT_SECONDS)),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "sso_refresh_timeout"
+    except Exception:
+        return False, "sso_refresh_failed"
+
+    if proc.returncode == 0:
+        return True, "succeeded"
+    return False, "sso_refresh_failed"
 
 
 def response_status(response: Any) -> int | None:
@@ -428,6 +472,93 @@ def classify_json_payload(payload: Any) -> tuple[str, int, str, dict[str, Any]]:
     return status, records_count, summary, quality
 
 
+def classify_response_to_observation(
+    *,
+    response: Any,
+    user_id: str,
+    evidence_time_range: dict[str, Any],
+    request_safe_id: str,
+    metadata: dict[str, Any],
+    executor_mode: str,
+    auth_refresh_attempted: bool,
+    auth_refresh_status: str,
+    retry_after_refresh: bool,
+    source_status_before_refresh: str | None,
+) -> dict[str, Any]:
+    status_code = response_status(response)
+    text = response_text(response)
+    if status_code is not None and 300 <= int(status_code) < 400:
+        return build_observation(
+            source_status="auth_failed",
+            user_id=user_id,
+            evidence_time_range=evidence_time_range,
+            evidence_summary="Unified login log request redirected, likely authentication or access proxy issue.",
+            source_quality={"permission_status": "auth_failed", "failure_reason": "http_redirect"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            auth_refresh_attempted=auth_refresh_attempted,
+            auth_refresh_status=auth_refresh_status,
+            retry_after_refresh=retry_after_refresh,
+            source_status_before_refresh=source_status_before_refresh,
+        )
+    if looks_like_auth_html(text):
+        return build_observation(
+            source_status="auth_failed",
+            user_id=user_id,
+            evidence_time_range=evidence_time_range,
+            evidence_summary="Unified login log returned HTML/login-like content instead of JSON.",
+            source_quality={"permission_status": "auth_failed", "failure_reason": "html_or_login_page"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            auth_refresh_attempted=auth_refresh_attempted,
+            auth_refresh_status=auth_refresh_status,
+            retry_after_refresh=retry_after_refresh,
+            source_status_before_refresh=source_status_before_refresh,
+        )
+
+    try:
+        payload = response_json(response)
+    except Exception as exc:
+        return build_observation(
+            source_status="parse_error",
+            user_id=user_id,
+            evidence_time_range=evidence_time_range,
+            evidence_summary="Unified login log response was not parseable as JSON.",
+            source_quality={"permission_status": "unknown", "failure_reason": "json_parse_error"},
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            error_message=str(exc),
+            extra_metadata=metadata,
+            executor_mode=executor_mode,
+            auth_refresh_attempted=auth_refresh_attempted,
+            auth_refresh_status=auth_refresh_status,
+            retry_after_refresh=retry_after_refresh,
+            source_status_before_refresh=source_status_before_refresh,
+        )
+
+    source_status, records_count, summary, quality = classify_json_payload(payload)
+    return build_observation(
+        source_status=source_status,
+        user_id=user_id,
+        evidence_time_range=evidence_time_range,
+        evidence_summary=summary,
+        source_quality=quality,
+        real_platform_request_executed=True,
+        records_count=records_count,
+        raw_reference_safe_id=request_safe_id,
+        extra_metadata=metadata,
+        executor_mode=executor_mode,
+        auth_refresh_attempted=auth_refresh_attempted,
+        auth_refresh_status=auth_refresh_status,
+        retry_after_refresh=retry_after_refresh,
+        source_status_before_refresh=source_status_before_refresh,
+    )
+
+
 def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, timeout: int) -> dict[str, Any]:
     url, metadata = build_user_login_url(user_id, from_ts, to_ts)
     evidence_time_range = metadata.pop("evidence_time_range")
@@ -467,61 +598,66 @@ def execute_login_log(user_id: str, from_ts: str | None, to_ts: str | None, time
             executor_mode="unavailable",
         )
 
-    status_code = response_status(response)
-    text = response_text(response)
-    if status_code is not None and 300 <= int(status_code) < 400:
-        return build_observation(
-            source_status="auth_failed",
-            user_id=user_id,
-            evidence_time_range=evidence_time_range,
-            evidence_summary="Unified login log request redirected, likely authentication or access proxy issue.",
-            source_quality={"permission_status": "auth_failed", "failure_reason": "http_redirect"},
-            real_platform_request_executed=True,
-            raw_reference_safe_id=request_safe_id,
-            extra_metadata=metadata,
-            executor_mode=executor_mode,
-        )
-    if looks_like_auth_html(text):
-        return build_observation(
-            source_status="auth_failed",
-            user_id=user_id,
-            evidence_time_range=evidence_time_range,
-            evidence_summary="Unified login log returned HTML/login-like content instead of JSON.",
-            source_quality={"permission_status": "auth_failed", "failure_reason": "html_or_login_page"},
-            real_platform_request_executed=True,
-            raw_reference_safe_id=request_safe_id,
-            extra_metadata=metadata,
-            executor_mode=executor_mode,
-        )
-
-    try:
-        payload = response_json(response)
-    except Exception as exc:
-        return build_observation(
-            source_status="parse_error",
-            user_id=user_id,
-            evidence_time_range=evidence_time_range,
-            evidence_summary="Unified login log response was not parseable as JSON.",
-            source_quality={"permission_status": "unknown", "failure_reason": "json_parse_error"},
-            real_platform_request_executed=True,
-            raw_reference_safe_id=request_safe_id,
-            error_message=str(exc),
-            extra_metadata=metadata,
-            executor_mode=executor_mode,
-        )
-
-    source_status, records_count, summary, quality = classify_json_payload(payload)
-    return build_observation(
-        source_status=source_status,
+    first_observation = classify_response_to_observation(
+        response=response,
         user_id=user_id,
         evidence_time_range=evidence_time_range,
-        evidence_summary=summary,
-        source_quality=quality,
-        real_platform_request_executed=True,
-        records_count=records_count,
-        raw_reference_safe_id=request_safe_id,
-        extra_metadata=metadata,
+        request_safe_id=request_safe_id,
+        metadata=metadata,
         executor_mode=executor_mode,
+        auth_refresh_attempted=False,
+        auth_refresh_status="skipped",
+        retry_after_refresh=False,
+        source_status_before_refresh=None,
+    )
+
+    if first_observation["source_status"] != "auth_failed":
+        return first_observation
+
+    refresh_ok, refresh_reason = refresh_sso_for_whitelist_url(url, timeout)
+    if not refresh_ok:
+        first_observation["auth_refresh_attempted"] = True
+        first_observation["auth_refresh_status"] = "failed"
+        first_observation["retry_after_refresh"] = False
+        first_observation["source_status_before_refresh"] = "auth_failed"
+        first_observation["source_quality"]["failure_reason"] = refresh_reason
+        return first_observation
+
+    try:
+        retry_response, retry_executor_mode = call_executor_get(url, timeout)
+    except Exception as exc:
+        return build_observation(
+            source_status="auth_failed",
+            user_id=user_id,
+            evidence_time_range=evidence_time_range,
+            evidence_summary="Unified login log auth refresh succeeded but retry could not complete.",
+            source_quality={
+                "permission_status": "auth_failed",
+                "failure_reason": safe_error_message(exc),
+                "no_data_not_risk_exclusion": True,
+            },
+            real_platform_request_executed=True,
+            raw_reference_safe_id=request_safe_id,
+            error_message=safe_error_message(exc),
+            extra_metadata=metadata,
+            executor_mode="unavailable",
+            auth_refresh_attempted=True,
+            auth_refresh_status="succeeded",
+            retry_after_refresh=True,
+            source_status_before_refresh="auth_failed",
+        )
+
+    return classify_response_to_observation(
+        response=retry_response,
+        user_id=user_id,
+        evidence_time_range=evidence_time_range,
+        request_safe_id=request_safe_id,
+        metadata=metadata,
+        executor_mode=retry_executor_mode,
+        auth_refresh_attempted=True,
+        auth_refresh_status="succeeded",
+        retry_after_refresh=True,
+        source_status_before_refresh="auth_failed",
     )
 
 

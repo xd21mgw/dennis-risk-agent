@@ -1612,3 +1612,33 @@ platform_capability_status_and_cost_priority_regression:
       - require_cross_validation
       - no_single_source_final_judgement
     pass_fail_criteria: "该信号应进入 evidence card 的 medium/weak evidence 或 missing/counter 解释，不得单独定性。"
+
+sso_runner_auth_refresh_retry_regression:
+  - case_id: SSO-RUNNER-AUTH-REFRESH-RETRY-001
+    input: "统一登录日志 runner 首次请求返回 302 / HTML 登录页 / access proxy redirect。"
+    expected_routing_mode: sso_runner_controlled_refresh_retry
+    expected_output_boundary:
+      - auth_failed_before_refresh
+      - auth_refresh_attempted_true
+      - retry_after_refresh_true
+      - max_retry_once
+      - no_cookie_token_session_header_output
+    pass_fail_criteria: "runner 必须使用内部白名单 URL 调用受控 sso_session.py refresh，并重试一次原请求；成功后返回 completed/no_data，失败后结构化 auth_failed。"
+  - case_id: SSO-RUNNER-REFRESH-FAIL-CLOSED-001
+    input: "统一登录日志 runner 首次 auth_failed，且 sso_session.py 不存在 / refresh 失败。"
+    expected_routing_mode: sso_runner_fail_closed
+    expected_output_boundary:
+      - auth_refresh_status_failed
+      - source_status_auth_failed_or_blocked
+      - failure_reason_recorded
+      - no_direct_bypass
+    pass_fail_criteria: "refresh 失败时必须 fail closed，输出结构化 auth_failed / blocked；不得让 main agent curl/cookie/browser 接管。"
+  - case_id: SSO-RUNNER-NO-AUTH-LOOP-001
+    input: "统一登录日志 runner refresh 后 retry 仍返回 auth_failed。"
+    expected_routing_mode: sso_runner_no_auth_loop
+    expected_output_boundary:
+      - retry_after_refresh_true
+      - max_retry_once
+      - final_auth_failed
+      - source_quality_auth_session_issue
+    pass_fail_criteria: "最多 refresh + retry 一次；retry 后仍失败必须返回 auth_failed，不进入循环。"

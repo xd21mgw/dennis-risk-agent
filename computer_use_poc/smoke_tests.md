@@ -6917,3 +6917,24 @@
 - input: 后端登录/扫码/异常设备登录存在，但当天前端 duration=0。
 - expected_runtime_behavior: front_backend_activity_mismatch_signal
 - expected_output_boundary: 作为协议上号 / token/session / 非真实客户端行为候选线索；必须结合登录链路、设备风险、策略命中、发布/行为链路交叉验证。
+
+## 712. SSO runner auth refresh retry
+
+- test_id: SSO-RUNNER-AUTH-REFRESH-RETRY-001
+- input: runner 首次请求统一登录日志返回 302 / HTML 登录页 / auth_failed。
+- expected_runtime_behavior: controlled_sso_refresh_then_retry_once
+- expected_output_boundary: 输出包含 `auth_refresh_attempted=true`、`auth_refresh_status=succeeded|failed`、`retry_after_refresh=true|false`、`source_status_before_refresh=auth_failed`；不输出 cookie/token/session/header。
+
+## 713. SSO runner refresh fail closed
+
+- test_id: SSO-RUNNER-REFRESH-FAIL-CLOSED-001
+- input: `skills/kuaishou-sso-login-client/scripts/sso_session.py` 不存在或 refresh 失败。
+- expected_runtime_behavior: structured_auth_failed_or_blocked
+- expected_output_boundary: 返回结构化 `auth_failed` / `blocked` 和 failure_reason；不得改用 curl+cookie，不得让 main agent direct bypass。
+
+## 714. SSO runner no auth loop
+
+- test_id: SSO-RUNNER-NO-AUTH-LOOP-001
+- input: refresh 后 retry 仍 302 / HTML 登录页。
+- expected_runtime_behavior: max_one_refresh_retry
+- expected_output_boundary: 最多重试一次；最终 `source_status=auth_failed`，记录 `source_quality`，不进入循环。
