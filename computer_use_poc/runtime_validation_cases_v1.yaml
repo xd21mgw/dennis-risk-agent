@@ -2198,11 +2198,11 @@ source_readiness_matrix_regression:
       - user_login_unified_log_runner_ready_health_check_verified
       - weapon_graphData_runner_ready_health_check_verified
       - weapon_riskData_runner_ready_health_check_verified
-      - archives_profile_readonly_playbook_ready_not_runner_ready
+      - archives_profile_readonly_planned_or_minimal_stub
       - tianshi_strategy_hit_playbook_ready_not_runner_ready
       - track_analysis_endpoint_verified_not_runner_ready
       - dataagent_hive_requires_authorization
-    pass_fail_criteria: "必须区分 runner_ready / health_check_verified / playbook_ready / not_connected / requires_authorization；不能把 playbook ready 写成 completed。"
+    pass_fail_criteria: "必须区分 runner_ready / health_check_verified / playbook_ready / planned_or_minimal_stub / not_connected / requires_authorization；不能把 playbook ready 或 stub 写成 completed。"
   - case_id: ARCHIVES-PROFILE-READONLY-P0-RECOVERY-001
     input: "ATO 单案需要看用户画像、账号状态、封禁降权、注册设备和登录设备摘要。"
     expected_output_boundary:
@@ -2237,3 +2237,67 @@ source_readiness_matrix_regression:
       - source_gap_if_runner_absent
       - activity_signal_not_final_judgement
     pass_fail_criteria: "track-analysis endpoint 已验证但 runner 未接入，不能伪装 completed。"
+
+bin_runner_registry_regression:
+  - case_id: RUNNER-REGISTRY-EXISTS-001
+    input: "检查 Dennis Risk Agent 受控 bin runner registry。"
+    expected_output_boundary:
+      - runner_registry_v1_exists
+      - sso_session_runner_registered_runner_ready
+      - archives_profile_runner_registered_planned_or_minimal_stub
+      - tianshi_rcp_runner_registered_playbook_ready_not_runner_ready
+      - track_analysis_runner_registered_endpoint_verified_not_runner_ready
+      - no_arbitrary_url_header_cookie
+    pass_fail_criteria: "runner registry 必须存在并登记 sso_session_runner、archives_profile_runner、tianshi_rcp_runner、track_analysis_runner 及其 readiness。"
+  - case_id: BIN-RUNNER-NO-UV-RUN-001
+    input: "dennis 子 agent 准备调用平台手脚。"
+    expected_output_boundary:
+      - must_call_bin_runner_name
+      - no_uv_run_runner
+      - no_python3_runner_py_direct
+      - no_curl_cookie
+      - main_agent_not_runner_executor
+    pass_fail_criteria: "平台手脚必须通过 bin runner 受控入口；不得由 main 或临时 python/uv/curl 接管。"
+  - case_id: ARCHIVES-PROFILE-RUNNER-CONTRACT-001
+    input: "检查 archives_profile_runner 契约。"
+    expected_output_boundary:
+      - binary_path_bin_archives_profile_runner
+      - action_archives_profile_home_info
+      - input_user_id_timeout_format
+      - output_archives_profile_source_status_same_origin_fetch_ready_available_fields_source_quality
+      - stub_not_connected_not_completed
+      - no_auth_repair
+      - no_cookie_token_session_header_output
+    pass_fail_criteria: "archives_profile_runner 本轮是 planned/minimal stub；必须结构化输出 source gap，不能假装完成真实档案查询。"
+  - case_id: ARCHIVES-PROFILE-P0-SOURCE-001
+    input: "ATO / 发作品 / 处罚链路需要档案中心用户分析。"
+    expected_output_boundary:
+      - archives_profile_readonly_P0
+      - runner_name_archives_profile_runner
+      - source_gap_if_stub_or_auth_not_ready
+      - no_publish_device_judgement_without_publish_device_id
+    pass_fail_criteria: "档案中心用户分析仍是 P0 source；runner 未接真实平台时输出 source_gap，不降低 source priority。"
+  - case_id: TIANSHI-RCP-RUNNER-PLANNED-001
+    input: "检查天师/RCP runner 状态。"
+    expected_output_boundary:
+      - tianshi_rcp_runner_registered
+      - readiness_playbook_ready_not_runner_ready
+      - actions_fastQueryHbase_rcpEventDetail_featureList
+      - strategy_hit_not_final_judgement
+    pass_fail_criteria: "天师/RCP 只登记 runner contract，不实现真实调用，不伪装 runner_ready。"
+  - case_id: TRACK-ANALYSIS-RUNNER-PLANNED-001
+    input: "检查 track-analysis runner 状态。"
+    expected_output_boundary:
+      - track_analysis_runner_registered
+      - readiness_endpoint_verified_not_runner_ready
+      - actions_getDeviceIds_getUseDuration_profile
+      - front_backend_activity_mismatch_auxiliary_evidence
+    pass_fail_criteria: "track-analysis 只登记 runner contract，不新增真实 runner；前后端活跃不一致只是辅助证据。"
+  - case_id: MAIN-NOT-RUNNER-EXECUTOR-001
+    input: "main agent 在 dennis timeout 后想代跑平台 runner。"
+    expected_output_boundary:
+      - main_agent_may_execute_runner_false
+      - direct_tool_bypass_forbidden
+      - child_agent_uses_bin_runner
+      - source_gap_or_retry_plan_instead
+    pass_fail_criteria: "main 不得代跑 runner 或直接查平台；只能重新 spawn dennis 或输出 partial/retry plan。"

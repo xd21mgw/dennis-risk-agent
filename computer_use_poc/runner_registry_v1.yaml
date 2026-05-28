@@ -1,0 +1,215 @@
+schema_version: runner_registry_v1
+purpose: >
+  Register controlled bin runners that dennis-risk-agent may execute directly
+  through workspace/dennis-risk-agent/bin. Runners are source adapters, not
+  free-form platform clients.
+
+global_contract:
+  executor_agent: dennis-risk-agent
+  main_agent_may_execute_runner: false
+  arbitrary_url_allowed: false
+  arbitrary_header_allowed: false
+  arbitrary_cookie_allowed: false
+  curl_cookie_allowed: false
+  uv_run_allowed: false
+  direct_python_runner_allowed: false
+  required_output_fields:
+    - source_card
+    - source_quality
+    - source_checkpoint_private
+    - redaction
+  sensitive_output_policy:
+    cookie_token_session_header: never_output
+    password_material: never_output
+    sensitive_output: false
+    redaction_applied: true
+
+runners:
+  - runner_name: sso_session_runner
+    binary_path: bin/sso_session_runner
+    source_capability:
+      - login_log_read
+      - user_device_resolution
+      - device_risk_read
+    readiness_status: runner_ready
+    allowed_actions:
+      - login_log.query_user_login_log
+      - weapon.graph_data
+      - weapon.risk_data
+    input_schema:
+      login_log.query_user_login_log:
+        required:
+          - user_id
+        optional:
+          - from_timestamp
+          - to_timestamp
+          - timeout
+      weapon.graph_data:
+        required:
+          - user_id
+        optional:
+          - timeout
+      weapon.risk_data:
+        required:
+          - device_id
+        optional:
+          - timeout
+    output_schema:
+      - source_card
+      - source_quality
+      - source_checkpoint_private
+      - redaction
+      - real_platform_request_executed
+    allowed_domains:
+      - user-center-workbench.corp.kuaishou.com
+      - weapon.corp.kuaishou.com
+    fixed_endpoints:
+      - /rest/unified/log/search
+      - /apiv2/graphData
+      - /apiv2/riskData
+    auth_state_dependency:
+      - SmartSSOSession
+      - controlled_cookie_state_fallback
+    downstream_source_chaining:
+      - graphData_raw_device_id_to_riskData
+    owner: dennis-risk-agent
+    validation_case_id:
+      - SSO-RUNNER-REAL-EXECUTOR-001
+      - WEAPON-RUNNER-ACTION-001
+
+  - runner_name: archives_profile_runner
+    binary_path: bin/archives_profile_runner
+    source_capability:
+      - archives_profile_readonly
+      - user_profile_read
+    readiness_status: planned_or_minimal_stub
+    allowed_actions:
+      - archives.profile_home_info
+    input_schema:
+      archives.profile_home_info:
+        required:
+          - user_id
+        optional:
+          - timeout
+          - format
+    output_schema:
+      - archives_profile_source_status
+      - same_origin_fetch_ready
+      - available_fields
+      - account_status_summary
+      - ban_info_summary
+      - demote_info_summary
+      - login_device_summary
+      - register_device_summary
+      - missing_fields
+      - source_card
+      - source_quality
+      - source_checkpoint_private
+      - redaction
+    sensitive_output_policy:
+      cookie_token_session_header: never_output
+      sensitive_output: false
+      redaction_applied: true
+    allowed_domains:
+      - admin.p.adm-corp.kuaishou.com
+    fixed_endpoints:
+      - /archives/user/home/info
+    auth_state_dependency:
+      - archives_auth_state
+      - browser_same_origin_if_auth_ready
+    downstream_source_chaining:
+      - login_device_to_weapon_riskData_when_device_id_available
+      - register_device_to_weapon_riskData_when_device_id_available
+    forbidden:
+      - publish_device_judgement_without_publish_device_id
+      - auth_repair_in_business_case
+      - arbitrary_url
+      - arbitrary_header
+      - arbitrary_cookie
+    owner: dennis-risk-agent
+    validation_case_id:
+      - ARCHIVES-PROFILE-RUNNER-CONTRACT-001
+      - ARCHIVES-PROFILE-P0-SOURCE-001
+
+  - runner_name: tianshi_rcp_runner
+    binary_path: bin/tianshi_rcp_runner
+    source_capability:
+      - strategy_hit_read
+      - tianshi_strategy_hit_inventory
+      - rcp_event_detail
+    readiness_status: playbook_ready_not_runner_ready
+    allowed_actions:
+      - tianshi.fastQueryHbase
+      - rcp.rcpEventDetail
+      - rcp.featureList
+    input_schema:
+      common:
+        supported:
+          - user_id
+          - time_window
+          - eventId
+          - eventTime
+          - policyCode
+    output_schema:
+      - source_card
+      - source_quality
+      - source_checkpoint_private
+      - redaction
+    sensitive_output_policy:
+      sensitive_output: false
+      redaction_applied: true
+    allowed_domains: []
+    fixed_endpoints:
+      - fastQueryHbase
+      - rcpEventDetail
+      - featureList
+    auth_state_dependency:
+      - future_runner_contract
+    downstream_source_chaining:
+      - event_id_to_rcp_detail
+      - policy_code_to_policy_attribution
+    boundary:
+      - strategy_hit_not_final_judgement
+    owner: dennis-risk-agent
+    validation_case_id:
+      - TIANSHI-RCP-RUNNER-PLANNED-001
+
+  - runner_name: track_analysis_runner
+    binary_path: bin/track_analysis_runner
+    source_capability:
+      - track_analysis_activity_profile_api_direct
+    readiness_status: endpoint_verified_not_runner_ready
+    allowed_actions:
+      - track_analysis.getDeviceIds
+      - track_analysis.getUseDuration
+      - track_analysis.profile
+    input_schema:
+      common:
+        supported:
+          - user_id
+          - device_id
+          - appName
+          - time_window
+    output_schema:
+      - source_card
+      - source_quality
+      - source_checkpoint_private
+      - redaction
+      - event_day_activity_alignment
+    sensitive_output_policy:
+      sensitive_output: false
+      redaction_applied: true
+    allowed_domains: []
+    fixed_endpoints:
+      - /dp/platform/app/analytics/v2/sequence/getDeviceIds
+      - /dp/platform/app/analytics/v2/sequence/getUseDuration
+      - /dp/platform/app/analytics/v2/sequence/profile
+    auth_state_dependency:
+      - future_runner_contract
+    downstream_source_chaining:
+      - device_ids_to_weapon_riskData
+    boundary:
+      - front_backend_activity_mismatch_auxiliary_evidence
+    owner: dennis-risk-agent
+    validation_case_id:
+      - TRACK-ANALYSIS-RUNNER-PLANNED-001

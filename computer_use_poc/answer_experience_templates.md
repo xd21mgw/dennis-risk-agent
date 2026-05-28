@@ -65,7 +65,8 @@ source_plan:
     access_method: api_direct_if_available / controlled_browser_if_cookie_activation_required
     purpose: 账号状态、注册/实名/基础画像、账号历史风险、当前状态
     fallback: auth_failed/blocked 进入 source_quality，不得静默跳过
-    readiness_status: playbook_ready_not_runner_ready
+    readiness_status: planned_or_minimal_stub
+    runner_name: archives_profile_runner
     output_if_completed:
       archives_profile_source_status: completed
       fields:
@@ -130,7 +131,8 @@ time_window_reasoning:
 ```yaml
 source_readiness_summary:
   - source_name: archives_profile_readonly
-    readiness_status: playbook_ready_not_runner_ready
+    readiness_status: planned_or_minimal_stub
+    runner_name: archives_profile_runner
     source_priority: P0
     expected_behavior: auth gap 或 runner gap 进入 source_quality；不阻塞已完成 P0 evidence card
   - source_name: tianshi_strategy_hit_inventory

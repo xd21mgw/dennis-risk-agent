@@ -11,6 +11,8 @@ status_enum:
   - requires_authorization
   - playbook_ready_not_runner_ready
   - endpoint_verified_not_runner_ready
+  - candidate_runner
+  - planned_or_minimal_stub
 
 global_boundaries:
   no_data_not_risk_exclusion: true
@@ -79,7 +81,8 @@ sources:
     source_priority: P0
     readiness_status:
       - playbook_ready
-      - not_connected
+      - planned_or_minimal_stub
+      - candidate_runner
     supported_input:
       - user_id
     access_method:
@@ -100,6 +103,7 @@ sources:
       - no_auth_repair_in_business_case
       - auth_failed_marks_archives_auth_gap
       - no_publish_device_id_means_cannot_judge_publish_device_anomaly
+      - stub_not_live_execution_until_connected
 
   archives_publish_device_trace:
     source_priority: P0-conditional

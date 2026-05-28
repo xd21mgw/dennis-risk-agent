@@ -7350,7 +7350,7 @@
 - test_id: SOURCE-READINESS-MATRIX-001
 - input: 核心 source readiness 状态。
 - expected_runtime_behavior: readiness_matrix_loaded
-- expected_output_boundary: `source_readiness_matrix_v1.yaml` 存在；覆盖 runner_ready、health_check_verified、playbook_ready、not_connected、requires_authorization；login_log/Weapon 为 runner_ready + health_check_verified；档案中心为 playbook_ready_not_runner_ready；DataAgent/Hive 为 requires_authorization。
+- expected_output_boundary: `source_readiness_matrix_v1.yaml` 存在；覆盖 runner_ready、health_check_verified、playbook_ready、planned_or_minimal_stub、not_connected、requires_authorization；login_log/Weapon 为 runner_ready + health_check_verified；档案中心为 planned_or_minimal_stub；DataAgent/Hive 为 requires_authorization。
 
 ## 774. Archives profile readonly P0 recovered
 
@@ -7379,3 +7379,52 @@
 - input: 需要对齐发布日/登录日前端活跃。
 - expected_runtime_behavior: endpoint_verified_runner_gap
 - expected_output_boundary: matrix 标 `endpoint_verified_not_runner_ready`；无 runner execution 时不得标 completed；活跃信号不是最终风险定性。
+
+## 778. Runner registry exists
+
+- test_id: RUNNER-REGISTRY-EXISTS-001
+- input: 检查受控 bin runner registry。
+- expected_runtime_behavior: runner_registry_loaded
+- expected_output_boundary: `runner_registry_v1.yaml` 存在并登记 `sso_session_runner`、`archives_profile_runner`、`tianshi_rcp_runner`、`track_analysis_runner`；包含 readiness、allowed_actions、input_schema、output_schema、敏感输出策略、固定 endpoint / domain。
+
+## 779. Bin runner no uv run
+
+- test_id: BIN-RUNNER-NO-UV-RUN-001
+- input: dennis 子 agent 调平台 source。
+- expected_runtime_behavior: bin_runner_only
+- expected_output_boundary: 必须调用 `bin/<runner_name>`；禁止 `uv run runner`、`python3 runner.py`、curl+cookie；main 不得代跑 runner。
+
+## 780. Archives profile runner contract
+
+- test_id: ARCHIVES-PROFILE-RUNNER-CONTRACT-001
+- input: `archives_profile_runner --user-id <uid> --timeout 30 --format json`
+- expected_runtime_behavior: planned_minimal_stub
+- expected_output_boundary: 输出 `archives_profile_source_status`、`same_origin_fetch_ready`、`available_fields`、`source_quality`、`source_checkpoint_private`、`redaction`；当前 stub 标 not_connected/source_gap，不伪装 completed。
+
+## 781. Archives profile P0 source
+
+- test_id: ARCHIVES-PROFILE-P0-SOURCE-001
+- input: ATO / 发作品 / 处罚链路需要档案中心用户分析。
+- expected_runtime_behavior: archives_profile_p0_with_runner_gap
+- expected_output_boundary: `archives_profile_readonly` 是 P0；runner 名为 `archives_profile_runner`；未接真实平台时输出 source_gap；无 publish_device_id 不判断发作品设备异常。
+
+## 782. Tianshi RCP runner planned
+
+- test_id: TIANSHI-RCP-RUNNER-PLANNED-001
+- input: 天师/RCP runner 状态。
+- expected_runtime_behavior: runner_contract_only
+- expected_output_boundary: 登记 `tianshi_rcp_runner`，状态 `playbook_ready_not_runner_ready`；actions 包含 fastQueryHbase / rcpEventDetail / featureList；不伪装可执行。
+
+## 783. Track-analysis runner planned
+
+- test_id: TRACK-ANALYSIS-RUNNER-PLANNED-001
+- input: track-analysis runner 状态。
+- expected_runtime_behavior: runner_contract_only
+- expected_output_boundary: 登记 `track_analysis_runner`，状态 `endpoint_verified_not_runner_ready`；actions 包含 getDeviceIds / getUseDuration / profile；不新增真实 runner。
+
+## 784. Main not runner executor
+
+- test_id: MAIN-NOT-RUNNER-EXECUTOR-001
+- input: dennis timeout 后 main 想代跑平台 runner。
+- expected_runtime_behavior: direct_bypass_forbidden
+- expected_output_boundary: main 不得代跑 runner 或 direct exec 平台；只能记录 timeout/source_gap、重新 spawn dennis 或输出 partial/retry plan。
