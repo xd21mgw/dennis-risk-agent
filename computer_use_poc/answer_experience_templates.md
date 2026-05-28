@@ -105,6 +105,26 @@ source_plan:
     access_method: controlled_runner
     purpose: 查询设备风险标签
     fallback: missing_device_reference 时标记未覆盖
+    output_if_completed:
+      risk_label_summary:
+        label_count:
+        high_risk_count:
+        medium_risk_count:
+        weak_risk_count:
+        readable_labels:
+        risk_group_name:
+        groupLevel:
+        machine_account:
+        no_sim:
+        no_lock_screen:
+        factory_reset:
+        low_launch_count:
+        uid_cluster:
+    boundary:
+      - raw labelInfo 只允许在 summary generation 层使用
+      - final answer / evidence card / run log 不输出完整 labelInfo 原文
+      - labelInfo 为空时标 `risk_label_summary.empty=true` 和 `no_risk_label_not_no_risk_proof=true`
+      - 设备风险标签是设备侧证据，不单独定性 ATO / 垃圾注册 / 群控
 ```
 
 ATO 输出必须包含 `time_window_reasoning`：

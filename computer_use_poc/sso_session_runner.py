@@ -234,6 +234,8 @@ def build_weapon_risk_url(device_id: str) -> tuple[str, dict[str, Any]]:
     url = f"{PLATFORM_ACTIONS[('weapon', 'risk_data')]['base_url']}?{urlencode(params)}"
     return url, {
         "request_safe_id": safe_id(url),
+        "device_id_safe_id": safe_id(f"device_id:{device_id}"),
+        "device_id_masked": mask_device_id(device_id),
         "endpoint_contract": "/apiv2/riskData",
         "device_id_prefix_preserved": device_id.startswith(("ANDROID_", "IOS_")),
         "query_shape": {
@@ -241,6 +243,230 @@ def build_weapon_risk_url(device_id: str) -> tuple[str, dict[str, Any]]:
             "deviceIds": "redacted_device_id",
         },
     }
+
+
+def mask_device_id(device_id: str) -> str:
+    if "_" in device_id:
+        prefix, rest = device_id.split("_", 1)
+        return f"{prefix}_***{rest[-4:]}" if rest else f"{prefix}_***"
+    return f"device_***{device_id[-4:]}"
+
+
+def extract_graph_device_ids(payload: Any) -> list[str]:
+    """Extract raw device ids from Weapon graphData payload for internal chaining.
+
+    Device ids are expected under payload.data.pointInfoMap in the verified
+    graphData response shape. Numeric-only nodes are user ids and must not be
+    treated as device ids.
+    """
+    if not isinstance(payload, dict):
+        return []
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    point_info_map = data.get("pointInfoMap")
+    if not isinstance(point_info_map, dict):
+        return []
+
+    candidates: list[str] = []
+    for key, value in point_info_map.items():
+        if isinstance(key, str):
+            candidates.append(key)
+        if isinstance(value, dict):
+            for field in ("id", "nodeId", "vertexId", "value", "deviceId", "device_id"):
+                field_value = value.get(field)
+                if isinstance(field_value, str):
+                    candidates.append(field_value)
+
+    device_ids: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate or ID_RE.fullmatch(candidate):
+            continue
+        if not DEVICE_ID_RE.fullmatch(candidate):
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            device_ids.append(candidate)
+    return device_ids
+
+
+LABEL_KEYWORDS = {
+    "machine_account": ("机器", "机注", "machine", "robot", "bot", "账号农场", "小号"),
+    "no_sim": ("无sim", "无 sim", "nosim", "no_sim", "无卡", "SIM缺失"),
+    "no_lock_screen": ("无锁屏", "未设置锁屏", "no_lock", "nolock", "lock_screen"),
+    "factory_reset": ("恢复出厂", "factory", "reset", "刷机", "wipe"),
+    "low_launch_count": ("启动次数低", "低启动", "low_launch", "launch_count"),
+    "uid_cluster": ("uid聚集", "uid_cluster", "账号聚集", "多账号", "群控"),
+}
+
+HIGH_RISK_WORDS = ("高危", "高风险", "严重", "黑", "high", "critical", "strong", "level_3", "level3")
+MEDIUM_RISK_WORDS = ("中危", "中风险", "可疑", "medium", "middle", "level_2", "level2")
+WEAK_RISK_WORDS = ("低危", "低风险", "弱", "low", "weak", "level_1", "level1")
+
+
+def iter_label_items(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        items: list[Any] = []
+        for item in value:
+            items.extend(iter_label_items(item))
+        return items
+    if isinstance(value, dict):
+        if any(
+            key in value
+            for key in (
+                "labelName",
+                "label_name",
+                "label",
+                "name",
+                "riskGroupName",
+                "risk_group_name",
+                "groupName",
+                "group_name",
+                "groupLevel",
+                "level",
+            )
+        ):
+            return [value]
+        items = []
+        for nested in value.values():
+            items.extend(iter_label_items(nested))
+        return items
+    if isinstance(value, str) and value.strip():
+        return [value]
+    return []
+
+
+def find_label_info(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        for key in ("labelInfo", "label_info", "labels", "riskLabels", "risk_labels"):
+            if key in payload:
+                return payload.get(key)
+        for nested in payload.values():
+            found = find_label_info(nested)
+            if found is not None:
+                return found
+    elif isinstance(payload, list):
+        merged: list[Any] = []
+        for item in payload:
+            found = find_label_info(item)
+            if found is not None:
+                merged.append(found)
+        if merged:
+            return merged
+    return None
+
+
+def normalize_label_text(item: Any) -> str:
+    if isinstance(item, str):
+        return sanitize_text(item)
+    if not isinstance(item, dict):
+        return sanitize_text(item)
+    parts: list[str] = []
+    for key in (
+        "labelName",
+        "label_name",
+        "label",
+        "name",
+        "desc",
+        "description",
+        "riskGroupName",
+        "risk_group_name",
+        "groupName",
+        "group_name",
+        "groupLevel",
+        "level",
+    ):
+        value = item.get(key)
+        if value not in (None, ""):
+            parts.append(sanitize_text(value))
+    return " / ".join(parts)[:160] if parts else sanitize_text(item)
+
+
+def classify_label_strength(item: Any, text: str) -> str:
+    haystack = text.lower()
+    if isinstance(item, dict):
+        for key in ("groupLevel", "level", "riskLevel", "risk_level", "score", "weight"):
+            value = item.get(key)
+            if isinstance(value, (int, float)):
+                if value >= 3 or value >= 50:
+                    return "high"
+                if value >= 2 or value >= 20:
+                    return "medium"
+                if value > 0:
+                    return "weak"
+            if isinstance(value, str):
+                haystack += f" {value.lower()}"
+    if any(word.lower() in haystack for word in HIGH_RISK_WORDS):
+        return "high"
+    if any(word.lower() in haystack for word in MEDIUM_RISK_WORDS):
+        return "medium"
+    if any(word.lower() in haystack for word in WEAK_RISK_WORDS):
+        return "weak"
+    return "weak"
+
+
+def summarize_risk_labels(payload: Any) -> dict[str, Any]:
+    label_info = find_label_info(payload)
+    items = iter_label_items(label_info)
+    readable_labels: list[str] = []
+    risk_group_names: list[str] = []
+    group_levels: list[str] = []
+    keyword_hits = {key: False for key in LABEL_KEYWORDS}
+    counts = {"high": 0, "medium": 0, "weak": 0}
+    seen_labels: set[str] = set()
+
+    for item in items:
+        text = normalize_label_text(item)
+        if not text:
+            continue
+        if text not in seen_labels:
+            seen_labels.add(text)
+            readable_labels.append(text[:160])
+        strength = classify_label_strength(item, text)
+        counts[strength] += 1
+        lowered = text.lower()
+        for key, keywords in LABEL_KEYWORDS.items():
+            if any(keyword.lower() in lowered for keyword in keywords):
+                keyword_hits[key] = True
+        if isinstance(item, dict):
+            for key in ("riskGroupName", "risk_group_name", "groupName", "group_name"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    safe_value = sanitize_text(value)
+                    if safe_value not in risk_group_names:
+                        risk_group_names.append(safe_value)
+            for key in ("groupLevel", "level", "riskLevel", "risk_level"):
+                value = item.get(key)
+                if value not in (None, ""):
+                    safe_value = sanitize_text(value)
+                    if safe_value not in group_levels:
+                        group_levels.append(safe_value)
+
+    label_count = len(readable_labels)
+    summary: dict[str, Any] = {
+        "empty": label_count == 0,
+        "label_count": label_count,
+        "high_risk_count": counts["high"],
+        "medium_risk_count": counts["medium"],
+        "weak_risk_count": counts["weak"],
+        "readable_labels": readable_labels[:20],
+        "risk_group_name": risk_group_names[:10],
+        "groupLevel": group_levels[:10],
+        "machine_account": keyword_hits["machine_account"],
+        "no_sim": keyword_hits["no_sim"],
+        "no_lock_screen": keyword_hits["no_lock_screen"],
+        "factory_reset": keyword_hits["factory_reset"],
+        "low_launch_count": keyword_hits["low_launch_count"],
+        "uid_cluster": keyword_hits["uid_cluster"],
+        "raw_labelInfo_output": False,
+    }
+    if label_count == 0:
+        summary["no_risk_label_not_no_risk_proof"] = True
+    return summary
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -314,7 +540,13 @@ def build_observation(
     source_name: str = "user_login_unified_log",
     response_type: str | None = None,
     source_card: dict[str, Any] | None = None,
+    source_checkpoint_private: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    source_quality = dict(source_quality)
+    source_quality.setdefault("redaction_applied", True)
+    source_quality.setdefault("raw_reference_retained_for_followup", False)
+    source_quality.setdefault("sensitive_output", False)
+    source_quality.setdefault("provenance", "current_task_observation")
     observation: dict[str, Any] = {
         "schema_version": "sso_runner_observation_v2",
         "source_name": source_name,
@@ -324,6 +556,17 @@ def build_observation(
         "evidence_time_range": evidence_time_range or {},
         "evidence_summary": evidence_summary,
         "source_quality": source_quality,
+        "raw_references": [],
+        "redaction": {
+            "redaction_applied": True,
+            "raw_reference_retained_for_followup": bool(source_quality.get("raw_reference_retained_for_followup")),
+            "sensitive_output": False,
+        },
+        "provenance": {
+            "executor_agent": "dennis-risk-agent",
+            "source_observation_id": raw_reference_safe_id,
+            "current_task_only": True,
+        },
         "raw_reference_safe_id": raw_reference_safe_id,
         "collected_at": now_iso(),
         "redaction_applied": True,
@@ -338,6 +581,7 @@ def build_observation(
         "sensitive_output": False,
         "response_type": response_type,
         "source_card": source_card or {},
+        "source_checkpoint_private": source_checkpoint_private or {},
         "logs": [],
     }
     if error_message:
@@ -346,6 +590,47 @@ def build_observation(
         observation["error"] = None
     if extra_metadata:
         observation["metadata"] = extra_metadata
+    raw_refs: list[dict[str, Any]] = []
+    if user_id:
+        raw_refs.append(
+            {
+                "ref_type": "user_id",
+                "raw_reference_safe_id": safe_id(f"user_id:{user_id}"),
+                "alias": "user_ref_1",
+                "masked_value": f"user_***{user_id[-4:]}",
+                "allowed_downstream_sources": ["login_log", "archives", "weapon_graphData", "dataagent_query_plan"],
+                "retention_scope": "current_task_only",
+            }
+        )
+    if source_card and source_card.get("device_id_safe_id"):
+        raw_refs.append(
+            {
+                "ref_type": "device_id",
+                "raw_reference_safe_id": source_card["device_id_safe_id"],
+                "alias": "device_ref_1",
+                "masked_value": source_card.get("device_id_masked", "device_masked"),
+                "allowed_downstream_sources": ["weapon_riskData", "track_analysis_device_query", "device_sdk_query_plan"],
+                "retention_scope": "current_task_only",
+            }
+        )
+    if source_checkpoint_private and source_checkpoint_private.get("raw_device_ids_for_chaining"):
+        for index, raw_device_id in enumerate(source_checkpoint_private["raw_device_ids_for_chaining"], start=1):
+            if not isinstance(raw_device_id, str):
+                continue
+            raw_refs.append(
+                {
+                    "ref_type": "device_id",
+                    "raw_reference_safe_id": safe_id(f"device_id:{raw_device_id}"),
+                    "alias": f"device_ref_{index}",
+                    "masked_value": mask_device_id(raw_device_id),
+                    "allowed_downstream_sources": ["weapon_riskData", "track_analysis_device_query", "device_sdk_query_plan"],
+                    "retention_scope": "current_task_only",
+                }
+            )
+    if raw_refs:
+        observation["raw_references"] = raw_refs
+        observation["redaction"]["raw_reference_retained_for_followup"] = True
+        observation["source_quality"]["raw_reference_retained_for_followup"] = True
     return observation
 
 
@@ -546,7 +831,13 @@ def classify_json_payload(payload: Any) -> tuple[str, int, str, dict[str, Any]]:
     return status, records_count, summary, quality
 
 
-def classify_weapon_payload(payload: Any, source_name: str) -> tuple[str, int, str, dict[str, Any], dict[str, Any]]:
+def classify_weapon_payload(
+    payload: Any,
+    source_name: str,
+    *,
+    device_id_safe_id: str | None = None,
+    device_id_masked: str | None = None,
+) -> tuple[str, int, str, dict[str, Any], dict[str, Any], dict[str, Any]]:
     records = extract_records(payload)
     records_count = len(records)
     if records_count == 0 and isinstance(payload, dict):
@@ -562,13 +853,27 @@ def classify_weapon_payload(payload: Any, source_name: str) -> tuple[str, int, s
         "response_shape": "json_summary",
         "raw_response_redacted": True,
     }
+    source_checkpoint_private: dict[str, Any] = {}
     if source_name == "weapon_user_to_device_graph":
+        graph_device_ids = extract_graph_device_ids(payload)
         source_card["endpoint"] = "/apiv2/graphData"
         source_card["forbidden_endpoint"] = "/api/graphData"
         source_card["graph_empty_not_no_device"] = records_count == 0
+        source_card["masked_device_ids"] = [mask_device_id(device_id) for device_id in graph_device_ids]
+        source_card["raw_device_ids_for_chaining_count"] = len(graph_device_ids)
+        source_card["device_id_redaction_policy"] = "raw_in_chaining_field_masked_in_display"
+        source_checkpoint_private["raw_device_ids_for_chaining"] = graph_device_ids
+        source_checkpoint_private["filtered_numeric_user_nodes"] = True
     else:
         source_card["endpoint"] = "/apiv2/riskData"
         source_card["device_risk_not_user_risk"] = True
+        if device_id_safe_id:
+            source_card["device_id_safe_id"] = device_id_safe_id
+            source_card["device_id_masked"] = device_id_masked
+        risk_label_summary = summarize_risk_labels(payload)
+        source_card["risk_label_summary"] = risk_label_summary
+        source_card["labelInfo_redaction_policy"] = "raw_labelInfo_used_for_summary_not_final_output"
+        source_checkpoint_private["raw_labelInfo_retained_for_summary"] = True
 
     status = "completed" if records_count > 0 else "no_data"
     summary = (
@@ -581,8 +886,15 @@ def classify_weapon_payload(payload: Any, source_name: str) -> tuple[str, int, s
         "reliability_level": "api_json_summary",
         "no_data_not_risk_exclusion": status == "no_data",
         "raw_response_redacted": True,
+        "redaction_applied": True,
+        "sensitive_output": False,
     }
-    return status, records_count, summary, quality, source_card
+    if source_name == "weapon_device_risk":
+        quality["raw_labelInfo_retained_for_summary"] = True
+        risk_label_summary = source_card.get("risk_label_summary", {})
+        if isinstance(risk_label_summary, dict) and risk_label_summary.get("empty"):
+            quality["no_risk_label_not_no_risk_proof"] = True
+    return status, records_count, summary, quality, source_card, source_checkpoint_private
 
 
 def classify_response_to_observation(
@@ -796,6 +1108,8 @@ def execute_weapon(
         raise ValueError("unsupported weapon action")
 
     request_safe_id = metadata.pop("request_safe_id")
+    device_id_safe_id = metadata.pop("device_id_safe_id", None)
+    device_id_masked = metadata.pop("device_id_masked", None)
     try:
         response, executor_mode = call_executor_get(url, timeout)
     except TimeoutError as exc:
@@ -879,7 +1193,12 @@ def execute_weapon(
             response_type="parse_error",
         )
 
-    source_status, records_count, summary, quality, source_card = classify_weapon_payload(payload, source_name)
+    source_status, records_count, summary, quality, source_card, source_checkpoint_private = classify_weapon_payload(
+        payload,
+        source_name,
+        device_id_safe_id=device_id_safe_id,
+        device_id_masked=device_id_masked,
+    )
     return build_observation(
         source_name=source_name,
         source_status=source_status,
@@ -894,6 +1213,7 @@ def execute_weapon(
         executor_mode=executor_mode,
         response_type="json",
         source_card=source_card,
+        source_checkpoint_private=source_checkpoint_private,
     )
 
 

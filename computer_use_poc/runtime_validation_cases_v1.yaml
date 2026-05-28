@@ -2301,3 +2301,36 @@ bin_runner_registry_regression:
       - child_agent_uses_bin_runner
       - source_gap_or_retry_plan_instead
     pass_fail_criteria: "main 不得代跑 runner 或直接查平台；只能重新 spawn dennis 或输出 partial/retry plan。"
+
+weapon_riskdata_label_summary_regression:
+  - case_id: WEAPON-RISKDATA-LABEL-SUMMARY-001
+    input: "Weapon riskData completed，payload 中包含 labelInfo。"
+    expected_output_boundary:
+      - risk_label_summary_exists
+      - label_count
+      - high_risk_count
+      - medium_risk_count
+      - weak_risk_count
+      - readable_labels
+      - risk_group_name_or_groupLevel_if_present
+      - machine_account_no_sim_no_lock_screen_factory_reset_low_launch_count_uid_cluster_flags
+      - source_quality_redaction_applied_true
+      - raw_labelInfo_retained_for_summary_true
+      - sensitive_output_false
+    pass_fail_criteria: "runner 必须把 raw labelInfo 转换成安全的 risk_label_summary，供 evidence card 使用。"
+  - case_id: RISKDATA-RAW-LABELINFO-NOT-FINAL-OUTPUT-001
+    input: "riskData labelInfo 含完整原始 JSON。"
+    expected_output_boundary:
+      - raw_labelInfo_used_only_for_summary_generation
+      - no_full_raw_labelInfo_json_in_final_answer
+      - no_full_raw_labelInfo_json_in_run_log
+      - no_full_deviceId_cookie_token_session_header
+    pass_fail_criteria: "完整 raw labelInfo 不能进入 final answer / run log；只能输出摘要和脱敏标签。"
+  - case_id: RISKDATA-EMPTY-LABEL-NOT-NO-RISK-001
+    input: "Weapon riskData completed，但 labelInfo 为空。"
+    expected_output_boundary:
+      - risk_label_summary_empty_true
+      - no_risk_label_not_no_risk_proof_true
+      - no_low_risk_or_no_risk_conclusion_from_empty_label
+      - source_quality_keeps_no_data_boundary
+    pass_fail_criteria: "labelInfo 为空只说明该 source 未返回可读风险标签，不是无风险证明。"

@@ -7428,3 +7428,24 @@
 - input: dennis timeout 后 main 想代跑平台 runner。
 - expected_runtime_behavior: direct_bypass_forbidden
 - expected_output_boundary: main 不得代跑 runner 或 direct exec 平台；只能记录 timeout/source_gap、重新 spawn dennis 或输出 partial/retry plan。
+
+## 785. Weapon riskData label summary
+
+- test_id: WEAPON-RISKDATA-LABEL-SUMMARY-001
+- input: Weapon riskData completed 且 payload 含 labelInfo。
+- expected_runtime_behavior: labelInfo_to_safe_summary
+- expected_output_boundary: 输出 `risk_label_summary`，包含 label_count、high/medium/weak 计数、readable_labels、risk_group_name/groupLevel、machine_account/no_sim/no_lock_screen/factory_reset/low_launch_count/uid_cluster 等布尔摘要；`source_quality.redaction_applied=true`、`raw_labelInfo_retained_for_summary=true`、`sensitive_output=false`。
+
+## 786. Raw riskData labelInfo not final output
+
+- test_id: RISKDATA-RAW-LABELINFO-NOT-FINAL-OUTPUT-001
+- input: riskData labelInfo 原始 JSON。
+- expected_runtime_behavior: raw_labelInfo_internal_only
+- expected_output_boundary: raw labelInfo 只用于内部 summary generation；final answer / evidence card / run log 不输出完整原文；不输出完整 deviceId、cookie/token/session/header。
+
+## 787. Empty riskData label is not no-risk proof
+
+- test_id: RISKDATA-EMPTY-LABEL-NOT-NO-RISK-001
+- input: riskData completed 但 labelInfo 为空。
+- expected_runtime_behavior: empty_label_boundary
+- expected_output_boundary: 输出 `risk_label_summary.empty=true` 和 `no_risk_label_not_no_risk_proof=true`；不得据此输出低风险 / 无风险 / 排除设备风险。
