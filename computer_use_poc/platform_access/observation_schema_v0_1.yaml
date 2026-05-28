@@ -29,6 +29,7 @@ source_status_enum:
   - wrong_request_body_shape
   - wrong_time_field_format
   - needs_har_request_body_confirmation
+  - guessed_body_failed
   - guessed_body_failed_not_direct_unavailable
   - parameter_contract_missing
   - missing_required_param
