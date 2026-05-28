@@ -7553,9 +7553,44 @@
 - test_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
 - input: 登录日 / 扫码日 / 发布日 / 策略命中日前端活跃对齐。
 - expected_runtime_behavior: track_analysis_har_contract
-- expected_output_boundary: 固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；未观察 userId/deviceId 变体标 `needs_har_confirmation`；`front_backend_activity_mismatch` 只是辅助证据。
+- expected_output_boundary: 使用完整 HAR contract 参数；`getLastestDateTime` 参数完整时不应触发 code=603；固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；duration=0 不是无风险反证；`front_backend_activity_mismatch` 只是辅助证据。
 
-## 803. Archives center publish chain P0
+## 803. Track getLastestDateTime parameter contract
+
+- test_id: TRACK-GETLATESTDATETIME-PARAM-CONTRACT-001
+- input: `getLastestDateTime` 缺 `product/type/funcType/_t` 或 type 非 userId/deviceId。
+- expected_runtime_behavior: parameter_contract_missing
+- expected_output_boundary: source_status=`invalid_parameter` 或 `missing_required_param`；failure_layer=`parameter_contract_missing`；code=603 不得写 auth_failed。
+
+## 804. Track getUseDuration rows object array
+
+- test_id: TRACK-GETUSEDURATION-ROWS-OBJECT-ARRAY-001
+- input: `getUseDuration.rows` 响应。
+- expected_runtime_behavior: rows_object_array_parse
+- expected_output_boundary: rows 按对象数组解析，读取 `date/duration`；计算 `total_duration`、`peak_day`、`event_day_duration`。
+
+## 805. Track profile second level fields
+
+- test_id: TRACK-PROFILE-SECOND-LEVEL-FIELDS-001
+- input: profile 返回 firstLevelProfile 和 secondLevelProfile。
+- expected_runtime_behavior: secondLevelProfile_label_value_parse
+- expected_output_boundary: `register_time`、`fan_distribution`、`active_days_bucket` 从 `secondLevelProfile` label-value pair 解析，不只查 firstLevelProfile。
+
+## 806. Track userId deviceId dual mode
+
+- test_id: TRACK-USERID-DEVICEID-DUAL-MODE-001
+- input: track-analysis 用 userId 或 deviceId 查询。
+- expected_runtime_behavior: accepted_entity_type_userId_deviceId
+- expected_output_boundary: userId 可聚合多设备，deviceId 看单设备活跃；维度混用标 `wrong_entity_type`；HAR 未观察 body key 变体时标 `needs_har_confirmation`。
+
+## 807. Track front backend activity mismatch
+
+- test_id: TRACK-FRONT-BACKEND-ACTIVITY-MISMATCH-001
+- input: 后端登录/发布/策略命中当天前端 duration=0。
+- expected_runtime_behavior: front_backend_activity_mismatch_signal
+- expected_output_boundary: 输出 `front_backend_activity_mismatch`；作为中高价值线索但不能单独定性，需结合登录链路、设备风险、策略命中、发布/行为链路。
+
+## 808. Archives center publish chain P0
 
 - test_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
 - input: 被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。

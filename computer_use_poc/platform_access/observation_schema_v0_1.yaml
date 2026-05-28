@@ -25,6 +25,8 @@ source_status_enum:
   - not_triggered
   - missing_upstream_id
   - invalid_parameter
+  - parameter_contract_missing
+  - missing_required_param
   - wrong_entity_type
   - wrong_base_domain
   - same_origin_mismatch
@@ -34,11 +36,14 @@ source_status_enum:
   - runner_platform_not_supported
   - api_path_permission_blocked
   - platform_partial_available
+  - discovery_completed_api_probe_pending
+  - front_backend_activity_mismatch
   - auth_failed
   - permission_blocked
   - parse_error
   - timeout
   - blocked
+  - completed_zero_duration
 failure_layer_enum:
   - runner_invocation
   - runner_dependency

@@ -2456,11 +2456,58 @@ platform_access_execution_v0_1_regression:
   - case_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
     input: "登录日 / 发布日 / 策略命中日前端活跃对齐。"
     expected_output_boundary:
+      - complete_har_contract_params
+      - getLastestDateTime_no_code_603_when_params_complete
       - getDeviceIds_getUseDuration_profile_getLastestDateTime_contract
       - appName_userId_deviceId_date_alignment
+      - event_day_activity_alignment
+      - completed_zero_duration_not_no_risk
       - front_backend_activity_mismatch_auxiliary_evidence
       - needs_har_confirmation_for_unobserved_variants
     pass_fail_criteria: "track-analysis 端点和字段结构已从 HAR 固化；未观察变体只标 needs_har_confirmation。"
+  - case_id: TRACK-GETLATESTDATETIME-PARAM-CONTRACT-001
+    input: "getLastestDateTime 缺 product/type/funcType/_t 或 type 非 userId/deviceId。"
+    expected_output_boundary:
+      - source_status_invalid_parameter_or_missing_required_param
+      - failure_layer_parameter_contract_missing
+      - code_603_not_auth_failed
+      - minimum_valid_request_documented
+    pass_fail_criteria: "getLastestDateTime code=603 归因参数契约缺失/非法，不写 auth_failed。"
+  - case_id: TRACK-GETUSEDURATION-ROWS-OBJECT-ARRAY-001
+    input: "解析 getUseDuration rows。"
+    expected_output_boundary:
+      - rows_object_array
+      - parse_date_duration_fields
+      - compute_total_duration
+      - compute_peak_day
+      - compute_event_day_duration
+    pass_fail_criteria: "getUseDuration.rows 必须按对象数组解析，不按二维数组偏移解析。"
+  - case_id: TRACK-PROFILE-SECOND-LEVEL-FIELDS-001
+    input: "解析 profile 的注册时间、粉丝分布和活跃天数。"
+    expected_output_boundary:
+      - parse_secondLevelProfile_label_value
+      - register_time_from_secondLevelProfile
+      - fan_distribution_from_secondLevelProfile
+      - active_days_bucket_from_secondLevelProfile
+      - not_firstLevelProfile_only
+    pass_fail_criteria: "profile 二级字段必须从 secondLevelProfile label-value 解析。"
+  - case_id: TRACK-USERID-DEVICEID-DUAL-MODE-001
+    input: "track-analysis 支持 userId 和 deviceId 两种维度。"
+    expected_output_boundary:
+      - accepted_entity_type_userId_deviceId
+      - userId_can_aggregate_multiple_devices
+      - deviceId_single_device_activity
+      - wrong_entity_type_on_dimension_mix
+      - userId_body_variant_needs_har_confirmation_if_unobserved
+    pass_fail_criteria: "userId / deviceId 双模式要表达清楚，未在 HAR 观察到的 body key 只标 needs_har_confirmation。"
+  - case_id: TRACK-FRONT-BACKEND-ACTIVITY-MISMATCH-001
+    input: "后端登录/发布/策略命中当天，前端 duration=0。"
+    expected_output_boundary:
+      - front_backend_activity_mismatch
+      - medium_high_value_lead_only
+      - not_standalone_final_judgement
+      - cross_validate_with_login_device_strategy_publish_chain
+    pass_fail_criteria: "前后端活跃不一致是线索，不单独定性风险。"
   - case_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
     input: "被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。"
     expected_output_boundary:

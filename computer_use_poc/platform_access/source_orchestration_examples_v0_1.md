@@ -26,6 +26,17 @@
 
 If the user provides a deviceId, call Weapon riskData directly. If only userId is provided, resolve device candidates from graphData, login log, publish chain, RCP detail, Archives, or track-analysis first. Do not pass userId as deviceId.
 
+## Track-Analysis Event-Day Activity
+
+1. Call `getLastestDateTime` with the complete query contract: `product=KUAISHOU|NEBULA`, `type=userId|deviceId`, `funcType=USER_PROFILE_QUERY`, and `_t`.
+2. If `getLastestDateTime` returns code `603`, classify it as `parameter_contract_missing` / `invalid_parameter`, not auth failure.
+3. Call `getDeviceIds` when device resolution is needed.
+4. Call `getUseDuration` and parse `rows` as an object array with `date` and `duration`.
+5. Call `profile` with millisecond `startTime/endTime`, `include=1`, `pageSize=100`, and the selected entity.
+6. Compare event-day backend evidence with frontend `event_day_duration`.
+
+If backend login, scan/OAuth, publish, or strategy hit exists on a day and the matching userId/deviceId duration is `0` or absent, mark `front_backend_activity_mismatch`. This is supporting evidence only and cannot independently classify risk.
+
 ## RCP Strategy Chain
 
 `eventList -> rcpEventDetail -> rcpEventFeatureList(featureGroup="") -> getPolicyVersionListByEvent -> nodePolicyAttribution`

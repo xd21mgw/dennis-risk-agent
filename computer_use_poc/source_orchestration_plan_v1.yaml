@@ -164,6 +164,21 @@
         "archives_contract_status": "partial_same_origin_if_auth_ready",
         "track_analysis_contract_status": "har_confirmed_needs_har_confirmation_for_unobserved_variants"
       },
+      "track_analysis_event_day_alignment": {
+        "getLastestDateTime_minimum_valid_request": "product=KUAISHOU|NEBULA&type=userId|deviceId&funcType=USER_PROFILE_QUERY&_t=<cache_buster>",
+        "code_603_failure_layer": "parameter_contract_missing",
+        "entity_modes": [
+          "userId",
+          "deviceId"
+        ],
+        "appName_values": [
+          "KUAISHOU",
+          "NEBULA"
+        ],
+        "duration_rows_shape": "rows object array with date and duration",
+        "zero_duration_status": "completed_zero_duration",
+        "event_day_signal": "front_backend_activity_mismatch"
+      },
       "stop_conditions": {
         "allow_stop_after_login_log_only": false,
         "allow_final_conclusion_without_source_completion_matrix": false,

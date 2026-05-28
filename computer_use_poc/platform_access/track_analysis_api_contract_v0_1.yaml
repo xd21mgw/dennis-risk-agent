@@ -1,84 +1,283 @@
 schema_version: track_analysis_api_contract_v0_1
 platform_key: track_analysis
+base_domain: track-analysis.corp.kuaishou.com
+base_path: /dp/platform/app/analytics/v2/sequence
 capability_status: same_origin_api_confirmed_or_api_direct_candidate
 current_status: har_confirmed_for_observed_endpoints_needs_har_confirmation_for_unobserved_variants
-base_path: /dp/platform/app/analytics/v2/sequence
-invocation_methods:
+invocation_context:
+  - api_direct_confirmed
   - browser_same_origin
-  - controlled_runner_api_candidate
+  - same_origin_api_confirmed
 supported_inputs:
-  - user_id
-  - device_id
+  - userId
+  - deviceId
   - appName
   - event_day
+supported_app_names:
+  - KUAISHOU
+  - NEBULA
+fixed_params:
+  funcType: USER_PROFILE_QUERY
+  cache_buster: _t
+general_failure_mapping:
+  code_603: invalid_parameter_or_missing_required_param
+  missing_param: missing_required_param
+  incomplete_param_contract: parameter_contract_missing
+  userId_deviceId_mixed: wrong_entity_type
+  illegal_appName: invalid_parameter
+  duration_zero: completed_zero_duration
+  spa_visible_api_not_verified: discovery_completed_api_probe_pending
+  same_origin_needed: same_origin_required
 apis:
   getLastestDateTime:
-    method: GET
+    api_name: getLastestDateTime
+    base_domain: track-analysis.corp.kuaishou.com
     path: /dp/platform/app/analytics/v2/sequence/getLastestDateTime
-    output:
-      - latest_datetime
-      - uid_did_relation_latest_datetime
-    har_confirmed_query_keys:
+    method: GET
+    invocation_context:
+      - api_direct_confirmed
+      - browser_same_origin
+      - same_origin_api_confirmed
+    required_query_params:
       - product
       - type
       - funcType
       - _t
-  getDeviceIds:
-    method: POST
-    path: /dp/platform/app/analytics/v2/sequence/getDeviceIds
-    output:
-      - device_ids
-      - uid_did_relation_latest_datetime
-      - deviceModel
-      - lastDeviceActive
-    har_confirmed_body_keys:
-      - appName
+    required_body_params: []
+    fixed_params:
+      funcType: USER_PROFILE_QUERY
+    entity_params:
+      userId: "represented by query type=userId; no entity value observed in HAR for this endpoint"
+      deviceId: "represented by query type=deviceId; no entity value observed in HAR for this endpoint"
+      appName: "use product query param"
+      product: "KUAISHOU | NEBULA"
+      type: "userId | deviceId"
+      funcType: USER_PROFILE_QUERY
+      startTime: null
+      endTime: null
+      date: null
+    accepted_entity_type:
+      - userId
       - deviceId
+    output_fields:
+      - data.lastestDateTime
+      - data.uidDidRelLatestDateTime
+    known_success_from_har: true
+    known_success_from_run_log: true
+    known_failure_modes:
+      - missing_required_param
+      - invalid_parameter
+      - parameter_contract_missing
+      - auth_failed
+      - parse_error
+      - timeout
+    minimum_valid_request: "GET with product=KUAISHOU|NEBULA, type=userId|deviceId, funcType=USER_PROFILE_QUERY, _t=<cache_buster>"
+    smoke_usage: "Run before entity-detail calls to confirm latest partition for selected app/entity type."
+    confidence: high_for_har_shape_medium_for_all_product_type_variants
+    code_603_interpretation: "Treat code=603 as invalid_parameter or missing_required_param before auth; likely missing/invalid product, type, funcType, or cache-buster contract."
+  getDeviceIds:
+    api_name: getDeviceIds
+    base_domain: track-analysis.corp.kuaishou.com
+    path: /dp/platform/app/analytics/v2/sequence/getDeviceIds
+    method: POST
+    invocation_context:
+      - api_direct_confirmed
+      - browser_same_origin
+      - same_origin_api_confirmed
+    required_query_params: []
+    required_body_params:
+      - appName
       - funcType
       - _t
+      - entity_value
+    fixed_params:
+      funcType: USER_PROFILE_QUERY
+    entity_params:
+      userId: "supported by run log; exact body key variant needs_har_confirmation if not present in observed HAR"
+      deviceId: "HAR observed body key deviceId"
+      appName: "KUAISHOU | NEBULA"
+      product: null
+      type: null
+      funcType: USER_PROFILE_QUERY
+      startTime: null
+      endTime: null
+      date: null
+    accepted_entity_type:
+      - userId
+      - deviceId
+    output_fields:
+      - data[].deviceId
+      - data[].deviceModel
+      - data[].lastDeviceActive
+    known_success_from_har: true
+    known_success_from_run_log: true
+    known_failure_modes:
+      - missing_required_param
+      - invalid_parameter
+      - wrong_entity_type
+      - auth_failed
+      - parse_error
+      - timeout
+    minimum_valid_request: "POST body with appName=KUAISHOU|NEBULA, funcType=USER_PROFILE_QUERY, _t=<cache_buster>, and a userId/deviceId entity value using the validated body key for the selected mode."
+    smoke_usage: "Resolve userId to visible deviceIds or validate deviceId relation before duration/profile reads."
+    confidence: high_for_deviceId_body_har_medium_for_userId_body_variant
     needs_har_confirmation:
       - userId_request_variant_if_not_present_in_observed_har
   getUseDuration:
-    method: POST
+    api_name: getUseDuration
+    base_domain: track-analysis.corp.kuaishou.com
     path: /dp/platform/app/analytics/v2/sequence/getUseDuration
-    output:
-      - daily_duration_rows
-      - total_duration
-      - peak_duration
-      - first_active_date
-    rows_shape: object_array_date_duration
-    har_confirmed_body_keys:
+    method: POST
+    invocation_context:
+      - api_direct_confirmed
+      - browser_same_origin
+      - same_origin_api_confirmed
+    required_query_params: []
+    required_body_params:
       - appName
-      - deviceId
       - funcType
       - _t
+      - entity_value
+    fixed_params:
+      funcType: USER_PROFILE_QUERY
+    entity_params:
+      userId: "supported by run log; exact body key variant needs_har_confirmation if not present in observed HAR"
+      deviceId: "HAR observed body key deviceId"
+      appName: "KUAISHOU | NEBULA"
+      product: null
+      type: null
+      funcType: USER_PROFILE_QUERY
+      startTime: null
+      endTime: null
+      date: "derived from data.rows[].date"
+    accepted_entity_type:
+      - userId
+      - deviceId
+    output_fields:
+      - data.columns
+      - data.rows[].date
+      - data.rows[].duration
+      - data.firstActiveDate
+      - computed.total_duration
+      - computed.peak_day
+      - computed.event_day_duration
+    rows_shape: "rows object array"
+    known_success_from_har: true
+    known_success_from_run_log: true
+    known_failure_modes:
+      - missing_required_param
+      - invalid_parameter
+      - wrong_entity_type
+      - completed_zero_duration
+      - auth_failed
+      - parse_error
+      - timeout
+    minimum_valid_request: "POST body with appName=KUAISHOU|NEBULA, funcType=USER_PROFILE_QUERY, _t=<cache_buster>, and a userId/deviceId entity value using the validated body key for selected mode."
+    smoke_usage: "Compute total_duration, peak_day, event_day_duration, and active day coverage."
+    confidence: high_for_deviceId_body_har_medium_for_userId_body_variant
     needs_har_confirmation:
       - userId_request_variant_if_not_present_in_observed_har
   profile:
-    method: POST
+    api_name: profile
+    base_domain: track-analysis.corp.kuaishou.com
     path: /dp/platform/app/analytics/v2/sequence/profile
-    input_time_fields: startTime/endTime_ms
-    har_confirmed_body_keys:
+    method: POST
+    invocation_context:
+      - api_direct_confirmed
+      - browser_same_origin
+      - same_origin_api_confirmed
+    required_query_params: []
+    required_body_params:
       - appName
       - startTime
       - endTime
       - include
       - pageSize
-      - deviceId
       - funcType
       - _t
-    output:
-      - profile_card
-      - register_time
-      - fan_distribution
-      - active_days_bucket
-      - device_ids
+      - entity_value
+    fixed_params:
+      funcType: USER_PROFILE_QUERY
+      include: 1
+      pageSize: 100
+    entity_params:
+      userId: "supported by run log; userId profile may return deviceIds"
+      deviceId: "HAR observed body key deviceId"
+      appName: "KUAISHOU | NEBULA"
+      product: null
+      type: null
+      funcType: USER_PROFILE_QUERY
+      startTime: "millisecond timestamp"
+      endTime: "millisecond timestamp"
+      date: "covered by startTime/endTime range"
+    accepted_entity_type:
+      - userId
+      - deviceId
+    input_time_fields: startTime/endTime_ms
+    output_fields:
+      - data.deviceIds
+      - data.profile.firstLevelProfile.userId
+      - data.profile.firstLevelProfile.gender
+      - data.profile.firstLevelProfile.age
+      - data.profile.firstLevelProfile.country
+      - data.profile.firstLevelProfile.province
+      - data.profile.firstLevelProfile.city
+      - data.profile.firstLevelProfile.userType30d
+      - data.profile.firstLevelProfile.channelType
+      - data.profile.firstLevelProfile.refluxPTag
+      - data.profile.secondLevelProfile[].label
+      - data.profile.secondLevelProfile[].value
+      - data.latestDateTime
     field_notes:
       - "register_time / fan_distribution / active_days_bucket are in secondLevelProfile label-value pairs."
+      - "userId profile may return multiple deviceIds."
+      - "If userId firstActiveDate is empty, record caveat and avoid overclaiming inactivity."
+    known_success_from_har: true
+    known_success_from_run_log: true
+    known_failure_modes:
+      - missing_required_param
+      - invalid_parameter
+      - wrong_entity_type
+      - auth_failed
+      - parse_error
+      - timeout
+      - partial_source
+    minimum_valid_request: "POST body with appName=KUAISHOU|NEBULA, startTime/endTime in milliseconds, include=1, pageSize=100, funcType=USER_PROFILE_QUERY, _t=<cache_buster>, and a userId/deviceId entity value."
+    smoke_usage: "Read profile_card, device_ids, register_time, fan_distribution, active_days_bucket, and date coverage."
+    confidence: high_for_har_shape_medium_for_userId_body_variant
     needs_har_confirmation:
       - userId_request_variant_if_not_present_in_observed_har
+track_analysis_event_day_alignment:
+  purpose:
+    - "Determine whether the event day has real frontend activity."
+    - "Identify mismatch between backend login/publish/strategy-hit and frontend activity."
+    - "Support protocol login, token/session use, or non-real-client behavior investigation."
+  event_day_anchors:
+    - login_success_day
+    - scan_or_oauth_day
+    - device_switch_day
+    - strategy_hit_day
+    - publish_work_day
+    - abnormal_behavior_day
+  evidence_rule:
+    - "If backend login/publish/strategy-hit exists but same-day userId/deviceId duration is 0 or absent, mark front_backend_activity_mismatch."
+    - "front_backend_activity_mismatch is a medium/high-value lead but cannot independently classify risk."
+    - "track-analysis no_data or duration=0 is not no-risk evidence; interpret with appName, window, and entity dimension."
+  output_required:
+    - appName
+    - entity_type
+    - date_range
+    - total_duration
+    - peak_day
+    - event_day_duration
+    - active_days_bucket
+    - register_time
+    - fan_distribution
+    - caveats
 boundaries:
   - "KUAISHOU and NEBULA must be interpreted separately."
   - "NEBULA duration=0 means no observed NEBULA activity, not account no activity."
   - "Event-day duration=0 during backend login/scan/publish/strategy-hit day becomes front_backend_activity_mismatch."
+  - "completed_zero_duration is a source_quality state, not a no-risk conclusion."
+  - "SPA reachable but API not verified is discovery_completed_api_probe_pending, not completed."
   - "Activity evidence is auxiliary and not final ATO/protocol/group-control judgement."

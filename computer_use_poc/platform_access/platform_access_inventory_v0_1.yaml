@@ -128,6 +128,10 @@ platform_sources:
       getDeviceIds: har_confirmed
       getUseDuration: har_confirmed_rows_object_array
       profile: har_confirmed
+      getLastestDateTime_minimum_params: product_type_funcType_t
+      userId_deviceId_dual_mode: run_log_confirmed_with_har_variant_gap
+      event_day_activity_alignment: contract_confirmed
+      code_603_mapping: parameter_contract_missing_or_invalid_parameter
     invocation_methods:
       - browser_same_origin
       - controlled_runner_api_candidate

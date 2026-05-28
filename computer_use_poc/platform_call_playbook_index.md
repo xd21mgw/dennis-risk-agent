@@ -359,14 +359,20 @@ Supported API groups:
 
 Request shape:
 
+- `getLastestDateTime` is a GET query contract, not a body call: `product=KUAISHOU|NEBULA`, `type=userId|deviceId`, `funcType=USER_PROFILE_QUERY`, `_t=<cache_buster>`.
+- `getLastestDateTime` code `603` means `invalid_parameter` / `missing_required_param` / `parameter_contract_missing`; do not write `auth_failed`.
+- `getDeviceIds` and `getUseDuration` are POST body calls with `appName=KUAISHOU|NEBULA`, `funcType=USER_PROFILE_QUERY`, `_t`, and the selected userId/deviceId entity value. HAR confirms the `deviceId` body key; userId mode is supported by run logs, and body-key variants remain `needs_har_confirmation` if not present in the HAR.
 - `profile` uses millisecond `startTime` / `endTime`; do not use `startDate` / `endDate`.
+- `profile` also requires `appName`, `include=1`, `pageSize=100`, `funcType=USER_PROFILE_QUERY`, `_t`, and the selected entity value.
 - Do not guess `/api/profile`, `/rest/profile`, or `/api/user/profile`.
 
 Field shape:
 
 - `getUseDuration.rows` is an object-array / dict structure, not a two-dimensional array.
+- `getUseDuration.rows` items contain `date` and `duration`; compute `total_duration`, `peak_day`, and `event_day_duration` from rows.
 - `register_time`, `fan_distribution`, and `active_days_bucket` are in `secondLevelProfile` label-value pairs, not `firstLevelProfile`.
 - `NEBULA` duration `0` means no NEBULA activity in the queried app scope; it does not mean no account activity.
+- `completed_zero_duration` is source quality, not no-risk evidence.
 
 Common errors:
 
@@ -378,6 +384,8 @@ Common errors:
 - Treating NEBULA zero duration as account inactivity.
 - Infinite SPA date picker / dropdown loop.
 - Treating detail sequence unavailable as platform fully unavailable.
+- Treating code `603` as auth failure.
+- Marking SPA discovery as completed API execution before API probe is verified; use `discovery_completed_api_probe_pending`.
 
 Fallback:
 
@@ -389,6 +397,10 @@ Source status mapping:
 
 - API JSON parsed with fields: `completed`
 - API JSON empty / zero app-scope activity: `no_data` or `completed` with zero-activity summary, depending on app scope
+- API JSON valid with zero duration: `completed_zero_duration`
+- missing required params: `missing_required_param`
+- code 603 / incomplete contract: `invalid_parameter` or `parameter_contract_missing`
+- SPA visible but API not verified: `discovery_completed_api_probe_pending`
 - missing key labels: `partial_source`
 - HTML / login page / redirect: `auth_failed`
 - unexpected field shape: `parse_error`

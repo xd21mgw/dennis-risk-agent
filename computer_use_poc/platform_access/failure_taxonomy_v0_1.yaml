@@ -27,6 +27,12 @@ taxonomy:
   invalid_parameter:
     layer: parameter_contract
     meaning: "Required parameter shape is invalid."
+  parameter_contract_missing:
+    layer: parameter_contract
+    meaning: "The contract for required query/body params is incomplete or not followed; classify before auth."
+  missing_required_param:
+    layer: parameter_contract
+    meaning: "A required query/body parameter is absent, for example track-analysis getLastestDateTime missing product/type/funcType."
   wrong_entity_type:
     layer: parameter_contract
     meaning: "Input entity type is wrong, e.g. userId used as deviceId for riskData."
@@ -61,10 +67,22 @@ taxonomy:
     layer: no_failure
     meaning: "Valid request and schema; no records under current filter/window."
     boundary: "Not a no-risk conclusion."
+  completed_zero_duration:
+    layer: no_failure
+    meaning: "Valid activity request returned zero duration for the selected app/entity/window."
+    boundary: "Not a no-risk conclusion; may be front/back-end mismatch when a backend event exists on that day."
   completed_no_hit:
     layer: no_failure
     meaning: "Valid strategy/event query; no hit under current filter/window."
     boundary: "Not a no-risk conclusion."
+  discovery_completed_api_probe_pending:
+    layer: platform_partial
+    meaning: "UI/browser discovery completed but API execution is not yet verified."
+    boundary: "Do not mark the source completed."
+  front_backend_activity_mismatch:
+    layer: no_failure
+    meaning: "Backend login/publish/strategy event exists but same-day frontend duration is zero or absent."
+    boundary: "Medium/high-value lead only; not standalone final judgement."
 classification_order:
   - runner_invocation
   - runner_dependency
