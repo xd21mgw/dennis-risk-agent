@@ -36,6 +36,37 @@ Hard gate:
 - source_quality 缺失时判定为 `output_contract` failure。
 - 平台未调用时必须明确 `reason_not_executed`。
 
+### Platform Access Observation Output
+
+平台手脚执行结果进入 evidence card 前，应先归一成 `platform_access_observation`，避免把调用链路、参数契约、权限和认证混成一个 `auth_failed`。
+
+```yaml
+platform_access_observation:
+  platform_key:
+  source_name:
+  api_name:
+  invocation_method:
+  input_entity_type:
+  required_params: []
+  upstream_source:
+  params_valid:
+  source_status: completed | completed_no_data | completed_no_hit | not_triggered | missing_upstream_id | invalid_parameter | wrong_entity_type | wrong_base_domain | same_origin_mismatch | same_origin_required | runner_invocation_error | runner_dependency_error | runner_platform_not_supported | api_path_permission_blocked | platform_partial_available | auth_failed | permission_blocked | parse_error | timeout | blocked
+  records_count:
+  schema_valid:
+  output_fields_observed: []
+  failure_layer:
+  source_quality:
+    response_type:
+    http_status:
+    no_data_not_risk_exclusion: true
+    no_hit_not_risk_exclusion: true
+  raw_reference_retained_for_followup:
+  redaction_applied: true
+  next_action:
+```
+
+判定顺序：先判调用链路，再判认证；先判参数契约，再判权限；先判局部 API，再判平台不可用。
+
 Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`。如果 plan 合格但 execution 失败，先查 config/runtime、runner/safeBin/auth 和 source_orchestration；如果 execution 成功但结论差，先查 evidence_reasoning 和 output_contract。
 
 ### ATO Source Priority / Access Method Output

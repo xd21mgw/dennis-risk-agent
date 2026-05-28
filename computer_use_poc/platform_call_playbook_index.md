@@ -5,6 +5,9 @@ This index is the mandatory preflight reading list before Dennis Risk Agent call
 ## Global Rules
 
 - Realtime readonly API calls do not require user confirmation when required fields are present.
+- Platform Access Execution v0.1 contracts are indexed under `computer_use_poc/platform_access/`. Use them as execution contracts, not merely diagnosis notes.
+- Classify failures in this order: runner invocation, runner dependency, base domain / endpoint contract, parameter contract, upstream id availability, same-origin context, path permission, then auth / permission.
+- 先判调用链路，再判认证；先判参数契约，再判权限；先判局部 API，再判平台不可用。
 - DataAgent / Hive / big batch / write / high-risk operations require query plan or explicit confirmation.
 - DataAgent / Hive confirmation is per call. A previous "查吧 DataAgent" only authorizes that one query; every new SQL, table, time window, question, or evidence direction requires a new confirmation.
 - Do not use old observations as "no-cache" realtime results.
@@ -85,6 +88,22 @@ These source states affect evidence quality only. They cannot directly become ri
 - `stale_source`: old observation or cache; cannot satisfy no-cache realtime request.
 
 Any answer using these states must reflect them in `source_quality`, `missing_evidence`, and conclusion confidence.
+
+## Platform Access Execution v0.1
+
+Reference contracts:
+
+- `computer_use_poc/platform_access/platform_access_inventory_v0_1.yaml`
+- `computer_use_poc/platform_access/observation_schema_v0_1.yaml`
+- `computer_use_poc/platform_access/failure_taxonomy_v0_1.yaml`
+- `computer_use_poc/platform_access/runner_invocation_contract_v0_1.md`
+- `computer_use_poc/platform_access/browser_same_origin_adapter_contract_v0_1.md`
+- `computer_use_poc/platform_access/tianshi_rcp_api_contract_v0_1.yaml`
+- `computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml`
+- `computer_use_poc/platform_access/archives_center_contract_v0_1.yaml`
+- `computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml`
+
+Every platform hand should return `platform_access_observation` or a source-specific card that can be losslessly mapped into it: `platform_key`, `source_name`, `api_name`, `invocation_method`, `input_entity_type`, `required_params`, `upstream_source`, `params_valid`, `source_status`, `records_count`, `schema_valid`, `output_fields_observed`, `failure_layer`, `source_quality`, `raw_reference_retained_for_followup`, `redaction_applied`, and `next_action`.
 
 ## Unified Login Log
 
@@ -187,6 +206,12 @@ Source status mapping:
 
 Capability status: `api_direct_confirmed` for validated `/apiv2/graphData` / `/apiv2/riskData` readonly paths.
 
+Runner wrapper:
+
+- Preferred child-agent entry: `computer_use_poc/bin/sso_session_runner`.
+- The wrapper handles dependency invocation. The agent should not construct ad hoc `python3 ...` or `uv ...` calls.
+- Wrong runner path / missing dependency maps to `runner_invocation_error` / `runner_dependency_error`, not auth failure.
+
 ## Tianshi Strategy Platform
 
 Reference:
@@ -203,11 +228,26 @@ Input:
 
 Preferred path:
 
-1. Strategy hit inventory: `fastQueryHbase` with sourceId / sourceIds and time window.
-2. Event detail: `rcpEventDetail`.
-3. Feature snapshot: `rcpEventFeatureList` with `featureGroup=""` and exact `_occurTime`.
-4. Policy tree node: `queryProPolicyTree`; do not guess `policyTreeNodeCode`.
-5. Attribution: `nodePolicyAttribution` / `nodeBindPolicyAttribution`.
+1. RCP realtime hit list: `POST /v2/rest/event/eventList` on `rcp.corp.kuaishou.com`.
+2. Event detail: `GET /v2/rest/event/rcpEventDetail`.
+3. Feature snapshot: `GET /v2/rest/event/rcpEventFeatureList` with `featureGroup=""` and exact `_occurTime`.
+4. Policy version: `GET /v2/rest/pc/policy/getPolicyVersionListByEvent`.
+5. Attribution: `POST /v2/rest/pc/policy/nodePolicyAttribution`.
+6. Fallback / optional HBase: `GET /v2/rest/pc/event/fastQueryHbase` on `rcp.corp.kuaishou.com`.
+
+`eventList` input contract:
+
+- Required: `eventType`, `timeRange`.
+- Optional: `sourceIds`, `policyFilter`, `feedback`, `conditionGroups`, `tableHeaderList` / custom columns, `pageInfo`, `eventV2`.
+- HAR-confirmed request body keys: `tableHeaderList`, `pageIndex`, `pageSize`, `eventV2`, `startTime`, `endTime`, `currentTime`.
+- HAR-confirmed `eventV2` keys: `eventType`, `hitPolicies`, `version`, `status`, `snapshotVersion`, `sourceIds`, `realTimeOp`, `isPolicyTreeExperiment`, `conditionList`, `grayFeature`, `grayQueryStatus`, `region`.
+
+HAR-confirmed `tableHeaderList` / response fields:
+
+- default / core: `sourceId`, `eventId`, `_occurTime`, `_realTimeOp`, `_errorCode`, `_sideEffectOps`, `time`, `photoId`
+- custom / evidence fields: `deviceId`, `hitFusePolicyCode`, `userRegisterIp`, `ipCity_zh`, `openId`, `appealPhoneModel`, `deviceClientEventLogCnt3h`, `deviceIdWeaponAndroidPluginBaseReportCnt`, `deviceIdWeaponLogCnt`, `weaponDataMap`, `weaponDecodeDataWeapon`
+
+Custom policy-code fields are field-level partial when unobserved; do not mark the whole RCP chain unknown.
 
 Common errors:
 
@@ -215,10 +255,12 @@ Common errors:
 - Confusing `hitTimestamp` with precise event `queryTime`.
 - Treating strategy hit as final risk judgement.
 - Treating `updateUser` or operator as responsibility attribution.
+- Treating `fastQueryHbase` blocked as RCP/Tianshi unavailable.
+- Calling detail / feature / attribution with `userId` instead of upstream `eventId/eventType/queryTime`.
 
 Fallback:
 
-- Missing sourceId/eventId/queryTime becomes query plan or missing evidence.
+- Missing sourceId/eventId/queryTime/policyCode/policyVersion becomes query plan, `missing_upstream_id`, or missing evidence.
 - Timeout becomes `timeout_sources`, not no risk.
 
 Source status mapping:
@@ -230,7 +272,8 @@ Source status mapping:
 
 Capability status:
 
-- `fastQueryHbase`: `api_direct_confirmed`.
+- `eventList`: primary source, `browser_same_origin` / partial API direct depending on runtime.
+- `fastQueryHbase`: fallback / optional HBase source.
 - Event detail / event drilldown: `partial_api_direct` when it depends on event type, exact event context, or has known timeout behavior.
 - Do not generalize one successful event type into all event types.
 

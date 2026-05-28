@@ -2334,3 +2334,105 @@ weapon_riskdata_label_summary_regression:
       - no_low_risk_or_no_risk_conclusion_from_empty_label
       - source_quality_keeps_no_data_boundary
     pass_fail_criteria: "labelInfo 为空只说明该 source 未返回可读风险标签，不是无风险证明。"
+
+platform_access_execution_v0_1_regression:
+  - case_id: RCP_EVENTLIST_STRATEGY_HIT_SMOKE_001
+    input: "544963630 这个 case 有没有策略命中能辅助判断？"
+    expected_output_boundary:
+      - main_agent_spawn_only_no_direct_takeover
+      - executor_agent_dennis_risk_agent
+      - rcp_eventList_primary_entry
+      - base_domain_rcp_corp_kuaishou_com
+      - fastQueryHbase_fallback_not_blocker
+      - eventList_completed_no_hit_not_risk_exclusion
+      - rcpEventDetail_only_with_eventId_eventType_queryTime
+      - rcpEventFeatureList_featureGroup_empty_string
+      - policyVersion_only_with_policyCode_eventType
+      - nodePolicyAttribution_only_with_eventId_policyCode_policyVersion_queryTime
+      - missing_fields_output_missing_upstream_id
+      - platform_access_observations
+      - evidence_card_source_quality_routing_metadata
+    pass_fail_criteria: "RCP eventList 是策略命中主入口；fastQueryHbase 只是 fallback；缺上游 ID 不得硬调下游或误判 auth_failed。"
+  - case_id: WEAPON-GRAPHDATA-WRAPPER-SMOKE-001
+    input: "通过受控 wrapper 查询 Weapon graphData。"
+    expected_output_boundary:
+      - wrapper_path_computer_use_poc_bin_sso_session_runner
+      - action_weapon_graph_data
+      - endpoint_apiv2_graphData
+      - no_api_graphData_default
+      - runner_invocation_error_if_wrapper_wrong
+      - platform_access_observation
+    pass_fail_criteria: "Weapon graphData 通过 wrapper 与 /apiv2/graphData 固化；runner 调用错误先归类 runner_invocation_error。"
+  - case_id: WEAPON-RISKDATA-DIRECT-DEVICEID-001
+    input: "已有 deviceId，直接查设备风险。"
+    expected_output_boundary:
+      - riskData_direct_deviceId
+      - no_graphData_required_when_deviceId_available
+      - no_userId_as_deviceId
+      - endpoint_apiv2_riskData
+      - source_quality
+    pass_fail_criteria: "riskData 是 device-level source；有 deviceId 可直接查，不必固定依赖 graphData。"
+  - case_id: RCP-EVENTLIST-CUSTOM-COLUMNS-001
+    input: "eventList 需要策略编码 / 设备 / IP 等自定义结果列。"
+    expected_output_boundary:
+      - tableHeaderList_supported
+      - custom_columns_field_level_partial
+      - hitFusePolicyCode_observed
+      - deviceId_observed
+      - userRegisterIp_observed
+      - no_whole_chain_unknown
+    pass_fail_criteria: "HAR 已确认 eventList 支持 tableHeaderList / custom columns；未完全确认字段只做字段级 partial。"
+  - case_id: RCP-FASTQUERY-FALLBACK-NOT-BLOCKER-001
+    input: "fastQueryHbase blocked，但 eventList 可用。"
+    expected_output_boundary:
+      - fastQueryHbase_fallback_optional
+      - eventList_primary_chain_continues
+      - api_path_permission_blocked_not_platform_unavailable
+      - platform_partial_available
+    pass_fail_criteria: "fastQueryHbase blocked 不代表 RCP/Tianshi 不可用。"
+  - case_id: PLATFORM-PARTIAL-AVAILABLE-NOT-AUTH-FAILED-001
+    input: "同一平台部分 API 可用、部分 API blocked。"
+    expected_output_boundary:
+      - platform_partial_available
+      - local_api_path_status_preserved
+      - not_generic_auth_failed
+    pass_fail_criteria: "先判局部 API，再判平台不可用；部分可用不写成整体 auth_failed。"
+  - case_id: MISSING-UPSTREAM-ID-NOT-AUTH-FAILED-001
+    input: "没有 eventId / policyCode / policyVersion 却想调 RCP 下游。"
+    expected_output_boundary:
+      - missing_upstream_id
+      - downstream_not_triggered
+      - no_auth_failed_claim
+    pass_fail_criteria: "缺上游 ID 是参数/编排问题，不是认证问题。"
+  - case_id: SAME-ORIGIN-REQUIRED-NOT-PERMISSION-ISSUE-001
+    input: "same-origin API 被 direct runner 调用失败。"
+    expected_output_boundary:
+      - same_origin_required
+      - same_origin_mismatch_if_wrong_origin
+      - not_permission_blocked_without_probe
+    pass_fail_criteria: "同源上下文问题不得直接定性为权限缺失。"
+  - case_id: LOGIN-LOG-FIXED-WINDOW-NO-LOOP-001
+    input: "登录日志固定窗口 no_data。"
+    expected_output_boundary:
+      - fixed_window_no_loop_expand_to_timeout
+      - completed_no_data_not_risk_exclusion
+      - offline_hive_required_if_window_gap
+    pass_fail_criteria: "统一登录日志固定窗口不循环扩窗；no_data 不作为无风险反证。"
+  - case_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
+    input: "登录日 / 发布日 / 策略命中日前端活跃对齐。"
+    expected_output_boundary:
+      - getDeviceIds_getUseDuration_profile_getLastestDateTime_contract
+      - appName_userId_deviceId_date_alignment
+      - front_backend_activity_mismatch_auxiliary_evidence
+      - needs_har_confirmation_for_unobserved_variants
+    pass_fail_criteria: "track-analysis 端点和字段结构已从 HAR 固化；未观察变体只标 needs_har_confirmation。"
+  - case_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
+    input: "被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。"
+    expected_output_boundary:
+      - archives_profile_P0
+      - publish_chain_P0_conditional
+      - invocation_method_browser_same_origin
+      - current_status_partial_if_path_incomplete
+      - no_downgrade_to_P1
+      - audit_reason_time_anchor_not_final_judgement
+    pass_fail_criteria: "档案中心用户分析是 ATO P0；发布链路是异常发布 P0-conditional；path 不完整只标 partial。"

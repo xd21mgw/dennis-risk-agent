@@ -1,0 +1,84 @@
+schema_version: track_analysis_api_contract_v0_1
+platform_key: track_analysis
+capability_status: same_origin_api_confirmed_or_api_direct_candidate
+current_status: har_confirmed_for_observed_endpoints_needs_har_confirmation_for_unobserved_variants
+base_path: /dp/platform/app/analytics/v2/sequence
+invocation_methods:
+  - browser_same_origin
+  - controlled_runner_api_candidate
+supported_inputs:
+  - user_id
+  - device_id
+  - appName
+  - event_day
+apis:
+  getLastestDateTime:
+    method: GET
+    path: /dp/platform/app/analytics/v2/sequence/getLastestDateTime
+    output:
+      - latest_datetime
+      - uid_did_relation_latest_datetime
+    har_confirmed_query_keys:
+      - product
+      - type
+      - funcType
+      - _t
+  getDeviceIds:
+    method: POST
+    path: /dp/platform/app/analytics/v2/sequence/getDeviceIds
+    output:
+      - device_ids
+      - uid_did_relation_latest_datetime
+      - deviceModel
+      - lastDeviceActive
+    har_confirmed_body_keys:
+      - appName
+      - deviceId
+      - funcType
+      - _t
+    needs_har_confirmation:
+      - userId_request_variant_if_not_present_in_observed_har
+  getUseDuration:
+    method: POST
+    path: /dp/platform/app/analytics/v2/sequence/getUseDuration
+    output:
+      - daily_duration_rows
+      - total_duration
+      - peak_duration
+      - first_active_date
+    rows_shape: object_array_date_duration
+    har_confirmed_body_keys:
+      - appName
+      - deviceId
+      - funcType
+      - _t
+    needs_har_confirmation:
+      - userId_request_variant_if_not_present_in_observed_har
+  profile:
+    method: POST
+    path: /dp/platform/app/analytics/v2/sequence/profile
+    input_time_fields: startTime/endTime_ms
+    har_confirmed_body_keys:
+      - appName
+      - startTime
+      - endTime
+      - include
+      - pageSize
+      - deviceId
+      - funcType
+      - _t
+    output:
+      - profile_card
+      - register_time
+      - fan_distribution
+      - active_days_bucket
+      - device_ids
+    field_notes:
+      - "register_time / fan_distribution / active_days_bucket are in secondLevelProfile label-value pairs."
+    needs_har_confirmation:
+      - userId_request_variant_if_not_present_in_observed_har
+boundaries:
+  - "KUAISHOU and NEBULA must be interpreted separately."
+  - "NEBULA duration=0 means no observed NEBULA activity, not account no activity."
+  - "Event-day duration=0 during backend login/scan/publish/strategy-hit day becomes front_backend_activity_mismatch."
+  - "Activity evidence is auxiliary and not final ATO/protocol/group-control judgement."

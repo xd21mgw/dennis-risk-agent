@@ -1,0 +1,30 @@
+schema_version: login_log_api_contract_v0_1
+platform_key: user_login_unified_log
+capability_status: api_direct_confirmed
+preferred_invocation: computer_use_poc/bin/sso_session_runner
+source_priority: P0
+input:
+  required:
+    - user_id
+  optional:
+    - from_timestamp
+    - to_timestamp
+    - time_window
+output:
+  - login_time
+  - login_method
+  - ip_summary
+  - region_summary
+  - device_summary
+  - token_session_scan_oauth_clues
+status_mapping:
+  http_200_json_records: completed
+  http_200_json_empty: completed_no_data
+  redirect_or_login_page: auth_failed
+  timeout: timeout
+  parse_failure: parse_error
+boundaries:
+  - "Fixed online window; do not loop-expand until timeout."
+  - "completed_no_data is not no-risk evidence."
+  - "If target event is outside online window, mark source_window_boundary and offline_hive_required."
+  - "DataAgent/Hive still requires per-call authorization."

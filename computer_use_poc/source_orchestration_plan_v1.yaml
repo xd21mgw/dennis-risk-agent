@@ -135,6 +135,26 @@
         "allow_track_analysis_device_id_for_weapon_riskdata": true,
         "cross_source_device_id_marker_required": true
       },
+      "platform_access_execution_v0_1": {
+        "observation_schema": "platform_access_observation",
+        "failure_classification_order": [
+          "runner_invocation",
+          "runner_dependency",
+          "base_domain_or_endpoint_contract",
+          "parameter_contract",
+          "missing_upstream_id",
+          "same_origin_context",
+          "api_path_permission",
+          "auth_or_user_permission"
+        ],
+        "rcp_strategy_hit_primary_source": "eventList",
+        "rcp_base_domain": "rcp.corp.kuaishou.com",
+        "fastQueryHbase_role": "fallback_optional_not_blocker",
+        "eventList_custom_columns_status": "har_confirmed_partial_field_coverage",
+        "archives_profile_priority": "P0",
+        "archives_contract_status": "partial_same_origin_if_auth_ready",
+        "track_analysis_contract_status": "har_confirmed_needs_har_confirmation_for_unobserved_variants"
+      },
       "stop_conditions": {
         "allow_stop_after_login_log_only": false,
         "allow_final_conclusion_without_source_completion_matrix": false,

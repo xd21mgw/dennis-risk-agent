@@ -1,0 +1,63 @@
+schema_version: weapon_api_contract_v0_1
+platform_key: weapon_graph_risk
+capability_status: api_direct_confirmed
+preferred_invocation: computer_use_poc/bin/sso_session_runner
+credential_policy:
+  output_cookie_token_session_header_password: false
+apis:
+  graphData:
+    action: weapon.graph_data
+    base_domain: weapon.corp.kuaishou.com
+    path: /apiv2/graphData
+    method: GET
+    input:
+      required:
+        - user_id
+      fixed_query:
+        product: KUAISHOU
+        productName: KUAISHOU
+        groupKey: USER_ID
+        dimKey: DEVICE_ID
+        searchLevel: 2
+      variable_query:
+        groupValue: "{user_id}"
+    output:
+      - device_id_candidates
+      - raw_device_ids_for_chaining
+      - masked_device_ids
+      - relation_edges_count
+    boundaries:
+      - "Filter pure numeric userId nodes when extracting deviceId from pointInfoMap."
+      - "graphData completed_no_data does not prove the user has no devices."
+      - "Do not use /api/graphData by default."
+  riskData:
+    action: weapon.risk_data
+    base_domain: weapon.corp.kuaishou.com
+    path: /apiv2/riskData
+    method: GET
+    role: "riskData direct deviceId risk source"
+    input:
+      required:
+        - device_id
+      fixed_query:
+        product: KUAISHOU
+      variable_query:
+        deviceIds: "{device_id}"
+    upstream_device_id_sources:
+      - user_prompt
+      - weapon.graphData
+      - user_login_unified_log
+      - publish_chain
+      - rcp_eventList_or_detail
+      - track_analysis
+      - archives_profile_or_device_profile
+    output:
+      - risk_label_summary
+      - label_count
+      - high_risk_count
+      - medium_risk_count
+      - weak_risk_count
+    boundaries:
+      - "riskData is device-level; do not pass userId as deviceId."
+      - "Preserve ANDROID_/IOS_ prefixes unless a validated platform contract says otherwise."
+      - "Empty labelInfo is not no-risk proof."

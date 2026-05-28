@@ -7449,3 +7449,87 @@
 - input: riskData completed 但 labelInfo 为空。
 - expected_runtime_behavior: empty_label_boundary
 - expected_output_boundary: 输出 `risk_label_summary.empty=true` 和 `no_risk_label_not_no_risk_proof=true`；不得据此输出低风险 / 无风险 / 排除设备风险。
+
+## 788. Platform access observation schema
+
+- test_id: PLATFORM-ACCESS-OBSERVATION-SCHEMA-001
+- input: 任一平台 source 执行结果。
+- expected_runtime_behavior: platform_access_observation_required
+- expected_output_boundary: 输出 `platform_access_observation` 或等价 source card，包含 platform_key、source_name、api_name、invocation_method、params_valid、source_status、failure_layer、source_quality、redaction_applied、next_action。
+
+## 789. RCP eventList strategy hit smoke
+
+- test_id: RCP_EVENTLIST_STRATEGY_HIT_SMOKE_001
+- input: “544963630 这个 case 有没有策略命中能辅助判断？”
+- expected_runtime_behavior: rcp_eventList_primary_chain
+- expected_output_boundary: main 只 spawn；executor_agent=dennis-risk-agent；RCP `eventList` 是主入口；`fastQueryHbase` 是 fallback；`eventList completed_no_hit` 不当无风险反证；detail / feature / attribution 缺上游 ID 时标 `missing_upstream_id`；输出 platform_access_observations、evidence_card、source_quality、routing_metadata。
+
+## 790. Weapon graphData wrapper smoke
+
+- test_id: WEAPON-GRAPHDATA-WRAPPER-SMOKE-001
+- input: Weapon graphData 受控调用。
+- expected_runtime_behavior: sso_session_runner_wrapper_used
+- expected_output_boundary: 使用 `computer_use_poc/bin/sso_session_runner`；固定 `/apiv2/graphData`；不默认 `/api/graphData`；runner 调用错误先标 `runner_invocation_error` / `runner_dependency_error`。
+
+## 791. Weapon riskData direct deviceId
+
+- test_id: WEAPON-RISKDATA-DIRECT-DEVICEID-001
+- input: 已有 deviceId 查设备风险。
+- expected_runtime_behavior: riskData_direct_deviceId
+- expected_output_boundary: 可直接走 `/apiv2/riskData`；不要求先 graphData；不得把 userId 当 deviceId；保留 deviceId prefix；输出 source_quality。
+
+## 792. RCP eventList custom columns
+
+- test_id: RCP-EVENTLIST-CUSTOM-COLUMNS-001
+- input: eventList 需要 policyCode / device / IP 相关字段。
+- expected_runtime_behavior: tableHeaderList_custom_columns_supported
+- expected_output_boundary: HAR 已确认 `tableHeaderList`，字段包括 `sourceId`、`eventId`、`_occurTime`、`deviceId`、`hitFusePolicyCode`、`userRegisterIp`、`ipCity_zh` 等；未完全确认字段标字段级 partial，不把链路标 unknown。
+
+## 793. RCP fastQueryHbase fallback not blocker
+
+- test_id: RCP-FASTQUERY-FALLBACK-NOT-BLOCKER-001
+- input: fastQueryHbase blocked 但 eventList 可用。
+- expected_runtime_behavior: fallback_not_primary_blocker
+- expected_output_boundary: `fastQueryHbase` 是 fallback / optional；blocked 只标 `api_path_permission_blocked`，不能写 RCP/Tianshi 不可用。
+
+## 794. Platform partial available not auth failed
+
+- test_id: PLATFORM-PARTIAL-AVAILABLE-NOT-AUTH-FAILED-001
+- input: 平台部分 API 可用、部分 API 403/blocked。
+- expected_runtime_behavior: platform_partial_available
+- expected_output_boundary: 先判局部 API，再判平台不可用；不得把所有 302/403/timeout 统一写成 auth_failed。
+
+## 795. Missing upstream id not auth failed
+
+- test_id: MISSING-UPSTREAM-ID-NOT-AUTH-FAILED-001
+- input: 缺 eventId / policyCode / policyVersion 仍尝试下游归因。
+- expected_runtime_behavior: downstream_not_triggered
+- expected_output_boundary: 标 `missing_upstream_id`；不得写 auth_failed 或 permission_blocked。
+
+## 796. Same origin required not permission issue
+
+- test_id: SAME-ORIGIN-REQUIRED-NOT-PERMISSION-ISSUE-001
+- input: 同源 API 用 direct runner 失败。
+- expected_runtime_behavior: same_origin_context_classification
+- expected_output_boundary: 标 `same_origin_required` / `same_origin_mismatch`；不得未验证就写 user permission missing。
+
+## 797. Login log fixed window no loop
+
+- test_id: LOGIN-LOG-FIXED-WINDOW-NO-LOOP-001
+- input: 登录日志固定窗口无结果。
+- expected_runtime_behavior: fixed_window_boundary
+- expected_output_boundary: 不循环扩窗拖到 timeout；`completed_no_data` 不当无风险反证；窗口不足标 offline_hive_required 且 Hive 逐次授权。
+
+## 798. Track-analysis event day activity
+
+- test_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
+- input: 登录日 / 扫码日 / 发布日 / 策略命中日前端活跃对齐。
+- expected_runtime_behavior: track_analysis_har_contract
+- expected_output_boundary: 固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；未观察 userId/deviceId 变体标 `needs_har_confirmation`；`front_backend_activity_mismatch` 只是辅助证据。
+
+## 799. Archives center publish chain P0
+
+- test_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
+- input: 被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。
+- expected_runtime_behavior: archives_profile_and_publish_chain_P0
+- expected_output_boundary: 档案中心用户分析是 ATO P0；发布链路是 P0-conditional；invocation_method 可为 browser_same_origin；API path 未完全确认时 current_status=partial，不降级 P1；审核 reason 仅作 time anchor。

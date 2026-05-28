@@ -1,0 +1,98 @@
+schema_version: platform_access_observation_schema_v0_1
+required_root_key: platform_access_observation
+required_fields:
+  - platform_key
+  - source_name
+  - api_name
+  - invocation_method
+  - input_entity_type
+  - required_params
+  - upstream_source
+  - params_valid
+  - source_status
+  - records_count
+  - schema_valid
+  - output_fields_observed
+  - failure_layer
+  - source_quality
+  - raw_reference_retained_for_followup
+  - redaction_applied
+  - next_action
+source_status_enum:
+  - completed
+  - completed_no_data
+  - completed_no_hit
+  - not_triggered
+  - missing_upstream_id
+  - invalid_parameter
+  - wrong_entity_type
+  - wrong_base_domain
+  - same_origin_mismatch
+  - same_origin_required
+  - runner_invocation_error
+  - runner_dependency_error
+  - runner_platform_not_supported
+  - api_path_permission_blocked
+  - platform_partial_available
+  - auth_failed
+  - permission_blocked
+  - parse_error
+  - timeout
+  - blocked
+failure_layer_enum:
+  - runner_invocation
+  - runner_dependency
+  - platform_contract
+  - parameter_contract
+  - upstream_dependency
+  - same_origin_context
+  - path_permission
+  - auth_session
+  - user_permission
+  - parser
+  - timeout
+  - platform_partial
+  - no_failure
+source_quality_schema:
+  permission_status: "ready | auth_not_ready | permission_blocked | unknown"
+  freshness_status: "current_task_observation | stale_source | unknown"
+  response_type: "json | html | redirect | text | unknown"
+  http_status: "integer_or_null"
+  no_data_not_risk_exclusion: true
+  no_hit_not_risk_exclusion: true
+  source_window_boundary: "string_or_null"
+  retry_count: "integer"
+  elapsed_ms: "integer_or_null"
+redaction_schema:
+  redaction_applied: true
+  sensitive_output: false
+  credential_material_retained: false
+  raw_reference_retained_for_followup: "boolean"
+  raw_reference_scope: "current_task_only_or_false"
+example:
+  platform_access_observation:
+    platform_key: tianshi_rcp_strategy
+    source_name: rcp_event_list_strategy_hit
+    api_name: eventList
+    invocation_method: browser_same_origin
+    input_entity_type: sourceIds
+    required_params:
+      - eventType
+      - timeRange
+    upstream_source: user_prompt
+    params_valid: false
+    source_status: missing_upstream_id
+    records_count: null
+    schema_valid: true
+    output_fields_observed: []
+    failure_layer: upstream_dependency
+    source_quality:
+      permission_status: unknown
+      freshness_status: current_task_observation
+      response_type: unknown
+      http_status: null
+      no_data_not_risk_exclusion: true
+      no_hit_not_risk_exclusion: true
+    raw_reference_retained_for_followup: false
+    redaction_applied: true
+    next_action: "Collect eventType and precise timeRange before eventList."

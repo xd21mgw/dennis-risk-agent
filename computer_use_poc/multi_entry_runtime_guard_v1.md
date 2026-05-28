@@ -97,6 +97,9 @@ Release / overlay readiness gate:
 Platform call preflight:
 
 - Before any realtime platform source, read `computer_use_poc/platform_call_playbook_index.md` and the referenced platform playbook.
+- Platform Access Execution v0.1 contracts live in `computer_use_poc/platform_access/`; platform calls must produce `platform_access_observation` or an equivalent source card before being merged into an evidence card.
+- Platform failure classification order is: invocation chain, dependency, base domain / endpoint contract, parameter contract, upstream id availability, same-origin context, path permission, then auth / permission. Do not collapse 302 / 403 / timeout into generic `auth_failed`.
+- Core principle: 先判调用链路，再判认证；先判参数契约，再判权限；先判局部 API，再判平台不可用。
 - If memory retrieval fails, fall back to files; do not guess platform paths.
 - Do not classify platform capabilities as only "API direct" or "not API direct". Use `api_direct_confirmed`, `same_origin_api_confirmed`, `partial_api_direct`, or `pending_api_direct_confirmation`.
 - Prefer low-cost structured sources: `api_direct_confirmed` before `same_origin_api_confirmed`, same-origin fetch before DOM, precise `sourceId/eventId/deviceId/eventType` before broad scan, realtime readonly API before DataAgent / Hive.
@@ -114,6 +117,14 @@ Platform call preflight:
 - If login log, Hive, Weapon, Archives, or strategy-hit evidence shows abnormal mobile device, non-historical device, new-device login, post-scan new device, device risk tag, or event-day strategy hit, trigger track-analysis event-day alignment as a low-cost supporting source.
 - Track-analysis `no_data`, `blocked`, or `timeout` must enter `source_quality`; it cannot exclude risk.
 - If backend login / scan / device switch / strategy hit exists on a day but track-analysis userId/deviceId duration is `0` or no frontend activity, mark `front_backend_activity_mismatch`. This is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior, but it is not standalone final judgement.
+
+RCP / Tianshi strategy-hit chain:
+
+- `eventList` on `rcp.corp.kuaishou.com` is the primary upstream source for realtime strategy-hit event lists.
+- `fastQueryHbase` uses `rcp.corp.kuaishou.com` and is fallback / optional, not the main blocking point.
+- `eventList` accepts `eventType`, `timeRange`, optional `sourceIds`, policy/feedback filters, `conditionGroups`, `tableHeaderList` / custom columns, and pagination. It is not a single `userId` API.
+- Downstream `rcpEventDetail`, `rcpEventFeatureList`, `getPolicyVersionListByEvent`, and `nodePolicyAttribution` require upstream `eventId/eventType/queryTime/policyCode/policyVersion`; missing fields become `missing_upstream_id`, not auth failure.
+- `eventList completed_no_hit` and empty `hitPolicies` are not no-risk evidence. Use detail/custom columns when upstream IDs exist.
 
 DataAgent / Hive registry preflight:
 
