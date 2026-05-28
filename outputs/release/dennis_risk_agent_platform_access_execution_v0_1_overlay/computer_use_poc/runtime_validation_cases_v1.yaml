@@ -1,0 +1,33 @@
+schema_version: platform_access_execution_v0_1_overlay_validation
+cases:
+  - case_id: WEAPON-GRAPHDATA-WRAPPER-SMOKE-001
+    expected:
+      - use_computer_use_poc_bin_sso_session_runner
+      - no_direct_python_runner_call
+      - runner_failure_maps_to_runner_invocation_or_dependency_error
+  - case_id: WEAPON-RISKDATA-DIRECT-DEVICEID-001
+    expected:
+      - riskData_direct_deviceId
+      - graphData_only_when_deviceId_missing
+      - no_userId_as_deviceId
+  - case_id: RCP_EVENTLIST_STRATEGY_HIT_SMOKE_001
+    expected:
+      - eventList_primary
+      - fastQueryHbase_fallback
+      - downstream_requires_upstream_fields
+      - missing_fields_output_missing_upstream_id
+  - case_id: RCP-EVENTLIST-CUSTOM-COLUMNS-001
+    expected:
+      - tableHeaderList_supported
+      - custom_columns_field_level_partial
+      - no_whole_chain_unknown
+  - case_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
+    expected:
+      - event_day_activity_alignment
+      - userId_deviceId_appName_date_contract
+      - front_backend_activity_mismatch_auxiliary_only
+  - case_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
+    expected:
+      - archives_profile_P0
+      - publish_chain_P0_conditional
+      - source_gap_does_not_downgrade_priority

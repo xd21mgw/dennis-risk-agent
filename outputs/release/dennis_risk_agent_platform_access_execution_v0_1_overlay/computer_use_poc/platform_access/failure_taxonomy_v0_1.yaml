@@ -1,0 +1,80 @@
+schema_version: platform_access_failure_taxonomy_v0_1
+core_principles:
+  - "先判调用链路，再判认证"
+  - "先判参数契约，再判权限"
+  - "先判局部 API，再判平台不可用"
+taxonomy:
+  runner_invocation_error:
+    layer: runner_invocation
+    meaning: "Runner was called with the wrong binary, argument shape, cwd, or wrapper path."
+    not_equivalent_to: auth_failed
+  runner_dependency_error:
+    layer: runner_dependency
+    meaning: "Runner dependency such as requests/uv/runtime package is missing or failed before platform request."
+    not_equivalent_to: permission_blocked
+  runner_platform_not_supported:
+    layer: runner_invocation
+    meaning: "Runner does not support selected platform/action."
+  wrong_base_domain:
+    layer: platform_contract
+    meaning: "API base domain does not match the confirmed contract, e.g. RCP eventList should use rcp.corp.kuaishou.com."
+  same_origin_mismatch:
+    layer: same_origin_context
+    meaning: "Browser context is not on the required origin for same-origin fetch."
+  same_origin_required:
+    layer: same_origin_context
+    meaning: "API contract requires browser same-origin context instead of direct runner call."
+  invalid_parameter:
+    layer: parameter_contract
+    meaning: "Required parameter shape is invalid."
+  wrong_entity_type:
+    layer: parameter_contract
+    meaning: "Input entity type is wrong, e.g. userId used as deviceId for riskData."
+  missing_upstream_id:
+    layer: upstream_dependency
+    meaning: "Downstream API is not triggered because eventId/policyCode/policyVersion/deviceId/queryTime is missing."
+  api_path_permission_blocked:
+    layer: path_permission
+    meaning: "Specific API path is blocked; do not generalize to whole platform unavailable."
+  platform_partial_available:
+    layer: platform_partial
+    meaning: "Some APIs or fields are available while other paths are blocked or incomplete."
+  sso_auth_failed:
+    layer: auth_session
+    meaning: "True SSO/session failure after invocation and parameter contract are valid."
+  accessproxy_session_invalid:
+    layer: auth_session
+    meaning: "Access proxy redirect or session invalid state."
+  amc_permission_blocked:
+    layer: path_permission
+    meaning: "AMC/path permission block, often UI-path specific."
+  user_permission_missing:
+    layer: user_permission
+    meaning: "Current user lacks platform permission."
+  parse_error:
+    layer: parser
+    meaning: "Response could not be parsed as expected schema."
+  timeout:
+    layer: timeout
+    meaning: "Source did not finish in budget; not counter evidence."
+  completed_no_data:
+    layer: no_failure
+    meaning: "Valid request and schema; no records under current filter/window."
+    boundary: "Not a no-risk conclusion."
+  completed_no_hit:
+    layer: no_failure
+    meaning: "Valid strategy/event query; no hit under current filter/window."
+    boundary: "Not a no-risk conclusion."
+classification_order:
+  - runner_invocation
+  - runner_dependency
+  - platform_contract
+  - parameter_contract
+  - upstream_dependency
+  - same_origin_context
+  - path_permission
+  - auth_session
+  - user_permission
+  - parser
+  - timeout
+  - platform_partial

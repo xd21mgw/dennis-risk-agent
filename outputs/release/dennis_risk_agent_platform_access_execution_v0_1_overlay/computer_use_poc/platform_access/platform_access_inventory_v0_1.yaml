@@ -1,0 +1,187 @@
+schema_version: platform_access_inventory_v0_1
+purpose: "Dennis Risk Agent platform access execution inventory; state/cookie/session/header/token are environment-owned and never packaged."
+principles:
+  - "先判调用链路，再判认证"
+  - "先判参数契约，再判权限"
+  - "先判局部 API，再判平台不可用"
+global_boundaries:
+  main_direct_tool_bypass_allowed: false
+  dataagent_default_execution_allowed: false
+  credential_output_allowed: false
+  arbitrary_url_allowed: false
+platform_sources:
+  - platform_key: user_login_unified_log
+    source_names:
+      - user_login_unified_log
+    source_priority: P0
+    capability_status: api_direct_confirmed
+    invocation_methods:
+      - controlled_runner_api
+    runner: computer_use_poc/bin/sso_session_runner
+    allowed_actions:
+      - login_log.query_user_login_log
+    input_entities:
+      - user_id
+      - time_window
+    execution_notes:
+      - "Fixed online window; do not loop-expand until timeout."
+      - "completed_no_data is not no-risk evidence."
+  - platform_key: weapon_graph_risk
+    source_names:
+      - weapon_user_to_device_graph
+      - weapon_device_risk
+    source_priority: P0_and_P0_conditional
+    capability_status: api_direct_confirmed
+    invocation_methods:
+      - controlled_runner_api
+    runner: computer_use_poc/bin/sso_session_runner
+    allowed_actions:
+      - weapon.graph_data
+      - weapon.risk_data
+    fixed_endpoints:
+      - /apiv2/graphData
+      - /apiv2/riskData
+    input_entities:
+      - user_id
+      - device_id
+    execution_notes:
+      - "graphData resolves user/device relation candidates."
+      - "riskData is direct deviceId evidence and does not require graphData when deviceId is already available."
+      - "Do not use /api/graphData or Weapon UI paths by default."
+  - platform_key: tianshi_rcp_strategy
+    source_names:
+      - rcp_event_list_strategy_hit
+      - rcp_event_detail
+      - rcp_event_feature_list
+      - rcp_policy_version
+      - rcp_node_policy_attribution
+      - fast_query_hbase_fallback
+    source_priority: P0_explicit_when_policy_hit_is_asked
+    capability_status: partial_api_direct
+    contract_status:
+      eventList: har_confirmed_primary_entry
+      eventList_custom_columns: har_confirmed_partial_field_coverage
+      rcpEventDetail: har_confirmed
+      rcpEventFeatureList: har_confirmed
+      getPolicyVersionListByEvent: har_confirmed
+      nodePolicyAttribution: har_confirmed
+      fastQueryHbase: har_confirmed_fallback
+    invocation_methods:
+      - browser_same_origin
+      - readonly_api_direct_if_contract_available
+    base_domain: rcp.corp.kuaishou.com
+    primary_entry: eventList
+    fallback_entry: fastQueryHbase
+    input_entities:
+      - eventType
+      - timeRange
+      - sourceIds
+      - eventId
+      - policyCode
+      - policyVersion
+      - queryTime
+    execution_notes:
+      - "eventList is the primary strategy-hit event list source."
+      - "fastQueryHbase is fallback and must not block the primary chain."
+      - "Missing eventId/policyCode/policyVersion becomes missing_upstream_id."
+  - platform_key: archives_center
+    source_names:
+      - archives_profile_readonly
+      - archives_publish_chain
+      - archives_publish_device_trace
+    source_priority: P0_and_P0_conditional
+    capability_status: same_origin_api_confirmed_if_auth_ready
+    current_status: partial
+    contract_status:
+      user_profile_account_baseline: existing_run_log_confirmed
+      publish_list_time_device_chain: partial_from_archives_inventory_and_run_logs
+      audit_punishment_reason: partial_time_window_anchor
+    invocation_methods:
+      - browser_same_origin
+      - browser_readonly
+    input_entities:
+      - user_id
+      - publish_event_id
+      - publish_item_id
+    execution_notes:
+      - "ATO account baseline source: profile, account status, registration, login/register device summaries."
+      - "Abnormal publish cases promote publish time/device/source chain to P0-conditional."
+      - "Business cases do not perform live auth repair."
+  - platform_key: track_analysis
+    source_names:
+      - track_analysis_getDeviceIds
+      - track_analysis_getUseDuration
+      - track_analysis_profile
+      - track_analysis_getLastestDateTime
+    source_priority: P0_or_P1_by_case
+    capability_status: same_origin_api_confirmed_or_api_direct_candidate
+    current_status: har_confirmed_fields_with_needs_har_confirmation_for_unobserved_variants
+    contract_status:
+      getLastestDateTime: har_confirmed
+      getDeviceIds: har_confirmed
+      getUseDuration: har_confirmed_rows_object_array
+      profile: har_confirmed
+    invocation_methods:
+      - browser_same_origin
+      - controlled_runner_api_candidate
+    input_entities:
+      - user_id
+      - device_id
+      - appName
+      - event_day
+    execution_notes:
+      - "Event-day frontend activity alignment source for login, scan/OAuth, publish, strategy hit, and device switch days."
+      - "front_backend_activity_mismatch is auxiliary evidence, not final judgement."
+  - platform_key: device_sdk_or_device_profile
+    source_names:
+      - device_sdk_risk
+      - device_profile
+    source_priority: P1_or_P2
+    capability_status: pending_api_direct_confirmation
+    current_status: partial
+    invocation_methods:
+      - controlled_runner_api_candidate
+      - browser_same_origin_if_registered
+    input_entities:
+      - device_id
+    execution_notes:
+      - "Device SDK / device profile is separate from Weapon riskData."
+      - "Weapon riskData is device-level and can run whenever a deviceId is available."
+      - "Device SDK independent field enumeration remains partial when HAR is incomplete."
+      - "Device risk tags support evidence cards but are not standalone final judgement."
+  - platform_key: audit_punishment_log
+    source_names:
+      - audit_log_reason
+      - punishment_reason
+    source_priority: P0_time_anchor_when_case_has_audit_or_punishment
+    capability_status: pending_api_direct_confirmation
+    current_status: source_contract_partial_time_window_inference
+    invocation_methods:
+      - browser_same_origin_if_registered
+      - query_plan
+    input_entities:
+      - user_id
+      - event_id
+      - publish_item_id
+      - time_window
+    execution_notes:
+      - "reason / audit_time / punishment_time are time anchors."
+      - "Audit reason guides time_window_inference and behavior direction only; it is not ATO judgement."
+      - "Missing API path does not block v0.1; mark source_contract=partial."
+  - platform_key: publish_chain
+    source_names:
+      - publish_work_list
+      - publish_time
+      - publish_device
+      - publish_source_chain
+    source_priority: P0_conditional_for_abnormal_publish
+    capability_status: pending_api_direct_confirmation
+    invocation_methods:
+      - browser_same_origin_if_registered
+      - query_plan
+    input_entities:
+      - user_id
+      - publish_item_id
+      - time_window
+    execution_notes:
+      - "Publish device can trigger Weapon riskData and track-analysis event-day alignment."

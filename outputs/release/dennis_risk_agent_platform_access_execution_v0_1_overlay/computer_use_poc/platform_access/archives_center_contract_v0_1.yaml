@@ -1,0 +1,85 @@
+schema_version: archives_center_contract_v0_1
+platform_key: archives_center
+capability_status: same_origin_api_confirmed_if_auth_ready
+current_status: partial
+confirmed_entry: https://admin.p.adm-corp.kuaishou.com
+login_redirect_domain: account.p.adm-corp.kuaishou.com
+source_priority:
+  archives_profile_readonly: P0
+  archives_publish_chain: P0_conditional_for_abnormal_publish
+invocation_methods:
+  - browser_same_origin
+  - browser_readonly
+profile_api:
+  source_name: archives_profile_readonly
+  invocation_method: browser_same_origin
+  current_status: partial_existing_run_log_confirmed
+  known_paths:
+    - /archives/user/home/info
+    - /archives/user/home/getUserLabel
+    - /archives/user/home/getUserShopInfo
+    - /archives/draco/getPunishStatus
+    - /archives/user/search/device
+  input:
+    required:
+      - user_id
+  output:
+    - user_profile_summary
+    - account_status_summary
+    - ban_info_summary
+    - demote_info_summary
+    - register_info_summary
+    - login_device_summary
+    - register_device_summary
+  boundaries:
+    - "Readonly only."
+    - "Business cases do not perform live auth repair."
+    - "auth not ready becomes archives_auth_gap or auth_session_issue."
+    - "ATO single case keeps Archives user analysis as P0 even when same-origin/browser access is required."
+publish_chain:
+  source_name: archives_publish_chain
+  invocation_method: browser_same_origin
+  current_status: partial_from_archives_inventory_and_run_logs
+  known_paths:
+    - /v4/archives/report/photo/search
+    - /archives/photo/home/userAutonomy
+    - /v4/archives/gallery/live/list
+    - /archives/user/gallery/momentList
+    - /archives/photo/collection/getCollectionList
+    - /archives/user/search/device
+  trigger:
+    - abnormal_publish
+    - traffic_diversion_content
+    - non_owner_publish
+    - content_operation
+  output:
+    - publish_work_list
+    - publish_time
+    - publish_device
+    - publish_source_chain
+  boundaries:
+    - "No publish_device_id means no publish-device abnormality judgement."
+    - "Publish time is a P0 time anchor."
+    - "Publish device can trigger Weapon riskData and track-analysis event-day alignment."
+audit_and_punishment:
+  source_name: archives_audit_punishment_reason
+  role: time_window_inference_source
+  current_status: partial
+  known_paths:
+    - /archives/user/home/auditLog
+    - /archives/draco/getLabelLog
+    - /v4/audit/user/fourinfo/log/search
+    - /archives/draco/getPunishStatus
+  output:
+    - reason
+    - audit_time
+    - punishment_time
+    - action_type
+  boundaries:
+    - "reason / audit_time / punishment_time are time anchors only."
+    - "Reason cannot independently classify ATO."
+    - "If exact API path or required parameter is missing, mark source_contract=partial and missing_upstream_id."
+forbidden:
+  - "Do not output cookie/token/session/header/password."
+  - "Do not guess archives domains."
+  - "Do not click login page inside business cases."

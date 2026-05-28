@@ -1,0 +1,228 @@
+schema_version: tianshi_rcp_api_contract_v0_1
+platform_key: tianshi_rcp_strategy
+base_domain: rcp.corp.kuaishou.com
+capability_status: partial_api_direct
+credential_policy:
+  output_cookie_token_session_header_password: false
+chain:
+  primary:
+    - eventList
+    - rcpEventDetail
+    - rcpEventFeatureList
+    - getPolicyVersionListByEvent
+    - nodePolicyAttribution
+  fallback:
+    - fastQueryHbase
+apis:
+  eventList:
+    role: primary_strategy_hit_event_list_source
+    path: /v2/rest/event/eventList
+    method: POST
+    invocation_context: browser_same_origin
+    input:
+      required:
+        - eventType
+        - timeRange
+      optional:
+        - sourceIds
+        - policyFilter
+        - feedback
+        - conditionGroups
+        - tableHeaderList
+        - customColumns
+        - pageInfo
+        - eventV2
+      har_confirmed_body_keys:
+        - tableHeaderList
+        - pageIndex
+        - pageSize
+        - eventV2
+        - startTime
+        - endTime
+        - currentTime
+      har_confirmed_eventV2_keys:
+        - eventType
+        - hitPolicies
+        - version
+        - status
+        - snapshotVersion
+        - sourceIds
+        - realTimeOp
+        - isPolicyTreeExperiment
+        - conditionList
+        - grayFeature
+        - grayQueryStatus
+        - region
+    output:
+      - eventId
+      - eventType
+      - sourceId
+      - occur_time
+      - _occurTime
+      - table_time
+      - real_time_op
+      - error_code
+      - side_effect_ops
+      - custom_columns
+    default_columns:
+      - sourceId
+      - photoId
+      - _realTimeOp
+      - _errorCode
+      - _sideEffectOps
+      - _occurTime
+      - time
+    har_observed_tableHeaderList_columns:
+      - sourceId
+      - photoId
+      - _realTimeOp
+      - _errorCode
+      - _sideEffectOps
+      - _occurTime
+      - time
+      - appealPhoneModel
+      - deviceClientEventLogCnt3h
+      - deviceId
+      - deviceIdWeaponAndroidPluginBaseReportCnt
+      - deviceIdWeaponLogCnt
+      - hitFusePolicyCode
+      - ipCity_zh
+      - openId
+      - userRegisterIp
+      - weaponDataMap
+      - weaponDecodeDataWeapon
+    har_observed_eventList_response_keys:
+      - sourceId
+      - eventId
+      - _occurTime
+      - _sideEffectOps
+      - photoId
+      - _errorCode
+      - time
+      - _realTimeOp
+      - deviceId
+      - hitFusePolicyCode
+      - appealPhoneModel
+      - deviceClientEventLogCnt3h
+      - deviceIdWeaponAndroidPluginBaseReportCnt
+      - deviceIdWeaponLogCnt
+      - ipCity_zh
+      - openId
+      - userRegisterIp
+      - weaponDataMap
+      - weaponDecodeDataWeapon
+    custom_column_examples:
+      - hitFusePolicyCode
+      - ltpRealAutoPolicyCode
+      - policyCode
+      - strategyID
+    field_coverage_status:
+      tableHeaderList: har_confirmed
+      customColumns: har_confirmed_partial
+      policy_code_columns: har_confirmed_partial
+      hitPolicies_in_eventList: may_be_empty_use_detail
+    boundaries:
+      - "eventList is not a single userId query API."
+      - "completed_no_hit is not no-risk evidence."
+      - "hitPolicies may be empty; use rcpEventDetail to supplement."
+  fastQueryHbase:
+    role: fallback_optional_hbase_source
+    path: /v2/rest/pc/event/fastQueryHbase
+    method: GET
+    input:
+      - userId_or_sourceId
+      - eventTypeCodes
+      - timeRange
+      - _t
+    known_issue: api_path_permission_blocked_possible
+    boundaries:
+      - "fastQueryHbase blocked does not mean RCP/Tianshi unavailable."
+      - "Do not block eventList primary chain if eventList works."
+  rcpEventDetail:
+    upstream:
+      - eventList
+      - fastQueryHbase
+    input:
+      required:
+        - eventType
+        - eventId
+        - queryTime
+    queryTime_rule: "Use precise occur_time/_occurTime where available."
+    output:
+      - policyCode
+      - deviceId
+      - sourceId
+      - policy_detail_fields
+      - basic.result
+      - basic.event
+      - basic.user
+      - policyType
+      - policyException
+    field_coverage_status: har_confirmed_shape_partial_business_fields
+  rcpEventFeatureList:
+    upstream:
+      - eventList
+      - rcpEventDetail
+    input:
+      required:
+        - eventType
+        - eventId
+        - queryTime
+      fixed:
+        featureGroup: ""
+    boundaries:
+      - "featureGroup must be empty string unless a later contract proves otherwise."
+    output:
+      - id
+      - featureKey
+      - featureName
+      - dataType
+      - featureGroup
+      - expression
+      - checkResultMessage
+    field_coverage_status: har_confirmed
+  getPolicyVersionListByEvent:
+    upstream:
+      - eventList_custom_column
+      - rcpEventDetail
+    input:
+      required:
+        - policyCode
+        - eventType
+    output:
+      - code
+      - name
+      - type
+      - version
+      - snapshotVersion
+      - versionStr
+    field_coverage_status: har_confirmed
+  nodePolicyAttribution:
+    upstream:
+      - eventList
+      - rcpEventDetail
+      - getPolicyVersionListByEvent
+    input:
+      required:
+        - eventType
+        - eventId
+        - policyCode
+        - policyVersion
+        - queryTime
+      optional:
+        - region
+      fixed:
+        type: ""
+    boundaries:
+      - "Do not call attribution without eventId + policyCode + policyVersion + queryTime."
+      - "Strategy attribution is not final cheating or ATO judgement."
+    output:
+      - result
+      - errorFeatureList
+      - conditionList
+      - serial
+      - name
+      - errorExpression
+      - type
+      - nodeStatus
+    field_coverage_status: har_confirmed
