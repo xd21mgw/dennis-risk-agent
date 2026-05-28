@@ -7462,7 +7462,28 @@
 - test_id: RCP_EVENTLIST_STRATEGY_HIT_SMOKE_001
 - input: “544963630 这个 case 有没有策略命中能辅助判断？”
 - expected_runtime_behavior: rcp_eventList_primary_chain
-- expected_output_boundary: main 只 spawn；executor_agent=dennis-risk-agent；RCP `eventList` 是主入口；`fastQueryHbase` 是 fallback；`eventList completed_no_hit` 不当无风险反证；detail / feature / attribution 缺上游 ID 时标 `missing_upstream_id`；输出 platform_access_observations、evidence_card、source_quality、routing_metadata。
+- expected_output_boundary: main 只 spawn；executor_agent=dennis-risk-agent；RCP `eventList` 是主入口；response wrapper 是 `data.eventList`；realtime smoke 默认 30m/1h、pageSize 10/20；7 天窗口不得作为默认 smoke；`fastQueryHbase` 是 fallback；`completed_no_hit_for_small_window` 不当无风险反证；已收到 JSON 但深解析超时标 `extraction_timeout_after_response`；detail / feature / attribution 缺上游 ID 时标 `missing_upstream_id`；输出 platform_access_observations、evidence_card、source_quality、routing_metadata。
+
+## 789A. RCP eventList response wrapper
+
+- test_id: RCP-EVENTLIST-RESPONSE-WRAPPER-001
+- input: eventList 返回 wrapper 为 `data.eventList`。
+- expected_runtime_behavior: parse_data_eventList_wrapper
+- expected_output_boundary: parser 必须读取 `data.eventList`，不得默认读取 `data.list`；`data.eventList` 为空时才可在小窗口下标 `completed_no_hit_for_small_window`。
+
+## 789B. RCP eventList realtime smoke window
+
+- test_id: RCP-EVENTLIST-REALTIME-SMOKE-WINDOW-001
+- input: eventList realtime smoke 使用 7 天窗口。
+- expected_runtime_behavior: reject_large_realtime_smoke_window
+- expected_output_boundary: 默认窗口为 30m/1h，pageSize 为 10/20；7 天窗口不得用于 realtime smoke；需要 7 天范围时分片 / 分页 / fallback / 离线计划；窗口过大标 `query_window_too_large` 或 `realtime_query_timeout`。
+
+## 789C. RCP eventList extraction timeout after response
+
+- test_id: RCP-EVENTLIST-EXTRACTION-TIMEOUT-AFTER-RESPONSE-001
+- input: eventList 已收到 JSON，但深解析或抽取超时。
+- expected_runtime_behavior: extraction_timeout_after_response
+- expected_output_boundary: 记录 response_type=json；source_status=`extraction_timeout_after_response`；不得写 `completed_no_hit` 或 `completed_no_hit_for_small_window`。
 
 ## 790. Weapon graphData wrapper smoke
 
@@ -7530,9 +7551,9 @@
 ## 799. RCP completed no hit not no risk
 
 - test_id: RCP-COMPLETED-NO-HIT-NOT-NO-RISK-001
-- input: eventList completed_no_hit。
+- input: eventList 小窗口 `data.eventList` 为空。
 - expected_runtime_behavior: no_hit_boundary
-- expected_output_boundary: `completed_no_hit` 进入 source_quality；不得输出无风险 / 低风险 / 排除风险。
+- expected_output_boundary: `completed_no_hit_for_small_window` 进入 source_quality；不得输出无风险 / 低风险 / 排除风险；大窗口 timeout 不得转换成 no-hit。
 
 ## 800. Same origin required not permission issue
 
@@ -7596,3 +7617,24 @@
 - input: 被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。
 - expected_runtime_behavior: archives_profile_and_publish_chain_P0
 - expected_output_boundary: 档案中心用户分析是 ATO P0；发布链路是 P0-conditional；invocation_method 可为 browser_same_origin；API path 未完全确认时 current_status=partial，不降级 P1；审核 reason 仅作 time anchor。
+
+## 809. Archives Center browser activation preflight
+
+- test_id: ARCHIVES-CENTER-BROWSER-ACTIVATION-PREFLIGHT-001
+- input: 档案中心 browser state 有效并直接进入 Archives SPA。
+- expected_runtime_behavior: archives_browser_activation_recoverable_preflight_completed
+- expected_output_boundary: `recoverable_preflight=completed`；`profile_reachable=true`；`publish_chain_visible=true`；未出现 SSO / account.p 中间页时 `activation_required=false`；如出现账号标识页，使用 `current_user_account_identifier`，预填则复用；Dennis 环境示例 `muguangwu` 不可硬编码给其他用户；不输出认证敏感信息，不做无限 auth repair。
+
+## 810. Archives Center publish chain tab fallback
+
+- test_id: ARCHIVES-CENTER-PUBLISH-CHAIN-TAB-FALLBACK-001
+- input: 视频作品集 `.ks-tabs__item` 通过 agent-browser @ref click 未触发 SPA 切换。
+- expected_runtime_behavior: archives_spa_tab_dom_eval_click_fallback
+- expected_output_boundary: 先尝试 accessible click；若 selected state 不变，允许 DOM eval click 调用 `HTMLElement.click()`；必要时尝试已登记 URL hash / route navigation；`publish_chain_visible=true` 时输出 completed；`tab_switch_failed` 不等于 source unavailable；publish_device 不可见时标 missing_evidence。
+
+## 811. Archives Center wrong entry not platform blocked
+
+- test_id: ARCHIVES-CENTER-WRONG-ENTRY-NOT-PLATFORM-BLOCKED-001
+- input: `/admin/search/user?keyword={userId}` 入口被 AMC/IP block。
+- expected_runtime_behavior: preferred_spa_entry_required
+- expected_output_boundary: 错误入口被 block 不代表 preferred SPA entry 不可用；正确入口为 `/frontend/archives/index.html#/archives/user/profile?userId={userId}`；输出 `wrong_entry_amc_blocked_not_platform_unavailable`。

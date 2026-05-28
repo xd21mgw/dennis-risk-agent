@@ -56,6 +56,25 @@ taxonomy:
   amc_permission_blocked:
     layer: path_permission
     meaning: "AMC/path permission block, often UI-path specific."
+  wrong_entry_amc_blocked_not_platform_unavailable:
+    layer: path_permission
+    meaning: "An unregistered Archives entry path is blocked by AMC/IP rules; this does not prove the preferred SPA entry is unavailable."
+    boundary: "Retry only via registered preferred SPA entry or mark source gap."
+  preferred_spa_entry_required:
+    layer: platform_contract
+    meaning: "Archives Center access must use the registered SPA entry instead of an admin/search or guessed path."
+  archives_browser_timeout:
+    layer: timeout
+    meaning: "Archives browser or same-origin source exceeded budget."
+    boundary: "Not auth_failed and not no-risk evidence."
+  tab_switch_failed:
+    layer: browser_ui_interaction
+    meaning: "SPA tab switch did not complete after allowed click/eval/route attempts."
+    boundary: "Does not mean source unavailable."
+  publish_chain_missing:
+    layer: missing_evidence
+    meaning: "Publish-chain tab or fields were not visible or not extracted under current source conditions."
+    boundary: "Do not infer no abnormal publish."
   user_permission_missing:
     layer: user_permission
     meaning: "Current user lacks platform permission."
@@ -65,6 +84,18 @@ taxonomy:
   timeout:
     layer: timeout
     meaning: "Source did not finish in budget; not counter evidence."
+  query_window_too_large:
+    layer: query_window
+    meaning: "Realtime API query window is too broad for smoke or quick validation, e.g. RCP eventList seven-day query."
+    boundary: "Shard, paginate, use fallback/comparison source, or produce an offline plan; do not mark completed_no_hit."
+  realtime_query_timeout:
+    layer: timeout
+    meaning: "Realtime quick-query API timed out due to query size, window, or server latency."
+    boundary: "Not no-hit evidence and not no-risk evidence."
+  extraction_timeout_after_response:
+    layer: extraction_timeout
+    meaning: "JSON response was received, but client-side extraction or deep parsing exceeded budget."
+    boundary: "Preserve response receipt metadata and mark extraction timeout; do not convert to completed_no_hit."
   completed_no_data:
     layer: no_failure
     meaning: "Valid request and schema; no records under current filter/window."
@@ -77,6 +108,10 @@ taxonomy:
     layer: no_failure
     meaning: "Valid strategy/event query; no hit under current filter/window."
     boundary: "Not a no-risk conclusion."
+  completed_no_hit_for_small_window:
+    layer: no_failure
+    meaning: "Valid realtime strategy/event query over a small smoke window returned empty data.eventList."
+    boundary: "Only says no hit in that small window; not no-risk evidence."
   discovery_completed_api_probe_pending:
     layer: platform_partial
     meaning: "UI/browser discovery completed but API execution is not yet verified."
@@ -92,9 +127,13 @@ classification_order:
   - parameter_contract
   - upstream_dependency
   - same_origin_context
+  - browser_ui_interaction
   - path_permission
   - auth_session
   - user_permission
   - parser
+  - query_window
   - timeout
+  - extraction_timeout
   - platform_partial
+  - missing_evidence

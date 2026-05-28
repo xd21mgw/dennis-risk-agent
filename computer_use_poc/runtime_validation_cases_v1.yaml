@@ -2343,16 +2343,46 @@ platform_access_execution_v0_1_regression:
       - executor_agent_dennis_risk_agent
       - rcp_eventList_primary_entry
       - base_domain_rcp_corp_kuaishou_com
+      - eventList_response_wrapper_data_eventList
+      - realtime_smoke_window_30m_or_1h
+      - pageSize_10_or_20
+      - no_7d_window_for_realtime_smoke
       - fastQueryHbase_fallback_not_blocker
-      - eventList_completed_no_hit_not_risk_exclusion
+      - eventList_completed_no_hit_for_small_window_not_risk_exclusion
       - rcpEventDetail_only_with_eventId_eventType_queryTime
       - rcpEventFeatureList_featureGroup_empty_string
       - policyVersion_only_with_policyCode_eventType
       - nodePolicyAttribution_only_with_eventId_policyCode_policyVersion_queryTime
+      - query_window_too_large_or_realtime_query_timeout_for_large_window
+      - extraction_timeout_after_response_if_json_received_but_deep_parse_timeout
       - missing_fields_output_missing_upstream_id
       - platform_access_observations
       - evidence_card_source_quality_routing_metadata
-    pass_fail_criteria: "RCP eventList 是策略命中主入口；fastQueryHbase 只是 fallback；缺上游 ID 不得硬调下游或误判 auth_failed。"
+    pass_fail_criteria: "RCP eventList 是策略命中主入口；实时 smoke 用 30m/1h 小窗口和 pageSize 10/20；response wrapper 是 data.eventList；7 天窗口 timeout 不得判 completed_no_hit。"
+  - case_id: RCP-EVENTLIST-RESPONSE-WRAPPER-001
+    input: "eventList 返回 JSON wrapper 为 data.eventList。"
+    expected_output_boundary:
+      - parse_data_eventList
+      - do_not_parse_data_list
+      - schema_valid_when_data_eventList_present
+    pass_fail_criteria: "eventList parser 必须读取 data.eventList；不得把 data.list 作为默认 wrapper。"
+  - case_id: RCP-EVENTLIST-REALTIME-SMOKE-WINDOW-001
+    input: "eventList realtime smoke 使用 7 天窗口并 pageSize 过大。"
+    expected_output_boundary:
+      - default_window_30m_or_1h
+      - default_pageSize_10_or_20
+      - seven_day_window_not_realtime_smoke
+      - query_window_too_large_or_realtime_query_timeout
+      - shard_paginate_fallback_or_offline_plan_for_7d
+    pass_fail_criteria: "7 天窗口不得作为 eventList realtime smoke 默认；需要大范围时分片/分页/fallback/离线计划。"
+  - case_id: RCP-EVENTLIST-EXTRACTION-TIMEOUT-AFTER-RESPONSE-001
+    input: "eventList 已收到 JSON，但深解析超时。"
+    expected_output_boundary:
+      - response_type_json_recorded
+      - source_status_extraction_timeout_after_response
+      - not_completed_no_hit
+      - source_quality_preserves_response_received
+    pass_fail_criteria: "已收到 JSON 但解析超时必须标 extraction_timeout_after_response，不得改写为 no_hit。"
   - case_id: WEAPON-GRAPHDATA-WRAPPER-SMOKE-001
     input: "通过受控 wrapper 查询 Weapon graphData。"
     expected_output_boundary:
@@ -2418,13 +2448,13 @@ platform_access_execution_v0_1_regression:
       - no_permission_blocked_claim
     pass_fail_criteria: "缺上游字段是编排/参数问题，不是认证失败。"
   - case_id: RCP-COMPLETED-NO-HIT-NOT-NO-RISK-001
-    input: "eventList completed_no_hit。"
+    input: "eventList 小窗口 data.eventList 为空。"
     expected_output_boundary:
-      - completed_no_hit_not_no_risk
+      - completed_no_hit_for_small_window_not_no_risk
       - no_hit_not_counter_evidence
       - source_quality_records_no_hit
       - missing_evidence_if_window_or_columns_incomplete
-    pass_fail_criteria: "eventList 无命中不能作为无风险反证。"
+    pass_fail_criteria: "小窗口 data.eventList 为空只能说明该窗口无命中，不能作为无风险反证。"
   - case_id: PLATFORM-PARTIAL-AVAILABLE-NOT-AUTH-FAILED-001
     input: "同一平台部分 API 可用、部分 API blocked。"
     expected_output_boundary:
@@ -2518,3 +2548,35 @@ platform_access_execution_v0_1_regression:
       - no_downgrade_to_P1
       - audit_reason_time_anchor_not_final_judgement
     pass_fail_criteria: "档案中心用户分析是 ATO P0；发布链路是异常发布 P0-conditional；path 不完整只标 partial。"
+  - case_id: ARCHIVES-CENTER-BROWSER-ACTIVATION-PREFLIGHT-001
+    input: "Archives Center browser state 有效，直接进入 SPA profile 页面并查看视频作品集。"
+    expected_output_boundary:
+      - recoverable_preflight_completed
+      - profile_reachable_true
+      - publish_chain_visible_true
+      - activation_required_false_when_no_sso_account_p_page
+      - no_account_identifier_input_when_not_needed
+      - no_cookie_token_session_header_password_output
+      - no_dataagent_hive_called
+      - no_business_risk_judgement
+    pass_fail_criteria: "latest live validation 的档案中心 browser preflight 结论必须回写：profile 可达、publish-chain 可见、无需激活时不触发账号标识输入。"
+  - case_id: ARCHIVES-CENTER-PUBLISH-CHAIN-TAB-FALLBACK-001
+    input: "点击 Archives Center 视频作品集 tab，agent-browser @ref click 未触发切换。"
+    expected_output_boundary:
+      - affected_ui_ks_tabs_item
+      - try_accessible_click_once
+      - dom_eval_click_fallback_allowed
+      - url_hash_or_route_navigation_if_contract_exists
+      - tab_switch_completed_or_tab_switch_failed
+      - tab_switch_failed_not_source_unavailable
+      - publish_chain_visible_completed_when_visible
+      - publish_device_missing_becomes_missing_evidence
+    pass_fail_criteria: "tab @ref click 失败后可使用 DOM eval click fallback；失败只标 tab_switch_failed，不得判 Archives source unavailable。"
+  - case_id: ARCHIVES-CENTER-WRONG-ENTRY-NOT-PLATFORM-BLOCKED-001
+    input: "使用 /admin/search/user?keyword={userId} 进入档案中心被 AMC/IP block。"
+    expected_output_boundary:
+      - preferred_spa_entry_required
+      - wrong_entry_amc_blocked_not_platform_unavailable
+      - preferred_spa_entry_frontend_archives_profile_userId
+      - no_platform_unavailable_claim_from_wrong_entry
+    pass_fail_criteria: "错误入口被 AMC/IP block 不代表 preferred SPA entry 不可用；正确入口为 /frontend/archives/index.html#/archives/user/profile?userId={userId}。"

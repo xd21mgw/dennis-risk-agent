@@ -304,6 +304,37 @@ Preferred path:
 4. After same-origin is active, use API direct read such as `/archives/user/home/info?userId=...`.
 5. Use DOM / selector only as fallback.
 
+Latest recoverable preflight backport:
+
+- `ARCHIVES-CENTER-BROWSER-ACTIVATION-PREFLIGHT-001` passed in live validation.
+- `recoverable_preflight=completed`.
+- Browser state was valid and directly entered Archives SPA.
+- No SSO / `account.p` middle page appeared.
+- No account identifier entry or next-step click was required.
+- Profile page was reachable, so account baseline can be `completed`.
+- Publish-chain / 视频作品集 tab was visible with seven video works.
+- Visible publish-chain fields include video ID, upload time, play count, comment count, like count, collect count, and status.
+- No credential material was output, no DataAgent/Hive was called, and no business risk judgement was made.
+
+Preferred SPA entry:
+
+- `/frontend/archives/index.html#/archives/user/profile?userId={userId}`
+
+Wrong entry boundary:
+
+- `/admin/search/user?keyword={userId}` can hit AMC/IP block.
+- `wrong_entry_amc_blocked_not_platform_unavailable`: wrong entry blocked does not prove preferred SPA entry is unavailable.
+
+SPA tab fallback:
+
+- `.ks-tabs__item` click by agent-browser ref may not trigger Vue / ks-tabs state change.
+- Try accessible click once.
+- If selected state does not change, use DOM eval click by text content and call `HTMLElement.click()`.
+- If still failed, try URL hash / route navigation when the contract has a registered route.
+- If still failed, mark `tab_switch_failed`, not source unavailable.
+- `publish_chain_visible=true` marks abnormal-publish P0-conditional source completed.
+- If publish device is not visible, mark `missing_evidence`; do not mark publish-chain unavailable.
+
 Common errors:
 
 - Declaring Archives unavailable before recoverable preflight.
@@ -312,6 +343,9 @@ Common errors:
 - Performing username entry / next click inside KNC, single-user, or batch business case execution instead of a separate auth activation task.
 - Direct browser UI scraping before API direct read.
 - Treating empty result as no risk or no behavior.
+- Treating `tab_switch_failed` as Archives unavailable.
+- Treating wrong-entry AMC/IP block as preferred SPA entry failure.
+- Hardcoding Dennis environment account identifier for other users; `muguangwu` is an example only.
 
 Fallback:
 
@@ -325,6 +359,11 @@ Source status mapping:
 - saved state redirects to `account.p`: `auth_state_expired` / `manual_sso_required`, not IP block
 - profile lock or browser session issue: `blocked`
 - SPA loop: `timeout` with `operation_loop_detected`
+- browser timeout: `archives_browser_timeout`, not `auth_failed`
+- tab switch fallback success: `tab_switch_completed`
+- tab switch fallback failed: `tab_switch_failed`
+- publish-chain visible: `publish_chain_visible`
+- publish-chain not visible or missing fields: `publish_chain_missing` / `missing_evidence`
 
 Capability status: `same_origin_api_confirmed_if_auth_ready` for validated APIs that require SPA / browser auth activation before same-origin fetch. Do not declare Archives unavailable before recoverable preflight; do not treat same-origin support as generic API direct. In business case execution, auth recovery is not performed inline; `account.p` redirect becomes `archives_auth_session_issue` and a remaining source gap.
 

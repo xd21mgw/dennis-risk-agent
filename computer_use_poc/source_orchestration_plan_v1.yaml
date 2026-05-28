@@ -37,12 +37,15 @@
           "source_type": "account_baseline",
           "access_method": "api_direct_if_available_or_browser_cookie_activation_or_same_origin_fetch",
           "runner_name": "archives_profile_runner",
-          "readiness_status": "planned_or_minimal_stub",
+          "readiness_status": "recoverable_preflight_completed_profile_reachable",
+          "latest_live_validation": "ARCHIVES-CENTER-BROWSER-ACTIVATION-PREFLIGHT-001",
+          "profile_reachable": true,
+          "activation_required_in_latest_validation": false,
           "required": true,
           "supported_input": "user_id",
           "purpose": "user_profile_account_status_ban_or_downrank_register_device_login_device_summary",
           "success_marker": "archives_profile_source_status=completed_when_homeInfo_available",
-          "fallback_status": "archives_auth_gap_or_blocked_enters_source_quality",
+          "fallback_status": "archives_auth_gap_or_archives_browser_timeout_or_blocked_enters_source_quality",
           "boundary": "readonly_no_auth_repair_no_cookie_token_session_header_output_no_publish_device_id_means_no_publish_device_anomaly_judgement"
         },
         {
@@ -98,18 +101,26 @@
         {
           "source_name": "publish_chain_if_abnormal_publish_or_content_operation",
           "source_priority": "P0-conditional",
-          "readiness_status": "playbook_ready_not_runner_ready",
+          "readiness_status": "publish_chain_visible_in_latest_live_validation",
+          "latest_live_validation": "video_tab_visible_7_items",
           "condition": "abnormal_publish_or_traffic_diversion_content_or_non_owner_publish_or_content_operation",
           "fields": [
             "publish_time",
             "publish_item_id",
             "content_type_summary",
+            "play_count",
+            "comment_count",
+            "like_count",
+            "collect_count",
+            "status",
             "publish_device",
             "publish_ip_or_region_if_available",
             "publish_source_chain"
           ],
+          "tab_interaction_fallback": "try_accessible_click_once_then_dom_eval_click_then_url_hash_or_route_navigation_if_contract_exists",
           "future_source_name": "archives_publish_device_trace",
-          "fallback_status": "not_connected_or_blocked_or_missing_evidence"
+          "fallback_status": "tab_switch_failed_or_blocked_or_missing_evidence",
+          "boundary": "tab_switch_failed_not_platform_unavailable_publish_device_missing_is_missing_evidence"
         },
         {
           "source_name": "tianshi_strategy_hit_if_user_asks_policy_hit",
@@ -161,12 +172,15 @@
         },
         "eventList_output_fields": "dynamic_by_tableHeaderList_and_custom_columns",
         "archives_profile_priority": "P0",
-        "archives_contract_status": "partial_same_origin_if_auth_ready",
+        "archives_contract_status": "recoverable_preflight_completed_profile_reachable_publish_chain_visible",
+        "archives_preferred_spa_entry": "/frontend/archives/index.html#/archives/user/profile?userId={userId}",
+        "archives_wrong_entry_behavior": "wrong_entry_amc_blocked_not_platform_unavailable",
+        "archives_publish_chain_tab_fallback": "DOM eval click allowed after click ref fails",
         "track_analysis_contract_status": "har_confirmed_needs_har_confirmation_for_unobserved_variants"
       },
       "track_analysis_event_day_alignment": {
         "getLastestDateTime_minimum_valid_request": "product=KUAISHOU|NEBULA&type=userId|deviceId&funcType=USER_PROFILE_QUERY&_t=<cache_buster>",
-        "code_603_failure_layer": "parameter_contract_missing",
+        "code_604_failure_layer": "parameter_contract_missing",
         "entity_modes": [
           "userId",
           "deviceId"
