@@ -65,6 +65,21 @@ source_plan:
     access_method: api_direct_if_available / controlled_browser_if_cookie_activation_required
     purpose: 账号状态、注册/实名/基础画像、账号历史风险、当前状态
     fallback: auth_failed/blocked 进入 source_quality，不得静默跳过
+    readiness_status: playbook_ready_not_runner_ready
+    output_if_completed:
+      archives_profile_source_status: completed
+      fields:
+        - 用户画像摘要
+        - 账号状态
+        - 封禁/降权摘要
+        - 注册设备摘要
+        - 登录设备摘要
+    boundary:
+      - readonly
+      - 不输出 cookie/token/session/header
+      - 不做 auth repair
+      - auth 失败标 archives_auth_gap
+      - 无 publish_device_id 时不能判断发作品设备异常
   - source_name: 发布作品/发布链路
     source_priority: P0-conditional
     trigger_condition: 涉及异常发布、作品引流、非本人发布、内容操作
@@ -107,6 +122,27 @@ time_window_reasoning:
 ```
 
 审核日志 reason 只能用于确定调查方向和重点时间窗口，不能单独定性 ATO。涉及异常发布时，作品发布时间是 P0 time anchor，应向前回溯登录、扫码 / OAuth、设备切换、token/session 和策略命中，向后查看审核、处罚、投诉。
+
+### Source Readiness Matrix Output
+
+当 source readiness 影响执行计划时，应输出 readiness 摘要，不把未接 runner 的 source 伪装为 completed。
+
+```yaml
+source_readiness_summary:
+  - source_name: archives_profile_readonly
+    readiness_status: playbook_ready_not_runner_ready
+    source_priority: P0
+    expected_behavior: auth gap 或 runner gap 进入 source_quality；不阻塞已完成 P0 evidence card
+  - source_name: tianshi_strategy_hit_inventory
+    readiness_status: playbook_ready_not_runner_ready
+    source_priority: P0-explicit when user asks policy hit
+  - source_name: track_analysis_activity_profile
+    readiness_status: endpoint_verified_not_runner_ready
+    source_priority: P0_or_P1_by_case
+  - source_name: dataagent_hive
+    readiness_status: requires_authorization
+    source_priority: P2
+```
 
 ## 0.0 General Evidence Reasoning Contract
 

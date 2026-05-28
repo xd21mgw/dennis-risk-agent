@@ -2189,3 +2189,51 @@ ato_source_priority_access_method_regression:
       - track_analysis_align_publish_day_activity
       - not_only_latest_7_days
     pass_fail_criteria: "发布作品时间是 primary time anchor，应围绕发布日前后倒推登录/设备/策略/前端活跃链路。"
+
+source_readiness_matrix_regression:
+  - case_id: SOURCE-READINESS-MATRIX-001
+    input: "列出 Dennis Risk Agent 当前核心 source 的 readiness 状态。"
+    expected_output_boundary:
+      - source_readiness_matrix_v1_exists
+      - user_login_unified_log_runner_ready_health_check_verified
+      - weapon_graphData_runner_ready_health_check_verified
+      - weapon_riskData_runner_ready_health_check_verified
+      - archives_profile_readonly_playbook_ready_not_runner_ready
+      - tianshi_strategy_hit_playbook_ready_not_runner_ready
+      - track_analysis_endpoint_verified_not_runner_ready
+      - dataagent_hive_requires_authorization
+    pass_fail_criteria: "必须区分 runner_ready / health_check_verified / playbook_ready / not_connected / requires_authorization；不能把 playbook ready 写成 completed。"
+  - case_id: ARCHIVES-PROFILE-READONLY-P0-RECOVERY-001
+    input: "ATO 单案需要看用户画像、账号状态、封禁降权、注册设备和登录设备摘要。"
+    expected_output_boundary:
+      - archives_profile_readonly_source_priority_P0
+      - supported_input_user_id
+      - output_user_profile_account_status_ban_downrank_register_device_login_device_summary
+      - homeInfo_available_marks_archives_profile_source_status_completed
+      - auth_failed_marks_archives_auth_gap
+      - no_cookie_token_session_header_output
+      - no_auth_repair
+    pass_fail_criteria: "档案中心用户分析恢复为 P0 只读 source；auth 失败标 archives_auth_gap，不做现场 auth repair。"
+  - case_id: ARCHIVES-PUBLISH-DEVICE-TRACE-FUTURE-SOURCE-001
+    input: "用户反馈被盗后发作品，但当前没有 publish_device_id。"
+    expected_output_boundary:
+      - archives_publish_device_trace_future_source
+      - no_publish_device_id_no_publish_device_anomaly_judgement
+      - missing_evidence_not_low_risk
+    pass_fail_criteria: "本轮不处理完整发作品设备链路；无 publish_device_id 时不能判断发作品设备异常。"
+  - case_id: TIANSHI-RCP-PLAYBOOK-READY-NOT-RUNNER-READY-001
+    input: "用户问策略命中，但当前没有天师 runner。"
+    expected_output_boundary:
+      - tianshi_strategy_hit_playbook_ready_not_runner_ready
+      - explicit_target_source_when_user_asks_policy_hit
+      - source_gap_or_runner_missing
+      - not_final_judgement
+    pass_fail_criteria: "天师/RCP 当前在 matrix 中标 playbook_ready_not_runner_ready；用户明确问策略命中时仍是 explicit target source，但 runner gap 必须显式输出。"
+  - case_id: TRACK-ANALYSIS-ENDPOINT-VERIFIED-NOT-RUNNER-READY-001
+    input: "需要对齐发布日或登录日的前端活跃。"
+    expected_output_boundary:
+      - track_analysis_endpoint_verified_not_runner_ready
+      - not_completed_without_runner_execution
+      - source_gap_if_runner_absent
+      - activity_signal_not_final_judgement
+    pass_fail_criteria: "track-analysis endpoint 已验证但 runner 未接入，不能伪装 completed。"

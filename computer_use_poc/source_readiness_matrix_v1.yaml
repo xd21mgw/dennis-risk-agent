@@ -1,0 +1,193 @@
+schema_version: source_readiness_matrix_v1
+purpose: >
+  Track Dennis Risk Agent source readiness separately from source priority.
+  A source can be P0 by evidence value while still being runner-incomplete or auth-gated.
+
+status_enum:
+  - runner_ready
+  - health_check_verified
+  - playbook_ready
+  - not_connected
+  - requires_authorization
+  - playbook_ready_not_runner_ready
+  - endpoint_verified_not_runner_ready
+
+global_boundaries:
+  no_data_not_risk_exclusion: true
+  source_priority_decided_by_evidence_value: true
+  access_method_is_collection_path_only: true
+  no_live_auth_repair_in_business_case: true
+  no_cookie_token_session_header_output: true
+
+sources:
+  user_login_unified_log:
+    source_priority: P0
+    readiness_status:
+      - runner_ready
+      - health_check_verified
+      - playbook_ready
+    supported_input:
+      - user_id
+      - time_window
+    output_summary:
+      - login_events
+      - login_method
+      - device_summary
+      - ip_region_summary
+      - reliable_window_boundary
+    boundary:
+      - online_window_limited
+      - no_data_not_risk_exclusion
+
+  weapon_graphData:
+    source_priority: P0
+    readiness_status:
+      - runner_ready
+      - health_check_verified
+      - playbook_ready
+    supported_input:
+      - user_id
+    output_summary:
+      - user_device_edges
+      - candidate_device_ids
+      - graph_edge_count
+    boundary:
+      - graphData_empty_not_no_device
+      - raw_device_id_internal_only
+
+  weapon_riskData:
+    source_priority: P0-conditional
+    readiness_status:
+      - runner_ready
+      - health_check_verified
+      - playbook_ready
+    supported_input:
+      - device_id
+    trigger_condition:
+      - graphData_deviceId
+      - login_log_deviceId
+      - publish_chain_deviceId
+      - track_analysis_deviceId
+    output_summary:
+      - device_risk_tags
+      - environment_risk_summary
+    boundary:
+      - missing_device_reference_when_no_device_id
+      - device_risk_not_standalone_judgement
+
+  archives_profile_readonly:
+    source_priority: P0
+    readiness_status:
+      - playbook_ready
+      - not_connected
+    supported_input:
+      - user_id
+    access_method:
+      - same_origin_fetch_if_auth_ready
+      - controlled_browser_cookie_activation_if_needed
+    output_summary:
+      - user_profile_summary
+      - account_status
+      - ban_or_downrank_summary
+      - register_device_summary
+      - login_device_summary
+    success_marker:
+      archives_profile_source_status: completed
+      condition: homeInfo_available
+    boundary:
+      - readonly
+      - no_cookie_token_session_header_output
+      - no_auth_repair_in_business_case
+      - auth_failed_marks_archives_auth_gap
+      - no_publish_device_id_means_cannot_judge_publish_device_anomaly
+
+  archives_publish_device_trace:
+    source_priority: P0-conditional
+    readiness_status:
+      - playbook_ready
+      - not_connected
+    supported_input:
+      - user_id
+      - publish_id
+      - publish_time
+    output_summary:
+      - publish_list
+      - publish_time
+      - publish_device
+      - publish_source_chain
+    boundary:
+      - future_source
+      - not_implemented_in_current_runner
+      - source_gap_until_connected
+
+  tianshi_strategy_hit_inventory:
+    source_priority: P0-explicit
+    readiness_status:
+      - playbook_ready_not_runner_ready
+    supported_input:
+      - source_id
+      - event_id
+      - device_id
+      - time_window
+    output_summary:
+      - strategy_hit_overview
+      - hit_policy_summary
+      - risk_decision_summary
+    boundary:
+      - explicit_target_when_user_asks_policy_hit
+      - not_final_risk_judgement
+      - missing_required_fields_becomes_source_gap
+
+  rcp_event_detail:
+    source_priority: conditional
+    readiness_status:
+      - playbook_ready_not_runner_ready
+    supported_input:
+      - event_id
+      - event_type
+      - query_time
+    output_summary:
+      - event_detail
+      - request_context_summary
+    boundary:
+      - partial_api_direct
+      - not_general_user_id_lookup
+
+  track_analysis_activity_profile:
+    source_priority: P0_or_P1_by_case
+    readiness_status:
+      - endpoint_verified_not_runner_ready
+      - playbook_ready
+    supported_input:
+      - user_id
+      - device_id
+      - appName
+    output_summary:
+      - profile_card
+      - device_ids
+      - daily_duration_rows
+      - active_days_bucket
+      - event_day_activity_alignment
+    boundary:
+      - endpoint_verified_but_no_runner
+      - activity_signal_not_final_judgement
+      - no_data_not_risk_exclusion
+
+  dataagent_hive:
+    source_priority: P2
+    readiness_status:
+      - requires_authorization
+      - playbook_ready
+    supported_input:
+      - approved_query_scope
+      - table
+      - time_window
+      - fields
+    output_summary:
+      - offline_history_evidence
+      - long_window_login_chain
+      - batch_or_cross_table_result
+    boundary:
+      - per_call_authorization_required
+      - query_plan_allowed_without_execution
+      - pending_query_not_completed_evidence

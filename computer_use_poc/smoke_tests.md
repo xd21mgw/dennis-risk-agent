@@ -7344,3 +7344,38 @@
 - input: 用户说账号被盗后发了几条视频，要求从视频时间倒推盗号链路。
 - expected_runtime_behavior: publish_time_primary_anchor
 - expected_output_boundary: 作品发布时间是 primary time anchor；向前查登录 / 扫码 / OAuth / 设备切换 / token-session / 策略命中；向后查审核 / 处罚 / 投诉；发布设备触发 Weapon riskData；track-analysis 对齐发布当天前端活跃。
+
+## 773. Source readiness matrix exists
+
+- test_id: SOURCE-READINESS-MATRIX-001
+- input: 核心 source readiness 状态。
+- expected_runtime_behavior: readiness_matrix_loaded
+- expected_output_boundary: `source_readiness_matrix_v1.yaml` 存在；覆盖 runner_ready、health_check_verified、playbook_ready、not_connected、requires_authorization；login_log/Weapon 为 runner_ready + health_check_verified；档案中心为 playbook_ready_not_runner_ready；DataAgent/Hive 为 requires_authorization。
+
+## 774. Archives profile readonly P0 recovered
+
+- test_id: ARCHIVES-PROFILE-READONLY-P0-RECOVERY-001
+- input: ATO 单案需要看用户画像、账号状态、封禁/降权、注册设备和登录设备摘要。
+- expected_runtime_behavior: archives_profile_readonly_p0_source
+- expected_output_boundary: `archives_profile_readonly` 支持 user_id；输出画像、账号状态、封禁/降权、注册设备、登录设备摘要；homeInfo 可用时 `archives_profile_source_status=completed`；auth 失败标 `archives_auth_gap`；不输出 cookie/token/session/header；不做 auth repair。
+
+## 775. Archives publish device trace remains future source
+
+- test_id: ARCHIVES-PUBLISH-DEVICE-TRACE-FUTURE-SOURCE-001
+- input: 发作品设备链路，但当前没有 publish_device_id。
+- expected_runtime_behavior: future_source_gap
+- expected_output_boundary: `archives_publish_device_trace` 标后续 source；无 publish_device_id 时不能判断发作品设备异常，不得写低风险。
+
+## 776. Tianshi RCP playbook ready not runner ready
+
+- test_id: TIANSHI-RCP-PLAYBOOK-READY-NOT-RUNNER-READY-001
+- input: 用户明确问策略命中，但当前没有天师/RCP runner。
+- expected_runtime_behavior: explicit_source_with_runner_gap
+- expected_output_boundary: matrix 标 `playbook_ready_not_runner_ready`；仍是 explicit target source；输出 runner_missing/source_gap，不把策略命中缺失当反证。
+
+## 777. Track-analysis endpoint verified not runner ready
+
+- test_id: TRACK-ANALYSIS-ENDPOINT-VERIFIED-NOT-RUNNER-READY-001
+- input: 需要对齐发布日/登录日前端活跃。
+- expected_runtime_behavior: endpoint_verified_runner_gap
+- expected_output_boundary: matrix 标 `endpoint_verified_not_runner_ready`；无 runner execution 时不得标 completed；活跃信号不是最终风险定性。
