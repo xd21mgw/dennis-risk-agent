@@ -20,6 +20,18 @@ Plan-only diagnostic boundary:
 - Strategy hit remains cross-validation only, not final ATO / cheating judgement.
 - Browser is not P0 when API runner / API direct can answer.
 - DataAgent/Hive remains per-call authorized even after a successful plan.
+- Source priority and access method are separate: evidence value decides `source_priority`; execution path decides `access_method`. API direct first is a low-cost / stable collection preference among sources with equal evidence value, not the P0/P1/P2 criterion.
+- Use `source_priority: P0 | P0-explicit | P0-conditional | P1 | P2 | conditional` and `access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized`.
+- Non-API sources are not automatically downgraded. Archives user analysis and publish-chain evidence can be P0 even when their controlled access method is browser cookie activation / same-origin fetch.
+- Browser is not a general fallback. It is allowed only when the source contract names it as the controlled access method and must keep `executor_agent=dennis-risk-agent`, `main_direct_tool_bypass=false`, readonly mode, checkpointing, timeout, and source_quality fallback.
+
+ATO time_window_inference:
+
+- Before executing the ATO source plan, infer candidate windows from user input and P0 anchors instead of using the latest 7 days as the only window.
+- Candidate anchors: `user_report_time`, `archive_user_analysis_time`, `audit_log_time`, `publish_time`, `publish_device_time`, `strategy_hit_time`, `login_event_time`, `device_first_seen_time`, `frontend_activity_time`.
+- Audit reason guides investigation direction and time windows only; it is not ATO judgement.
+- Abnormal publish / traffic-diversion content makes publish time and publish device P0 anchors. Look backward for login, scan/OAuth, device switch, token/session, and strategy hit; look forward for audit, punishment, and complaint.
+- Login-log online window gaps must become `login_log_window_incomplete` / `offline_hive_required`; Hive still requires per-call user authorization.
 
 ## Platform Capability Status Taxonomy
 
@@ -151,7 +163,7 @@ Hard rules:
 - Do not use `/api/graphData` as default execution guidance.
 - Do not strip mobile device prefixes such as `ANDROID_` or `IOS_` before calling Weapon riskData. Preserve the observed device id string unless a validated platform contract explicitly says otherwise.
 - Do not switch to arbitrary frontend or guessed API paths when `/apiv2/*` returns `auth_failed`, `blocked`, or `timeout`; record the source status and continue the evidence card.
-- In single-user account security / ATO / login anomaly cases, Weapon graphData/riskData is part of the P0 default sequence after unified login log. Login log `no_data` does not end the judgement.
+- In single-user account security / ATO / login anomaly cases, Weapon graphData is a P0 user-to-device resolution source. Weapon riskData is conditional on a deviceId resolved from graphData, login log, publish chain, track-analysis, or another current-task source. Login log `no_data` does not end the judgement.
 
 Common errors:
 

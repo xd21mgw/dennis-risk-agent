@@ -16,6 +16,14 @@ Plan 合格后进入 execution 前必须同时满足：
 - output contract 明确：execution 必须有 `evidence_card` / `source_quality` / `routing_metadata`。
 - plan-only 也必须有 `routing_metadata`，至少包含 `execution_mode=plan_mode_only`、`platform_called=false`、`dataagent_called=false`、`reason_not_executed`。
 
+ATO source priority and access method must be separated:
+
+- 证据价值决定 `source_priority`，执行方式决定 `access_method`。API direct first 是同等证据价值下的低成本 / 稳定采集路径优先，不是 P0 / P1 / P2 的唯一判定标准。
+- 每个 source plan item must separately declare `source_priority: P0 | P1 | P2 | conditional` and `access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized`.
+- 非纯 API source 不能天然降级；如果它是当前场景核心证据，仍然可以是 P0。
+- Browser 不作为通用默认替代；但对于档案中心用户分析、发布作品 / 发布链路等特定 P0 source，如果平台必须 browser 激活 cookie / SPA / same-origin fetch，可以作为受控 P0 采集链路。
+- 受控 browser P0 source 必须满足：`executor_agent=dennis-risk-agent`、`main_direct_tool_bypass=false`、`readonly=true`、timeout / checkpoint / partial evidence fallback 完整，且 `auth_failed` / redirect / profile_lock / same_origin_error 进入 `source_quality`。
+
 如果 plan 合格但 execution 失败，优先归因到 `config/runtime`、runner/safeBin/auth 或 `source_orchestration`，不要直接判定为脑子 / 路由问题。
 
 如果 execution 成功但结论差，优先归因到 `evidence_reasoning` 或 `output_contract`。
@@ -29,13 +37,14 @@ DataAgent/Hive：
 Browser：
 
 - P0 优先受控 API runner / API direct。
-- browser / DOM / SPA 只能作为 API 不可用时的降级或补证。
+- browser / DOM / SPA 不作为通用默认替代；只有当该 source 的已登记 access method 需要 `browser_cookie_activation` / `same_origin_fetch` 时，才能作为受控采集链路。
 - main agent 不得通过 browser / curl / cookie 接管平台查询。
 
 策略命中：
 
 - 用户明确问“策略命中”时，策略命中是显式目标 source。
 - 策略命中只能作为辅助风险信号，不是最终 ATO 定性证据。
+- stop condition 不能跳过用户显式目标 source。用户问策略命中时，天师策略命中必须进入 target source；用户问异常发布 / 作品引流 / 非本人发布时，发布作品列表、发布时间、发布设备和发布来源链路必须进入 target source。
 
 Failure Triage Card 模板见 `computer_use_poc/failure_triage_card_template_v1.md`。
 
@@ -228,8 +237,11 @@ Behavior:
 - Per-source checkpoint is mandatory. After each source finishes, record `source_name`, `source_type`, `source_status`, `evidence_summary`, `evidence_time_range`, `source_quality`, `raw_reference_safe_id`, `collected_at`, `failure_reason`, and `next_source_decision`.
 - Completed P0/P1 sources must be retained even if later P2 browser sources time out. `no_data` is still a completed source and must carry `no_data_not_risk_exclusion`.
 - Default total budget is 180s. If any P0/P1 source has completed, stop extending P2 browser sources at the 120s or 150s checkpoint and emit partial evidence before the overall timeout.
-- Source priority: P0 = unified login log, Weapon riskData/graphData, Tianshi strategy hit summary; P1 = archives profile, track-analysis stats-first; P2 = RCP browser, archives browser recoverable_preflight, track-analysis SPA detail.
+- Source priority must follow evidence value, not access method. For ATO: P0 = Archives Center user analysis, unified login log, Weapon graphData; P0-explicit = Tianshi strategy hit when the user asks policy hit; P0-conditional = publish chain / publish device for abnormal publish cases and Weapon riskData after a suspicious deviceId is resolved; P1/P2 = deeper device SDK, browser DOM fallback, offline supplement, and other non-blocking evidence.
+- ATO source priority corrected: 档案中心用户分析是 P0 account baseline source；统一登录日志是 P0；Weapon graphData 是 P0；Weapon riskData 是 `P0-conditional / P1`，只有 graphData / 登录日志 / 发布链路 / track-analysis 等 source 产出可疑 `deviceId` 后触发；用户明确问策略命中时天师策略命中是 `P0-explicit`；涉及发布作品、异常发布、作品引流、非本人发布、内容操作时，发布作品 / 发布时间 / 发布设备 / 发布来源链路是 `P0-conditional`；track-analysis 对协议上号、OAuth / 扫码、后端有事件但前端无活跃、异常发布当天无真实前端活跃等场景可升为 P0。
 - P0 multi-source orchestration gate: for single-user account security / ATO / login anomaly cases, `user_login_unified_log` is only the first P0 source, never the terminal judgement source. Whether login log returns `completed`, `no_data`, `auth_failed`, `timeout`, or `parse_error`, continue the default P0 sequence unless the overall deadline is reached: `user_login_unified_log` -> Weapon USER_ID to DEVICE_ID graphData -> Weapon device riskData for resolved devices -> Tianshi strategy hit summary when sourceId/time_window is available -> Archives profile availability check. Each unavailable source must still checkpoint as `blocked`, `auth_failed`, `timeout`, `parse_error`, or `not_checked`.
+- The P0 sequence above is dependency-aware, not a fixed unconditional list: `weapon_device_risk` requires a raw `deviceId` from graphData / login_log / publish_chain / track_analysis; if no device reference exists, record `missing_device_reference` instead of claiming riskData coverage.
+- ATO time_window_inference is a P0 pre-step. If the user only provides `user_id`, do not treat the latest 7 days as the only window. Build candidate windows from user_report_time, archives user analysis device/account changes, audit log reason/time, recent publish_time, publish_device_time, strategy_hit_time, login_event_time, device_first_seen_time, and track-analysis frontend_activity_time.
 - Weapon path hard rule: use `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2` for user-to-device resolution, then `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}` for device risk. Do not use `/api/graphData` as default guidance, and do not freely explore alternate frontend paths after `/apiv2/*` fails; record the failure in `source_quality`.
 - If P0 source execution cannot complete, output a partial evidence card with completed / no_data / blocked / auth_failed / timeout / parse_error / not_checked sources. Do not stop at a single login-log `no_data` conclusion.
 - Track-analysis supporting source must only be marked `completed` when the executable endpoint is verified in the current runtime. If the contract says `api_direct_confirmed` but the live executable endpoint is not verified, downgrade that source to `pending_api_direct_confirmation` / `source_gap` and do not use it as completed evidence.

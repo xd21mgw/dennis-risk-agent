@@ -49,6 +49,15 @@
 
 正式能力与平台适配器关系：
 
+- Source priority and access method must be expressed separately:
+  - `source_priority: P0 | P0-explicit | P0-conditional | P1 | P2 | conditional`
+  - `access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized`
+  - 证据价值决定 source priority，执行方式决定 access method。API direct first 是采集路径优先，不是 P0/P1/P2 的唯一判定标准。
+- `user_profile_read` / 档案中心用户分析在 ATO、account_security、abnormal publish、user state analysis 中是 P0 account-baseline source。即使需要 `browser_cookie_activation` / `same_origin_fetch`，也不得因非纯 API direct 自动降为 P1/P2。
+- 发布作品 / 发布设备 / 发布来源链路是 ATO P0-conditional capability：异常发布、作品引流、非本人发布、内容操作、发布后投诉 / 封禁 / 策略命中时触发。发布设备可作为后续 `device_risk_read` 的 raw_reference_safe_id 来源。
+- `device_risk_read` / Weapon riskData 是 conditional device-level follow-up，输入依赖 `deviceId`，可来自 graphData、login_log、publish_chain、track_analysis 或其他 current-task source 的 raw_reference_safe_id。没有 deviceId 时必须标 `missing_device_reference`，不得假装 riskData 已覆盖。
+- `strategy_hit_read` 在用户明确问“策略命中 / 有没有命中策略 / 策略命中能否辅助判断”时是 `P0-explicit` target source；策略命中只能作为辅助风险信号，不是 final judgement。
+- Browser / cookie activation 是 access method，不是 source priority。main agent 不得以 browser / curl / cookie fallback 形式 direct exec 接管平台查询。
 - P0 source capability 的 wrapper-first 是 runtime 约束，不只是文档建议。`login_log_read`、`strategy_hit_read`、`user_device_resolution` / Weapon read 等 P0 source 需要 dedicated dennis runtime config、`safeBins`、source wrapper 和 `tools.deny` 同时生效。
 - 如果 live `openclaw.json` 没有独立 `dennis-risk-agent` entry，或 dennis 继承 full-profile defaults，必须标 `runtime_config_not_applied`，不得宣称 wrapper-first 已 runtime 生效。
 - Browser fallback 必须显式记录 `access_method=browser_same_origin_fetch` 或 `browser_ui_observation`；不得把 browser fallback 成功包装成 wrapper-first 成功。

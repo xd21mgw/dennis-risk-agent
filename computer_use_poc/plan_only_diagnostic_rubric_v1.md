@@ -34,6 +34,15 @@ Each dimension is scored `0-5`.
 - 2-9 user mixed ATO + expansion request is not split into `small_batch_execution_with_checkpoint` plus `plan_mode_only`: deduct intent/routing and orchestration.
 - DataAgent/Hive is described as automatically allowed after one consent or after P0/P1 insufficiency: deduct source_plan and orchestration.
 - Browser / DOM / SPA is placed in P0 default path when API runner / API direct exists: deduct source_plan.
+- Archives Center user analysis is downgraded to P1/P2 in ATO single-case planning: deduct source_plan and orchestration.
+- Abnormal publish / non-owner publish / content operation is involved but publish list, publish time, publish device, and publish source chain are not P0-conditional: deduct source_plan.
+- API direct is treated as the source priority criterion: deduct source_plan. API direct first is only access-method preference among comparable evidence sources.
+- `source_priority` and `access_method` are not separated: deduct output_contract and orchestration.
+- Browser is used as a general default replacement: deduct orchestration and runtime boundary.
+- A core source that requires browser cookie activation / SPA / same-origin fetch is downgraded only because it is not pure API direct: deduct source_plan.
+- Weapon riskData is fixed as unconditional P0 before any deviceId has been resolved: deduct orchestration.
+- Explicit strategy-hit question does not make Tianshi strategy hit an explicit target source: deduct intent/routing.
+- Stop condition allows skipping explicit target source, archives user analysis in ATO, or publish chain in abnormal-publish cases: deduct orchestration.
 - no_data / timeout / blocked / auth_failed is used as low-risk / no-risk evidence: deduct evidence_reasoning.
 - Strategy hit, model score, blacklist, or rule name is used as final judgement: deduct evidence_reasoning.
 - Plan-only output lacks `routing_metadata`: deduct output_contract.
@@ -56,9 +65,10 @@ Before moving from plan-only diagnostic to execution:
 2. `source_plan` is correct.
 3. DataAgent/Hive is not executed by default and remains per-call authorized.
 4. Browser is not a P0 default source; API runner / API direct comes first.
-5. no_data and strategy-hit evidence boundaries are explicit.
-6. Output contract is explicit.
-7. Plan-only response includes `routing_metadata` with:
+5. Source priority and access method are separated; core evidence sources are not downgraded only because they require controlled browser cookie activation / same-origin fetch.
+6. no_data and strategy-hit evidence boundaries are explicit.
+7. Output contract is explicit.
+8. Plan-only response includes `routing_metadata` with:
    - `execution_mode=plan_mode_only`
    - `platform_called=false`
    - `dataagent_called=false`
@@ -78,12 +88,21 @@ Expected:
 
 - `single_entity_execution_mode` or diagnostic plan for that execution.
 - Strategy hit is an explicit target source because the user explicitly asks for it.
-- Minimal sources: Tianshi strategy hit + login log.
-- Weapon graphData / riskData as ATO cross-validation.
+- Minimal target sources: Tianshi strategy hit + login log + Archives Center user analysis.
+- Weapon graphData as ATO cross-validation; Weapon riskData only after graphData / login log / publish chain / track-analysis yields a deviceId.
 - No default DataAgent/Hive.
-- Browser is not P0; API runner / API direct first.
+- Browser is not a general P0 replacement; controlled browser cookie activation / same-origin fetch can be the access method for an evidence-critical P0 source such as Archives Center.
 - `strategy_hit_not_final_judgement`.
 - `no_data_not_risk_exclusion`.
+
+### ATO Publish / Time Window Inference
+
+Expected:
+
+- `time_window_inference` is a P0 pre-step; do not use the latest 7 days as the only window when event time is missing.
+- Time anchors include user report time, Archives user analysis device/account changes, audit log time and reason, recent publish time, publish device time, strategy hit time, login event time, device first seen time, and frontend activity time.
+- Audit reason guides investigation direction and window selection; it is not final ATO evidence.
+- Abnormal publish makes publish time and publish device P0 anchors; look backward to login / scan / OAuth / device switch / token-session / strategy hit and forward to audit / punishment / complaint.
 
 ### Small Batch ATO + Expansion
 

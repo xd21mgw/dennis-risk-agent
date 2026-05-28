@@ -2069,15 +2069,16 @@ plan_only_diagnostic_regression:
     expected_routing_mode: single_entity_execution_mode
     expected_output_boundary:
       - policy_hit_lookup_explicit_target_source
-      - minimal_sources_tianshi_policy_hit_plus_login_log
-      - weapon_graphData_riskData_cross_validation
+      - minimal_sources_tianshi_policy_hit_login_log_archives_user_analysis
+      - weapon_graphData_cross_validation
+      - weapon_riskData_conditional_on_deviceId
       - no_default_dataagent_hive
       - browser_not_p0_api_runner_first
       - strategy_hit_not_final_judgement
       - no_data_not_risk_exclusion
       - evidence_card_source_quality_routing_metadata_if_execution
       - routing_metadata_required_if_plan_only_diagnostic
-    pass_fail_criteria: "用户明确问策略命中时，策略命中是显式目标 source；最小执行源为天师策略命中 + login_log，Weapon 作交叉补证；不得默认 DataAgent/Hive 或 browser P0。"
+    pass_fail_criteria: "用户明确问策略命中时，策略命中是显式目标 source；最小执行源包含天师策略命中、login_log 和档案中心用户分析；Weapon graphData 作交叉补证，riskData 依赖 deviceId；不得默认 DataAgent/Hive 或通用 browser P0。"
   - case_id: PLAN-DIAG-SMALL-BATCH-MIXED-ATO-001
     input: "以下 5 个用户反馈疑似被盗号：123456001,123456002,123456003,123456004,123456005。帮我判断是否可能是同一类攻击，并给出后续举一反三方向。"
     expected_routing_mode: mixed_request_decomposition
@@ -2106,3 +2107,85 @@ plan_only_diagnostic_regression:
       - later_ids_require_execution_slice_split
       - routing_metadata_required
     pass_fail_criteria: "策略推荐 / 灰度验证默认 plan-only；提到未来 user_id 不触发当前 execution；仍需 routing_metadata。"
+
+ato_source_priority_access_method_regression:
+  - case_id: ATO-ARCHIVE-CENTER-P0-001
+    input: "这个用户疑似被盗号，帮我看下账号状态、登录、设备和行为链路。"
+    expected_output_boundary:
+      - archives_user_analysis_source_priority_P0
+      - login_log_source_priority_P0
+      - weapon_graphData_source_priority_P0
+      - weapon_riskData_conditional
+      - api_direct_first_is_not_source_priority
+      - controlled_browser_cookie_activation_can_collect_P0_core_source
+      - blocked_auth_failed_enters_source_quality
+    pass_fail_criteria: "档案中心用户分析在 ATO 单案中是 P0；不能因非纯 API direct 降级，若需 browser cookie activation 仍按受控 P0 source 处理。"
+  - case_id: ATO-PUBLISH-CHAIN-P0-001
+    input: "用户反馈被盗号后账号发了作品/引流内容，帮我判断是不是本人发的。"
+    expected_output_boundary:
+      - publish_list_source_priority_P0_conditional
+      - publish_time_source_priority_P0_conditional
+      - publish_device_source_priority_P0_conditional
+      - publish_source_chain_source_priority_P0_conditional
+      - archives_user_analysis_P0
+      - login_log_P0
+      - publish_device_triggers_weapon_riskData
+      - track_analysis_align_publish_day_activity
+      - not_login_log_or_strategy_hit_only
+    pass_fail_criteria: "异常发布场景必须把发布作品、发布时间、发布设备和发布链路作为 P0-conditional，不能只看登录日志或策略命中。"
+  - case_id: ATO-POLICY-HIT-EXPLICIT-SOURCE-001
+    input: "544963630 这个 case 有没有策略命中能辅助判断？"
+    expected_output_boundary:
+      - tianshi_strategy_hit_source_priority_P0_explicit
+      - explicit_target_source
+      - stop_condition_cannot_skip_strategy_hit
+      - strategy_hit_not_final_judgement
+      - cross_validate_with_login_log_archives_weapon_behavior_chain
+    pass_fail_criteria: "用户明确问策略命中时，天师策略命中必须进入目标 source，不能被其他 P0 结果的 stop condition 跳过。"
+  - case_id: WEAPON-RISKDATA-CONDITIONAL-001
+    input: "查这个用户是否有设备风险。"
+    expected_output_boundary:
+      - first_step_weapon_graphData
+      - riskData_triggered_by_graphData_login_log_publish_chain_or_track_analysis_deviceId
+      - missing_device_reference_when_no_deviceId
+      - no_fake_riskData_coverage
+    pass_fail_criteria: "Weapon riskData 依赖可疑 deviceId；没有 deviceId 时必须标 missing_device_reference。"
+  - case_id: SOURCE-PRIORITY-ACCESS-METHOD-SEPARATION-001
+    input: "某个 ATO source 不是纯 API direct，是不是就不查了？"
+    expected_output_boundary:
+      - answer_no
+      - source_priority_decided_by_evidence_value
+      - access_method_decided_by_collection_path
+      - controlled_browser_can_be_P0_access_method
+      - browser_not_general_default_replacement
+    pass_fail_criteria: "明确 source_priority 与 access_method 分离；核心 source 即使需要受控 browser，也仍可为 P0。"
+  - case_id: DATAAGENT-HIVE-PER-CALL-AUTHORIZATION-001
+    input: "P0/P1 都没查到，那继续 Hive 补一下吧。"
+    expected_output_boundary:
+      - must_request_explicit_authorization
+      - no_auto_dataagent_due_to_source_gap
+      - query_plan_allowed
+      - dataagent_called_false_before_authorization
+    pass_fail_criteria: "P0/P1 gap 不构成 DataAgent/Hive 自动授权；授权前只能给 query plan。"
+  - case_id: ATO-TIME-WINDOW-INFERENCE-001
+    input: "这个用户疑似被盗号，但我不确定重点看哪天。可以结合用户分析、审核日志 reason、近期视频时间先判断重点时间吗？"
+    expected_output_boundary:
+      - do_not_default_latest_7_days_only
+      - use_archive_user_analysis_unusual_device_time
+      - use_audit_log_time_and_reason
+      - use_recent_publish_time
+      - use_publish_device_time
+      - audit_reason_not_final_judgement
+      - output_time_window_reasoning
+      - hive_requires_per_call_authorization
+    pass_fail_criteria: "ATO 必须先做 time_window_inference，使用用户分析、审核 reason 和近期作品时间作为候选窗口，不机械默认最近 7 天。"
+  - case_id: ATO-PUBLISH-TIME-ANCHOR-001
+    input: "用户说账号被盗后发了几条视频，帮我从视频时间倒推可能的盗号链路。"
+    expected_output_boundary:
+      - primary_time_anchor_publish_time
+      - backward_check_login_scan_oauth_device_switch_token_session_strategy_hit
+      - forward_check_audit_log_punishment_complaint
+      - publish_device_triggers_weapon_riskData
+      - track_analysis_align_publish_day_activity
+      - not_only_latest_7_days
+    pass_fail_criteria: "发布作品时间是 primary time anchor，应围绕发布日前后倒推登录/设备/策略/前端活跃链路。"

@@ -38,6 +38,76 @@ Hard gate:
 
 Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`。如果 plan 合格但 execution 失败，先查 config/runtime、runner/safeBin/auth 和 source_orchestration；如果 execution 成功但结论差，先查 evidence_reasoning 和 output_contract。
 
+### ATO Source Priority / Access Method Output
+
+证据价值决定 `source_priority`，执行方式决定 `access_method`。API direct first 是同等证据价值下的低成本 / 稳定采集路径优先，不是 source priority 的唯一判定标准。
+
+输出 Source Plan 时必须分开写：
+
+```yaml
+source_plan_item:
+  source_name:
+  source_priority: P0 | P0-explicit | P0-conditional | P1 | P2 | conditional
+  trigger_condition:
+  access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized
+  purpose:
+  fallback:
+  source_quality_required: true
+```
+
+ATO 单案推荐 source plan 示例：
+
+```yaml
+source_plan:
+  - source_name: 档案中心用户分析
+    source_priority: P0
+    trigger_condition: ATO 单案默认需要
+    access_method: api_direct_if_available / controlled_browser_if_cookie_activation_required
+    purpose: 账号状态、注册/实名/基础画像、账号历史风险、当前状态
+    fallback: auth_failed/blocked 进入 source_quality，不得静默跳过
+  - source_name: 发布作品/发布链路
+    source_priority: P0-conditional
+    trigger_condition: 涉及异常发布、作品引流、非本人发布、内容操作
+    access_method: api_direct_if_available / controlled_browser_if_required
+    purpose: 发布时间、发布设备、行为链路、登录设备与发布设备一致性
+    fallback: blocked/no_data 进入 missing_evidence
+  - source_name: 天师策略命中
+    source_priority: P0-explicit
+    trigger_condition: 用户明确问策略命中，或需要策略命中辅助判断
+    access_method: api_direct_or_controlled_runner_if_available; otherwise source_gap/runner_missing
+    purpose: 辅助判断是否有 ATO/登录/发布/反爬/账号安全相关策略命中
+    fallback: runner_missing 不默认 browser 接管，除非已有受控 browser playbook
+  - source_name: Weapon graphData
+    source_priority: P0
+    trigger_condition: ATO 单案默认需要
+    access_method: controlled_runner
+    purpose: 用户-设备关系、异常设备候选
+    fallback: no_data 不得作为无设备反证
+  - source_name: Weapon riskData
+    source_priority: P0-conditional
+    trigger_condition: graphData/login_log/发布链路/track-analysis 发现可疑 deviceId
+    access_method: controlled_runner
+    purpose: 查询设备风险标签
+    fallback: missing_device_reference 时标记未覆盖
+```
+
+ATO 输出必须包含 `time_window_reasoning`：
+
+```yaml
+time_window_reasoning:
+  primary_time_window:
+  time_anchors:
+    - anchor_type: user_report_time | archive_user_analysis_time | audit_log_time | publish_time | publish_device_time | strategy_hit_time | login_event_time | device_first_seen_time | frontend_activity_time
+      anchor_time:
+      source:
+      reason:
+  window_gap:
+  offline_hive_required:
+  next_time_window_to_verify:
+```
+
+审核日志 reason 只能用于确定调查方向和重点时间窗口，不能单独定性 ATO。涉及异常发布时，作品发布时间是 P0 time anchor，应向前回溯登录、扫码 / OAuth、设备切换、token/session 和策略命中，向后查看审核、处罚、投诉。
+
 ## 0.0 General Evidence Reasoning Contract
 
 适用范围：账号安全、协议上号、群控、反爬、活动反作弊、导流、流量反作弊、策略命中归因、批量风险分簇等所有风险研判。

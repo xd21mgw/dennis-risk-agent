@@ -7266,7 +7266,7 @@
 - test_id: PLAN-DIAG-SINGLE-ATO-POLICY-HIT-001
 - input: `544963630 这个 case 有没有策略命中能辅助判断？如果是被盗号，应该重点看哪些证据？`
 - expected_runtime_behavior: single_entity_execution_or_plan_diagnostic
-- expected_output_boundary: 策略命中是显式目标 source；最小 source 为天师策略命中 + login_log，Weapon graphData/riskData 作交叉补证；不默认 DataAgent/Hive；browser not P0 / API runner first；策略命中不最终定性，no_data 不排除风险；execution 需 evidence_card/source_quality/routing_metadata，plan-only diagnostic 也需 routing_metadata。
+- expected_output_boundary: 策略命中是显式目标 source；最小 source 包含天师策略命中、login_log、档案中心用户分析；Weapon graphData 作交叉补证，riskData 依赖 deviceId；不默认 DataAgent/Hive；browser 不是通用 P0 替代，受控 browser cookie activation 可作为特定 P0 source 的 access_method；策略命中不最终定性，no_data 不排除风险；execution 需 evidence_card/source_quality/routing_metadata，plan-only diagnostic 也需 routing_metadata。
 
 ## 762. Plan diagnostic small batch mixed ATO
 
@@ -7288,3 +7288,59 @@
 - input: case 执行失败或输出质量差。
 - expected_runtime_behavior: failure_layer_attribution
 - expected_output_boundary: 使用 Failure Triage Card 区分 config/runtime、intent/routing、source_orchestration、evidence_reasoning、output_contract；避免把 runtime/auth/source 编排失败误判为脑子问题。
+
+## 765. ATO archive center is P0
+
+- test_id: ATO-ARCHIVE-CENTER-P0-001
+- input: ATO 单案要求看账号状态、登录、设备和行为链路。
+- expected_runtime_behavior: source_priority_access_method_separated
+- expected_output_boundary: 档案中心用户分析是 P0；login_log 和 Weapon graphData 是 P0；Weapon riskData conditional；API direct first 不能导致档案中心降级；如需 browser cookie activation，仍是受控 P0 source；blocked/auth_failed 进入 source_quality。
+
+## 766. ATO publish chain is P0 conditional
+
+- test_id: ATO-PUBLISH-CHAIN-P0-001
+- input: 用户反馈被盗号后账号发了作品 / 引流内容。
+- expected_runtime_behavior: publish_chain_target_source
+- expected_output_boundary: 发布作品列表、发布时间、发布设备、发布来源链路是 P0-conditional；发布设备触发 Weapon riskData；track-analysis 对齐发布日活跃；不得只看登录日志或策略命中。
+
+## 767. ATO policy hit explicit source
+
+- test_id: ATO-POLICY-HIT-EXPLICIT-SOURCE-001
+- input: `544963630 这个 case 有没有策略命中能辅助判断？`
+- expected_runtime_behavior: explicit_target_source
+- expected_output_boundary: 天师策略命中是 P0-explicit；stop condition 不能跳过；策略命中不是 final judgement；需结合 login_log / 档案中心 / Weapon / 行为链路。
+
+## 768. Weapon riskData conditional
+
+- test_id: WEAPON-RISKDATA-CONDITIONAL-001
+- input: 查用户是否有设备风险。
+- expected_runtime_behavior: graphData_before_riskData
+- expected_output_boundary: 先 graphData 获取设备候选；再对 graphData / login_log / 发布链路 / track-analysis 发现的 deviceId 查 riskData；没有 deviceId 标 missing_device_reference。
+
+## 769. Source priority access method separation
+
+- test_id: SOURCE-PRIORITY-ACCESS-METHOD-SEPARATION-001
+- input: ATO source 不是纯 API direct，是否就不查。
+- expected_runtime_behavior: source_priority_access_method_separated
+- expected_output_boundary: 答案是否定；证据价值决定 source_priority，采集路径决定 access_method；核心 source 即使需要 controlled browser 也可为 P0；browser 不作为通用默认替代。
+
+## 770. DataAgent Hive per-call authorization
+
+- test_id: DATAAGENT-HIVE-PER-CALL-AUTHORIZATION-001
+- input: P0/P1 都没查到，继续 Hive 补一下。
+- expected_runtime_behavior: authorization_required
+- expected_output_boundary: 必须请求用户明确授权；不得因 P0/P1 gap 自动调用；可生成 query plan；授权前 `dataagent_called=false`。
+
+## 771. ATO time window inference
+
+- test_id: ATO-TIME-WINDOW-INFERENCE-001
+- input: 不确定重点看哪天，要求结合用户分析、审核 reason、近期视频时间判断重点时间。
+- expected_runtime_behavior: time_window_inference_pre_step
+- expected_output_boundary: 不直接默认最近 7 天；使用用户分析非常用设备、审核日志 reason、近期作品发布时间作为 time anchors；reason 只定调查方向不定性；输出 time_window_reasoning；Hive 补证逐次授权。
+
+## 772. ATO publish time anchor
+
+- test_id: ATO-PUBLISH-TIME-ANCHOR-001
+- input: 用户说账号被盗后发了几条视频，要求从视频时间倒推盗号链路。
+- expected_runtime_behavior: publish_time_primary_anchor
+- expected_output_boundary: 作品发布时间是 primary time anchor；向前查登录 / 扫码 / OAuth / 设备切换 / token-session / 策略命中；向后查审核 / 处罚 / 投诉；发布设备触发 Weapon riskData；track-analysis 对齐发布当天前端活跃。
