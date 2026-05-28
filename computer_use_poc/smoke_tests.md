@@ -7553,14 +7553,14 @@
 - test_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
 - input: 登录日 / 扫码日 / 发布日 / 策略命中日前端活跃对齐。
 - expected_runtime_behavior: track_analysis_har_contract
-- expected_output_boundary: 使用完整 HAR contract 参数；`getLastestDateTime` 参数完整时不应触发 code=603；固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；duration=0 不是无风险反证；`front_backend_activity_mismatch` 只是辅助证据。
+- expected_output_boundary: 使用完整 HAR contract 参数；`getLastestDateTime` 参数完整时不应触发 code=604；固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；duration=0 不是无风险反证；`front_backend_activity_mismatch` 只是辅助证据。
 
 ## 803. Track getLastestDateTime parameter contract
 
 - test_id: TRACK-GETLATESTDATETIME-PARAM-CONTRACT-001
 - input: `getLastestDateTime` 缺 `product/type/funcType/_t` 或 type 非 userId/deviceId。
 - expected_runtime_behavior: parameter_contract_missing
-- expected_output_boundary: source_status=`invalid_parameter` 或 `missing_required_param`；failure_layer=`parameter_contract_missing`；code=603 不得写 auth_failed。
+- expected_output_boundary: source_status=`invalid_parameter` 或 `missing_required_param`；failure_layer=`parameter_contract_missing`；code=604 不得写 auth_failed。
 
 ## 804. Track getUseDuration rows object array
 

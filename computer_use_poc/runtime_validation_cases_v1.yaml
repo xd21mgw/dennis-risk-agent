@@ -2457,7 +2457,7 @@ platform_access_execution_v0_1_regression:
     input: "登录日 / 发布日 / 策略命中日前端活跃对齐。"
     expected_output_boundary:
       - complete_har_contract_params
-      - getLastestDateTime_no_code_603_when_params_complete
+      - getLastestDateTime_no_code_604_when_params_complete
       - getDeviceIds_getUseDuration_profile_getLastestDateTime_contract
       - appName_userId_deviceId_date_alignment
       - event_day_activity_alignment
@@ -2470,9 +2470,9 @@ platform_access_execution_v0_1_regression:
     expected_output_boundary:
       - source_status_invalid_parameter_or_missing_required_param
       - failure_layer_parameter_contract_missing
-      - code_603_not_auth_failed
+      - code_604_not_auth_failed
       - minimum_valid_request_documented
-    pass_fail_criteria: "getLastestDateTime code=603 归因参数契约缺失/非法，不写 auth_failed。"
+    pass_fail_criteria: "getLastestDateTime code=604 归因参数契约缺失/非法，不写 auth_failed。"
   - case_id: TRACK-GETUSEDURATION-ROWS-OBJECT-ARRAY-001
     input: "解析 getUseDuration rows。"
     expected_output_boundary:

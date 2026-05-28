@@ -20,7 +20,7 @@ fixed_params:
   funcType: USER_PROFILE_QUERY
   cache_buster: _t
 general_failure_mapping:
-  code_603: invalid_parameter_or_missing_required_param
+  code_604: invalid_parameter_or_missing_required_param
   missing_param: missing_required_param
   incomplete_param_contract: parameter_contract_missing
   userId_deviceId_mixed: wrong_entity_type
@@ -74,7 +74,7 @@ apis:
     minimum_valid_request: "GET with product=KUAISHOU|NEBULA, type=userId|deviceId, funcType=USER_PROFILE_QUERY, _t=<cache_buster>"
     smoke_usage: "Run before entity-detail calls to confirm latest partition for selected app/entity type."
     confidence: high_for_har_shape_medium_for_all_product_type_variants
-    code_603_interpretation: "Treat code=603 as invalid_parameter or missing_required_param before auth; likely missing/invalid product, type, funcType, or cache-buster contract."
+    code_604_interpretation: "Treat code=604 as invalid_parameter or missing_required_param before auth; likely missing/invalid product, type, funcType, or cache-buster contract."
   getDeviceIds:
     api_name: getDeviceIds
     base_domain: track-analysis.corp.kuaishou.com

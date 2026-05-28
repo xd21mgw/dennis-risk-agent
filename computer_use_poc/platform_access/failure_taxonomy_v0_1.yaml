@@ -30,6 +30,8 @@ taxonomy:
   parameter_contract_missing:
     layer: parameter_contract
     meaning: "The contract for required query/body params is incomplete or not followed; classify before auth."
+    known_error_codes:
+      track_analysis_getLastestDateTime_604: "Missing or invalid getLastestDateTime product/type/funcType/_t parameter contract."
   missing_required_param:
     layer: parameter_contract
     meaning: "A required query/body parameter is absent, for example track-analysis getLastestDateTime missing product/type/funcType."
