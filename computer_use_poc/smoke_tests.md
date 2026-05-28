@@ -7638,3 +7638,10 @@
 - input: `/admin/search/user?keyword={userId}` 入口被 AMC/IP block。
 - expected_runtime_behavior: preferred_spa_entry_required
 - expected_output_boundary: 错误入口被 block 不代表 preferred SPA entry 不可用；正确入口为 `/frontend/archives/index.html#/archives/user/profile?userId={userId}`；输出 `wrong_entry_amc_blocked_not_platform_unavailable`。
+
+## 812. Archives Center manual action does not wait in business flow
+
+- test_id: ARCHIVES-CENTER-MANUAL-ACTION-NOT-WAIT-IN-BUSINESS-FLOW-001
+- input: 业务研判、smoke 或 recoverable_preflight 中，档案中心出现 QR / MFA / password / captcha。
+- expected_runtime_behavior: source_status_user_manual_action_required_continue_partial
+- expected_output_boundary: 不等待人工完成；source_status=`user_manual_action_required`；写入 source_quality 和 remaining gap；业务流继续 partial evidence；只有 dedicated_auth_activation task 才允许短时等待人工；不输出 cookie/token/session/header/password。

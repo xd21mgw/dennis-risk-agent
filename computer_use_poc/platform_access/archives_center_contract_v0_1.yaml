@@ -37,6 +37,10 @@ activation_account_identifier_rules:
     - password
     - captcha
     - sms
+  manual_action_context_boundary:
+    business_case_execution: "do_not_wait; source_status=user_manual_action_required; continue partial evidence"
+    recoverable_preflight: "do_not_wait; source_status=user_manual_action_required; continue partial evidence"
+    dedicated_auth_activation_task: "short_wait_allowed_for_user_manual_action"
   permission_page_status: permission_blocked
   loop_status: activation_loop_detected
 profile_api:

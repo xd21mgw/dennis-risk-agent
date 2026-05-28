@@ -2580,3 +2580,14 @@ platform_access_execution_v0_1_regression:
       - preferred_spa_entry_frontend_archives_profile_userId
       - no_platform_unavailable_claim_from_wrong_entry
     pass_fail_criteria: "错误入口被 AMC/IP block 不代表 preferred SPA entry 不可用；正确入口为 /frontend/archives/index.html#/archives/user/profile?userId={userId}。"
+  - case_id: ARCHIVES-CENTER-MANUAL-ACTION-NOT-WAIT-IN-BUSINESS-FLOW-001
+    input: "业务研判 / smoke / recoverable_preflight 中档案中心出现 QR、MFA、password 或 captcha。"
+    expected_output_boundary:
+      - source_status_user_manual_action_required
+      - no_wait_for_manual_action_in_business_flow
+      - no_wait_for_manual_action_in_recoverable_preflight
+      - partial_evidence_continues
+      - source_quality_records_manual_action_required
+      - dedicated_auth_activation_task_short_wait_allowed_only
+      - no_cookie_token_session_header_password_output
+    pass_fail_criteria: "业务研判、smoke、recoverable_preflight 遇到 QR/MFA/password/captcha 不等待人工，标 user_manual_action_required 并继续 partial evidence；只有 dedicated_auth_activation task 可短时等待人工。"

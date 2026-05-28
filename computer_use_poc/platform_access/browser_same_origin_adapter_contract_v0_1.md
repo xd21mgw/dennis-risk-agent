@@ -88,5 +88,7 @@ Account identifier / activation rules:
 - `fill_account_identifier_if_empty`: allowed only in a separate auth activation task, not inside business execution.
 - `click_next_or_continue_once`: allowed only in a separate auth activation task.
 - QR / MFA / password / captcha / SMS means `user_manual_action_required`.
+- In business case execution and recoverable preflight, do not wait for manual action. Mark the source `user_manual_action_required`, write source quality, and continue partial evidence.
+- Only a dedicated auth activation task may briefly wait for user manual action.
 - Permission page means `permission_blocked`.
 - Repeated activation loop means `activation_loop_detected`.

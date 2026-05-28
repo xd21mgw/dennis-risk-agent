@@ -53,6 +53,10 @@ taxonomy:
   accessproxy_session_invalid:
     layer: auth_session
     meaning: "Access proxy redirect or session invalid state."
+  user_manual_action_required:
+    layer: user_action_required
+    meaning: "QR/MFA/password/captcha/SMS step requires user action; business flows and recoverable preflight must not wait."
+    boundary: "Only dedicated auth activation task may briefly wait; business flow continues partial evidence."
   amc_permission_blocked:
     layer: path_permission
     meaning: "AMC/path permission block, often UI-path specific."
@@ -130,6 +134,7 @@ classification_order:
   - browser_ui_interaction
   - path_permission
   - auth_session
+  - user_action_required
   - user_permission
   - parser
   - query_window

@@ -42,6 +42,7 @@ source_status_enum:
   - discovery_completed_api_probe_pending
   - front_backend_activity_mismatch
   - auth_failed
+  - user_manual_action_required
   - permission_blocked
   - parse_error
   - timeout
@@ -65,6 +66,7 @@ failure_layer_enum:
   - browser_ui_interaction
   - path_permission
   - auth_session
+  - user_action_required
   - user_permission
   - parser
   - query_window
