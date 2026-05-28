@@ -2,6 +2,42 @@
 
 本文沉淀 Dennis Agent 面向策略同学的标准回答体验模板。模板不是平台字段说明，而是把 observation 转成可读、可行动、有边界的业务回答。
 
+## 0.0A Plan-only Diagnostic / Failure Triage Output
+
+Plan-only diagnostic responses must still end with `routing_metadata`. When no platform is called, do not emit detailed source_quality arrays as if data was fetched; instead state `platform_called=false`, `dataagent_called=false`, and `reason_not_executed`.
+
+```yaml
+plan_only_diagnostic_summary:
+  diagnostic_status: plan_can_enter_execution | plan_blocked_before_execution | needs_runtime_health_check | needs_codex_fix | needs_internal_agent_verification
+  scores:
+    intent_routing_score:
+    source_plan_score:
+    orchestration_score:
+    evidence_reasoning_score:
+    output_contract_score:
+  primary_failure_layer: config/runtime | intent/routing | source_orchestration | evidence_reasoning | output_contract | no_issue
+  reason_not_executed:
+  plan_to_execution_gate:
+    routing_mode_correct:
+    source_plan_correct:
+    dataagent_hive_per_call_authorization:
+    browser_not_p0_api_runner_first:
+    no_data_boundary_clear:
+    strategy_hit_boundary_clear:
+    output_contract_clear:
+```
+
+Hard gate:
+
+- plan-only 输出必须有 `routing_metadata`。
+- execution 输出必须有 `evidence_card` / `source_quality` / `routing_metadata`。
+- blocked / no_data / timeout / auth_failed 不得写成 low risk / no risk。
+- 策略命中不能写成 final judgement。
+- source_quality 缺失时判定为 `output_contract` failure。
+- 平台未调用时必须明确 `reason_not_executed`。
+
+Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`。如果 plan 合格但 execution 失败，先查 config/runtime、runner/safeBin/auth 和 source_orchestration；如果 execution 成功但结论差，先查 evidence_reasoning 和 output_contract。
+
 ## 0.0 General Evidence Reasoning Contract
 
 适用范围：账号安全、协议上号、群控、反爬、活动反作弊、导流、流量反作弊、策略命中归因、批量风险分簇等所有风险研判。
@@ -1148,6 +1184,62 @@ archives_auth_recovery_observation:
 - 后续出现密码、二维码、短信或 MFA 时暂停等待用户手动完成。
 - `archives_auth_state.json` 过期应标 `auth_state_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网。
 - 不输出 cookie / token / session / header，不把认证态细节写入报告。
+
+### Raw Reference Retention / Redaction Layering 模板
+
+适用：任何 source 需要把当前 source 的实体传给后续 source，例如 Weapon `graphData -> riskData`、Tianshi `fastQueryHbase -> rcpEventDetail`、`rcpEventDetail -> policy attribution`、登录日志 IP -> IP 聚类 / Hive query plan。
+
+```yaml
+source_checkpoint:
+  source_name:
+  source_status:
+  raw_references:
+    - ref_type: device_id | user_id | event_id | source_id | policy_code | ip
+      raw_reference_safe_id: "<current_task_private_handle>"
+      alias: "<display_alias>"
+      masked_value: "<masked_for_display>"
+      allowed_downstream_sources:
+        - "<source_name>"
+      retention_scope: current_task_only
+  redaction:
+    redaction_applied: true
+    raw_reference_retained_for_followup: true
+    sensitive_output: false
+  provenance:
+    executor_agent: dennis-risk-agent
+    source_observation_id:
+    current_task_only: true
+```
+
+用户可见 evidence card 只展示：
+
+```yaml
+display_references:
+  - ref_type:
+    alias:
+    masked_value:
+    source:
+```
+
+禁止：
+
+- 用 `masked_device_id` / `device_ref_*` 作为 Weapon `riskData` 输入。
+- 用 masked `event_id` 作为 `rcpEventDetail` 输入。
+- 用 redacted IP 做 IP 聚类查询。
+- 在 final answer / run log 输出完整 raw id。
+- 把 token / session / cookie / header / password 放入 `raw_references`。
+
+Weapon graphData 专项：
+
+```yaml
+weapon_graphData_checkpoint:
+  raw_device_ids_for_chaining: "<source_checkpoint_private only>"
+  masked_device_ids: ["ANDROID_***1234"]
+  device_id_redaction_policy: raw_in_chaining_field_masked_in_display
+  numeric_user_nodes_filtered: true
+  downstream:
+    weapon_riskData_uses_raw_reference_safe_id: true
+```
 
 ### BC-HARMONY-ATO-001 批量 ATO 攻击类型纠偏模板
 

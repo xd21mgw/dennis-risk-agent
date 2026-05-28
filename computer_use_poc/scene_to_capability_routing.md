@@ -1,5 +1,21 @@
 # Scene to Capability Routing
 
+## 0. Plan-only Diagnostic Routing Gate
+
+`plan_only_diagnostic` is a diagnostic layer, not execution. It checks whether intent/routing, source plan, orchestration, evidence reasoning, and output contract are coherent before live source calls.
+
+Plan-only diagnostics must not be used to claim runtime health. If plan is correct but execution fails, first triage `config/runtime`, runner/safeBin/auth, and `source_orchestration`.
+
+Rules:
+
+- Single user ATO / account-security query with explicit "查 / 看 / 判断" routes to `single_entity_execution_mode`, unless the current task is explicitly a diagnostic dry run.
+- If the user explicitly asks "策略命中", strategy hit is an explicit target source, not a low-priority optional supplement.
+- 2-9 user ATO + "同类攻击 / 举一反三" is a mixed request: split into `small_batch_execution_with_checkpoint` and `plan_mode_only`.
+- Strategy recommendation / gray rollout / false-positive control routes to `strategy_recommendation_plan_mode`; future mention of possible user IDs does not trigger execution.
+- DataAgent/Hive always requires per-call authorization; query plans are allowed without execution.
+- Browser is not a P0 default source when controlled API runner / API direct can answer.
+- plan-only responses still require `routing_metadata` with `execution_mode=plan_mode_only`, `platform_called=false`, `dataagent_called=false`, and `reason_not_executed`.
+
 本文是体验优先的能力路由说明。用户仍按业务问题提问，系统内部再按 capability routing 选择只读手脚、实体解析或回答模板。
 
 原则：

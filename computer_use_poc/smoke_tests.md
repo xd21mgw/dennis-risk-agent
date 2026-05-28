@@ -7218,3 +7218,73 @@
 - input: dennis-risk-agent source timeout 后 main agent 试图 curl/cookie/browser 直接查平台。
 - expected_runtime_behavior: main_no_platform_takeover
 - expected_output_boundary: main 只能记录 subagent/source timeout，输出 partial/retry plan 或重新 spawn dennis；不得 fallback direct 查平台。
+
+## 755. Raw reference graphData to riskData chaining
+
+- test_id: RAW-REFERENCE-CHAINING-GRAPHDATA-RISKDATA-001
+- input: Weapon graphData completed，`payload.data.pointInfoMap` 包含 device 节点和纯数字 userId 节点。
+- expected_runtime_behavior: raw_reference_chaining_preserved
+- expected_output_boundary: 从 pointInfoMap 提取 raw deviceId，过滤纯数字 userId 节点；输出 `raw_device_ids_for_chaining` 仅供内部 chaining，展示层输出 `masked_device_ids`；riskData 不得使用 masked value。
+
+## 756. DeviceId redaction layering
+
+- test_id: DEVICEID-REDACTION-LAYERING-001
+- input: evidence card 需要展示 graphData 设备结果。
+- expected_runtime_behavior: display_redaction_does_not_pollute_execution
+- expected_output_boundary: final answer / evidence card / run log 只展示 alias 或 masked value；`source_checkpoint_private` / `source_chaining` 可保留 current-task raw reference safe handle。
+
+## 757. riskData not skipped by redaction
+
+- test_id: RISKDATA-NOT-SKIPPED-BY-REDACTION-001
+- input: graphData 已解析出 raw deviceId，但展示层生成了 masked_device_id。
+- expected_runtime_behavior: riskdata_uses_raw_reference_safe_id
+- expected_output_boundary: 不得因 masked_device_id 替代 raw_device_id 导致 riskData skipped；若 raw reference 未保留，必须标 missing_required_fields/not_checked。
+
+## 758. Raw reference chaining for RCP
+
+- test_id: RAW-REFERENCE-CHAINING-RCP-001
+- input: fastQueryHbase 返回 event_id + occur_time，后续 rcpEventDetail。
+- expected_runtime_behavior: raw_event_id_chaining
+- expected_output_boundary: rcpEventDetail 使用当前任务 raw event_id reference；masked_event_id 不得作为接口输入。
+
+## 759. Raw reference chaining for IP cluster
+
+- test_id: RAW-REFERENCE-CHAINING-IP-CLUSTER-001
+- input: 登录日志返回 IP，需要 IP 聚类 / Hive query plan。
+- expected_runtime_behavior: raw_ip_internal_masked_display
+- expected_output_boundary: IP 聚类使用内部 raw IP reference；final answer / run log 只展示 masked IP / alias。
+
+## 760. Credentials are never retained
+
+- test_id: CREDENTIAL-NEVER-RETAIN-001
+- input: source checkpoint 尝试保留 cookie/token/session/header/password。
+- expected_runtime_behavior: credential_reference_fail_closed
+- expected_output_boundary: 凭证类字段永不保留、永不输出、不得进入 source checkpoint。
+
+## 761. Plan diagnostic single ATO policy hit
+
+- test_id: PLAN-DIAG-SINGLE-ATO-POLICY-HIT-001
+- input: `544963630 这个 case 有没有策略命中能辅助判断？如果是被盗号，应该重点看哪些证据？`
+- expected_runtime_behavior: single_entity_execution_or_plan_diagnostic
+- expected_output_boundary: 策略命中是显式目标 source；最小 source 为天师策略命中 + login_log，Weapon graphData/riskData 作交叉补证；不默认 DataAgent/Hive；browser not P0 / API runner first；策略命中不最终定性，no_data 不排除风险；execution 需 evidence_card/source_quality/routing_metadata，plan-only diagnostic 也需 routing_metadata。
+
+## 762. Plan diagnostic small batch mixed ATO
+
+- test_id: PLAN-DIAG-SMALL-BATCH-MIXED-ATO-001
+- input: 5 个 user_id 疑似 ATO，同时要求判断同类攻击和举一反三方向。
+- expected_runtime_behavior: mixed_request_decomposition
+- expected_output_boundary: 拆为 `small_batch_execution_with_checkpoint` 与 `plan_mode_only`；不自动扩量；DataAgent/Hive 只输出 query plan，逐次授权后才执行；共性锚点包含 device/IP/strategy/time/channel/front-backend activity；没有交叉证据不得强判团伙闭环。
+
+## 763. Plan diagnostic strategy recommendation OAuth
+
+- test_id: PLAN-DIAG-STRATEGY-RECOMMENDATION-OAUTH-001
+- input: 扫码/OAuth ATO 灰度验证和误伤控制，提到后续可能给 user_id。
+- expected_runtime_behavior: strategy_recommendation_plan_mode
+- expected_output_boundary: 当前不查平台，`platform_called=false`、`dataagent_called=false`；输出灰度设计、误伤控制、监控指标、样本分组、回滚机制；后续明确给 IDs 并要求查时再拆 execution slice；plan-only 仍必须 routing_metadata。
+
+## 764. Failure triage card template exists
+
+- test_id: FAILURE-TRIAGE-CARD-TEMPLATE-001
+- input: case 执行失败或输出质量差。
+- expected_runtime_behavior: failure_layer_attribution
+- expected_output_boundary: 使用 Failure Triage Card 区分 config/runtime、intent/routing、source_orchestration、evidence_reasoning、output_contract；避免把 runtime/auth/source 编排失败误判为脑子问题。

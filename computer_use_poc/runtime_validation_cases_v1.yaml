@@ -2009,3 +2009,100 @@ runtime_live_fix_consolidation_regression:
       - direct_tool_bypass_false_only_if_no_platform_takeover
       - partial_evidence_or_retry_plan
     pass_fail_criteria: "子 agent fail/timeout 后 main 不得 fallback direct 查平台；只能记录 timeout、输出 partial/retry plan 或重新 spawn dennis。"
+
+raw_reference_redaction_layering_regression:
+  - case_id: RAW-REFERENCE-CHAINING-GRAPHDATA-RISKDATA-001
+    input: "Weapon graphData completed，payload.data.pointInfoMap 包含 device 节点和纯数字 userId 节点。"
+    expected_routing_mode: source_chaining_validation
+    expected_output_boundary:
+      - extract_device_id_from_pointInfoMap
+      - filter_numeric_user_nodes
+      - raw_device_ids_for_chaining_private
+      - riskData_uses_raw_reference_safe_id
+      - masked_device_ids_for_display
+    pass_fail_criteria: "graphData 必须提取真实 deviceId 并过滤纯数字 userId 节点；riskData 使用 raw reference，不使用 masked display value。"
+  - case_id: DEVICEID-REDACTION-LAYERING-001
+    input: "graphData 输出 deviceId 后 evidence card 需要展示设备信息。"
+    expected_routing_mode: redaction_layering_validation
+    expected_output_boundary:
+      - raw_in_source_checkpoint_private
+      - masked_in_evidence_card
+      - no_raw_device_id_in_final_answer
+      - device_id_redaction_policy_raw_in_chaining_field_masked_in_display
+    pass_fail_criteria: "内部 chaining 可保留 raw device reference；用户可见输出只展示 alias/masked device id。"
+  - case_id: RISKDATA-NOT-SKIPPED-BY-REDACTION-001
+    input: "graphData 有 raw deviceId，但展示层 masked_device_id 已生成。"
+    expected_routing_mode: source_orchestration_validation
+    expected_output_boundary:
+      - riskData_not_skipped_due_to_redaction
+      - masked_device_id_not_used_as_input
+      - raw_reference_retained_for_followup
+    pass_fail_criteria: "展示层脱敏不得导致 riskData skipped；如果 raw reference 已保留，必须继续尝试 riskData 或给出 auth/timeout/blocker。"
+  - case_id: RAW-REFERENCE-CHAINING-RCP-001
+    input: "fastQueryHbase 返回 event_id + occur_time 后，需要下钻 rcpEventDetail。"
+    expected_routing_mode: source_chaining_validation
+    expected_output_boundary:
+      - raw_event_id_retained_for_followup
+      - masked_event_id_not_used_as_rcp_input
+      - occur_time_provenance_required
+    pass_fail_criteria: "rcpEventDetail 必须使用当前任务 raw event_id reference；masked event id 只能用于展示。"
+  - case_id: RAW-REFERENCE-CHAINING-IP-CLUSTER-001
+    input: "登录日志返回 IP，需要做 IP 聚类 / Hive query plan。"
+    expected_routing_mode: source_chaining_validation
+    expected_output_boundary:
+      - raw_ip_retained_for_query_plan
+      - redacted_ip_not_used_for_cluster_query
+      - ip_masked_in_final_answer
+    pass_fail_criteria: "IP 聚类 / Hive query plan 使用内部 raw IP reference；final answer / run log 只输出 masked IP 或 alias。"
+  - case_id: CREDENTIAL-NEVER-RETAIN-001
+    input: "source checkpoint raw_references 包含 cookie/token/session/header/password。"
+    expected_routing_mode: redaction_guard
+    expected_output_boundary:
+      - credential_reference_forbidden
+      - fail_closed
+      - no_cookie_token_session_header_output
+    pass_fail_criteria: "cookie/token/session/header/password 永不进入 raw_references、source checkpoint、run log 或 final answer。"
+
+plan_only_diagnostic_regression:
+  - case_id: PLAN-DIAG-SINGLE-ATO-POLICY-HIT-001
+    input: "544963630 这个 case 有没有策略命中能辅助判断？如果是被盗号，应该重点看哪些证据？"
+    expected_routing_mode: single_entity_execution_mode
+    expected_output_boundary:
+      - policy_hit_lookup_explicit_target_source
+      - minimal_sources_tianshi_policy_hit_plus_login_log
+      - weapon_graphData_riskData_cross_validation
+      - no_default_dataagent_hive
+      - browser_not_p0_api_runner_first
+      - strategy_hit_not_final_judgement
+      - no_data_not_risk_exclusion
+      - evidence_card_source_quality_routing_metadata_if_execution
+      - routing_metadata_required_if_plan_only_diagnostic
+    pass_fail_criteria: "用户明确问策略命中时，策略命中是显式目标 source；最小执行源为天师策略命中 + login_log，Weapon 作交叉补证；不得默认 DataAgent/Hive 或 browser P0。"
+  - case_id: PLAN-DIAG-SMALL-BATCH-MIXED-ATO-001
+    input: "以下 5 个用户反馈疑似被盗号：123456001,123456002,123456003,123456004,123456005。帮我判断是否可能是同一类攻击，并给出后续举一反三方向。"
+    expected_routing_mode: mixed_request_decomposition
+    expected_output_boundary:
+      - split_small_batch_execution_with_checkpoint
+      - split_expansion_plan_mode_only
+      - no_automatic_expansion_beyond_provided_users
+      - dataagent_hive_query_plan_only_without_authorization
+      - shared_anchors_device_ip_strategy_time_channel_frontend_activity
+      - no_strong_group_conclusion_without_cross_source_evidence
+      - source_quality_partial_evidence_required_for_execution_slice
+    pass_fail_criteria: "5 用户 ATO 是小批量 execution；举一反三是 plan-only，不自动扩量、不自动 DataAgent/Hive。"
+  - case_id: PLAN-DIAG-STRATEGY-RECOMMENDATION-OAUTH-001
+    input: "针对扫码/OAuth 类 ATO，应该怎么做灰度验证和误伤控制？如果我后续给你几个 user_id，你应该怎么处理？"
+    expected_routing_mode: strategy_recommendation_plan_mode
+    expected_output_boundary:
+      - plan_mode_only
+      - platform_called_false
+      - dataagent_called_false
+      - no_execution_for_future_user_id_mention
+      - gray_rollout_design
+      - false_positive_control
+      - monitor_metrics
+      - sample_split
+      - rollback_plan
+      - later_ids_require_execution_slice_split
+      - routing_metadata_required
+    pass_fail_criteria: "策略推荐 / 灰度验证默认 plan-only；提到未来 user_id 不触发当前 execution；仍需 routing_metadata。"

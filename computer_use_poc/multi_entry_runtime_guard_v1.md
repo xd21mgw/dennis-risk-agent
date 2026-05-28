@@ -2,6 +2,43 @@
 
 Guard marker: `DENNIS_ROUTING_GUARD_V1`.
 
+## 0. Plan-only Diagnostic / Plan -> Execution Gate
+
+`plan_only_diagnostic` 只能证明 intent / routing / source plan / output contract 设计是否合理，不能证明 live runtime config、safeBins、runner、auth state 或平台权限可用。
+
+Plan 合格后进入 execution 前必须同时满足：
+
+- `routing_mode` 正确。
+- `source_plan` 正确。
+- DataAgent/Hive 未默认执行，仍为逐次授权。
+- Browser / DOM / SPA 未作为 P0 默认 source；P0 优先受控 API runner / API direct。
+- `no_data_not_risk_exclusion` 和 `strategy_hit_not_final_judgement` 边界明确。
+- output contract 明确：execution 必须有 `evidence_card` / `source_quality` / `routing_metadata`。
+- plan-only 也必须有 `routing_metadata`，至少包含 `execution_mode=plan_mode_only`、`platform_called=false`、`dataagent_called=false`、`reason_not_executed`。
+
+如果 plan 合格但 execution 失败，优先归因到 `config/runtime`、runner/safeBin/auth 或 `source_orchestration`，不要直接判定为脑子 / 路由问题。
+
+如果 execution 成功但结论差，优先归因到 `evidence_reasoning` 或 `output_contract`。
+
+DataAgent/Hive：
+
+- 每一次调用都必须用户逐次授权。
+- 上一次授权、同一轮对话、P0/P1 数据不足，都不构成后续自动调用授权。
+- 可以生成 query plan、推荐 SQL、表选择和字段说明，但不能自动执行。
+
+Browser：
+
+- P0 优先受控 API runner / API direct。
+- browser / DOM / SPA 只能作为 API 不可用时的降级或补证。
+- main agent 不得通过 browser / curl / cookie 接管平台查询。
+
+策略命中：
+
+- 用户明确问“策略命中”时，策略命中是显式目标 source。
+- 策略命中只能作为辅助风险信号，不是最终 ATO 定性证据。
+
+Failure Triage Card 模板见 `computer_use_poc/failure_triage_card_template_v1.md`。
+
 ## 1. Supported Entry Points
 
 This guard applies before any Dennis Risk Agent execution from:

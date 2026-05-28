@@ -12,6 +12,15 @@ This index is the mandatory preflight reading list before Dennis Risk Agent call
 - `no_data`, `blocked`, `timeout`, and `auth_failed` are source states, not no-risk counter evidence.
 - Browser UI is fallback, not default.
 
+Plan-only diagnostic boundary:
+
+- `plan_only_diagnostic` does not call platform sources. It can validate route/source design but cannot prove live auth, safeBins, runner availability, or API execution.
+- Plan-only output still needs `routing_metadata` with `execution_mode=plan_mode_only`, `platform_called=false`, `dataagent_called=false`, and `reason_not_executed`.
+- If the user explicitly asks for strategy hit, Tianshi strategy hit is an explicit target source in the plan.
+- Strategy hit remains cross-validation only, not final ATO / cheating judgement.
+- Browser is not P0 when API runner / API direct can answer.
+- DataAgent/Hive remains per-call authorized even after a successful plan.
+
 ## Platform Capability Status Taxonomy
 
 Do not use a binary "API direct / non API direct" classification. Every platform source must be labeled with one of the following capability statuses:

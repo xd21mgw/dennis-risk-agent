@@ -6,6 +6,13 @@
 
 以下按 capability 而不是平台列出当前正式能力。平台只是适配器或数据来源，主 Agent 应先识别业务场景和证据需求，再选择 capability。
 
+诊断类能力：
+
+| capability | purpose | mode | status | key_boundary |
+|---|---|---|---|---|
+| `plan_only_diagnostic` | 对 plan-only 输出做 Codex 评分，区分 intent/routing、source plan、orchestration、evidence reasoning、output contract | diagnostic / no platform call | documented | 只能证明脑子 / 路由 / 编排设计是否合理，不能证明 runtime config、auth、safeBins 或 source wrapper 可用；必须输出 routing_metadata |
+| `failure_triage_card` | 对失败 case 做分层归因：config/runtime、intent/routing、source_orchestration、evidence_reasoning、output_contract、no_issue | post-failure diagnostic | documented | 不调用平台，不调用 DataAgent；用于决定 fix owner 和 regression |
+
 全局输出字段分层：
 
 - 所有 capability 的输出必须遵守 `computer_use_poc/field_output_classification_policy_v1.md`。
