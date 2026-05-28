@@ -118,6 +118,15 @@ Platform call preflight:
 - Track-analysis `no_data`, `blocked`, or `timeout` must enter `source_quality`; it cannot exclude risk.
 - If backend login / scan / device switch / strategy hit exists on a day but track-analysis userId/deviceId duration is `0` or no frontend activity, mark `front_backend_activity_mismatch`. This is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior, but it is not standalone final judgement.
 
+Dennis source execution guard:
+
+- In real case / source observation / evidence card execution, `dennis-risk-agent` must treat SSO / cookie / runner troubleshooting details in AGENTS.md, TOOLS.md, SOUL.md, USER.md, IDENTITY.md, or session-memory as `main_agent_config_ops_only`, `deprecated_for_dennis_subagent`, and `not_for_case_execution`.
+- Hard forbid during case execution: read `.ks_sso/sso-state.json`, manually build Cookie/Header, use curl / urllib / requests with Cookie, debug `SmartSSOSession`, debug `sso_session_runner.py` / `sso_session.py`, import or inspect auth bridge implementation, perform live auth repair, or replace source observation with tool troubleshooting.
+- Allowed source calls are only: task-authorized `browser_same_origin`, registered controlled runner, registered readonly API playbook, or a fallback explicitly listed in the task prompt.
+- Each source may attempt at most one primary path and one fallback path. Repeated runner debugging, auth probing, or endpoint exploration is a source execution guard violation.
+- When a source path fails, emit `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`, fill `source_quality`, continue the next source, and produce partial evidence card if the matrix is incomplete.
+- `tool_gap`, `auth_bridge_gap`, `no_data`, `timeout`, `blocked`, and `parse_error` are not low-risk / no-risk counter evidence.
+
 RCP / Tianshi strategy-hit chain:
 
 - `eventList` on `rcp.corp.kuaishou.com` is the primary upstream source for realtime strategy-hit event lists.

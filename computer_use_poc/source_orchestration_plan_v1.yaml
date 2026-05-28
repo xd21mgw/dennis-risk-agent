@@ -146,6 +146,37 @@
         "allow_track_analysis_device_id_for_weapon_riskdata": true,
         "cross_source_device_id_marker_required": true
       },
+      "source_execution_guard": {
+        "dennis_case_execution_forbidden": [
+          "read_.ks_sso/sso-state.json",
+          "manual_cookie_or_header",
+          "curl_urllib_requests_with_cookie",
+          "debug_SmartSSOSession",
+          "debug_sso_session_runner.py_or_sso_session.py",
+          "inspect_auth_bridge_implementation",
+          "live_auth_repair",
+          "tool_troubleshooting_instead_of_source_observation"
+        ],
+        "allowed_source_call_methods": [
+          "task_authorized_browser_same_origin",
+          "registered_controlled_runner",
+          "registered_readonly_api_playbook",
+          "task_prompt_explicit_fallback"
+        ],
+        "attempt_limit_per_source": {
+          "primary_path": 1,
+          "fallback_path": 1
+        },
+        "failure_statuses": [
+          "tool_gap",
+          "auth_bridge_gap",
+          "blocked",
+          "timeout",
+          "parse_error",
+          "no_data"
+        ],
+        "failure_boundary": "failure_status_not_low_risk_or_no_risk_evidence"
+      },
       "platform_access_execution_v0_1": {
         "observation_schema": "platform_access_observation",
         "failure_classification_order": [

@@ -822,6 +822,38 @@ ATO 单案 source orchestration：
 - profile lock / SingletonLock 标 `profile_lock` 并快速降级。
 - `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都进入 `source_quality`，不得写成 no_data。
 
+### source execution guard failure template
+
+适用：dennis-risk-agent 在真实 case / source observation / evidence card 执行中，遇到 runner 不可用、auth bridge 不可用、工具缺失、same-origin 条件不足或平台 source 失败。
+
+禁止在模板外继续排障：
+
+- 不读取 `.ks_sso/sso-state.json`。
+- 不手动拼 Cookie / Header。
+- 不用 curl / urllib / requests 携带 Cookie 调平台。
+- 不 debug `SmartSSOSession`、`sso_session_runner.py` 或 `sso_session.py`。
+- 不 import / inspect auth bridge implementation。
+- 不做临场 auth repair。
+
+标准 source observation：
+
+```yaml
+source_observation:
+  source_name:
+  source_status: tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data
+  primary_path_attempted:
+  fallback_path_attempted:
+  source_quality:
+    failure_reason:
+    permission_status:
+    access_method:
+    no_data_not_risk_exclusion: true
+    not_executed_as_low_risk_evidence: true
+  next_source_decision: continue_next_source
+```
+
+最终回答必须保留 completed source，并输出 partial evidence card；不得把 `tool_gap` / `auth_bridge_gap` / `no_data` / `timeout` 写成低风险或无风险。
+
 小批量 ATO 2-9 用户：
 
 - 默认 `small_batch_execution_with_checkpoint`，不是纯 plan-only。

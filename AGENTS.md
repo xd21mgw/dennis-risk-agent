@@ -169,6 +169,42 @@ Guard marker: `DENNIS_ROUTING_GUARD_V1`.
 
 禁止自由猜 URL。Weapon 默认只允许 `/apiv2/graphData` 与 `/apiv2/riskData`；未登记 endpoint discovery 只能在明确 `task_type=endpoint_discovery` 时执行，普通风控研判不得尝试未登记 URL。
 
+### Dennis source execution guard
+
+以下规则只针对 `dennis-risk-agent` 在真实 case、source observation、evidence card 任务中的平台 source 执行。AGENTS.md / TOOLS.md / memory 中出现的 SSO、cookie、SmartSSOSession、runner、browser fallback、curl 或 urllib 排障说明，统一标记为：
+
+- `main_agent_config_ops_only`
+- `deprecated_for_dennis_subagent`
+- `not_for_case_execution`
+
+`dennis-risk-agent` 在 case execution 中 hard forbid：
+
+- 读取 `.ks_sso/sso-state.json`。
+- 手动拼 Cookie / Header。
+- 使用 curl / urllib / requests 携带 Cookie 调平台。
+- debug `SmartSSOSession`。
+- debug `sso_session_runner.py` / `sso_session.py`。
+- import / inspect auth bridge implementation。
+- 临场 auth repair。
+- 用工具排障替代 source observation。
+
+允许的 source 调用方式只包括：
+
+- task prompt 明确授权的 `browser_same_origin`。
+- 已登记 controlled runner。
+- 已登记只读 API playbook。
+- task prompt 明确列出的 fallback。
+
+每个 source 最多允许 1 条 primary path 和 1 条 fallback path。失败后必须记录 `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`，在 `source_quality` 写明原因，继续下一个 source，并最终输出 partial evidence card。`tool_gap` / `auth_bridge_gap` / `no_data` / `timeout` 不得作为低风险或无风险反证。
+
+### Raw Reference Retention / Redaction Layering
+
+展示层脱敏不得污染执行层 source chaining。`user_id`、`device_id`、`event_id`、`source_id`、`policy_code`、`ip` 等风险实体可在 `tool_call_internal` / `source_checkpoint_private` / `source_chaining` 层按当前任务保留 raw reference safe handle；用户可见 evidence card、final answer 和 run log 只能展示 alias / masked value / summary。
+
+Weapon `graphData -> riskData` 必须使用 graphData checkpoint 中保留的 raw `device_id` reference，不能使用 `masked_device_id`、`device_ref_*` 或展示层脱敏串作为 riskData 输入。graphData 解析 `payload.data.pointInfoMap` 时必须过滤纯数字 userId 节点，避免把 userId 当 deviceId。若 raw reference 未保留，riskData 应标 `missing_required_fields` / `not_checked`，不得伪装 completed。
+
+`event_id -> rcpEventDetail`、`source_id -> fastQueryHbase/eventList`、`policy_code -> policy attribution`、`ip -> IP cluster/Hive query plan` 同样遵守该分层。cookie / token / session / header / password 永不保留、永不输出、不得进入 source checkpoint。
+
 ### Runtime Config Apply 前置条件
 
 半开放 readonly runtime config template 不等于 live runtime 已生效。只有 live `openclaw.json` 的 `agents.list` 中存在独立 `dennis-risk-agent` entry，并且该 entry 应用了 `exec.security=allowlist`、`safeBins`、`tools.deny`、`fs.workspaceOnly=true` 和 `loopDetection`，AGENTS.md 中的 wrapper-first / browser fallback / direct exec guard 才是 runtime 硬约束。
@@ -199,6 +235,8 @@ main agent 不得在 dennis timeout 后接管风控平台查询。dennis timeout
 - response length / channel constraint。
 
 ### Release / Overlay Readiness Gate
+
+Section classification: `main_agent_config_ops_only`, `deprecated_for_dennis_subagent`, `not_for_case_execution`.
 
 每次 release、overlay 或 live apply 前必须先跑本地门禁：
 
@@ -330,6 +368,8 @@ Step 3: ATO 单 case 精简 execution
 不要把整个混合请求都当成 execution task。
 
 ### main agent direct exec / unified login auth bridge boundary
+
+Section classification: `main_agent_config_ops_only`, `deprecated_for_dennis_subagent`, `not_for_case_execution`.
 
 当 main agent 已 spawn `dennis-risk-agent`，但子 agent 因 SSO / browser / source timeout 卡住时，main agent 不得自行接管统一登录日志、Weapon、档案中心或天狮查询。
 

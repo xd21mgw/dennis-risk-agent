@@ -28,12 +28,36 @@ TRACK_ANALYSIS_REQUIRED_PATHS = {
 }
 TRACK_ANALYSIS_FORBIDDEN_PATHS = {"/api/profile", "/rest/profile", "/api/user/profile"}
 FORBIDDEN_ACCESS_METHODS = {"curl_cookie", "manual_cookie", "main_agent_direct_exec", "arbitrary_url"}
-NO_DATA_STATUSES = {"no_data", "blocked", "auth_failed", "timeout", "parse_error"}
-NON_ENDPOINT_STATUSES = {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout"}
-EXPLAINED_NOT_EXECUTED_STATUSES = {"blocked", "auth_failed", "not_checked", "missing_required_fields", "timeout", "parse_error"}
+NO_DATA_STATUSES = {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "tool_gap", "auth_bridge_gap"}
+NON_ENDPOINT_STATUSES = {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"}
+EXPLAINED_NOT_EXECUTED_STATUSES = {"blocked", "auth_failed", "not_checked", "missing_required_fields", "timeout", "parse_error", "tool_gap", "auth_bridge_gap", "no_data"}
 ENVIRONMENT_GAP_MARKERS = {"sandbox_missing", "agent_browser_missing", "node_missing", "macos_capability_missing"}
 AUTH_GAP_MARKERS = {"sso_ticket_expired", "auth_failed", "login_page", "access_proxy_redirect"}
 TOOL_GAP_MARKERS = {"tool_unavailable", "safe_bin_missing", "browser_profile_lock"}
+CREDENTIAL_REF_TYPES = {"token", "session", "cookie", "header", "password", "authorization", "api_key"}
+MASKED_VALUE_MARKERS = {"*", "redacted", "masked", "<", ">", "xxx", "****"}
+FORBIDDEN_CASE_EXECUTION_MARKERS = {
+    ".ks_sso/sso-state.json": "NO-COOKIE-STATE-READ-DURING-CASE-001",
+    "manual_cookie": "NO-MANUAL-COOKIE-CURL-001",
+    "curl_cookie": "NO-MANUAL-COOKIE-CURL-001",
+    "Cookie:": "NO-MANUAL-COOKIE-CURL-001",
+    "Header:": "NO-MANUAL-COOKIE-CURL-001",
+    "urllib": "NO-MANUAL-COOKIE-CURL-001",
+    "curl ": "NO-MANUAL-COOKIE-CURL-001",
+    "requests_with_cookie": "NO-MANUAL-COOKIE-CURL-001",
+    "SmartSSOSession": "NO-RUNNER-DEBUG-DURING-CASE-001",
+    "sso_session_runner.py": "NO-RUNNER-DEBUG-DURING-CASE-001",
+    "sso_session.py": "NO-RUNNER-DEBUG-DURING-CASE-001",
+    "auth_bridge_implementation": "NO-RUNNER-DEBUG-DURING-CASE-001",
+}
+REFERENCE_TYPES_REQUIRING_RAW_SAFE_ID = {
+    "user_id",
+    "device_id",
+    "event_id",
+    "source_id",
+    "policy_code",
+    "ip",
+}
 
 
 def load_plan() -> dict[str, Any]:
@@ -87,6 +111,47 @@ def as_bool(value: Any) -> bool:
     return value is True or str(value).lower() == "true"
 
 
+def looks_masked(value: Any) -> bool:
+    text = str(value or "").lower()
+    return any(marker in text for marker in MASKED_VALUE_MARKERS)
+
+
+def raw_references(item: dict[str, Any]) -> list[dict[str, Any]]:
+    refs = item.get("raw_references", [])
+    if isinstance(refs, list):
+        return [ref for ref in refs if isinstance(ref, dict)]
+    return []
+
+
+def has_raw_reference(item: dict[str, Any], ref_type: str) -> bool:
+    for ref in raw_references(item):
+        if str(ref.get("ref_type")) == ref_type and ref.get("raw_reference_safe_id") and ref.get("retention_scope", "current_task_only") == "current_task_only":
+            return True
+    return False
+
+
+def redaction_block(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("redaction", {})
+    return value if isinstance(value, dict) else {}
+
+
+def source_quality_block(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("source_quality", {})
+    return value if isinstance(value, dict) else {}
+
+
+def as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def serialized_item(item: dict[str, Any]) -> str:
+    return json.dumps(item, ensure_ascii=False, sort_keys=True)
+
+
 def is_registered_endpoint(endpoint: str) -> bool:
     registered_fragments = {
         "/apiv2/graphData",
@@ -120,12 +185,64 @@ def validate_matrix(
         return failures
 
     for idx, item in enumerate(matrix):
+        source_status = str(item.get("source_status", ""))
         for field in required_fields:
             if field not in item:
                 failures.append(
                     {
                         "rule": "source_completion_matrix_required_fields",
                         "reason": f"entry {idx} missing required field {field}",
+                    }
+                )
+        redaction = redaction_block(item)
+        quality = source_quality_block(item)
+        for key, expected in {
+            "redaction_applied": True,
+            "sensitive_output": False,
+        }.items():
+            if redaction.get(key) is not expected and quality.get(key) is not expected:
+                failures.append(
+                    {
+                        "rule": "raw_reference_redaction_layering",
+                        "reason": f"entry {idx} missing {key}={str(expected).lower()} in redaction/source_quality",
+                    }
+                )
+        if quality.get("provenance") != "current_task_observation" and item.get("source_provenance") not in {"current_task_observation", "realtime"}:
+            failures.append(
+                {
+                    "rule": "raw_reference_redaction_layering",
+                    "reason": f"entry {idx} must mark provenance=current_task_observation or current realtime observation",
+                }
+            )
+        retained_flag = redaction.get("raw_reference_retained_for_followup", quality.get("raw_reference_retained_for_followup"))
+        if retained_flag not in {True, False}:
+            failures.append(
+                {
+                    "rule": "raw_reference_redaction_layering",
+                    "reason": f"entry {idx} must declare raw_reference_retained_for_followup true/false",
+                }
+            )
+        for ref_idx, ref in enumerate(raw_references(item)):
+            ref_type = str(ref.get("ref_type", ""))
+            if ref_type in CREDENTIAL_REF_TYPES:
+                failures.append(
+                    {
+                        "rule": "credential_reference_forbidden",
+                        "reason": f"entry {idx} raw_references[{ref_idx}] contains forbidden credential ref_type {ref_type}",
+                    }
+                )
+            if ref_type in REFERENCE_TYPES_REQUIRING_RAW_SAFE_ID and not ref.get("raw_reference_safe_id"):
+                failures.append(
+                    {
+                        "rule": "raw_reference_safe_id_required",
+                        "reason": f"entry {idx} raw_references[{ref_idx}] missing raw_reference_safe_id for {ref_type}",
+                    }
+                )
+            if ref.get("masked_value") and ref.get("raw_reference_safe_id") == ref.get("masked_value"):
+                failures.append(
+                    {
+                        "rule": "masked_value_used_as_raw_reference",
+                        "reason": f"entry {idx} raw_references[{ref_idx}] uses masked_value as raw_reference_safe_id",
                     }
                 )
         access_method = str(item.get("access_method", ""))
@@ -172,6 +289,63 @@ def validate_matrix(
                     "reason": f"entry {idx} auth failed before refresh but did not attempt controlled refresh",
                 }
             )
+        item_text = serialized_item(item)
+        for marker, case_id in FORBIDDEN_CASE_EXECUTION_MARKERS.items():
+            if marker in item_text:
+                failures.append(
+                    {
+                        "rule": "source_execution_guard_forbidden_case_debug",
+                        "case_id": case_id,
+                        "reason": f"entry {idx} contains forbidden case-execution marker {marker}",
+                    }
+                )
+        for flag in [
+            "read_cookie_state",
+            "manual_cookie_constructed",
+            "manual_header_constructed",
+            "curl_cookie_attempted",
+            "urllib_cookie_attempted",
+            "requests_cookie_attempted",
+            "smart_sso_debug_attempted",
+            "runner_debug_attempted",
+            "auth_bridge_inspected",
+            "live_auth_repair_attempted",
+        ]:
+            if item.get(flag) is True:
+                failures.append(
+                    {
+                        "rule": "source_execution_guard_forbidden_case_debug",
+                        "reason": f"entry {idx} sets forbidden case-execution flag {flag}=true",
+                    }
+                )
+        primary_attempts = as_list(item.get("primary_path_attempts", item.get("primary_paths_attempted")))
+        fallback_attempts = as_list(item.get("fallback_path_attempts", item.get("fallback_paths_attempted")))
+        all_attempts = as_list(item.get("source_path_attempts", item.get("attempted_paths")))
+        if len(primary_attempts) > 1 or len(fallback_attempts) > 1 or (all_attempts and len(all_attempts) > 2):
+            failures.append(
+                {
+                    "rule": "source_attempt_limit",
+                    "case_id": "SOURCE-ATTEMPT-LIMIT-001",
+                    "reason": f"entry {idx} exceeds one primary path and one fallback path per source",
+                }
+            )
+        if source_status in {"tool_gap", "auth_bridge_gap"}:
+            if not quality:
+                failures.append(
+                    {
+                        "rule": "runner_unavailable_tool_gap",
+                        "case_id": "RUNNER-UNAVAILABLE-TOOL-GAP-001",
+                        "reason": f"entry {idx} source_status={source_status} must include source_quality",
+                    }
+                )
+            if item.get("continued_next_source") is False:
+                failures.append(
+                    {
+                        "rule": "partial_evidence_card_on_source_failure",
+                        "case_id": "PARTIAL-EVIDENCE-CARD-ON-SOURCE-FAILURE-001",
+                        "reason": f"entry {idx} source failure must continue to next source or partial evidence card",
+                    }
+                )
 
     if names == {"user_login_unified_log"}:
         failures.append(
@@ -311,7 +485,7 @@ def validate_matrix(
                     "reason": f"entry {idx} mislabels {gap_reason} as platform_gap",
                 }
             )
-        if source_status in {"blocked", "auth_failed", "timeout", "not_checked"} and gap_type == "":
+        if source_status in {"blocked", "auth_failed", "timeout", "not_checked", "tool_gap", "auth_bridge_gap"} and gap_type == "":
             failures.append(
                 {
                     "rule": "source_gap_type_required",
@@ -347,6 +521,20 @@ def validate_matrix(
                 }
             )
         if source_name == "weapon_device_risk_if_device_id_available":
+            if looks_masked(device_id):
+                failures.append(
+                    {
+                        "rule": "masked_device_id_used_as_riskdata_input",
+                        "reason": "Weapon riskData must use retained raw device_id reference, not masked/redacted display value",
+                    }
+                )
+            if source_status not in {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"} and not has_raw_reference(item, "device_id"):
+                failures.append(
+                    {
+                        "rule": "raw_reference_safe_id_required",
+                        "reason": "Weapon riskData execution requires current-task raw device_id reference safe id",
+                    }
+                )
             device_source = str(item.get("device_id_source", ""))
             if device_source and device_source not in {"weapon_user_to_device_graph", "Weapon graphData"}:
                 if item.get("cross_source_device_id") is not True:
@@ -363,7 +551,7 @@ def validate_matrix(
                         "reason": "Weapon riskData using track-analysis device id must mark cross_source_device_id=true",
                     }
                 )
-            if graph_empty and source_status not in {"skipped", "missing_required_fields", "not_checked"} and item.get("weapon_graphData_empty") is not True:
+            if graph_empty and source_status not in {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"} and item.get("weapon_graphData_empty") is not True:
                 failures.append(
                     {
                         "rule": "cross_source_entity_misuse",
@@ -387,30 +575,48 @@ def validate_matrix(
                         "reason": f"{source_name} completed endpoint must be {required_track_path}",
                     }
                 )
-            if source_name == "track_analysis_profile":
-                request_fields = set(item.get("request_fields", []))
-                if item.get("source_status") == "completed" and not {"startTime", "endTime"}.issubset(request_fields):
-                    failures.append(
-                        {
-                            "rule": "track_analysis_profile_time_field_drift",
-                            "reason": "track-analysis profile must use millisecond startTime/endTime",
-                        }
-                    )
-                if {"startDate", "endDate"} & request_fields:
-                    failures.append(
-                        {
-                            "rule": "track_analysis_profile_date_field_forbidden",
-                            "reason": "track-analysis profile must not use startDate/endDate",
-                        }
-                    )
-            if source_name == "track_analysis_getUseDuration":
-                if item.get("rows_shape") == "two_dimensional_array":
-                    failures.append(
-                        {
-                            "rule": "track_analysis_rows_shape_drift",
-                            "reason": "getUseDuration.rows must be an object array with date/duration",
-                        }
-                    )
+        if source_name in {"tianshi_event_detail", "rcpEventDetail", "rcp_event_detail"}:
+            event_id = str(item.get("event_id", ""))
+            if looks_masked(event_id):
+                failures.append(
+                    {
+                        "rule": "masked_event_id_used_as_rcp_input",
+                        "reason": "event detail source must use retained raw event_id reference, not masked display value",
+                    }
+                )
+        if source_name in {"ip_cluster_query", "hive_ip_cluster_query"}:
+            ip_value = str(item.get("ip", ""))
+            if looks_masked(ip_value):
+                failures.append(
+                    {
+                        "rule": "redacted_ip_used_for_cluster_query",
+                        "reason": "IP cluster query must use retained raw ip reference, not redacted display value",
+                    }
+                )
+        if source_name == "track_analysis_profile":
+            request_fields = set(item.get("request_fields", []))
+            if item.get("source_status") == "completed" and not {"startTime", "endTime"}.issubset(request_fields):
+                failures.append(
+                    {
+                        "rule": "track_analysis_profile_time_field_drift",
+                        "reason": "track-analysis profile must use millisecond startTime/endTime",
+                    }
+                )
+            if {"startDate", "endDate"} & request_fields:
+                failures.append(
+                    {
+                        "rule": "track_analysis_profile_date_field_forbidden",
+                        "reason": "track-analysis profile must not use startDate/endDate",
+                    }
+                )
+        if source_name == "track_analysis_getUseDuration":
+            if item.get("rows_shape") == "two_dimensional_array":
+                failures.append(
+                    {
+                        "rule": "track_analysis_rows_shape_drift",
+                        "reason": "getUseDuration.rows must be an object array with date/duration",
+                    }
+                )
         if item.get("source_name") in {"track_analysis_if_endpoint_verified", "track_analysis_getDeviceIds", "track_analysis_getUseDuration", "track_analysis_profile"}:
             endpoint_verified = bool(item.get("endpoint_verified"))
             if item.get("source_status") == "completed" and not endpoint_verified:
@@ -431,7 +637,7 @@ def validate_matrix(
             )
     final_summary = final_conclusion or ""
     conclusion_state = str(next((item.get("conclusion_state") for item in matrix if item.get("conclusion_state")), ""))
-    incomplete_matrix = any(str(item.get("source_status")) in {"blocked", "auth_failed", "timeout", "parse_error", "missing_required_fields", "not_checked"} for item in matrix)
+    incomplete_matrix = any(str(item.get("source_status")) in {"blocked", "auth_failed", "timeout", "parse_error", "missing_required_fields", "not_checked", "tool_gap", "auth_bridge_gap"} for item in matrix)
     if final_summary in {"low_risk", "no_risk", "data_against_ato_suspicion"} and (incomplete_matrix or conclusion_state in {"needs_more_evidence", "insufficient_support", "partial"}):
         failures.append(
             {

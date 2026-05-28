@@ -38,6 +38,18 @@ Before any Dennis Risk Agent realtime platform source call, read:
 - Every source must emit checkpoint and `source_quality`.
 - `no_data`, `blocked`, `timeout`, and `auth_failed` are not no-risk counter evidence.
 
+## Dennis Subagent Source Execution Guard
+
+Classification for auth / runner troubleshooting text in this file:
+
+- `main_agent_config_ops_only`
+- `deprecated_for_dennis_subagent`
+- `not_for_case_execution`
+
+During real case evidence-card execution, `dennis-risk-agent` must not read `.ks_sso/sso-state.json`, manually build Cookie/Header values, run curl/urllib/requests with Cookie, debug `SmartSSOSession`, debug `sso_session_runner.py` / `sso_session.py`, inspect auth bridge implementation, or perform live auth repair. Those actions belong only to explicit config / overlay / health-check tasks, not case source execution.
+
+Allowed source execution paths are limited to a registered controlled runner, a registered readonly API playbook, task-authorized `browser_same_origin`, or a fallback explicitly listed in the task prompt. Each source gets at most one primary path and one fallback path. Failure must become `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`, then execution continues to the next source and ends with a partial evidence card when needed.
+
 ## Required Platform Preflight
 
 ```yaml
