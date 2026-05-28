@@ -239,14 +239,19 @@ Preferred path:
 
 - Role: `primary_strategy_hit_entry`.
 - Interface type: `query_conditions_plus_dynamic_columns`.
-- Invocation context: `browser_same_origin`.
+- Backend semantics: `clickhouse_like_event_query_builder`.
+- Invocation context: primary `browser_same_origin`.
 - Smoke ready: `true_for_browser_same_origin`.
-- HTTP SSO direct: `optional_unverified`.
+- HTTP SSO direct: `needs_har_request_body_exact_replay`; previous guessed-body failures are `guessed_body_failed_not_direct_unavailable`, not direct unavailable.
 - Required: `eventType`, `timeRange`.
 - Optional: `sourceIds`, `policyFilter`, `feedback`, `conditionGroups`, `tableHeaderList`, `customColumns`, `selectedColumns`, `featureList`, `pageInfo`, `eventV2`.
-- Dynamic column params: `tableHeaderList: har_confirmed`; `customColumns: candidate_scenario_dependent`; `selectedColumns: candidate_scenario_dependent`; `featureList: candidate_scenario_dependent`.
+- Dynamic column params: `tableHeaderList: har_confirmed_object_array`; `customColumns: candidate_scenario_dependent`; `selectedColumns: candidate_scenario_dependent`; `featureList: candidate_scenario_dependent`.
 - HAR-confirmed request body keys: `tableHeaderList`, `pageIndex`, `pageSize`, `eventV2`, `startTime`, `endTime`, `currentTime`.
 - HAR-confirmed `eventV2` keys: `eventType`, `hitPolicies`, `version`, `status`, `snapshotVersion`, `sourceIds`, `realTimeOp`, `isPolicyTreeExperiment`, `conditionList`, `grayFeature`, `grayQueryStatus`, `region`.
+- `tableHeaderList` shape: object array with `column_name` and `column_comment`; never string array.
+- `startTime`, `endTime`, and `currentTime` shape: `YYYY-MM-DD HH:mm:ss`; not epoch ms or epoch seconds.
+- `eventV2.sourceIds` is a string field in the HAR-confirmed body, not a string array.
+- `conditionList` is an array of condition groups. It can express deviceId, sourceId, and custom feature filters.
 
 HAR-confirmed `tableHeaderList` / response fields. These are observed dynamic fields, not a fixed output schema:
 
@@ -258,6 +263,10 @@ Custom policy-code, selected-column, and feature-list fields are scenario-depend
 Common errors:
 
 - Simple userId direct strategy query without sourceId/time window context.
+- Passing `tableHeaderList` as `["sourceId", "eventId", "_occurTime"]`; classify as `wrong_request_body_shape`.
+- Passing `sourceIds` as a string array; classify as `wrong_request_body_shape`.
+- Passing epoch ms / epoch seconds for `startTime/endTime/currentTime`; classify as `wrong_time_field_format`.
+- Treating guessed-body HTTP direct failure as direct unavailable.
 - Confusing `hitTimestamp` with precise event `queryTime`.
 - Treating strategy hit as final risk judgement.
 - Treating `updateUser` or operator as responsibility attribution.

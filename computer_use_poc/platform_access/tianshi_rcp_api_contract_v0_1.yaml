@@ -17,11 +17,35 @@ apis:
   eventList:
     role: primary_strategy_hit_entry
     interface_type: query_conditions_plus_dynamic_columns
+    backend_semantics: clickhouse_like_event_query_builder
+    base_domain: rcp.corp.kuaishou.com
     path: /v2/rest/event/eventList
     method: POST
-    invocation_context: browser_same_origin
+    invocation_context:
+      primary: browser_same_origin
+      http_sso_direct: possible_if_har_body_replayed_exactly
     smoke_ready: true_for_browser_same_origin
-    http_sso_direct: optional_unverified
+    http_sso_direct:
+      status: needs_har_request_body_exact_replay
+      previous_failure_layer: wrong_request_body_shape
+      not_proven_unavailable: true
+      notes:
+        - previous HTTP attempts used guessed body
+        - tableHeaderList string array was invalid
+        - sourceIds string array was invalid
+        - epoch time format was invalid
+        - must replay HAR body shape before concluding direct viability
+    realtime_smoke_defaults:
+      default_time_window: 30m
+      accepted_smoke_time_window:
+        - 30m
+        - 1h
+      default_pageSize:
+        - 10
+        - 20
+      prohibited_smoke_time_window:
+        - 7d
+      large_window_behavior: "For 7d or broader strategy-hit review, shard by short windows, paginate, use fallback/comparison source, or produce an offline plan; do not use a single realtime smoke query."
     dynamic_column_param:
       tableHeaderList: har_confirmed
       customColumns: candidate_scenario_dependent
@@ -63,8 +87,101 @@ apis:
         - grayFeature
         - grayQueryStatus
         - region
+    request_body_contract:
+      tableHeaderList:
+        type: object_array
+        item_shape:
+          column_name: string
+          column_comment: string
+        not_string_array: true
+        examples:
+          - column_name: sourceId
+            column_comment: 用户ID
+          - column_name: photoId
+            column_comment: 视频ID
+          - column_name: _realTimeOp
+            column_comment: 实时反馈
+          - column_name: _errorCode
+            column_comment: 错误码
+          - column_name: _sideEffectOps
+            column_comment: 惩罚动作
+          - column_name: _occurTime
+            column_comment: 发生时间
+          - column_name: time
+            column_comment: 落表时间
+      time_fields:
+        startTime: "YYYY-MM-DD HH:mm:ss"
+        endTime: "YYYY-MM-DD HH:mm:ss"
+        currentTime: "YYYY-MM-DD HH:mm:ss"
+        not_epoch_ms: true
+        not_epoch_seconds: true
+        examples:
+          startTime: "2026-05-28 17:47:00"
+          endTime: "2026-05-28 17:52:34"
+          currentTime: "2026-05-28 17:52:34"
+      pagination:
+        pageIndex: int
+        pageSize: int
+      eventV2:
+        eventType: string
+        hitPolicies: string
+        version: string
+        status: int
+        snapshotVersion: string
+        sourceIds: string
+        realTimeOp: string
+        isPolicyTreeExperiment: boolean
+        conditionList: nested_condition_groups
+        grayFeature: string
+        grayQueryStatus: int
+        region: string
+        example:
+          eventType: LIKE
+          hitPolicies: ""
+          version: ""
+          status: 2
+          snapshotVersion: ""
+          sourceIds: ""
+          realTimeOp: "5"
+          isPolicyTreeExperiment: false
+          conditionList: []
+          grayFeature: ""
+          grayQueryStatus: 0
+          region: china
+      conditionList:
+        type: array_of_condition_groups
+        group_shape: array
+        condition_item_shape:
+          key: string
+          logic: string
+          value: string
+          id: string
+          seq: int
+          keyType: string
+          description: string
+          rightDataType: string
+        example:
+          - - key: deviceId
+              logic: term
+              value: "<value>"
+              id: "<uuid>"
+              seq: 0
+              keyType: 主表
+              description: ""
+              rightDataType: C
+      wrong_body_shape_mapping:
+        tableHeaderList_string_array: wrong_request_body_shape
+        sourceIds_string_array: wrong_request_body_shape
+        epoch_time_fields: wrong_time_field_format
+        guessed_body_http_failure: guessed_body_failed_not_direct_unavailable
     output_fields_model: dynamic_by_tableHeaderList_and_custom_columns
     output:
+      response_wrapper:
+        event_list_path: data.eventList
+        pagination_path: data.pagination
+        table_header_path: data.tableHeaderList
+      not_response_wrapper:
+        - data.list
       dynamic_fields:
         - eventId
         - eventType
@@ -137,8 +254,19 @@ apis:
       hitPolicies_in_eventList: may_be_empty_use_detail
     boundaries:
       - "eventList is not a single userId query API."
+      - "eventList is a ClickHouse-like event query builder: query conditions, dynamic result columns, and condition groups are configurable."
+      - "tableHeaderList is an object array with column_name and column_comment, not a string array."
+      - "startTime/endTime/currentTime are YYYY-MM-DD HH:mm:ss strings, not epoch ms or epoch seconds."
+      - "eventV2 is a full query object; do not use a simplified {eventType,status,region} body as confirmed contract."
+      - "sourceIds is a string field in the HAR-confirmed eventV2 shape; complex entity filters are better expressed through conditionList."
+      - "conditionList is an array of condition groups and can express deviceId/sourceId/feature filters."
+      - "HTTP+SSO direct is not proven unavailable; previous guessed-body failures are wrong_request_body_shape until HAR body exact replay is tested."
+      - "eventList is a realtime quick-query interface; smoke defaults to 30m or 1h with pageSize 10 or 20."
+      - "Do not use a 7d window for realtime smoke. Large windows must be sharded, paginated, compared with fallback, or moved to an offline plan."
+      - "The response wrapper is data.eventList, not data.list."
       - "eventList output_fields are dynamic_by_tableHeaderList_and_custom_columns, not a fixed field table."
-      - "completed_no_hit is not no-risk evidence."
+      - "data.eventList empty under a small realtime window is completed_no_hit_for_small_window, not no-risk evidence."
+      - "A 7d window plus deep parsing timeout is query_window_too_large / realtime_query_timeout / extraction_timeout_after_response, not completed_no_hit."
       - "If policyCode/deviceId/policy detail fields are missing from eventList, use rcpEventDetail to supplement."
       - "Missing eventId/eventType/queryTime/policyCode/policyVersion becomes missing_upstream_id; do not force downstream calls."
       - "A single API blocked does not mean RCP/Tianshi platform unavailable."

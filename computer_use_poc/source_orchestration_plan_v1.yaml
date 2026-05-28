@@ -162,13 +162,24 @@
         "rcp_base_domain": "rcp.corp.kuaishou.com",
         "fastQueryHbase_role": "fallback_optional_not_blocker",
         "eventList_interface_type": "query_conditions_plus_dynamic_columns",
+        "eventList_backend_semantics": "clickhouse_like_event_query_builder",
         "eventList_smoke_ready": "true_for_browser_same_origin",
-        "eventList_http_sso_direct": "optional_unverified",
+        "eventList_http_sso_direct": "needs_har_request_body_exact_replay",
+        "eventList_http_sso_direct_previous_failure_layer": "guessed_body_failed_not_direct_unavailable",
         "eventList_dynamic_column_param": {
-          "tableHeaderList": "har_confirmed",
+          "tableHeaderList": "har_confirmed_object_array_not_string_array",
           "customColumns": "candidate_scenario_dependent",
           "selectedColumns": "candidate_scenario_dependent",
           "featureList": "candidate_scenario_dependent"
+        },
+        "eventList_request_body_contract": {
+          "tableHeaderList_shape": "object_array_column_name_column_comment",
+          "time_fields": "YYYY-MM-DD HH:mm:ss",
+          "eventV2": "full_query_object",
+          "sourceIds": "string_not_string_array",
+          "conditionList": "array_of_condition_groups",
+          "wrong_body_shape_status": "wrong_request_body_shape",
+          "wrong_time_field_status": "wrong_time_field_format"
         },
         "eventList_output_fields": "dynamic_by_tableHeaderList_and_custom_columns",
         "archives_profile_priority": "P0",

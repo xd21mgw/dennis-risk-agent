@@ -26,6 +26,10 @@ source_status_enum:
   - not_triggered
   - missing_upstream_id
   - invalid_parameter
+  - wrong_request_body_shape
+  - wrong_time_field_format
+  - needs_har_request_body_confirmation
+  - guessed_body_failed_not_direct_unavailable
   - parameter_contract_missing
   - missing_required_param
   - wrong_entity_type

@@ -2427,10 +2427,59 @@ platform_access_execution_v0_1_regression:
     input: "验证 eventList tableHeaderList 口径。"
     expected_output_boundary:
       - tableHeaderList_har_confirmed
+      - tableHeaderList_object_array
+      - column_name_column_comment_item_shape
+      - not_string_array
       - true_for_browser_same_origin
-      - http_sso_direct_optional_unverified
+      - http_sso_direct_needs_har_request_body_exact_replay
       - dynamic_columns_are_field_level_partial
-    pass_fail_criteria: "tableHeaderList 是 HAR confirmed；HTTP SSO direct 仍 optional_unverified；未确认动态列只字段级 partial。"
+    pass_fail_criteria: "tableHeaderList 是 HAR confirmed object array，不是 string array；HTTP SSO direct 需 exact HAR body replay。"
+  - case_id: RCP-EVENTLIST-HAR-BODY-CONTRACT-001
+    input: "eventList 按最新 HAR body pattern 构造请求。"
+    expected_output_boundary:
+      - backend_semantics_clickhouse_like_event_query_builder
+      - tableHeaderList_object_array_not_string_array
+      - time_fields_YYYY_MM_DD_HH_mm_ss
+      - eventV2_full_query_object
+      - sourceIds_string_not_string_array
+      - conditionList_array_of_condition_groups
+      - response_wrapper_data_eventList_pagination_tableHeaderList
+    pass_fail_criteria: "eventList body contract 必须体现动态事件查询构造器：object-array 结果列、字符串时间、完整 eventV2 和二维 conditionList。"
+  - case_id: RCP-EVENTLIST-WRONG-BODY-NOT-AUTH-FAILED-001
+    input: "eventList 使用 tableHeaderList 字符串数组、sourceIds 字符串数组或 epoch 时间后失败。"
+    expected_output_boundary:
+      - wrong_request_body_shape
+      - wrong_time_field_format
+      - invalid_parameter
+      - no_auth_failed_claim
+      - no_permission_blocked_claim
+      - no_platform_unavailable_claim
+    pass_fail_criteria: "错误 body shape 导致失败时归因参数契约，不得写认证、权限或平台不可用。"
+  - case_id: RCP-EVENTLIST-HTTP-DIRECT-OPTIONAL-UNVERIFIED-001
+    input: "eventList HTTP+SSO direct 用 guessed body 失败。"
+    expected_output_boundary:
+      - needs_har_request_body_exact_replay
+      - guessed_body_failed_not_direct_unavailable
+      - previous_failure_layer_wrong_request_body_shape
+      - not_proven_unavailable
+    pass_fail_criteria: "HTTP+SSO direct 失败只能写 guessed_body_failed_not_direct_unavailable；不能写 direct unavailable。"
+  - case_id: RCP-EVENTLIST-TIME-FIELD-FORMAT-001
+    input: "eventList 使用 epoch ms / epoch seconds 时间字段。"
+    expected_output_boundary:
+      - startTime_string_YYYY_MM_DD_HH_mm_ss
+      - endTime_string_YYYY_MM_DD_HH_mm_ss
+      - currentTime_string_YYYY_MM_DD_HH_mm_ss
+      - wrong_time_field_format
+      - invalid_parameter
+    pass_fail_criteria: "startTime/endTime/currentTime 是字符串时间；epoch ms/seconds 不作为 confirmed smoke body。"
+  - case_id: RCP-EVENTLIST-CONDITIONLIST-QUERY-BUILDER-001
+    input: "eventList 需要按 deviceId/sourceId/特征过滤。"
+    expected_output_boundary:
+      - conditionList_array_of_condition_groups
+      - condition_item_key_logic_value_id_seq_keyType_description_rightDataType
+      - conditionList_can_express_deviceId_sourceId_feature_filters
+      - wrong_conditionList_shape_invalid_parameter
+    pass_fail_criteria: "conditionList 是二维条件组，可表达实体和特征过滤；结构错误归因 invalid_parameter。"
   - case_id: RCP-FASTQUERY-FALLBACK-NOT-BLOCKER-001
     input: "fastQueryHbase blocked，但 eventList 可用。"
     expected_output_boundary:

@@ -7518,7 +7518,42 @@
 - test_id: RCP-EVENTLIST-TABLEHEADERLIST-HAR-CONFIRMED-001
 - input: eventList tableHeaderList 口径。
 - expected_runtime_behavior: tableHeaderList_har_confirmed
-- expected_output_boundary: `tableHeaderList: har_confirmed`；`smoke_ready=true_for_browser_same_origin`；`http_sso_direct=optional_unverified`；未确认动态列只字段级 partial。
+- expected_output_boundary: `tableHeaderList` 是 object array，item 为 `column_name` / `column_comment`；不是 string array；`smoke_ready=true_for_browser_same_origin`；`http_sso_direct=needs_har_request_body_exact_replay`；未确认动态列只字段级 partial。
+
+## 794A. RCP eventList HAR body contract
+
+- test_id: RCP-EVENTLIST-HAR-BODY-CONTRACT-001
+- input: eventList 按最新 HAR body pattern 构造请求。
+- expected_runtime_behavior: clickhouse_like_event_query_builder
+- expected_output_boundary: `tableHeaderList` 是 object array；时间字段为 `"YYYY-MM-DD HH:mm:ss"`；`eventV2` 是完整查询对象；`conditionList` 是 array_of_condition_groups；response wrapper 包含 `data.eventList` / `data.pagination` / `data.tableHeaderList`。
+
+## 794B. RCP eventList wrong body is not auth failed
+
+- test_id: RCP-EVENTLIST-WRONG-BODY-NOT-AUTH-FAILED-001
+- input: tableHeaderList string array / sourceIds string array / epoch time 导致 eventList 失败。
+- expected_runtime_behavior: wrong_request_body_shape_or_wrong_time_field_format
+- expected_output_boundary: 归因 `wrong_request_body_shape` / `wrong_time_field_format` / `invalid_parameter`；不得写 auth_failed / permission_blocked / platform_unavailable。
+
+## 794C. RCP eventList HTTP direct optional unverified
+
+- test_id: RCP-EVENTLIST-HTTP-DIRECT-OPTIONAL-UNVERIFIED-001
+- input: eventList HTTP+SSO direct 用 guessed body 失败。
+- expected_runtime_behavior: guessed_body_failed_not_direct_unavailable
+- expected_output_boundary: 标 `needs_har_request_body_exact_replay`；不得写 direct unavailable；未来需按 HAR body exact replay 后再判断。
+
+## 794D. RCP eventList time field format
+
+- test_id: RCP-EVENTLIST-TIME-FIELD-FORMAT-001
+- input: startTime/endTime/currentTime 使用 epoch ms 或 epoch seconds。
+- expected_runtime_behavior: wrong_time_field_format
+- expected_output_boundary: confirmed body 必须使用 `"YYYY-MM-DD HH:mm:ss"` 字符串；epoch 时间格式归因 invalid_parameter。
+
+## 794E. RCP eventList conditionList query builder
+
+- test_id: RCP-EVENTLIST-CONDITIONLIST-QUERY-BUILDER-001
+- input: eventList 需要 deviceId / sourceId / 自定义特征过滤。
+- expected_runtime_behavior: conditionList_array_of_condition_groups
+- expected_output_boundary: `conditionList` 可表达实体和特征过滤；condition item 包含 key/logic/value/id/seq/keyType/description/rightDataType；结构错误归因 invalid_parameter，不误判权限。
 
 ## 795. RCP fastQueryHbase fallback not blocker
 

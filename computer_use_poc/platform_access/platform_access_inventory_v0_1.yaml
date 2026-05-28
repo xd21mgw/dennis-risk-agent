@@ -61,12 +61,19 @@ platform_sources:
     contract_status:
       eventList: har_confirmed_primary_entry
       eventList_interface_type: query_conditions_plus_dynamic_columns
-      eventList_tableHeaderList: har_confirmed
+      eventList_backend_semantics: clickhouse_like_event_query_builder
+      eventList_tableHeaderList: har_confirmed_object_array_column_name_column_comment
+      eventList_tableHeaderList_not_string_array: true
+      eventList_time_fields: YYYY-MM-DD HH:mm:ss
+      eventList_time_fields_not_epoch_ms_or_seconds: true
+      eventList_eventV2: full_query_object_har_confirmed
+      eventList_conditionList: array_of_condition_groups
       eventList_customColumns: candidate_scenario_dependent
       eventList_selectedColumns: candidate_scenario_dependent
       eventList_featureList: candidate_scenario_dependent
       eventList_smoke_ready: true_for_browser_same_origin
-      eventList_http_sso_direct: optional_unverified
+      eventList_http_sso_direct: needs_har_request_body_exact_replay
+      eventList_previous_direct_failure_layer: guessed_body_failed_not_direct_unavailable
       rcpEventDetail: har_confirmed
       rcpEventFeatureList: har_confirmed
       getPolicyVersionListByEvent: har_confirmed
@@ -88,6 +95,11 @@ platform_sources:
       - queryTime
     execution_notes:
       - "eventList is the primary strategy-hit event list source."
+      - "eventList is a ClickHouse-like event query builder with dynamic result columns and condition groups."
+      - "tableHeaderList is an object array of column_name/column_comment, not a string array."
+      - "startTime/endTime/currentTime are string timestamps, not epoch ms/seconds."
+      - "sourceIds is a string field in eventV2; complex filters should use conditionList."
+      - "HTTP+SSO direct is not proven unavailable until the exact HAR request body is replayed."
       - "eventList output_fields are dynamic_by_tableHeaderList / custom columns, not a fixed field table."
       - "fastQueryHbase is fallback and must not block the primary chain."
       - "Missing eventId/policyCode/policyVersion becomes missing_upstream_id."
