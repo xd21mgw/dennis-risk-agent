@@ -237,17 +237,23 @@ Preferred path:
 
 `eventList` input contract:
 
+- Role: `primary_strategy_hit_entry`.
+- Interface type: `query_conditions_plus_dynamic_columns`.
+- Invocation context: `browser_same_origin`.
+- Smoke ready: `true_for_browser_same_origin`.
+- HTTP SSO direct: `optional_unverified`.
 - Required: `eventType`, `timeRange`.
-- Optional: `sourceIds`, `policyFilter`, `feedback`, `conditionGroups`, `tableHeaderList` / custom columns, `pageInfo`, `eventV2`.
+- Optional: `sourceIds`, `policyFilter`, `feedback`, `conditionGroups`, `tableHeaderList`, `customColumns`, `selectedColumns`, `featureList`, `pageInfo`, `eventV2`.
+- Dynamic column params: `tableHeaderList: har_confirmed`; `customColumns: candidate_scenario_dependent`; `selectedColumns: candidate_scenario_dependent`; `featureList: candidate_scenario_dependent`.
 - HAR-confirmed request body keys: `tableHeaderList`, `pageIndex`, `pageSize`, `eventV2`, `startTime`, `endTime`, `currentTime`.
 - HAR-confirmed `eventV2` keys: `eventType`, `hitPolicies`, `version`, `status`, `snapshotVersion`, `sourceIds`, `realTimeOp`, `isPolicyTreeExperiment`, `conditionList`, `grayFeature`, `grayQueryStatus`, `region`.
 
-HAR-confirmed `tableHeaderList` / response fields:
+HAR-confirmed `tableHeaderList` / response fields. These are observed dynamic fields, not a fixed output schema:
 
 - default / core: `sourceId`, `eventId`, `_occurTime`, `_realTimeOp`, `_errorCode`, `_sideEffectOps`, `time`, `photoId`
 - custom / evidence fields: `deviceId`, `hitFusePolicyCode`, `userRegisterIp`, `ipCity_zh`, `openId`, `appealPhoneModel`, `deviceClientEventLogCnt3h`, `deviceIdWeaponAndroidPluginBaseReportCnt`, `deviceIdWeaponLogCnt`, `weaponDataMap`, `weaponDecodeDataWeapon`
 
-Custom policy-code fields are field-level partial when unobserved; do not mark the whole RCP chain unknown.
+Custom policy-code, selected-column, and feature-list fields are scenario-dependent candidates when unobserved; do not mark the whole RCP chain unknown. If eventList lacks `policyCode`, `deviceId`, or strategy-detail fields, supplement via `rcpEventDetail`.
 
 Common errors:
 

@@ -7485,49 +7485,77 @@
 - expected_runtime_behavior: tableHeaderList_custom_columns_supported
 - expected_output_boundary: HAR 已确认 `tableHeaderList`，字段包括 `sourceId`、`eventId`、`_occurTime`、`deviceId`、`hitFusePolicyCode`、`userRegisterIp`、`ipCity_zh` 等；未完全确认字段标字段级 partial，不把链路标 unknown。
 
-## 793. RCP fastQueryHbase fallback not blocker
+## 793. RCP eventList dynamic columns
+
+- test_id: RCP-EVENTLIST-DYNAMIC-COLUMNS-001
+- input: eventList 返回字段随结果列配置变化。
+- expected_runtime_behavior: query_conditions_plus_dynamic_columns
+- expected_output_boundary: `eventList.role=primary_strategy_hit_entry`；`interface_type=query_conditions_plus_dynamic_columns`；`output_fields=dynamic_by_tableHeaderList_and_custom_columns`；`customColumns/selectedColumns/featureList=candidate_scenario_dependent`；不得写固定字段表。
+
+## 794. RCP eventList tableHeaderList HAR confirmed
+
+- test_id: RCP-EVENTLIST-TABLEHEADERLIST-HAR-CONFIRMED-001
+- input: eventList tableHeaderList 口径。
+- expected_runtime_behavior: tableHeaderList_har_confirmed
+- expected_output_boundary: `tableHeaderList: har_confirmed`；`smoke_ready=true_for_browser_same_origin`；`http_sso_direct=optional_unverified`；未确认动态列只字段级 partial。
+
+## 795. RCP fastQueryHbase fallback not blocker
 
 - test_id: RCP-FASTQUERY-FALLBACK-NOT-BLOCKER-001
 - input: fastQueryHbase blocked 但 eventList 可用。
 - expected_runtime_behavior: fallback_not_primary_blocker
 - expected_output_boundary: `fastQueryHbase` 是 fallback / optional；blocked 只标 `api_path_permission_blocked`，不能写 RCP/Tianshi 不可用。
 
-## 794. Platform partial available not auth failed
+## 796. Platform partial available not auth failed
 
 - test_id: PLATFORM-PARTIAL-AVAILABLE-NOT-AUTH-FAILED-001
 - input: 平台部分 API 可用、部分 API 403/blocked。
 - expected_runtime_behavior: platform_partial_available
 - expected_output_boundary: 先判局部 API，再判平台不可用；不得把所有 302/403/timeout 统一写成 auth_failed。
 
-## 795. Missing upstream id not auth failed
+## 797. Missing upstream id not auth failed
 
 - test_id: MISSING-UPSTREAM-ID-NOT-AUTH-FAILED-001
 - input: 缺 eventId / policyCode / policyVersion 仍尝试下游归因。
 - expected_runtime_behavior: downstream_not_triggered
 - expected_output_boundary: 标 `missing_upstream_id`；不得写 auth_failed 或 permission_blocked。
 
-## 796. Same origin required not permission issue
+## 798. RCP missing upstream id not auth failed
+
+- test_id: RCP-MISSING-UPSTREAM-ID-NOT-AUTH-FAILED-001
+- input: eventList 缺 eventId/eventType/queryTime/policyCode/policyVersion。
+- expected_runtime_behavior: rcp_downstream_guard
+- expected_output_boundary: 下游 detail / feature / policyVersion / attribution 不硬调；输出 `missing_upstream_id`，不得写 auth_failed。
+
+## 799. RCP completed no hit not no risk
+
+- test_id: RCP-COMPLETED-NO-HIT-NOT-NO-RISK-001
+- input: eventList completed_no_hit。
+- expected_runtime_behavior: no_hit_boundary
+- expected_output_boundary: `completed_no_hit` 进入 source_quality；不得输出无风险 / 低风险 / 排除风险。
+
+## 800. Same origin required not permission issue
 
 - test_id: SAME-ORIGIN-REQUIRED-NOT-PERMISSION-ISSUE-001
 - input: 同源 API 用 direct runner 失败。
 - expected_runtime_behavior: same_origin_context_classification
 - expected_output_boundary: 标 `same_origin_required` / `same_origin_mismatch`；不得未验证就写 user permission missing。
 
-## 797. Login log fixed window no loop
+## 801. Login log fixed window no loop
 
 - test_id: LOGIN-LOG-FIXED-WINDOW-NO-LOOP-001
 - input: 登录日志固定窗口无结果。
 - expected_runtime_behavior: fixed_window_boundary
 - expected_output_boundary: 不循环扩窗拖到 timeout；`completed_no_data` 不当无风险反证；窗口不足标 offline_hive_required 且 Hive 逐次授权。
 
-## 798. Track-analysis event day activity
+## 802. Track-analysis event day activity
 
 - test_id: TRACK-ANALYSIS-EVENT-DAY-ACTIVITY-001
 - input: 登录日 / 扫码日 / 发布日 / 策略命中日前端活跃对齐。
 - expected_runtime_behavior: track_analysis_har_contract
 - expected_output_boundary: 固化 `getDeviceIds`、`getUseDuration`、`profile`、`getLastestDateTime`；`getUseDuration.rows` 是 `{date,duration}` object array；未观察 userId/deviceId 变体标 `needs_har_confirmation`；`front_backend_activity_mismatch` 只是辅助证据。
 
-## 799. Archives center publish chain P0
+## 803. Archives center publish chain P0
 
 - test_id: ARCHIVES-CENTER-PUBLISH-CHAIN-P0-001
 - input: 被盗后异常发布，需要查作品发布时间、发布设备和发布来源链路。

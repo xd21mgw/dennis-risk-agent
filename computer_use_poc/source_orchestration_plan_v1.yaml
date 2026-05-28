@@ -150,7 +150,16 @@
         "rcp_strategy_hit_primary_source": "eventList",
         "rcp_base_domain": "rcp.corp.kuaishou.com",
         "fastQueryHbase_role": "fallback_optional_not_blocker",
-        "eventList_custom_columns_status": "har_confirmed_partial_field_coverage",
+        "eventList_interface_type": "query_conditions_plus_dynamic_columns",
+        "eventList_smoke_ready": "true_for_browser_same_origin",
+        "eventList_http_sso_direct": "optional_unverified",
+        "eventList_dynamic_column_param": {
+          "tableHeaderList": "har_confirmed",
+          "customColumns": "candidate_scenario_dependent",
+          "selectedColumns": "candidate_scenario_dependent",
+          "featureList": "candidate_scenario_dependent"
+        },
+        "eventList_output_fields": "dynamic_by_tableHeaderList_and_custom_columns",
         "archives_profile_priority": "P0",
         "archives_contract_status": "partial_same_origin_if_auth_ready",
         "track_analysis_contract_status": "har_confirmed_needs_har_confirmation_for_unobserved_variants"

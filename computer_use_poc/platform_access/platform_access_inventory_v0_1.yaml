@@ -60,7 +60,13 @@ platform_sources:
     capability_status: partial_api_direct
     contract_status:
       eventList: har_confirmed_primary_entry
-      eventList_custom_columns: har_confirmed_partial_field_coverage
+      eventList_interface_type: query_conditions_plus_dynamic_columns
+      eventList_tableHeaderList: har_confirmed
+      eventList_customColumns: candidate_scenario_dependent
+      eventList_selectedColumns: candidate_scenario_dependent
+      eventList_featureList: candidate_scenario_dependent
+      eventList_smoke_ready: true_for_browser_same_origin
+      eventList_http_sso_direct: optional_unverified
       rcpEventDetail: har_confirmed
       rcpEventFeatureList: har_confirmed
       getPolicyVersionListByEvent: har_confirmed
@@ -82,6 +88,7 @@ platform_sources:
       - queryTime
     execution_notes:
       - "eventList is the primary strategy-hit event list source."
+      - "eventList output_fields are dynamic_by_tableHeaderList / custom columns, not a fixed field table."
       - "fastQueryHbase is fallback and must not block the primary chain."
       - "Missing eventId/policyCode/policyVersion becomes missing_upstream_id."
   - platform_key: archives_center

@@ -15,10 +15,18 @@ chain:
     - fastQueryHbase
 apis:
   eventList:
-    role: primary_strategy_hit_event_list_source
+    role: primary_strategy_hit_entry
+    interface_type: query_conditions_plus_dynamic_columns
     path: /v2/rest/event/eventList
     method: POST
     invocation_context: browser_same_origin
+    smoke_ready: true_for_browser_same_origin
+    http_sso_direct: optional_unverified
+    dynamic_column_param:
+      tableHeaderList: har_confirmed
+      customColumns: candidate_scenario_dependent
+      selectedColumns: candidate_scenario_dependent
+      featureList: candidate_scenario_dependent
     input:
       required:
         - eventType
@@ -30,6 +38,8 @@ apis:
         - conditionGroups
         - tableHeaderList
         - customColumns
+        - selectedColumns
+        - featureList
         - pageInfo
         - eventV2
       har_confirmed_body_keys:
@@ -53,17 +63,19 @@ apis:
         - grayFeature
         - grayQueryStatus
         - region
+    output_fields_model: dynamic_by_tableHeaderList_and_custom_columns
     output:
-      - eventId
-      - eventType
-      - sourceId
-      - occur_time
-      - _occurTime
-      - table_time
-      - real_time_op
-      - error_code
-      - side_effect_ops
-      - custom_columns
+      dynamic_fields:
+        - eventId
+        - eventType
+        - sourceId
+        - occur_time
+        - _occurTime
+        - table_time
+        - real_time_op
+        - error_code
+        - side_effect_ops
+        - custom_columns
     default_columns:
       - sourceId
       - photoId
@@ -118,13 +130,18 @@ apis:
       - strategyID
     field_coverage_status:
       tableHeaderList: har_confirmed
-      customColumns: har_confirmed_partial
-      policy_code_columns: har_confirmed_partial
+      customColumns: candidate_scenario_dependent
+      selectedColumns: candidate_scenario_dependent
+      featureList: candidate_scenario_dependent
+      policy_code_columns: candidate_scenario_dependent
       hitPolicies_in_eventList: may_be_empty_use_detail
     boundaries:
       - "eventList is not a single userId query API."
+      - "eventList output_fields are dynamic_by_tableHeaderList_and_custom_columns, not a fixed field table."
       - "completed_no_hit is not no-risk evidence."
-      - "hitPolicies may be empty; use rcpEventDetail to supplement."
+      - "If policyCode/deviceId/policy detail fields are missing from eventList, use rcpEventDetail to supplement."
+      - "Missing eventId/eventType/queryTime/policyCode/policyVersion becomes missing_upstream_id; do not force downstream calls."
+      - "A single API blocked does not mean RCP/Tianshi platform unavailable."
   fastQueryHbase:
     role: fallback_optional_hbase_source
     path: /v2/rest/pc/event/fastQueryHbase

@@ -2382,6 +2382,25 @@ platform_access_execution_v0_1_regression:
       - userRegisterIp_observed
       - no_whole_chain_unknown
     pass_fail_criteria: "HAR 已确认 eventList 支持 tableHeaderList / custom columns；未完全确认字段只做字段级 partial。"
+  - case_id: RCP-EVENTLIST-DYNAMIC-COLUMNS-001
+    input: "eventList 返回字段随查询条件和结果列配置变化。"
+    expected_output_boundary:
+      - role_primary_strategy_hit_entry
+      - interface_type_query_conditions_plus_dynamic_columns
+      - output_fields_dynamic_by_tableHeaderList_and_custom_columns
+      - customColumns_candidate_scenario_dependent
+      - selectedColumns_candidate_scenario_dependent
+      - featureList_candidate_scenario_dependent
+      - no_fixed_field_table_assumption
+    pass_fail_criteria: "eventList 必须表达为查询条件 + 动态结果列接口；不得写成固定字段表。"
+  - case_id: RCP-EVENTLIST-TABLEHEADERLIST-HAR-CONFIRMED-001
+    input: "验证 eventList tableHeaderList 口径。"
+    expected_output_boundary:
+      - tableHeaderList_har_confirmed
+      - true_for_browser_same_origin
+      - http_sso_direct_optional_unverified
+      - dynamic_columns_are_field_level_partial
+    pass_fail_criteria: "tableHeaderList 是 HAR confirmed；HTTP SSO direct 仍 optional_unverified；未确认动态列只字段级 partial。"
   - case_id: RCP-FASTQUERY-FALLBACK-NOT-BLOCKER-001
     input: "fastQueryHbase blocked，但 eventList 可用。"
     expected_output_boundary:
@@ -2390,6 +2409,22 @@ platform_access_execution_v0_1_regression:
       - api_path_permission_blocked_not_platform_unavailable
       - platform_partial_available
     pass_fail_criteria: "fastQueryHbase blocked 不代表 RCP/Tianshi 不可用。"
+  - case_id: RCP-MISSING-UPSTREAM-ID-NOT-AUTH-FAILED-001
+    input: "eventList 缺 eventId/eventType/queryTime/policyCode/policyVersion，仍尝试 detail/feature/attribution。"
+    expected_output_boundary:
+      - missing_upstream_id
+      - downstream_not_triggered
+      - no_auth_failed_claim
+      - no_permission_blocked_claim
+    pass_fail_criteria: "缺上游字段是编排/参数问题，不是认证失败。"
+  - case_id: RCP-COMPLETED-NO-HIT-NOT-NO-RISK-001
+    input: "eventList completed_no_hit。"
+    expected_output_boundary:
+      - completed_no_hit_not_no_risk
+      - no_hit_not_counter_evidence
+      - source_quality_records_no_hit
+      - missing_evidence_if_window_or_columns_incomplete
+    pass_fail_criteria: "eventList 无命中不能作为无风险反证。"
   - case_id: PLATFORM-PARTIAL-AVAILABLE-NOT-AUTH-FAILED-001
     input: "同一平台部分 API 可用、部分 API blocked。"
     expected_output_boundary:
