@@ -4913,6 +4913,46 @@ def _fixture_payload(
     return payload
 
 
+def parse_typed_params_json(raw_json: str) -> Dict[str, Any]:
+    """Parse CLI typed params while preserving the fixed-action boundary."""
+
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise BrowserBackedServiceInputError(f"typed params must be a JSON object: {exc.msg}") from exc
+    if not isinstance(parsed, Mapping):
+        raise BrowserBackedServiceInputError("typed params must be a JSON object")
+    typed_params = dict(parsed)
+    _validate_typed_params(typed_params)
+    return typed_params
+
+
+def run_mock_action_invocation(action_name: str, typed_params: Mapping[str, Any]) -> Dict[str, Any]:
+    """Invoke a fixed action against local fixtures without service/platform access."""
+
+    _validate_action_name(action_name)
+    params = dict(typed_params)
+    _validate_typed_params(params)
+    client = BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload(action_name, "completed")))
+    result = client.call_action(action_name, params)
+    result["invocation_mode"] = "mock"
+    result["live_service_called"] = False
+    result["platform_called"] = False
+    result["dataagent_called"] = False
+    result["default_runtime_routing"] = False
+    result["live_verified"] = False
+    result["typed_params_summary"] = _typed_params_summary(params)
+    result["fixed_action_endpoint"] = ACTION_ENDPOINTS[action_name]
+    result["safety_boundary"] = {
+        "fixed_action_name_only": True,
+        "typed_params_only": True,
+        "caller_url_path_header_cookie_token_session_allowed": False,
+        "default_runtime_routing": False,
+        "live_verified": False,
+    }
+    return result
+
+
 def run_fixture_tests() -> Dict[str, Any]:
     results = []
 
@@ -5581,6 +5621,31 @@ def run_fixture_tests() -> Dict[str, Any]:
     except BrowserBackedServiceInputError:
         results.append(("url_like_typed_param_rejected", "passed"))
 
+    mock_invocation = run_mock_action_invocation(
+        "archives_user_analysis",
+        {
+            "user_id": "2871834924",
+            "beginTime": 1764201600000,
+            "endTime": 1764288000000,
+            "pageIndex": 1,
+            "pageSize": 20,
+        },
+    )
+    assert mock_invocation["source_status"] == "completed"
+    assert mock_invocation["invocation_mode"] == "mock"
+    assert mock_invocation["live_service_called"] is False
+    assert mock_invocation["platform_called"] is False
+    assert mock_invocation["default_runtime_routing"] is False
+    assert mock_invocation["live_verified"] is False
+    assert mock_invocation["fixed_action_endpoint"] == ACTION_ENDPOINTS["archives_user_analysis"]
+    results.append(("explicit_action_mock_invocation", "passed"))
+
+    try:
+        parse_typed_params_json('{"header": "forbidden"}')
+        raise AssertionError("forbidden CLI typed param was not rejected")
+    except BrowserBackedServiceInputError:
+        results.append(("explicit_action_cli_forbidden_typed_param_rejected", "passed"))
+
     account_security_source_plan = build_account_security_browser_backed_requests(
         "2871834924",
         expand_track_analysis_bundle=False,
@@ -5890,10 +5955,29 @@ def run_fixture_tests() -> Dict[str, Any]:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Browser-backed service client utilities")
     parser.add_argument("--self-test", action="store_true", help="run fixture tests without live service")
+    parser.add_argument(
+        "--action",
+        choices=sorted(ACTION_ENDPOINTS),
+        help="invoke a fixed browser-backed action in local mock mode",
+    )
+    parser.add_argument(
+        "--typed-params-json",
+        default="{}",
+        help="JSON object with typed params for --action; URL/path/header/cookie/token/session keys are rejected",
+    )
     args = parser.parse_args(argv)
 
     if args.self_test:
         print(json.dumps(run_fixture_tests(), indent=2, sort_keys=True))
+        return 0
+
+    if args.action:
+        try:
+            typed_params = parse_typed_params_json(args.typed_params_json)
+            result = run_mock_action_invocation(args.action, typed_params)
+        except BrowserBackedServiceInputError as exc:
+            parser.error(str(exc))
+        print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False))
         return 0
 
     parser.print_help()
