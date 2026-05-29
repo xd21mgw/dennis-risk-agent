@@ -1668,7 +1668,7 @@
 
 - 输入：策略树资产链路。
 - 场景：节点级策略列表和全树策略 code 列表。
-- 预期：包含 `queryBindingByNodeCode` 和 `getAllPolicyCodeByPage`；明确前者是节点级策略列表，后者是全树策略 code 列表。
+- 预期：`rcp_policy_tree_lookup` 的策略树资产链路包含固定只读 companion path `queryBindingByNodeCode` 和 `getAllPolicyCodeByPage`；明确前者是节点级策略列表，后者是全树策略 code 列表；`policyTreeNodeCode` 必须来自 `queryProPolicyTree` 递归解析，不允许 caller 猜测或传任意 URL/path。
 - 状态：guardrail added。
 
 ## 191-N. tianshi strategy governance pipeline list version parsing
@@ -8022,7 +8022,21 @@
 - test_id: FULL-RUNTIME-DATAAGENT-DRY-RUN-SQL-NOT-EVIDENCE-001
 - input: DataAgent normalizer 只提取到 SQL，没有查询结果。
 - expected_runtime_behavior: status_sql_generated
-- expected_output_boundary: 输出 `status=sql_generated` 和 `pending_execution_not_evidence=true`；不得说成已查数、已完成或 no_data。
+- expected_output_boundary: 输出 `status=sql_generated`、`pending_execution_not_evidence=true` 和 `sql_quality_gate`；不得说成已查数、已完成或 no_data；即使 gate 通过，`dry_run_false_execution_allowed=false`，仍需逐次授权。
+
+## 861A. DataAgent dry-run SQL quality gate blocks unsafe execution
+
+- test_id: FULL-RUNTIME-DATAAGENT-SQL-QUALITY-GATE-001
+- input: DataAgent dry-run 生成 SQL。
+- expected_runtime_behavior: generated_sql_quality_checked_without_execution
+- expected_output_boundary: 只校验表名、分区字段、字段白名单、credential / pii 字段、扫描范围和 DataAgent caveat；不执行 SQL、不调用 Hive、不提交 SQL；出现 `Table not found in metadata catalog; verify table name & partition column before execution` 时必须 `sql_quality_gate.gate_status=block`、`dry_run_false_eligible=false`。
+
+## 861B. DataAgent SQL gate treats IP and device as risk entities
+
+- test_id: FULL-RUNTIME-DATAAGENT-SQL-GATE-RISK-ENTITY-FIELDS-001
+- input: generated_sql 包含 `user_id`、`device_id` / DID、`source_ip` / IP、`eventId`、`sourceId`。
+- expected_runtime_behavior: risk_entity_identifier_fields_allowed_for_internal_gate
+- expected_output_boundary: IP、device_id / DID、user_id、eventId、sourceId 属于 `risk_entity_identifier`，不是 `pii_strict` 或 `credential_secret`；不得因为这些字段存在就阻断 SQL gate。cookie/token secret/session/header/authorization/password、phone、id_card、email、真实姓名字段仍必须阻断。
 
 ## 862. DataAgent cloud Skill parity contract
 
@@ -8085,7 +8099,7 @@
 - test_id: FULL-RUNTIME-DATAAGENT-DRYRUN-TRUE-NOT-COMPLETED-001
 - input: DataAgent dry_run=true 只生成 SQL。
 - expected_runtime_behavior: dry_run_sql_generation_only
-- expected_output_boundary: `dry_run=true` 不得标 completed evidence；`sql_generated` 不等于已查数；`dry_run=false` 仍需逐次授权。
+- expected_output_boundary: `dry_run=true` 不得标 completed evidence；`sql_generated` 不等于已查数；`dry_run=false` 仍需逐次授权，并且必须先通过 `sql_quality_gate`。DataAgent 自带表/分区/metadata caveat 时不得进入 `dry_run=false`。
 
 ## 871. DataAgent dry-run status field semantics
 
@@ -8122,6 +8136,27 @@
 - expected_runtime_behavior: query_id_provenance_only_no_answer
 - expected_output_boundary: `query_id_present=true` 可作为 provenance；`raw_step_types_observed=UNKNOWN` 且 `model_answer_extracted=false` 时必须输出 `source_schema_drift` / `missing_model_answer`，不得标 completed，不得调用 Hive，不得提交 SQL，不得输出 raw response。
 
+## 874B. Track Analysis readiness mock-only action uses HAR-confirmed shape
+
+- test_id: FULL-RUNTIME-HAR-INVENTORY-TRACK-ANALYSIS-READINESS-BLOCKER-001
+- input: `computer_use_poc/har_platform_interface_inventory_v1.md` 中的 `track_analysis_check_data_ready` and `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: track_analysis_auxiliary_endpoint_mock_only_after_har_shape_confirmed
+- expected_output_boundary: `track_analysis_check_data_ready` 必须固定为 `POST /actions/track_analysis_check_data_ready` 和 representative platform path `/dp/platform/app/analytics/v2/sequence/checkDataReady`；typed params 使用 `device_id`、`appName`、`product`、`startTime`、`endTime`、`category/event/appPlatform`、`metric`、fixed `type=deviceId`，service 侧生成 `batchQueryId/_t` 和固定 `funcType=USER_PROFILE_QUERY`；normalizer 只输出 `dateStatus` 摘要和 `trace_id_present`，不得输出 raw readiness body / traceId 值，不得接受 caller-provided URL/path/header/cookie/token/session；该 action 是 P2-helper / readiness provenance，不得进默认 account-security runtime，不得作为 completed evidence。
+
+## 874C. Login Logs pagination remains covered by base search
+
+- test_id: FULL-RUNTIME-HAR-INVENTORY-LOGIN-LOG-PAGINATION-NOT-STANDALONE-001
+- input: `/rest/unified/log/search` v2.4.10 GET-only POC 与 inventory。
+- expected_runtime_behavior: login_log_pagination_not_separate_action
+- expected_output_boundary: 当前证据中 `totalCount == logSearchModels.length` 且 UI 翻页不触发新 search 请求；因此不得实现 `login_logs_search_page` standalone action。只有未来安全 HAR 证明 `logSearchModels.length < totalCount` 且存在 page/offset/cursor/searchAfter 参数时才可重新登记。
+
+## 874D. HAR inventory distinguishes Dennis mock-only contracts from service actions
+
+- test_id: FULL-RUNTIME-HAR-INVENTORY-BROWSER-BACKED-SERVICE-PARITY-001
+- input: `browser-backed-api-poc` action allowlist and `computer_use_poc/har_platform_interface_inventory_v1.md`。
+- expected_runtime_behavior: service_live_actions_not_overclaimed
+- expected_output_boundary: 如果 `browser-backed-api-poc` 只暴露 `rcp_snapshot`、`weapon_inventory`、`login_logs_search`、`track_analysis_summary`，则 Track Analysis readiness helper、Archives optional actions 和 RCP drill-down / governance actions 只能描述为 Dennis-side `implemented_mock_only` contracts，不得标 live_verified / service-live / default runtime source；必须 `needs_explicit_action_call=true`。
+
 ## 875. Browser-backed evidence card display summary
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-EVIDENCE-DISPLAY-001
@@ -8142,6 +8177,27 @@
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: archives_optional_fixed_actions_mock_pass
 - expected_output_boundary: `archives_photo_search` must be fixed to `POST /actions/archives_photo_search` and representative platform path `/v4/archives/report/photo/search`; typed params map `user_id` to service-owned `reportedIds` and use `begin/end`, `matchType`, `sort`, `page`, `count`. `archives_user_profile` must be fixed to `POST /actions/archives_user_profile` and service-owned `/archives/user/home/info`; Dennis passes only typed `user_id`. `archives_related_users` must be fixed to `POST /actions/archives_related_users` and service-owned `/archives/user/search/device`; typed params map `relation_type` to validated `type=0/1`. All three actions must output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; internal-review risk entities such as user_id/device_id/IP/photo_id/live_id/related_user_ids may remain raw, while external-share output masks them. Raw full body, raw report text, raw profile body, raw related-user profile, full phone, ID card, real name, cookie/token/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+
+## 875B-2. Archives Center social and four-info mock-only actions
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-SOCIAL-FOURINFO-ACTIONS-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: archives_social_fourinfo_fixed_actions_mock_pass
+- expected_output_boundary: `archives_private_message_search` must be fixed to `POST /actions/archives_private_message_search` and representative platform path `/archives/user/message/search`; typed params include `user_id`, `direction=sent|received`, `page`, `count`, `status`, and `sort`, with service-side mapping to `fromUserId` or `toUserId`. `archives_past_four_items` must be fixed to `POST /actions/archives_past_four_items` and representative platform path `/v4/audit/user/fourinfo/log/search`; typed params include `user_id`, `info_type=all|username|avatar|profile_description|background`, validated `infoType=0..4`, `page`, `count`, `markResult`, and `punishResult`, with service-side mapping `user_id -> keyword`. Both actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; private message plaintext, counterpart nickname/profile, old/new profile content, avatar/background URLs, operator name, raw full body, cookie/token/session/header/password, full phone, ID card, and real name must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+
+## 875C. RCP browser-backed event drill-down mock-only actions
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-RCP-DRILLDOWN-ACTIONS-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: rcp_event_drilldown_fixed_actions_mock_pass
+- expected_output_boundary: `rcp_event_detail` must be fixed to `POST /actions/rcp_event_detail` and representative platform path `/v2/rest/event/rcpEventDetail`; typed params include `eventType`, `eventId`, exact `queryTime`, and no URL/path/header/cookie/token/session fields. `rcp_event_feature_list` must be fixed to `POST /actions/rcp_event_feature_list` and representative platform path `/v2/rest/event/rcpEventFeatureList`; typed params include `eventType`, `eventId`, exact `queryTime`, and fixed `featureGroup=""`, while non-empty featureGroup overrides are rejected. Both actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; raw full body, raw event detail body, raw feature values, cookie/token/session/header/password, phone, ID card, and real name must not appear; strategy events/features are evidence context, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+
+## 875D. RCP browser-backed policy governance mock-only actions
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-RCP-POLICY-GOVERNANCE-ACTIONS-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: rcp_policy_governance_fixed_actions_mock_pass
+- expected_output_boundary: `rcp_policy_version_lookup` must be fixed to `POST /actions/rcp_policy_version_lookup` and representative platform path `/v2/rest/pc/policy/getPolicyVersionListByEvent`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, and exact `queryTime`. `rcp_policy_detail_lookup` must be fixed to `POST /actions/rcp_policy_detail_lookup` and representative platform path `/v2/rest/pro/policy/getPolicyDetailByVersion`; typed params include `policyCode` and `policyVersion`, while companion readonly version-history and relation-tree reads stay service-owned. `rcp_policy_release_record_lookup` must be fixed to `POST /actions/rcp_policy_release_record_lookup` and representative platform path `/v2/rest/common/pipeline/list`; typed params include `policyCode`, optional `statusCode`, `page`, and `size`; service-side body uses `extrbB=policyCode`, service-owned `configCode/createUser/extrbA/extrbC`, and companion `/v2/rest/common/pipeline/selectInfo`; `businessUnionKey` parses policy version and `pipelineVersion` is not policy version. `rcp_policy_tree_lookup` must be fixed to `POST /actions/rcp_policy_tree_lookup` and representative platform path `/v2/rest/pro/policyTree/queryProPolicyTree`; typed params include `policyTreeCode`, `policyTreeVersion`, and optional `targetPolicyCode`; service-side parser resolves `policyTreeNodeCode`, and `/v2/rest/pc/policytree/getPolicyTreeByVersion` must remain forbidden as an incorrect path. `rcp_node_policy_attribution` must be fixed to `POST /actions/rcp_node_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodePolicyAttribution`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, exact `queryTime`, `region`, and fixed `type=""`. `rcp_node_bind_policy_attribution` must be fixed to `POST /actions/rcp_node_bind_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodeBindPolicyAttribution`; typed params include `eventType`, `eventId`, exact `queryTime`, `policyTreeCode`, `policyTreeVersion`, and resolved `policyTreeNodeCode`. All actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; risk-control entities such as policyCode/eventId/deviceId/IP may remain raw in internal review, but raw policy version body, raw policy detail body, raw release records, operator identities, raw condition expression/dump, raw policy tree body, raw node-binding body/list, raw feature values, raw full body, cookie/token/session/header/password, phone, ID card, and real name must not appear; policy version/detail/release/tree/condition-attribution/node-binding context is attribution/governance evidence, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 876. Full runtime browser-backed priority
 

@@ -15,8 +15,8 @@ Dennis still calls only local fixed actions with typed params. The browser-backe
 | `archives_photo_search` | P0-conditional | `POST /v4/archives/report/photo/search` | corrected payload documented: `reportedIds=<user_id>`, `matchType`, `sort`, `begin`, `end`, `page`, `count` | validated `totalCount` / `dataList`; report text must be summarized only | implemented | use for abnormal-publish/content anchoring; reports are signal, not final judgement |
 | `archives_related_users` | P1 | `POST /archives/user/search/device` | corrected payload documented: `keyword=<user_id>`, `inputType=0`, `type=0/1` | validated same-device registered/login mapping; mock fixture covers relation summary | implemented | output counts, relation type, and internal-review risk entity IDs; relation alone is not judgement |
 | `archives_related_devices` | P1 | likely user-analysis/profile/device summaries; no single dedicated action confirmed | request body not fixed for standalone related-device action | response shape not fixed for standalone related-device action | next_probe_needed | confirm whether device relation should come from user profile, user analysis, or same-device search before implementing |
-| `archives_private_message_search` | P1 candidate | `POST /archives/user/message/search` | from/to directions documented, but browser-backed typed params not finalized | totals observed; private message plaintext must never output | candidate_only | add only after typed direction contract and text-suppression fixture are ready |
-| `archives_past_four_items` | P1 candidate | `POST /v4/audit/user/fourinfo/log/search` | `keyword=<user_id>` and `infoType` mapping documented, but action semantics need naming decision | change-log shape documented; old/new text/media/operator must be summarized | next_probe_needed | clarify whether "past four items" means four-info audit logs before action exposure |
+| `archives_private_message_search` | P1 candidate | `POST /archives/user/message/search` | from/to directions validated; Dennis passes typed `direction=sent/received` only | totals observed; mock fixture covers count/status/time summary; private message plaintext never outputs | implemented | use for social-interaction context only; no plaintext or counterpart profile dump |
+| `archives_past_four_items` | P1 candidate | `POST /v4/audit/user/fourinfo/log/search` | `keyword=<user_id>` and `infoType=0/1/2/3/4` mapping validated | mock fixture covers count/time/type/status summary; old/new text/media/operator suppressed | implemented | treat as four-info change-log summary; align with login/publish evidence before judgement |
 
 ## Implemented Actions
 
@@ -178,6 +178,84 @@ Normalizer summary:
 - Preserves `key_entities.related_user_ids` for internal review/source chaining.
 - Forces `sensitive_output=false` and `no_data_not_risk_exclusion=true`.
 - Suppresses raw full body and raw related-user profile details.
+
+### `archives_private_message_search`
+
+Fixed service endpoint:
+
+```yaml
+browser_backed_action: archives_private_message_search
+local_service_endpoint: POST /actions/archives_private_message_search
+representative_platform_path: /archives/user/message/search
+platform_method: POST
+```
+
+Typed params accepted by Dennis:
+
+```yaml
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_private_message_summary
+  direction: sent | received
+  page: 1
+  count: 20
+  status: ""
+  sort: "0"
+```
+
+Service-side body builder summary:
+
+- Map `direction=sent` to platform `fromUserId=<user_id>`.
+- Map `direction=received` to platform `toUserId=<user_id>`.
+- Map `status`, `sort`, `page`, and `count` directly.
+- Keep platform path fixed at `/archives/user/message/search`.
+- Reject caller-provided URL/path/header/cookie/token/session.
+
+Normalizer summary:
+
+- Produces `private_message_summary` with count, direction, time range, status, counterpart count, and risk context summary.
+- Preserves `counterpart_user_ids` only as risk entity identifiers for internal review/source chaining.
+- Forces `sensitive_output=false` and `no_data_not_risk_exclusion=true`.
+- Suppresses raw private message plaintext, counterpart nicknames, and raw full body.
+
+### `archives_past_four_items`
+
+Fixed service endpoint:
+
+```yaml
+browser_backed_action: archives_past_four_items
+local_service_endpoint: POST /actions/archives_past_four_items
+representative_platform_path: /v4/audit/user/fourinfo/log/search
+platform_method: POST
+```
+
+Typed params accepted by Dennis:
+
+```yaml
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_four_info_change_log_summary
+  info_type: all | username | avatar | profile_description | background
+  infoType: 0 | 1 | 2 | 3 | 4
+  page: 1
+  count: 20
+  markResult: ""
+  punishResult: ""
+```
+
+Service-side body builder summary:
+
+- Map `user_id` to platform `keyword`; do not use `userId`.
+- Map `info_type` to validated `infoType`: all=0, username=1, avatar=2, profile_description=3, background=4.
+- Map `markResult`, `punishResult`, `page`, and `count` directly.
+- Keep platform path fixed at `/v4/audit/user/fourinfo/log/search`.
+- Reject caller-provided URL/path/header/cookie/token/session.
+
+Normalizer summary:
+
+- Produces `four_info_change_summary` with total changes, time range, info type summary, status summary, and profile-change risk summary.
+- Forces `sensitive_output=false` and `no_data_not_risk_exclusion=true`.
+- Suppresses raw old/new profile content, avatar/background URLs, operator names, and raw full body.
 
 ## Boundary
 

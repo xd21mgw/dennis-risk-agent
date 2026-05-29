@@ -18,14 +18,38 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | Weapon device relation / risk | `weapon_inventory` | `POST /actions/weapon_inventory` |
 | Login log online source | `login_logs_search` | `POST /actions/login_logs_search` |
 | Track-analysis activity / profile | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
+| Track-analysis data readiness precheck | `track_analysis_check_data_ready` | `POST /actions/track_analysis_check_data_ready` |
 | Archives Center user-analysis core logs | `archives_user_analysis` | `POST /actions/archives_user_analysis` |
 | Archives Center photo report search | `archives_photo_search` | `POST /actions/archives_photo_search` |
 | Archives Center user profile baseline | `archives_user_profile` | `POST /actions/archives_user_profile` |
 | Archives Center same-device related users | `archives_related_users` | `POST /actions/archives_related_users` |
+| Archives Center private-message summary | `archives_private_message_search` | `POST /actions/archives_private_message_search` |
+| Archives Center four-info change log | `archives_past_four_items` | `POST /actions/archives_past_four_items` |
+| RCP event detail | `rcp_event_detail` | `POST /actions/rcp_event_detail` |
+| RCP event feature snapshot | `rcp_event_feature_list` | `POST /actions/rcp_event_feature_list` |
+| RCP policy version context | `rcp_policy_version_lookup` | `POST /actions/rcp_policy_version_lookup` |
+| RCP policy detail context | `rcp_policy_detail_lookup` | `POST /actions/rcp_policy_detail_lookup` |
+| RCP policy release record context | `rcp_policy_release_record_lookup` | `POST /actions/rcp_policy_release_record_lookup` |
+| RCP policy tree node lookup | `rcp_policy_tree_lookup` | `POST /actions/rcp_policy_tree_lookup` |
+| RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
+| RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
 
-For clean `full_runtime` single-user account-security evidence cards, these fixed actions are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
+For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
 
-`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are available as optional Archives Center sources. They are not added to the default four-source account-security main chain by this adapter patch.
+`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, `archives_related_users`, `archives_private_message_search`, and `archives_past_four_items` are available as optional Archives Center sources. They are not added to the default four-source account-security main chain by this adapter patch.
+
+`rcp_event_detail`, `rcp_event_feature_list`, `rcp_policy_version_lookup`, `rcp_policy_detail_lookup`, `rcp_policy_release_record_lookup`, `rcp_policy_tree_lookup`, `rcp_node_policy_attribution`, and `rcp_node_bind_policy_attribution` are explicit RCP/Tianshi drill-down sources. They require upstream event, policy, or policy-tree identifiers; they are not part of the default four-source account-security main chain.
+
+The HAR inventory also tracks auxiliary candidates that are intentionally not in the default four-source runtime chain:
+
+- `track_analysis_check_data_ready`: mock-only readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`, not account-security evidence by itself.
+- `track_analysis_config_lookup`: config helper only; not evidence and not default runtime.
+- `rcp_event_type_list` / `rcp_realtime_op_list` / `rcp_event_feature_key_lookup` / `rcp_event_tree_or_decision_lookup`: RCP helper candidates only; not default runtime and not implemented in this adapter pass.
+- `login_log_detail_lookup`: UI modal key extraction has validation evidence, but no fixed API path/body or row identifier contract has been confirmed.
+- `login_log_filter_options`: blocked until a safe HAR confirms a separate filter/config option path and response shape; current default remains `recallSource=2,0,1,3`.
+- `login_logs_search_page`: not a standalone action for the current `/rest/unified/log/search` contract because validated API responses can return the full current-window result and UI pagination is frontend-only.
+
+Current `browser-backed-api-poc` parity note: the adjacent service implementation still exposes only the four base actions (`rcp_snapshot`, `weapon_inventory`, `login_logs_search`, `track_analysis_summary`). The Track Analysis readiness helper, Archives Center optional actions, and RCP/Tianshi drill-down actions below are Dennis-side mock-only contracts until the service action allowlist is extended separately. They require explicit action calls and must not be treated as live service actions or default runtime sources.
 
 ## Account-Security Bundle Typed Params
 
@@ -202,6 +226,7 @@ The executable client is intentionally narrow:
 - Default timeout: `10s`.
 - Fixed action allowlist only:
   - `track_analysis_summary`
+  - `track_analysis_check_data_ready`
   - `rcp_snapshot`
   - `weapon_inventory`
   - `login_logs_search`
@@ -209,15 +234,78 @@ The executable client is intentionally narrow:
   - `archives_photo_search`
   - `archives_user_profile`
   - `archives_related_users`
+  - `archives_private_message_search`
+  - `archives_past_four_items`
+  - `rcp_event_detail`
+  - `rcp_event_feature_list`
+  - `rcp_policy_version_lookup`
+  - `rcp_policy_detail_lookup`
+  - `rcp_policy_release_record_lookup`
+  - `rcp_policy_tree_lookup`
+  - `rcp_node_policy_attribution`
+  - `rcp_node_bind_policy_attribution`
 - Only typed params are serialized into the JSON body.
 - Caller-provided route, credential, or transport override fields are rejected before service invocation.
 - HTTP transport errors, connection refused, timeout, HTTP error, and non-JSON responses are normalized as source results instead of Dennis runtime failures.
 - `BrowserBackedServiceClient.call_account_security_sources()` is the executable single-user account-security helper. It expands Track Analysis sub-interfaces, preserves Weapon private safe handles when the service returns them, applies login-log parse fallback, and returns display-safe source results for evidence-card construction.
 - `build_small_batch_evidence_output()` is the small-batch display helper. In `internal_risk_review`, user titles must use raw copyable risk entity identifiers such as `用户 772671837`; in `external_share`, user titles must use aliases / masks such as `用户 U1（user_***1837）`. This only changes display; credential secrets and raw source dumps remain suppressed in every scope.
+- `build_track_analysis_check_data_ready_browser_backed_request()` maps typed `device_id`, time window, app/product, category/event/platform filters, and metric to service-owned `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`; service generates `batchQueryId` and `_t`. The result is readiness/provenance context only, not evidence completion.
 - `build_archives_user_analysis_browser_backed_request()` builds the fixed typed-param plan for `archives_user_analysis`. The browser-backed service maps it to `POST /v3/user/log/coreLogs/fetch`; Dennis never passes URL/path/header/cookie/token/session.
 - `build_archives_photo_search_browser_backed_request()` maps typed `user_id` plus time/page filters to service-owned `POST /v4/archives/report/photo/search` body fields `reportedIds`, `matchType`, `sort`, `begin`, `end`, `page`, and `count`.
 - `build_archives_user_profile_browser_backed_request()` maps typed `user_id` to service-owned `GET /archives/user/home/info?userId=...`; optional label/shop/risk bundle paths stay service-owned.
 - `build_archives_related_users_browser_backed_request()` maps typed `user_id` and `relation_type` to service-owned `POST /archives/user/search/device` body fields `keyword`, `inputType=0`, and validated `type=0/1`.
+- `build_archives_private_message_search_browser_backed_request()` maps typed `user_id` and `direction=sent/received` to service-owned `POST /archives/user/message/search` body fields `fromUserId` or `toUserId`, plus page/count/status/sort.
+- `build_archives_past_four_items_browser_backed_request()` maps typed `user_id` and four-info `info_type` to service-owned `POST /v4/audit/user/fourinfo/log/search` body fields `keyword`, `infoType`, `markResult`, `punishResult`, `page`, and `count`.
+- `build_rcp_event_detail_browser_backed_request()` maps typed `eventType`, `eventId`, and exact `queryTime` to service-owned `GET /v2/rest/event/rcpEventDetail`.
+- `build_rcp_event_feature_list_browser_backed_request()` maps typed `eventType`, `eventId`, exact `queryTime`, and fixed `featureGroup=""` to service-owned `GET /v2/rest/event/rcpEventFeatureList`.
+- `build_rcp_policy_version_lookup_browser_backed_request()` maps typed event and policy identifiers to service-owned `GET /v2/rest/pc/policy/getPolicyVersionListByEvent`.
+- `build_rcp_policy_detail_lookup_browser_backed_request()` maps typed `policyCode` and `policyVersion` to service-owned `GET /v2/rest/pro/policy/getPolicyDetailByVersion`; companion readonly version-history and relation-tree reads stay service-owned. Policy detail is strategy-governance context, not final judgement.
+- `build_rcp_policy_release_record_lookup_browser_backed_request()` maps typed `policyCode`, optional `statusCode`, and page/size to service-owned `POST /v2/rest/common/pipeline/list`, with `extrbB=policyCode`; companion `selectInfo` stays service-owned. Release records are lifecycle provenance, not risk judgement.
+- `build_rcp_policy_tree_lookup_browser_backed_request()` maps typed policy-tree identifiers to service-owned `GET /v2/rest/pro/policyTree/queryProPolicyTree`; the strategy-tree asset chain may also use fixed companion reads `/v2/rest/pro/policyTree/policyTreeList` (coarse list only), `/v2/rest/pro/policyTree/queryBindingByNodeCode` (node-level binding policy list), and `/v2/rest/pro/policyTree/getAllPolicyCodeByPage` (full-tree policy code list). Node resolution stays service-owned and guessed node codes are not accepted from the caller.
+- `build_rcp_node_policy_attribution_browser_backed_request()` maps typed event and policy identifiers to service-owned `POST /v2/rest/pc/policy/nodePolicyAttribution` with fixed `type=""`.
+- `build_rcp_node_bind_policy_attribution_browser_backed_request()` maps typed event and resolved policy-tree node identifiers to service-owned `GET /v2/rest/pc/policy/nodeBindPolicyAttribution`.
+
+## Track Analysis Auxiliary Actions
+
+```yaml
+source_name: track_analysis_check_data_ready
+action_name: track_analysis_check_data_ready
+local_service_endpoint: POST /actions/track_analysis_check_data_ready
+representative_platform_path: /dp/platform/app/analytics/v2/sequence/checkDataReady
+typed_params:
+  device_id: "<device risk entity id>"
+  appName: KUAISHOU
+  product: KUAISHOU
+  startTime: <millisecond timestamp>
+  endTime: <millisecond timestamp>
+  include: 1
+  pageSize: 100
+  category: ["<safe category label>"]
+  event: []
+  appPlatform: []
+  metric: pv
+  type: deviceId
+  mode: track_analysis_data_readiness_precheck
+service_generated_fields:
+  - batchQueryId
+  - _t
+fixed_fields:
+  funcType: USER_PROFILE_QUERY
+  type: deviceId
+```
+
+Output contract:
+
+- `source_status`
+- `source_card.track_analysis_check_data_ready_summary`
+- `source_quality.track_analysis_action_contract=track_analysis_check_data_ready`
+- `key_entities.device_id`
+- `missing_fields`
+- `next_action`
+- `sensitive_output=false`
+- `no_data_not_risk_exclusion=true`
+
+This action summarizes `data.dateStatus` presence/status and `trace_id_present=true/false` only. It must not output raw readiness body, trace ID value, caller-provided URL/path/header/cookie/token/session, or credential material. It is a readiness/source-quality helper and must not be counted as completed account-security evidence by itself.
 
 ## Archives Center Actions
 
@@ -280,6 +368,33 @@ typed_params:
   relation_type: same_device_registered | same_device_login
   inputType: 0
   type: 0 | 1
+---
+source_name: archives_private_message_search
+action_name: archives_private_message_search
+local_service_endpoint: POST /actions/archives_private_message_search
+representative_platform_path: /archives/user/message/search
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_private_message_summary
+  direction: sent | received
+  page: 1
+  count: 20
+  status: ""
+  sort: "0"
+---
+source_name: archives_past_four_items
+action_name: archives_past_four_items
+local_service_endpoint: POST /actions/archives_past_four_items
+representative_platform_path: /v4/audit/user/fourinfo/log/search
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_four_info_change_log_summary
+  info_type: all | username | avatar | profile_description | background
+  infoType: 0 | 1 | 2 | 3 | 4
+  page: 1
+  count: 20
+  markResult: ""
+  punishResult: ""
 ```
 
 Output contract:
@@ -293,7 +408,138 @@ Output contract:
 - `sensitive_output=false`
 - `no_data_not_risk_exclusion=true`
 
-The actions return derived summaries only: `risk_event_scan`, `photo_search_summary`, `profile_summary`, or `related_users_summary`. They must not return raw full body, full `requestParam`, full `extraParam`, raw report text, raw profile body, raw related-user profile, token/tokenId/open_id/sig/refresh_token, or raw records.
+The actions return derived summaries only: `risk_event_scan`, `photo_search_summary`, `profile_summary`, `related_users_summary`, `private_message_summary`, or `four_info_change_summary`. They must not return raw full body, full `requestParam`, full `extraParam`, raw report text, raw profile body, raw related-user profile, private message plaintext, old/new profile text, media URLs, token/tokenId/open_id/sig/refresh_token, or raw records.
+
+## RCP / Tianshi Drill-Down Actions
+
+Inventory: `computer_use_poc/har_platform_interface_inventory_v1.md`.
+
+Implemented mock-only actions:
+
+```yaml
+source_name: rcp_event_detail
+action_name: rcp_event_detail
+local_service_endpoint: POST /actions/rcp_event_detail
+representative_platform_path: /v2/rest/event/rcpEventDetail
+typed_params:
+  eventType: USER_REGISTER_NEW
+  eventId: "<event id>"
+  queryTime: <exact _occurTime millisecond timestamp>
+  mode: rcp_event_detail_readonly
+---
+source_name: rcp_event_feature_list
+action_name: rcp_event_feature_list
+local_service_endpoint: POST /actions/rcp_event_feature_list
+representative_platform_path: /v2/rest/event/rcpEventFeatureList
+typed_params:
+  eventType: USER_REGISTER_NEW
+  eventId: "<event id>"
+  queryTime: <exact _occurTime millisecond timestamp>
+  featureGroup: ""
+  mode: rcp_event_feature_snapshot_readonly
+---
+source_name: rcp_policy_version_lookup
+action_name: rcp_policy_version_lookup
+local_service_endpoint: POST /actions/rcp_policy_version_lookup
+representative_platform_path: /v2/rest/pc/policy/getPolicyVersionListByEvent
+typed_params:
+  eventType: USER_REGISTER_NEW
+  eventId: "<event id>"
+  policyCode: "<policy code>"
+  policyVersion: 5
+  queryTime: <exact _occurTime millisecond timestamp>
+  mode: rcp_policy_version_lookup_readonly
+---
+source_name: rcp_policy_detail_lookup
+action_name: rcp_policy_detail_lookup
+local_service_endpoint: POST /actions/rcp_policy_detail_lookup
+representative_platform_path: /v2/rest/pro/policy/getPolicyDetailByVersion
+companion_readonly_paths:
+  - /v2/rest/pro/policy/getPolicyAllVersion
+  - /v2/rest/pc/policyReview/getRelationPolicyTree
+typed_params:
+  policyCode: "<policy code>"
+  policyVersion: 5
+  mode: rcp_policy_detail_lookup_readonly
+---
+source_name: rcp_policy_release_record_lookup
+action_name: rcp_policy_release_record_lookup
+local_service_endpoint: POST /actions/rcp_policy_release_record_lookup
+representative_platform_path: /v2/rest/common/pipeline/list
+companion_readonly_paths:
+  - /v2/rest/common/pipeline/selectInfo
+typed_params:
+  policyCode: "<policy code>"
+  statusCode: ""
+  page: 1
+  size: 20
+  mode: rcp_policy_release_record_lookup_readonly
+body_builder:
+  extrbB: policyCode
+  statusCode: statusCode
+  pageInfoRequest:
+    page: page
+    size: size
+  service_owned_fields:
+    - configCode
+    - createUser
+    - extrbA
+    - extrbC
+---
+source_name: rcp_policy_tree_lookup
+action_name: rcp_policy_tree_lookup
+local_service_endpoint: POST /actions/rcp_policy_tree_lookup
+representative_platform_path: /v2/rest/pro/policyTree/queryProPolicyTree
+companion_readonly_paths:
+  - /v2/rest/pro/policyTree/policyTreeList
+  - /v2/rest/pro/policyTree/queryBindingByNodeCode
+  - /v2/rest/pro/policyTree/getAllPolicyCodeByPage
+typed_params:
+  policyTreeCode: USER_REGISTER_NEW
+  policyTreeVersion: 887
+  targetPolicyCode: "<optional policy code>"
+  mode: rcp_policy_tree_lookup_readonly
+---
+source_name: rcp_node_policy_attribution
+action_name: rcp_node_policy_attribution
+local_service_endpoint: POST /actions/rcp_node_policy_attribution
+representative_platform_path: /v2/rest/pc/policy/nodePolicyAttribution
+typed_params:
+  eventType: USER_REGISTER_NEW
+  eventId: "<event id>"
+  policyCode: "<policy code>"
+  policyVersion: 5
+  queryTime: <exact _occurTime millisecond timestamp>
+  region: china
+  type: ""
+  mode: rcp_node_policy_attribution_readonly
+---
+source_name: rcp_node_bind_policy_attribution
+action_name: rcp_node_bind_policy_attribution
+local_service_endpoint: POST /actions/rcp_node_bind_policy_attribution
+representative_platform_path: /v2/rest/pc/policy/nodeBindPolicyAttribution
+typed_params:
+  eventType: USER_REGISTER_NEW
+  eventId: "<event id>"
+  queryTime: <exact _occurTime millisecond timestamp>
+  policyTreeCode: USER_REGISTER_NEW
+  policyTreeVersion: 887
+  policyTreeNodeCode: "<resolved node code from queryProPolicyTree>"
+  mode: rcp_node_bind_policy_attribution_readonly
+```
+
+Output contract:
+
+- `source_status`
+- `source_card`
+- `source_quality`
+- `key_entities`
+- `missing_fields`
+- `next_action`
+- `sensitive_output=false`
+- `no_data_not_risk_exclusion=true`
+
+The actions return derived `event_detail_summary`, `feature_snapshot_summary`, `policy_version_summary`, `policy_detail_summary`, `release_record_summary`, `policy_tree_summary`, `policy_attribution_summary`, and `node_binding_summary` only. They must not return raw full body, raw event detail body, raw feature values, raw policy version body, raw policy detail body, raw release records, operator identities, raw policy tree body, raw condition dumps, raw node-binding body/list, credential material, or policy configuration dumps. Strategy events, feature snapshots, policy versions/details/release records, policy-tree nodes, condition-level attribution, and node-binding attribution are evidence/provenance, not final risk judgement.
 
 Fixture self-test:
 
@@ -376,6 +622,12 @@ Source-specific summary fields:
   - `device_ids_summary.device_id_sample`
   - `device_ids_summary.device_model_fields_present`
   - `device_ids_summary.last_active_fields_present`
+- `track_analysis_check_data_ready`
+  - `readiness_summary.readiness_status`
+  - `readiness_summary.date_status_present`
+  - `readiness_summary.trace_id_present`
+  - `key_entities.device_id`
+  - Boundary: readiness is source-quality/provenance context, not account-security evidence by itself.
 - `rcp_snapshot`
   - `event_summary.event_count`
   - `event_summary.table_header_columns`
@@ -437,6 +689,83 @@ Source-specific summary fields:
   - `related_users_summary.status_summary`
   - `key_entities.related_user_ids`
   - Boundary: same-device relation is an expansion clue, not standalone judgement.
+- `archives_private_message_search`
+  - `private_message_summary.private_message_count`
+  - `private_message_summary.direction_summary`
+  - `private_message_summary.message_time_range`
+  - `private_message_summary.status_summary`
+  - `private_message_summary.counterpart_count`
+  - Boundary: private-message plaintext and counterpart profile details stay suppressed.
+- `archives_past_four_items`
+  - `four_info_change_summary.total_changes`
+  - `four_info_change_summary.change_time_range`
+  - `four_info_change_summary.info_type_summary`
+  - `four_info_change_summary.status_summary`
+  - `four_info_change_summary.profile_change_risk_summary`
+  - Boundary: old/new profile content, media URL, and operator name stay suppressed.
+- `rcp_event_detail`
+  - `event_detail_summary.event_detail_status`
+  - `event_detail_summary._occurTime`
+  - `event_detail_summary.real_time_feedback`
+  - `event_detail_summary.error_code`
+  - `event_detail_summary.effective_policy_summary`
+  - `event_detail_summary.hit_policy_count`
+  - `key_entities.eventId`
+  - `key_entities.sourceId`
+  - `key_entities.deviceId`
+  - Boundary: event detail is single-event strategy evidence, not final judgement.
+- `rcp_event_feature_list`
+  - `feature_snapshot_summary.feature_count`
+  - `feature_snapshot_summary.feature_group_distribution`
+  - `feature_snapshot_summary.feature_key_samples`
+  - `feature_snapshot_summary.check_result_summary`
+  - Boundary: feature snapshots are attribution context; raw feature values stay suppressed.
+- `rcp_policy_version_lookup`
+  - `policy_version_summary.version_found`
+  - `policy_version_summary.policyCode`
+  - `policy_version_summary.policyVersion`
+  - `policy_version_summary.snapshotVersion`
+  - `policy_version_summary.version_metadata_summary`
+  - Boundary: policy version context is attribution prerequisite, not judgement.
+- `rcp_policy_detail_lookup`
+  - `policy_detail_summary.policy_detail_status`
+  - `policy_detail_summary.policyCode`
+  - `policy_detail_summary.policyVersion`
+  - `policy_detail_summary.condition_count`
+  - `policy_detail_summary.version_count`
+  - `policy_detail_summary.relation_policy_tree_count`
+  - Boundary: policy detail explains strategy definition and versions; raw condition expressions stay suppressed and this is not final judgement.
+- `rcp_policy_release_record_lookup`
+  - `release_record_summary.release_record_status`
+  - `release_record_summary.policyCode`
+  - `release_record_summary.record_count`
+  - `release_record_summary.parsed_policy_versions`
+  - `release_record_summary.pipeline_versions`
+  - `release_record_summary.status_distribution`
+  - Boundary: release records explain lifecycle/version provenance; raw records and operator identities stay suppressed and this is not final judgement.
+- `rcp_policy_tree_lookup`
+  - `policy_tree_summary.policyTreeCode`
+  - `policy_tree_summary.policyTreeVersion`
+  - `policy_tree_summary.policyTreeNodeCode`
+  - `policy_tree_summary.node_code_source`
+  - `policy_tree_summary.target_policy_found`
+  - Boundary: policy-tree lookup is governance context; do not guess node codes.
+- `rcp_node_policy_attribution`
+  - `policy_attribution_summary.attribution_status`
+  - `policy_attribution_summary.policyCode`
+  - `policy_attribution_summary.policyVersion`
+  - `policy_attribution_summary.condition_count`
+  - `policy_attribution_summary.true_condition_count`
+  - `policy_attribution_summary.false_condition_count`
+  - Boundary: condition attribution explains a policy result; raw condition and feature dumps stay suppressed.
+- `rcp_node_bind_policy_attribution`
+  - `node_binding_summary.node_binding_status`
+  - `node_binding_summary.node_name_summary`
+  - `node_binding_summary.policyTreeNodeCode`
+  - `node_binding_summary.effective_policy_summary`
+  - `node_binding_summary.target_policy_online`
+  - `node_binding_summary.target_policy_result`
+  - Boundary: node binding explains strategy-tree context; raw binding lists stay suppressed.
 
 The display layer keeps:
 
