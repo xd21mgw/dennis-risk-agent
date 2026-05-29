@@ -19,10 +19,13 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | Login log online source | `login_logs_search` | `POST /actions/login_logs_search` |
 | Track-analysis activity / profile | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
 | Archives Center user-analysis core logs | `archives_user_analysis` | `POST /actions/archives_user_analysis` |
+| Archives Center photo report search | `archives_photo_search` | `POST /actions/archives_photo_search` |
+| Archives Center user profile baseline | `archives_user_profile` | `POST /actions/archives_user_profile` |
+| Archives Center same-device related users | `archives_related_users` | `POST /actions/archives_related_users` |
 
 For clean `full_runtime` single-user account-security evidence cards, these fixed actions are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
 
-`archives_user_analysis` is available as an optional Archives Center P0 source. It is not added to the default four-source account-security main chain by this adapter patch.
+`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are available as optional Archives Center sources. They are not added to the default four-source account-security main chain by this adapter patch.
 
 ## Account-Security Bundle Typed Params
 
@@ -203,18 +206,24 @@ The executable client is intentionally narrow:
   - `weapon_inventory`
   - `login_logs_search`
   - `archives_user_analysis`
+  - `archives_photo_search`
+  - `archives_user_profile`
+  - `archives_related_users`
 - Only typed params are serialized into the JSON body.
 - Caller-provided route, credential, or transport override fields are rejected before service invocation.
 - HTTP transport errors, connection refused, timeout, HTTP error, and non-JSON responses are normalized as source results instead of Dennis runtime failures.
 - `BrowserBackedServiceClient.call_account_security_sources()` is the executable single-user account-security helper. It expands Track Analysis sub-interfaces, preserves Weapon private safe handles when the service returns them, applies login-log parse fallback, and returns display-safe source results for evidence-card construction.
 - `build_small_batch_evidence_output()` is the small-batch display helper. In `internal_risk_review`, user titles must use raw copyable risk entity identifiers such as `用户 772671837`; in `external_share`, user titles must use aliases / masks such as `用户 U1（user_***1837）`. This only changes display; credential secrets and raw source dumps remain suppressed in every scope.
 - `build_archives_user_analysis_browser_backed_request()` builds the fixed typed-param plan for `archives_user_analysis`. The browser-backed service maps it to `POST /v3/user/log/coreLogs/fetch`; Dennis never passes URL/path/header/cookie/token/session.
+- `build_archives_photo_search_browser_backed_request()` maps typed `user_id` plus time/page filters to service-owned `POST /v4/archives/report/photo/search` body fields `reportedIds`, `matchType`, `sort`, `begin`, `end`, `page`, and `count`.
+- `build_archives_user_profile_browser_backed_request()` maps typed `user_id` to service-owned `GET /archives/user/home/info?userId=...`; optional label/shop/risk bundle paths stay service-owned.
+- `build_archives_related_users_browser_backed_request()` maps typed `user_id` and `relation_type` to service-owned `POST /archives/user/search/device` body fields `keyword`, `inputType=0`, and validated `type=0/1`.
 
-## Archives Center User Analysis
+## Archives Center Actions
 
 Landscape: `computer_use_poc/archives_center_integration_landscape_v1.md`.
 
-Implemented action:
+Implemented actions:
 
 ```yaml
 source_name: archives_user_analysis
@@ -238,6 +247,39 @@ typed_params:
     scanCode: 1
     logout: 1
     frozen: 1
+---
+source_name: archives_photo_search
+action_name: archives_photo_search
+local_service_endpoint: POST /actions/archives_photo_search
+representative_platform_path: /v4/archives/report/photo/search
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_photo_report_search
+  begin: <millisecond timestamp>
+  end: <millisecond timestamp>
+  page: 1
+  count: 20
+  matchType: "0"
+  sort: "0"
+---
+source_name: archives_user_profile
+action_name: archives_user_profile
+local_service_endpoint: POST /actions/archives_user_profile
+representative_platform_path: /archives/user/home/info
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_user_home_profile
+---
+source_name: archives_related_users
+action_name: archives_related_users
+local_service_endpoint: POST /actions/archives_related_users
+representative_platform_path: /archives/user/search/device
+typed_params:
+  user_id: "<decimal user id>"
+  mode: archives_same_device_related_users
+  relation_type: same_device_registered | same_device_login
+  inputType: 0
+  type: 0 | 1
 ```
 
 Output contract:
@@ -251,7 +293,7 @@ Output contract:
 - `sensitive_output=false`
 - `no_data_not_risk_exclusion=true`
 
-The action returns a derived `risk_event_scan`; it must not return raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, or raw records.
+The actions return derived summaries only: `risk_event_scan`, `photo_search_summary`, `profile_summary`, or `related_users_summary`. They must not return raw full body, full `requestParam`, full `extraParam`, raw report text, raw profile body, raw related-user profile, token/tokenId/open_id/sig/refresh_token, or raw records.
 
 Fixture self-test:
 
@@ -375,6 +417,26 @@ Source-specific summary fields:
   - `login_window_summary.logSource_sample`
   - `login_window_summary.standard_browser_backed_source_result`
   - Boundary: `no_data` means no visible rows in the observed window, not no-risk evidence.
+- `archives_photo_search`
+  - `photo_search_summary.photo_count`
+  - `photo_search_summary.publish_time_range`
+  - `photo_search_summary.status_summary`
+  - `photo_search_summary.risk_context_summary`
+  - `key_entities.photo_ids`
+  - Boundary: report/content signals are not final risk judgement.
+- `archives_user_profile`
+  - `profile_summary.account_status_summary`
+  - `profile_summary.registration_summary`
+  - `profile_summary.profile_state_summary`
+  - `profile_summary.label_summary`
+  - `profile_summary.risk_info_summary`
+  - Boundary: current-state profile baseline is not full history.
+- `archives_related_users`
+  - `related_users_summary.related_user_count`
+  - `related_users_summary.relation_type_summary`
+  - `related_users_summary.status_summary`
+  - `key_entities.related_user_ids`
+  - Boundary: same-device relation is an expansion clue, not standalone judgement.
 
 The display layer keeps:
 

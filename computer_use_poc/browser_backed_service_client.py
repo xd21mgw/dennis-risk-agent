@@ -30,6 +30,9 @@ ACTION_ENDPOINTS = {
     "weapon_inventory": "/actions/weapon_inventory",
     "login_logs_search": "/actions/login_logs_search",
     "archives_user_analysis": "/actions/archives_user_analysis",
+    "archives_photo_search": "/actions/archives_photo_search",
+    "archives_user_profile": "/actions/archives_user_profile",
+    "archives_related_users": "/actions/archives_related_users",
 }
 
 ACTION_TO_SOURCE = {
@@ -38,6 +41,9 @@ ACTION_TO_SOURCE = {
     "weapon_inventory": "weapon_inventory",
     "login_logs_search": "login_logs_search",
     "archives_user_analysis": "archives_user_analysis",
+    "archives_photo_search": "archives_photo_search",
+    "archives_user_profile": "archives_user_profile",
+    "archives_related_users": "archives_related_users",
 }
 
 ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds", "getLastestDateTime")
@@ -45,6 +51,9 @@ ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
 TRACK_ANALYSIS_BUNDLE_SOURCE_NAME = "track_analysis_account_security_bundle"
 TRACK_ANALYSIS_BUNDLE_MODE = "account_security_bundle"
 ARCHIVES_USER_ANALYSIS_FIXED_PATH = "/v3/user/log/coreLogs/fetch"
+ARCHIVES_PHOTO_SEARCH_FIXED_PATH = "/v4/archives/report/photo/search"
+ARCHIVES_USER_PROFILE_FIXED_PATH = "/archives/user/home/info"
+ARCHIVES_RELATED_USERS_FIXED_PATH = "/archives/user/search/device"
 ARCHIVES_USER_ANALYSIS_FILTER_FIELDS = (
     "loginStart",
     "registerBind",
@@ -55,6 +64,10 @@ ARCHIVES_USER_ANALYSIS_FILTER_FIELDS = (
     "logout",
     "frozen",
 )
+ARCHIVES_RELATED_USER_TYPES = {
+    "same_device_registered": 0,
+    "same_device_login": 1,
+}
 DEFAULT_OUTPUT_SCOPE = "internal_risk_review"
 OUTPUT_SCOPES = {"internal_risk_review", "external_share"}
 FIELD_CLASSIFICATION = {
@@ -73,18 +86,24 @@ FIELD_CLASSIFICATION = {
     "pii_strict": ["phone_number", "id_card", "real_name"],
     "risk_entity_identifier": [
         "user_id",
+        "user_ids",
+        "related_user_ids",
         "uid",
         "device_id",
+        "device_ids",
         "deviceId",
         "did",
         "DID",
         "ip",
+        "ip_address",
         "userIpDesc",
         "eventId",
         "sourceId",
         "photo_id",
+        "photo_ids",
         "photoId",
         "live_id",
+        "live_ids",
         "liveId",
         "strategy_id",
         "hitFusePolicyCode",
@@ -133,6 +152,8 @@ PARSE_ERROR_STATUSES = {"parse_error"}
 INVALID_PARAMETER_STATUSES = {"parameter_error", "invalid_parameter", "wrong_request_body_shape"}
 DISPLAY_FORBIDDEN_FIELD_MARKERS = {
     "raw_profile",
+    "rawProfile",
+    "userProfileRaw",
     "raw_body",
     "raw_response",
     "raw_login_records",
@@ -142,6 +163,12 @@ DISPLAY_FORBIDDEN_FIELD_MARKERS = {
     "extraParam",
     "logContent",
     "full_json",
+    "reportText",
+    "reportContent",
+    "messageContent",
+    "commentContent",
+    "privateMessage",
+    "rawRelatedUserProfile",
     "password",
     "authorization",
     "cookie",
@@ -449,6 +476,135 @@ def build_archives_user_analysis_browser_backed_request(
     return request
 
 
+def build_archives_photo_search_browser_backed_request(
+    user_id: str,
+    begin_time_ms: int,
+    end_time_ms: int,
+    page: int = 1,
+    count: int = 20,
+    match_type: str = "0",
+    sort: str = "0",
+) -> Dict[str, Any]:
+    """Return the fixed Archives Center photo report/search action plan."""
+
+    if not isinstance(user_id, str) or not user_id.isdigit():
+        raise BrowserBackedServiceInputError("user_id must be a decimal string")
+    if not isinstance(begin_time_ms, int) or not isinstance(end_time_ms, int) or begin_time_ms <= 0 or end_time_ms <= 0:
+        raise BrowserBackedServiceInputError("begin_time_ms and end_time_ms must be positive millisecond timestamps")
+    if begin_time_ms >= end_time_ms:
+        raise BrowserBackedServiceInputError("begin_time_ms must be before end_time_ms")
+    if not isinstance(page, int) or page < 1:
+        raise BrowserBackedServiceInputError("page must be a positive integer")
+    if not isinstance(count, int) or count < 1 or count > 100:
+        raise BrowserBackedServiceInputError("count must be between 1 and 100")
+    if str(match_type) not in {"0", "1", "2"}:
+        raise BrowserBackedServiceInputError("match_type must be a supported string enum")
+    if str(sort) not in {"0", "1"}:
+        raise BrowserBackedServiceInputError("sort must be a supported string enum")
+
+    typed_params: Dict[str, Any] = {
+        "user_id": user_id,
+        "mode": "archives_photo_report_search",
+        "begin": begin_time_ms,
+        "end": end_time_ms,
+        "page": page,
+        "count": count,
+        "matchType": str(match_type),
+        "sort": str(sort),
+    }
+    request = {
+        "source_name": "archives_photo_search",
+        "action_name": "archives_photo_search",
+        "priority": "P0-conditional",
+        "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
+        "typed_params": typed_params,
+        "body_builder_summary": {
+            "service_side_body_builder": True,
+            "body_fields": ["reportedIds", "matchType", "sort", "begin", "end", "page", "count"],
+            "reportedIds_source": "user_id",
+            "raw_report_text_output": False,
+            "raw_full_body_output": False,
+        },
+    }
+    _validate_action_name(str(request["action_name"]))
+    _validate_typed_params(request["typed_params"])
+    return request
+
+
+def build_archives_user_profile_browser_backed_request(user_id: str) -> Dict[str, Any]:
+    """Return the fixed Archives Center user home/profile action plan."""
+
+    if not isinstance(user_id, str) or not user_id.isdigit():
+        raise BrowserBackedServiceInputError("user_id must be a decimal string")
+
+    typed_params: Dict[str, Any] = {
+        "user_id": user_id,
+        "mode": "archives_user_home_profile",
+    }
+    request = {
+        "source_name": "archives_user_profile",
+        "action_name": "archives_user_profile",
+        "priority": "P0",
+        "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
+        "typed_params": typed_params,
+        "body_builder_summary": {
+            "service_side_body_builder": True,
+            "method": "GET",
+            "query_fields": ["userId"],
+            "userId_source": "user_id",
+            "optional_bundle_paths": [
+                "/archives/user/home/getUserLabel",
+                "/archives/user/home/getUserShopInfo",
+                "/v3/user/risk/info",
+            ],
+            "raw_profile_body_output": False,
+            "raw_full_body_output": False,
+        },
+    }
+    _validate_action_name(str(request["action_name"]))
+    _validate_typed_params(request["typed_params"])
+    return request
+
+
+def build_archives_related_users_browser_backed_request(
+    user_id: str,
+    relation_type: str = "same_device_registered",
+) -> Dict[str, Any]:
+    """Return the fixed Archives Center same-device related users action plan."""
+
+    if not isinstance(user_id, str) or not user_id.isdigit():
+        raise BrowserBackedServiceInputError("user_id must be a decimal string")
+    if relation_type not in ARCHIVES_RELATED_USER_TYPES:
+        raise BrowserBackedServiceInputError("relation_type must be same_device_registered or same_device_login")
+
+    typed_params: Dict[str, Any] = {
+        "user_id": user_id,
+        "mode": "archives_same_device_related_users",
+        "relation_type": relation_type,
+        "inputType": 0,
+        "type": ARCHIVES_RELATED_USER_TYPES[relation_type],
+    }
+    request = {
+        "source_name": "archives_related_users",
+        "action_name": "archives_related_users",
+        "priority": "P1",
+        "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
+        "typed_params": typed_params,
+        "body_builder_summary": {
+            "service_side_body_builder": True,
+            "method": "POST",
+            "body_fields": ["keyword", "inputType", "type"],
+            "keyword_source": "user_id",
+            "type_mapping": dict(ARCHIVES_RELATED_USER_TYPES),
+            "raw_related_user_profile_output": False,
+            "raw_full_body_output": False,
+        },
+    }
+    _validate_action_name(str(request["action_name"]))
+    _validate_typed_params(request["typed_params"])
+    return request
+
+
 def _typed_params_summary(typed_params: Any) -> Dict[str, Any]:
     if not isinstance(typed_params, Mapping):
         return {}
@@ -683,6 +839,12 @@ def normalize_service_response(
 
     if action_name == "archives_user_analysis":
         _attach_archives_user_analysis_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
+    if action_name == "archives_photo_search":
+        _attach_archives_photo_search_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
+    if action_name == "archives_user_profile":
+        _attach_archives_user_profile_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
+    if action_name == "archives_related_users":
+        _attach_archives_related_users_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
 
     return normalized
 
@@ -727,6 +889,153 @@ def _attach_archives_user_analysis_contract_fields(
         quality["no_data_not_risk_exclusion"] = True
         quality.setdefault("raw_response_full_body_returned", False)
         quality.setdefault("requestParam_extraParam_suppressed", True)
+        normalized["source_quality"] = quality
+    if isinstance(normalized.get("source_card"), Mapping):
+        card = dict(normalized["source_card"])
+        card.setdefault("key_entities", normalized["key_entities"])
+        card.setdefault("missing_fields", normalized["missing_fields"])
+        card.setdefault("next_action", normalized["next_action"])
+        normalized["source_card"] = card
+
+
+def _attach_archives_photo_search_contract_fields(
+    normalized: Dict[str, Any],
+    service_payload: Mapping[str, Any],
+    source_card: Any,
+    source_quality: Any,
+    output_scope: str,
+) -> None:
+    material = {
+        "service_payload": service_payload,
+        "source_card": source_card if isinstance(source_card, Mapping) else {},
+        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
+    }
+    key_entities = service_payload.get("key_entities")
+    if not isinstance(key_entities, Mapping):
+        key_entities = _pick_fields(
+            material,
+            ("user_id", "userId", "reportedIds", "photo_ids", "photoIds", "photo_id", "photoId", "live_id", "liveId"),
+            output_scope,
+        )
+    missing_fields = service_payload.get("missing_fields")
+    if not isinstance(missing_fields, list):
+        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
+    if not isinstance(missing_fields, list):
+        missing_fields = []
+    next_action = service_payload.get("next_action")
+    if not isinstance(next_action, str) or not next_action:
+        next_action = _find_first(material, ("next_action",), output_scope)
+    if not isinstance(next_action, str) or not next_action:
+        next_action = "Use photo search as a content/report signal; cross-check publish detail, audit logs, and account timeline."
+
+    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
+    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
+    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
+    normalized["no_data_not_risk_exclusion"] = True
+    if isinstance(normalized.get("source_quality"), Mapping):
+        quality = dict(normalized["source_quality"])
+        quality.setdefault("archives_action_contract", "archives_photo_search")
+        quality["no_data_not_risk_exclusion"] = True
+        quality.setdefault("raw_response_full_body_returned", False)
+        quality.setdefault("raw_report_text_suppressed", True)
+        normalized["source_quality"] = quality
+    if isinstance(normalized.get("source_card"), Mapping):
+        card = dict(normalized["source_card"])
+        card.setdefault("key_entities", normalized["key_entities"])
+        card.setdefault("missing_fields", normalized["missing_fields"])
+        card.setdefault("next_action", normalized["next_action"])
+        normalized["source_card"] = card
+
+
+def _attach_archives_user_profile_contract_fields(
+    normalized: Dict[str, Any],
+    service_payload: Mapping[str, Any],
+    source_card: Any,
+    source_quality: Any,
+    output_scope: str,
+) -> None:
+    material = {
+        "service_payload": service_payload,
+        "source_card": source_card if isinstance(source_card, Mapping) else {},
+        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
+    }
+    key_entities = service_payload.get("key_entities")
+    if not isinstance(key_entities, Mapping):
+        key_entities = _pick_fields(
+            material,
+            ("user_id", "userId", "uid", "device_id", "deviceId", "did", "ip", "userIpDesc"),
+            output_scope,
+        )
+    missing_fields = service_payload.get("missing_fields")
+    if not isinstance(missing_fields, list):
+        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
+    if not isinstance(missing_fields, list):
+        missing_fields = []
+    next_action = service_payload.get("next_action")
+    if not isinstance(next_action, str) or not next_action:
+        next_action = _find_first(material, ("next_action",), output_scope)
+    if not isinstance(next_action, str) or not next_action:
+        next_action = "Use Archives user profile as account baseline; cross-check action logs and external evidence before judgement."
+
+    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
+    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
+    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
+    normalized["no_data_not_risk_exclusion"] = True
+    if isinstance(normalized.get("source_quality"), Mapping):
+        quality = dict(normalized["source_quality"])
+        quality.setdefault("archives_action_contract", "archives_user_profile")
+        quality["no_data_not_risk_exclusion"] = True
+        quality.setdefault("raw_response_full_body_returned", False)
+        quality.setdefault("raw_profile_body_suppressed", True)
+        normalized["source_quality"] = quality
+    if isinstance(normalized.get("source_card"), Mapping):
+        card = dict(normalized["source_card"])
+        card.setdefault("key_entities", normalized["key_entities"])
+        card.setdefault("missing_fields", normalized["missing_fields"])
+        card.setdefault("next_action", normalized["next_action"])
+        normalized["source_card"] = card
+
+
+def _attach_archives_related_users_contract_fields(
+    normalized: Dict[str, Any],
+    service_payload: Mapping[str, Any],
+    source_card: Any,
+    source_quality: Any,
+    output_scope: str,
+) -> None:
+    material = {
+        "service_payload": service_payload,
+        "source_card": source_card if isinstance(source_card, Mapping) else {},
+        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
+    }
+    key_entities = service_payload.get("key_entities")
+    if not isinstance(key_entities, Mapping):
+        key_entities = _pick_fields(
+            material,
+            ("user_id", "userId", "related_user_ids", "relatedUserIds", "device_id", "deviceId", "did"),
+            output_scope,
+        )
+    missing_fields = service_payload.get("missing_fields")
+    if not isinstance(missing_fields, list):
+        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
+    if not isinstance(missing_fields, list):
+        missing_fields = []
+    next_action = service_payload.get("next_action")
+    if not isinstance(next_action, str) or not next_action:
+        next_action = _find_first(material, ("next_action",), output_scope)
+    if not isinstance(next_action, str) or not next_action:
+        next_action = "Use related users only as expansion candidates; validate each related account before judgement."
+
+    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
+    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
+    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
+    normalized["no_data_not_risk_exclusion"] = True
+    if isinstance(normalized.get("source_quality"), Mapping):
+        quality = dict(normalized["source_quality"])
+        quality.setdefault("archives_action_contract", "archives_related_users")
+        quality["no_data_not_risk_exclusion"] = True
+        quality.setdefault("raw_response_full_body_returned", False)
+        quality.setdefault("raw_related_user_profile_suppressed", True)
         normalized["source_quality"] = quality
     if isinstance(normalized.get("source_card"), Mapping):
         card = dict(normalized["source_card"])
@@ -916,6 +1225,12 @@ def build_business_evidence_summary(
         return _login_logs_summary(result, scope)
     if action == "archives_user_analysis":
         return _archives_user_analysis_summary(result, scope)
+    if action == "archives_photo_search":
+        return _archives_photo_search_summary(result, scope)
+    if action == "archives_user_profile":
+        return _archives_user_profile_summary(result, scope)
+    if action == "archives_related_users":
+        return _archives_related_users_summary(result, scope)
     return _generic_summary(result, scope)
 
 
@@ -1491,6 +1806,133 @@ def _archives_user_analysis_summary(result: Mapping[str, Any], output_scope: str
     return summary
 
 
+def _archives_photo_search_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "archives_photo_search", output_scope)
+    summary["action_contract"] = {
+        "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
+        "same_origin_service_owned": True,
+        "raw_full_body_suppressed": True,
+        "raw_report_text_suppressed": True,
+    }
+    summary["photo_search_summary"] = _pick_fields(
+        material,
+        (
+            "photo_count",
+            "totalCount",
+            "dataList_length",
+            "publish_time_range",
+            "status_summary",
+            "risk_context_summary",
+            "report_reason_summary",
+            "pagination_required",
+            "coverage_limitations",
+        ),
+        output_scope,
+    )
+    summary["key_entities"] = _pick_fields(
+        material,
+        ("user_id", "userId", "reportedIds", "photo_ids", "photoIds", "photo_id", "photoId", "live_id", "liveId"),
+        output_scope,
+    )
+    summary["missing_fields"] = _pick_fields(
+        material,
+        ("missing_fields", "fields_missing", "required_fields_missing"),
+        output_scope,
+    ).get("missing_fields", [])
+    summary["next_action"] = _find_first(material, ("next_action",), output_scope) or (
+        "Cross-check photo report signal with publish detail, audit log, and account timeline before judgement."
+    )
+    summary["boundary"] = (
+        "Archives photo search is a report/content signal source; reports and no_data are not final risk judgement."
+    )
+    return summary
+
+
+def _archives_user_profile_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "archives_user_profile", output_scope)
+    summary["action_contract"] = {
+        "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
+        "same_origin_service_owned": True,
+        "raw_full_body_suppressed": True,
+        "raw_profile_body_suppressed": True,
+    }
+    summary["profile_summary"] = _pick_fields(
+        material,
+        (
+            "account_status_summary",
+            "registration_summary",
+            "profile_state_summary",
+            "label_summary",
+            "risk_info_summary",
+            "shop_status_summary",
+            "punish_status_summary",
+            "coverage_limitations",
+        ),
+        output_scope,
+    )
+    summary["key_entities"] = _pick_fields(
+        material,
+        ("user_id", "userId", "uid", "device_id", "deviceId", "did", "ip", "userIpDesc"),
+        output_scope,
+    )
+    summary["missing_fields"] = _pick_fields(
+        material,
+        ("missing_fields", "fields_missing", "required_fields_missing"),
+        output_scope,
+    ).get("missing_fields", [])
+    summary["next_action"] = _find_first(material, ("next_action",), output_scope) or (
+        "Cross-check profile baseline with user analysis, login logs, and content/report evidence before judgement."
+    )
+    summary["boundary"] = (
+        "Archives user profile is account baseline evidence; profile labels/status are not final risk judgement by themselves."
+    )
+    return summary
+
+
+def _archives_related_users_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "archives_related_users", output_scope)
+    summary["action_contract"] = {
+        "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
+        "same_origin_service_owned": True,
+        "raw_full_body_suppressed": True,
+        "raw_related_user_profile_suppressed": True,
+    }
+    summary["related_users_summary"] = _pick_fields(
+        material,
+        (
+            "related_user_count",
+            "relation_type_summary",
+            "same_device_registered_count",
+            "same_device_login_count",
+            "status_summary",
+            "risk_context_summary",
+            "pagination_required",
+            "coverage_limitations",
+        ),
+        output_scope,
+    )
+    summary["key_entities"] = _pick_fields(
+        material,
+        ("user_id", "userId", "related_user_ids", "relatedUserIds", "device_id", "deviceId", "did"),
+        output_scope,
+    )
+    summary["missing_fields"] = _pick_fields(
+        material,
+        ("missing_fields", "fields_missing", "required_fields_missing"),
+        output_scope,
+    ).get("missing_fields", [])
+    summary["next_action"] = _find_first(material, ("next_action",), output_scope) or (
+        "Treat same-device users as expansion candidates; validate account behavior before judgement."
+    )
+    summary["boundary"] = (
+        "Same-device relation is a clustering clue, not standalone cheating or ATO judgement."
+    )
+    return summary
+
+
 def _generic_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     summary = _base_source_summary(result, "generic_browser_backed_source", output_scope)
     summary["summary"] = "source result normalized; raw body suppressed"
@@ -1948,6 +2390,124 @@ def _fixture_payload(
                 "raw_response_full_body_returned": False,
             }
         )
+    elif action_name == "archives_photo_search":
+        source_card["archives_photo_search_summary"] = {
+            "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
+            "photo_count": 2,
+            "totalCount": 2,
+            "dataList_length": 2,
+            "publish_time_range": {
+                "earliest_publish_time": "2026-05-27 08:00:00",
+                "latest_publish_time": "2026-05-28 12:00:00",
+            },
+            "status_summary": {"visible": 1, "deleted": 1},
+            "risk_context_summary": ["reported_photo_cluster", "publish_time_anchor_present"],
+            "report_reason_summary": {"fraud": 1, "harassment": 1},
+            "pagination_required": False,
+            "coverage_limitations": ["report_signal_not_final_judgement"],
+            "userId": "2871834924",
+            "reportedIds": "2871834924",
+            "photo_ids": ["photo_1001", "photo_1002"],
+            "photoId": "photo_1001",
+            "liveId": "live_2001",
+            "reportText": "raw_report_text_should_not_render",
+            "reportContent": "raw_report_content_should_not_render",
+        }
+        source_card["key_entities"] = {
+            "user_id": "2871834924",
+            "photo_ids": ["photo_1001", "photo_1002"],
+            "live_id": "live_2001",
+        }
+        source_card["missing_fields"] = ["photo_detail_meta"]
+        source_card["next_action"] = "Cross-check reported photo with photo detail, audit log, and account timeline."
+        payload["key_entities"] = dict(source_card["key_entities"])
+        payload["missing_fields"] = list(source_card["missing_fields"])
+        payload["next_action"] = source_card["next_action"]
+        payload["source_quality"].update(
+            {
+                "no_data_not_risk_exclusion": True,
+                "archives_action_contract": "archives_photo_search",
+                "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
+                "raw_report_text_suppressed": True,
+                "raw_response_full_body_returned": False,
+            }
+        )
+    elif action_name == "archives_user_profile":
+        source_card["archives_user_profile_summary"] = {
+            "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
+            "account_status_summary": {"account_state": "normal", "profile_visible": True},
+            "registration_summary": {"register_time_present": True, "register_channel_present": True},
+            "profile_state_summary": {"avatar_present": True, "intro_present": True, "nickname_present": True},
+            "label_summary": {"risk_label_count": 1, "label_groups_observed": ["account_baseline"]},
+            "risk_info_summary": {"risk_info_present": True, "risk_info_count": 1},
+            "shop_status_summary": {"shop_status_present": False},
+            "punish_status_summary": {"user_level_punish_unsupported": True},
+            "coverage_limitations": ["home_info_is_current_state_not_history"],
+            "userId": "2871834924",
+            "deviceId": "ANDROID_profile_device_001",
+            "userIpDesc": "10.20.30.41",
+            "phone_number": "13812345678",
+            "id_card": "110105199001011234",
+            "real_name": "Fixture User",
+            "rawProfileBody": "raw_profile_body_should_not_render",
+        }
+        source_card["key_entities"] = {
+            "user_id": "2871834924",
+            "deviceId": "ANDROID_profile_device_001",
+            "ip": "10.20.30.41",
+        }
+        source_card["missing_fields"] = ["profile_change_history"]
+        source_card["next_action"] = "Cross-check profile baseline with user analysis and content/report evidence."
+        payload["key_entities"] = dict(source_card["key_entities"])
+        payload["missing_fields"] = list(source_card["missing_fields"])
+        payload["next_action"] = source_card["next_action"]
+        payload["source_quality"].update(
+            {
+                "no_data_not_risk_exclusion": True,
+                "archives_action_contract": "archives_user_profile",
+                "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
+                "raw_profile_body_suppressed": True,
+                "raw_response_full_body_returned": False,
+            }
+        )
+    elif action_name == "archives_related_users":
+        source_card["archives_related_users_summary"] = {
+            "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
+            "related_user_count": 3,
+            "relation_type_summary": {
+                "same_device_registered_count": 2,
+                "same_device_login_count": 1,
+            },
+            "same_device_registered_count": 2,
+            "same_device_login_count": 1,
+            "status_summary": {"normal": 2, "restricted": 1},
+            "risk_context_summary": ["same_device_cluster_candidate", "needs_per_account_validation"],
+            "pagination_required": False,
+            "coverage_limitations": ["same_device_relation_not_standalone_judgement"],
+            "userId": "2871834924",
+            "related_user_ids": ["772671837", "3481089791", "2871834924"],
+            "deviceId": "ANDROID_relation_device_001",
+            "rawRelatedUserProfile": "raw_related_user_profile_should_not_render",
+        }
+        source_card["key_entities"] = {
+            "user_id": "2871834924",
+            "related_user_ids": ["772671837", "3481089791", "2871834924"],
+            "deviceId": "ANDROID_relation_device_001",
+        }
+        source_card["missing_fields"] = ["related_user_login_behavior"]
+        source_card["next_action"] = "Validate related users individually before any cluster judgement."
+        payload["key_entities"] = dict(source_card["key_entities"])
+        payload["missing_fields"] = list(source_card["missing_fields"])
+        payload["next_action"] = source_card["next_action"]
+        payload["source_quality"].update(
+            {
+                "no_data_not_risk_exclusion": True,
+                "archives_action_contract": "archives_related_users",
+                "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
+                "raw_related_user_profile_suppressed": True,
+                "raw_response_full_body_returned": False,
+            }
+        )
     return payload
 
 
@@ -2013,6 +2573,110 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert '"extraParam":' not in archives_text
     assert archives_card["sensitive_output"] is False
     results.append(("archives_user_analysis_standard_source_result", "passed"))
+
+    photo_plan = build_archives_photo_search_browser_backed_request(
+        "2871834924",
+        begin_time_ms=1764201600000,
+        end_time_ms=1764288000000,
+    )
+    assert photo_plan["action_name"] == "archives_photo_search"
+    assert photo_plan["fixed_path"] == ARCHIVES_PHOTO_SEARCH_FIXED_PATH
+    assert photo_plan["typed_params"]["user_id"] == "2871834924"
+    assert photo_plan["typed_params"]["matchType"] == "0"
+    assert photo_plan["typed_params"]["sort"] == "0"
+    assert photo_plan["body_builder_summary"]["reportedIds_source"] == "user_id"
+    serialized_photo_plan = json.dumps(photo_plan, ensure_ascii=True)
+    assert "cookie" not in serialized_photo_plan.lower()
+    assert "token" not in serialized_photo_plan.lower()
+    assert "session" not in serialized_photo_plan.lower()
+    assert "/v4/archives/report/photo/search" in serialized_photo_plan
+    assert "http://" not in serialized_photo_plan.lower()
+    assert "https://" not in serialized_photo_plan.lower()
+    results.append(("archives_photo_search_typed_request_plan", "passed"))
+
+    photo_opener = _FakeOpener(_fixture_payload("archives_photo_search", "completed"))
+    client = BrowserBackedServiceClient(opener=photo_opener)
+    photo_result = client.call_action("archives_photo_search", photo_plan["typed_params"])
+    assert photo_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_photo_search"])
+    assert photo_result["source_status"] == "completed"
+    assert photo_result["source_card"] and photo_result["source_quality"]
+    assert photo_result["key_entities"]["photo_ids"] == ["photo_1001", "photo_1002"]
+    assert photo_result["missing_fields"] == ["photo_detail_meta"]
+    assert photo_result["sensitive_output"] is False
+    assert photo_result["no_data_not_risk_exclusion"] is True
+    photo_card = build_partial_evidence_card([photo_result])
+    photo_summary = photo_card["evidence_summary_by_source"]["archives_photo_search"]
+    assert photo_summary["action_contract"]["fixed_path"] == ARCHIVES_PHOTO_SEARCH_FIXED_PATH
+    assert photo_summary["photo_search_summary"]["photo_count"] == 2
+    assert photo_summary["photo_search_summary"]["publish_time_range"]["latest_publish_time"] == "2026-05-28 12:00:00"
+    assert photo_summary["key_entities"]["photo_ids"] == ["photo_1001", "photo_1002"]
+    photo_text = json.dumps(photo_card, ensure_ascii=True)
+    assert "raw_report_text_should_not_render" not in photo_text
+    assert "raw_report_content_should_not_render" not in photo_text
+    assert '"reportText":' not in photo_text
+    assert '"reportContent":' not in photo_text
+    results.append(("archives_photo_search_standard_source_result", "passed"))
+
+    profile_plan = build_archives_user_profile_browser_backed_request("2871834924")
+    assert profile_plan["action_name"] == "archives_user_profile"
+    assert profile_plan["fixed_path"] == ARCHIVES_USER_PROFILE_FIXED_PATH
+    assert profile_plan["typed_params"]["user_id"] == "2871834924"
+    serialized_profile_plan = json.dumps(profile_plan, ensure_ascii=True)
+    assert "cookie" not in serialized_profile_plan.lower()
+    assert "token" not in serialized_profile_plan.lower()
+    assert "session" not in serialized_profile_plan.lower()
+    assert "/archives/user/home/info" in serialized_profile_plan
+    assert "http://" not in serialized_profile_plan.lower()
+    assert "https://" not in serialized_profile_plan.lower()
+    results.append(("archives_user_profile_typed_request_plan", "passed"))
+
+    profile_opener = _FakeOpener(_fixture_payload("archives_user_profile", "completed"))
+    client = BrowserBackedServiceClient(opener=profile_opener)
+    profile_result = client.call_action("archives_user_profile", profile_plan["typed_params"])
+    assert profile_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_user_profile"])
+    assert profile_result["source_status"] == "completed"
+    assert profile_result["key_entities"]["deviceId"] == "ANDROID_profile_device_001"
+    profile_card = build_partial_evidence_card([profile_result])
+    profile_summary = profile_card["evidence_summary_by_source"]["archives_user_profile"]
+    assert profile_summary["action_contract"]["fixed_path"] == ARCHIVES_USER_PROFILE_FIXED_PATH
+    assert profile_summary["profile_summary"]["account_status_summary"]["account_state"] == "normal"
+    profile_text = json.dumps(profile_card, ensure_ascii=True)
+    assert "13812345678" not in profile_text
+    assert "110105199001011234" not in profile_text
+    assert "Fixture User" not in profile_text
+    assert "raw_profile_body_should_not_render" not in profile_text
+    results.append(("archives_user_profile_standard_source_result", "passed"))
+
+    related_plan = build_archives_related_users_browser_backed_request("2871834924", "same_device_login")
+    assert related_plan["action_name"] == "archives_related_users"
+    assert related_plan["fixed_path"] == ARCHIVES_RELATED_USERS_FIXED_PATH
+    assert related_plan["typed_params"]["user_id"] == "2871834924"
+    assert related_plan["typed_params"]["inputType"] == 0
+    assert related_plan["typed_params"]["type"] == 1
+    assert related_plan["body_builder_summary"]["keyword_source"] == "user_id"
+    serialized_related_plan = json.dumps(related_plan, ensure_ascii=True)
+    assert "cookie" not in serialized_related_plan.lower()
+    assert "token" not in serialized_related_plan.lower()
+    assert "session" not in serialized_related_plan.lower()
+    assert "/archives/user/search/device" in serialized_related_plan
+    assert "http://" not in serialized_related_plan.lower()
+    assert "https://" not in serialized_related_plan.lower()
+    results.append(("archives_related_users_typed_request_plan", "passed"))
+
+    related_opener = _FakeOpener(_fixture_payload("archives_related_users", "completed"))
+    client = BrowserBackedServiceClient(opener=related_opener)
+    related_result = client.call_action("archives_related_users", related_plan["typed_params"])
+    assert related_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_related_users"])
+    assert related_result["source_status"] == "completed"
+    assert related_result["key_entities"]["related_user_ids"] == ["772671837", "3481089791", "2871834924"]
+    related_card = build_partial_evidence_card([related_result])
+    related_summary = related_card["evidence_summary_by_source"]["archives_related_users"]
+    assert related_summary["action_contract"]["fixed_path"] == ARCHIVES_RELATED_USERS_FIXED_PATH
+    assert related_summary["related_users_summary"]["related_user_count"] == 3
+    assert related_summary["key_entities"]["related_user_ids"] == ["772671837", "3481089791", "2871834924"]
+    related_text = json.dumps(related_card, ensure_ascii=True)
+    assert "raw_related_user_profile_should_not_render" not in related_text
+    results.append(("archives_related_users_standard_source_result", "passed"))
 
     blocked_payload = _fixture_payload("rcp_snapshot", "blocked", "platform_error")
     client = BrowserBackedServiceClient(opener=_FakeOpener(blocked_payload))

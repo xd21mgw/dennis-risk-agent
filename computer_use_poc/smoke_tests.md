@@ -8136,6 +8136,13 @@
 - expected_runtime_behavior: archives_user_analysis_fixed_action_mock_pass
 - expected_output_boundary: `archives_user_analysis` must be fixed to `POST /actions/archives_user_analysis` and representative platform path `/v3/user/log/coreLogs/fetch`; typed params include `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, `haveParamAuth`, and operation filters; output includes `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, cookie/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
+## 875B. Archives Center browser-backed optional action closure
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-OPTIONAL-ACTIONS-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: archives_optional_fixed_actions_mock_pass
+- expected_output_boundary: `archives_photo_search` must be fixed to `POST /actions/archives_photo_search` and representative platform path `/v4/archives/report/photo/search`; typed params map `user_id` to service-owned `reportedIds` and use `begin/end`, `matchType`, `sort`, `page`, `count`. `archives_user_profile` must be fixed to `POST /actions/archives_user_profile` and service-owned `/archives/user/home/info`; Dennis passes only typed `user_id`. `archives_related_users` must be fixed to `POST /actions/archives_related_users` and service-owned `/archives/user/search/device`; typed params map `relation_type` to validated `type=0/1`. All three actions must output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; internal-review risk entities such as user_id/device_id/IP/photo_id/live_id/related_user_ids may remain raw, while external-share output masks them. Raw full body, raw report text, raw profile body, raw related-user profile, full phone, ID card, real name, cookie/token/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+
 ## 876. Full runtime browser-backed priority
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
