@@ -21,10 +21,11 @@ sources:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/tianshi_strategy_hit_readonly_poc_v2_5_5.md
       - computer_use_poc/tianshi_strategy_hit_routing_v2_5_6.md
+      - computer_use_poc/tianshi_rcp_runner_contract_v1.md
       - computer_use_poc/tianshi_strategy_platform_contracts/02_fast_query_hbase_strategy_hit_contract_v1.md
     runner_file: bin/tianshi_rcp_runner
-    runner_present: false
-    runner_included_in_full_runtime: false
+    runner_present: true
+    runner_included_in_full_runtime: true
     required_inputs:
       - user_id_or_source_id
       - bounded_time_range
@@ -38,27 +39,32 @@ sources:
       - auth_debug
       - manual_cookie_header
     auth_dependency:
-      - future_runner_contract
-      - browser_same_origin_if_explicitly_registered
-    current_status: playbook_ready_not_runner_ready
+      - future_live_readonly_adapter_disabled_by_default
+      - no_auth_dependency_in_dry_run_contract_check
+    current_status: dry_run_contract_ready
     failure_policy:
-      - source_status=tool_gap_when_runner_missing
+      - source_status=dry_run_only_for_local_contract_check
       - explicit_source_failure_must_enter_source_quality
       - no_data_not_risk_exclusion
+      - dry_run_only_not_platform_evidence
     fallback_policy:
       - do_not_silently_skip_explicit_source
       - output_partial_evidence_card
-      - use_query_plan_if_required_fields_missing_or_runner_absent
+      - use_query_plan_if_required_fields_missing_or_live_mode_disabled
     evidence_output_fields:
+      - source_status
+      - records_count
       - hit_policy_summary
+      - policy_code_summary
       - risk_decision_summary
       - event_type_summary
+      - time_range
       - source_quality
       - missing_required_fields
     sensitive_output_policy: redact_source_id_policy_payload_and_operator
     notes:
-      - "Full runtime currently has playbooks/contracts, but no tianshi_rcp_runner binary in the mother repo."
-      - "544963630-style strategy-hit questions should not be globally blocked; report tool_gap/source_quality if runner is unavailable."
+      - "Full runtime has a tianshi_rcp_runner dry-run/contract-check scaffold. It does not perform live readonly verification."
+      - "544963630-style strategy-hit questions should route to the runner and report dry_run_only/source_quality until live readonly mode is explicitly verified."
 
   - source_name: rcp_event_list
     capability: tianshi_eventlist_read
@@ -67,11 +73,12 @@ sources:
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/tianshi_eventlist_api_read_poc_v2_5_9.md
+      - computer_use_poc/tianshi_rcp_runner_contract_v1.md
       - computer_use_poc/platform_access/tianshi_rcp_api_contract_v0_1.yaml
       - computer_use_poc/tianshi_strategy_platform_contracts/03_eventlist_api_read_event_detail_contract_v1.md
     runner_file: bin/tianshi_rcp_runner
-    runner_present: false
-    runner_included_in_full_runtime: false
+    runner_present: true
+    runner_included_in_full_runtime: true
     required_inputs:
       - event_type_or_source_condition
       - bounded_time_range
@@ -87,24 +94,29 @@ sources:
       - raw_response_dump
       - auth_debug
     auth_dependency:
-      - browser_same_origin_or_future_runner_contract
-    current_status: playbook_ready_not_runner_ready
+      - future_live_readonly_adapter_disabled_by_default
+      - no_auth_dependency_in_dry_run_contract_check
+    current_status: dry_run_contract_ready
     failure_policy:
       - missing_upstream_id_enters_source_quality
       - timeout_not_no_data
       - no_data_not_behavior_absence
+      - dry_run_only_not_platform_evidence
     fallback_policy:
-      - output_query_plan_or_partial_evidence_when_runner_missing
+      - output_query_plan_or_partial_evidence_when_live_mode_disabled
       - fastQueryHbase_is_fallback_optional_not_blocker
     evidence_output_fields:
+      - source_status
+      - records_count
       - event_count_summary
       - representative_event_refs
       - policy_code_refs
+      - time_range
       - source_quality
       - failure_layer
     sensitive_output_policy: mask_event_source_policy_request_payload
     notes:
-      - "RCP eventList contract is detailed, but local full_runtime does not include an executable runner."
+      - "RCP eventList now has a tianshi_rcp_runner dry-run/contract-check scaffold. It is not live verified."
 
   - source_name: user_login_log
     capability: login_log_read
@@ -602,9 +614,10 @@ summary:
     - weapon_graphData
     - weapon_riskData
     - archives_center_profile
-  playbook_ready_not_runner_ready:
+  dry_run_contract_ready:
     - tianshi_strategy_hit
     - rcp_event_list
+  playbook_ready_not_runner_ready:
     - track_analysis_profile
     - track_analysis_getDeviceIds
     - track_analysis_getUseDuration
@@ -612,8 +625,6 @@ summary:
     - dataagent_hive_registry
     - batch_risk_clustering
   current_p0_p1_tool_gaps:
-    - tianshi_strategy_hit: missing bin/tianshi_rcp_runner
-    - rcp_event_list: missing bin/tianshi_rcp_runner
     - track_analysis_profile: missing bin/track_analysis_runner
     - track_analysis_getDeviceIds: missing bin/track_analysis_runner
     - track_analysis_getUseDuration: missing bin/track_analysis_runner

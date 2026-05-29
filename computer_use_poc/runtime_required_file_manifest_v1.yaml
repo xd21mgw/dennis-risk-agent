@@ -35,6 +35,9 @@ full_runtime_required:
     - computer_use_poc/sso_session_runner.py
     - bin/archives_profile_runner
     - computer_use_poc/archives_profile_runner.py
+    - bin/tianshi_rcp_runner
+    - computer_use_poc/tianshi_rcp_runner.py
+    - computer_use_poc/tianshi_rcp_runner_contract_v1.md
     - computer_use_poc/failure_triage_card_template_v1.md
     - computer_use_poc/plan_mode_capability_v1.md
     - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md

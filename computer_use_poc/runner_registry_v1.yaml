@@ -137,42 +137,54 @@ runners:
       - strategy_hit_read
       - tianshi_strategy_hit_inventory
       - rcp_event_detail
-    readiness_status: playbook_ready_not_runner_ready
+    readiness_status: dry_run_contract_ready
     allowed_actions:
-      - tianshi.fastQueryHbase
-      - rcp.rcpEventDetail
-      - rcp.featureList
+      - strategy_hit_overview_lookup
+      - rcp_event_list_readonly
     input_schema:
       common:
-        supported:
-          - user_id
-          - time_window
-          - eventId
-          - eventTime
-          - policyCode
+        required:
+          - entity_type
+          - entity_id
+          - from_timestamp
+          - to_timestamp
+        optional:
+          - product
+          - app_name
+          - event_type
+          - time_window_inferred
+          - entity_type_inferred
     output_schema:
+      - source_status
+      - records_count
+      - hit_summary
+      - policy_code_summary
+      - risk_decision_summary
+      - time_range
       - source_card
       - source_quality
       - source_checkpoint_private
       - redaction
+      - redaction_applied
     sensitive_output_policy:
       sensitive_output: false
       redaction_applied: true
     allowed_domains: []
     fixed_endpoints:
       - fastQueryHbase
-      - rcpEventDetail
-      - featureList
+      - eventList
     auth_state_dependency:
-      - future_runner_contract
+      - future_live_readonly_adapter_disabled_by_default
     downstream_source_chaining:
       - event_id_to_rcp_detail
       - policy_code_to_policy_attribution
     boundary:
       - strategy_hit_not_final_judgement
+      - dry_run_only_not_platform_evidence
+      - no_live_mode_without_explicit_future_wiring
     owner: dennis-risk-agent
     validation_case_id:
-      - TIANSHI-RCP-RUNNER-PLANNED-001
+      - TIANSHI-RCP-RUNNER-DRYRUN-CONTRACT-001
 
   - runner_name: track_analysis_runner
     binary_path: bin/track_analysis_runner

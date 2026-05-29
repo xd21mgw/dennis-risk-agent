@@ -7860,8 +7860,8 @@
 
 - test_id: FULL-RUNTIME-TIANSHI-STRATEGY-HIT-STATUS-001
 - input: `source_executability_inventory_v1.yaml` 中 `tianshi_strategy_hit` / `rcp_event_list`。
-- expected_runtime_behavior: tianshi_runner_gap_explicit
-- expected_output_boundary: 状态明确为 `playbook_ready_not_runner_ready`；不得伪装成 executable；runner 缺口输出为 `tool_gap` / `source_quality`，不能输出 no_data 或 low risk。
+- expected_runtime_behavior: tianshi_runner_contract_status_explicit
+- expected_output_boundary: 状态明确为 `dry_run_contract_ready`；不得伪装成 executable / completed；dry-run 输出为 `dry_run_only` / `source_quality`，不能输出 no_data 或 low risk。
 
 ## 839. P0 source status explicit
 
@@ -7911,3 +7911,24 @@
 - input: `python3 computer_use_poc/source_runner_health_check.py`。
 - expected_runtime_behavior: local_contract_check_only
 - expected_output_boundary: 对 `sso_session_runner` 只跑缺必填参数路径，必须 `real_platform_request_executed=false`；对 `archives_profile_runner` 只跑本地 stub，必须 `real_platform_request_executed=false`；输出不得包含 cookie/token/session/header/authorization/password 明文。
+
+## 846. Tianshi RCP runner dry-run contract check
+
+- test_id: FULL-RUNTIME-TIANSHI-RCP-RUNNER-DRYRUN-CONTRACT-001
+- input: `bin/tianshi_rcp_runner --mode contract-check` and dry-run calls for `strategy_hit_overview_lookup` / `rcp_event_list_readonly`。
+- expected_runtime_behavior: tianshi_rcp_runner_dry_run_contract_ready
+- expected_output_boundary: runner 必须 readonly；`real_platform_request_executed=false`；输出包含 `source_status`、`records_count`、`hit_summary`、`policy_code_summary`、`risk_decision_summary`、`time_range`、`source_quality`、`redaction_applied`；不得接受 arbitrary_url，不得读取 `.ks_sso`，不得输出 cookie/token/session/header。
+
+## 847. Tianshi runner present but not live executable
+
+- test_id: FULL-RUNTIME-TIANSHI-RUNNER-PRESENT-NOT-COMPLETED-001
+- input: inventory 中 `tianshi_strategy_hit` / `rcp_event_list` current_status=`dry_run_contract_ready`。
+- expected_runtime_behavior: dry_run_contract_ready_not_completed
+- expected_output_boundary: `dry_run_contract_ready` 只表示 runner 入口和输出 contract 已存在；不得标记为 live executable、source completed、no_data、低风险或无风险；真实 live readonly 验证前不能升级为 executable。
+
+## 848. 544963630 strategy-hit case no longer runner-missing tool gap
+
+- test_id: FULL-RUNTIME-544963630-TIANSHI-RUNNER-NO-TOOL-GAP-001
+- input: `544963630 这个 case 有没有策略命中能辅助判断？`
+- expected_runtime_behavior: explicit_tianshi_source_routes_to_runner_contract
+- expected_output_boundary: full_runtime 应将 `544963630` 推断为 `user_id_candidate`，标 `time_window_inferred=true`，策略命中是 explicit target source；本地未 live 验证时至少进入 `dry_run_contract_ready` / `dry_run_only` / `source_quality`，不得再因为缺 `bin/tianshi_rcp_runner` 返回 `tool_gap`。

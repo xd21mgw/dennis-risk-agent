@@ -11,6 +11,7 @@ status_enum:
   - requires_authorization
   - playbook_ready_not_runner_ready
   - endpoint_verified_not_runner_ready
+  - dry_run_contract_ready
   - candidate_runner
   - planned_or_minimal_stub
 
@@ -127,8 +128,10 @@ sources:
   tianshi_strategy_hit_inventory:
     source_priority: P0-explicit
     readiness_status:
-      - playbook_ready_not_runner_ready
+      - dry_run_contract_ready
+      - playbook_ready
     supported_input:
+      - user_id_candidate
       - source_id
       - event_id
       - device_id
@@ -141,12 +144,17 @@ sources:
       - explicit_target_when_user_asks_policy_hit
       - not_final_risk_judgement
       - missing_required_fields_becomes_source_gap
+      - dry_run_only_not_platform_evidence
+      - live_readonly_not_verified
 
   rcp_event_detail:
     source_priority: conditional
     readiness_status:
-      - playbook_ready_not_runner_ready
+      - dry_run_contract_ready
+      - playbook_ready
     supported_input:
+      - user_id_candidate
+      - source_id
       - event_id
       - event_type
       - query_time
