@@ -31,8 +31,9 @@ full_runtime_required:
     - computer_use_poc/source_readiness_matrix_v1.yaml
     - computer_use_poc/runner_registry_v1.yaml
     - computer_use_poc/bin_runner_contract_v1.md
-    - bin/sso_session_runner
-    - computer_use_poc/sso_session_runner.py
+    - computer_use_poc/browser_backed_service_client.py
+    - computer_use_poc/browser_backed_service_adapter_v1.md
+    - computer_use_poc/platform_access/observation_schema_v0_1.yaml
     - bin/archives_profile_runner
     - computer_use_poc/archives_profile_runner.py
     - bin/tianshi_rcp_runner
@@ -131,6 +132,10 @@ excluded_files:
     - outputs/**
     - .ks_sso/**
     - TOOLS.md
+    - bin/sso_session_runner
+    - computer_use_poc/sso_session_runner.py
+    - "**/sso_session.py"
+    - "**/sso_session_runner.py"
     - "**/old patch/**"
     - "**/local-file-in-chat/**"
     - computer_use_poc/test_fixtures/package_asset_scanner_risky_mock/**

@@ -121,29 +121,30 @@ sources:
   - source_name: user_login_log
     capability: login_log_read
     priority: P0
-    expected_runtime_mode: executable
+    expected_runtime_mode: conditional_executable
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md
       - computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md
-    runner_file: bin/sso_session_runner
+    runner_file: computer_use_poc/browser_backed_service_client.py
     runner_present: true
     runner_included_in_full_runtime: true
     required_inputs:
       - user_id
       - bounded_time_range_optional
     allowed_actions:
-      - login_log.query_user_login_log
+      - login_logs_search
     forbidden_actions:
       - curl_cookie
       - manual_cookie_header
       - auth_bridge_debug
+      - sso_session_runner_execution_in_clean_full_runtime
       - unbounded_history_query
       - raw_token_output
     auth_dependency:
-      - SmartSSOSession_inside_controlled_runner
-      - controlled_cookie_state_fallback_inside_runner
-    current_status: runner_present_not_verified
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
       - auth_failed_or_blocked_enters_source_quality
       - login_log_window_incomplete_when_over_online_window
@@ -160,32 +161,35 @@ sources:
       - source_quality
     sensitive_output_policy: redact_token_session_cookie_header_ip_device_as_required
     notes:
-      - "Runner exists in mother repo and is included in full_runtime. This inventory did not execute it or verify live auth."
+      - "Clean full_runtime excludes the old SSO runner assets."
+      - "Login log smoke uses the browser-backed fixed action when the local service is already running."
 
   - source_name: weapon_graphData
     capability: user_device_resolution
     priority: P0
-    expected_runtime_mode: executable
+    expected_runtime_mode: conditional_executable
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml
       - computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md
       - computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md
-    runner_file: bin/sso_session_runner
+    runner_file: computer_use_poc/browser_backed_service_client.py
     runner_present: true
     runner_included_in_full_runtime: true
     required_inputs:
       - user_id
     allowed_actions:
-      - weapon.graph_data
+      - weapon_inventory
     forbidden_actions:
       - api_graphData_legacy_path
       - arbitrary_url_probe
       - raw_graph_payload_output
       - manual_cookie_header
+      - sso_session_runner_execution_in_clean_full_runtime
     auth_dependency:
-      - SmartSSOSession_inside_controlled_runner
-    current_status: runner_present_not_verified
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
       - graphData_no_data_not_no_device
       - auth_failed_or_timeout_enters_source_quality
@@ -201,7 +205,7 @@ sources:
       - raw_reference_safe_id
     sensitive_output_policy: mask_device_ids_in_user_visible_output
     notes:
-      - "Uses sso_session_runner weapon.graph_data. Inventory did not execute platform request."
+      - "Clean full_runtime uses browser-backed weapon_inventory summary, not the old SSO runner."
 
   - source_name: weapon_riskData
     capability: device_risk_read
@@ -212,22 +216,24 @@ sources:
       - computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml
       - computer_use_poc/device_sdk_foundation_internal_agent_playbook_v2_5_0.md
       - computer_use_poc/device_sdk_api_direct_readonly_playbook_v2_5_2.md
-    runner_file: bin/sso_session_runner
+    runner_file: computer_use_poc/browser_backed_service_client.py
     runner_present: true
     runner_included_in_full_runtime: true
     required_inputs:
       - raw_device_id_reference
     allowed_actions:
-      - weapon.risk_data
+      - weapon_inventory
     forbidden_actions:
       - user_id_as_device_id
       - location_query_by_default
       - raw_device_fingerprint_output
       - arbitrary_url_probe
       - manual_cookie_header
+      - sso_session_runner_execution_in_clean_full_runtime
     auth_dependency:
-      - SmartSSOSession_inside_controlled_runner
-    current_status: runner_present_not_verified
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
       - missing_device_reference_means_not_checked
       - device_risk_not_standalone_judgement
@@ -241,7 +247,7 @@ sources:
       - source_quality
     sensitive_output_policy: redact_device_fingerprint_location_and_raw_payload
     notes:
-      - "Conditional source only after raw device reference is retained in private checkpoint."
+      - "Clean full_runtime uses browser-backed weapon_inventory summary and must not expose raw device references."
 
   - source_name: archives_center_profile
     capability: archives_profile_readonly
@@ -290,31 +296,30 @@ sources:
   - source_name: track_analysis_profile
     capability: track_analysis_activity_profile_api_direct
     priority: P0_or_P1_by_case
-    expected_runtime_mode: conditional
+    expected_runtime_mode: conditional_executable
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/track_analysis_api_direct_contract_current.md
       - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
-    runner_file: bin/track_analysis_runner
-    runner_present: false
-    runner_included_in_full_runtime: false
+    runner_file: computer_use_poc/browser_backed_service_client.py
+    runner_present: true
+    runner_included_in_full_runtime: true
     required_inputs:
       - user_id_or_device_id
       - appName
     allowed_actions:
-      - track_analysis.profile
-      - track_analysis.getLastestDateTime
+      - track_analysis_summary
     forbidden_actions:
       - raw_event_sequence_export
       - behavior_replay_export
       - frontend_activity_as_human_proof
       - arbitrary_url_probe
     auth_dependency:
-      - future_runner_contract
-      - same_origin_if_explicitly_registered
-    current_status: playbook_ready_not_runner_ready
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
-      - endpoint_verified_but_runner_missing_enters_tool_gap
+      - browser_backed_service_unavailable_enters_source_quality
       - no_data_not_risk_exclusion
       - activity_signal_not_final_judgement
     fallback_policy:
@@ -327,33 +332,34 @@ sources:
       - source_quality
     sensitive_output_policy: aggregate_profile_only_redact_user_device
     notes:
-      - "Contracts are included; no track_analysis_runner exists in mother repo."
+      - "Clean full_runtime uses browser-backed track_analysis_summary for profile/getDeviceIds/getUseDuration summary."
 
   - source_name: track_analysis_getDeviceIds
     capability: track_analysis_activity_profile_api_direct
     priority: P0_or_P1_by_case
-    expected_runtime_mode: conditional
+    expected_runtime_mode: conditional_executable
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/track_analysis_api_direct_contract_current.md
       - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
-    runner_file: bin/track_analysis_runner
-    runner_present: false
-    runner_included_in_full_runtime: false
+    runner_file: computer_use_poc/browser_backed_service_client.py
+    runner_present: true
+    runner_included_in_full_runtime: true
     required_inputs:
       - user_id
       - appName
     allowed_actions:
-      - track_analysis.getDeviceIds
+      - track_analysis_summary
     forbidden_actions:
       - unbounded_user_device_export
       - raw_relation_dump
       - arbitrary_url_probe
     auth_dependency:
-      - future_runner_contract
-    current_status: playbook_ready_not_runner_ready
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
-      - runner_missing_enters_tool_gap
+      - browser_backed_service_unavailable_enters_source_quality
       - returned_device_candidates_are_auxiliary_not_final
     fallback_policy:
       - keep_weapon_graphData_as_primary_when_available
@@ -364,35 +370,36 @@ sources:
       - source_quality
     sensitive_output_policy: mask_device_ids_in_user_visible_output
     notes:
-      - "No executable runner found locally."
+      - "Device IDs are summarized through browser-backed track_analysis_summary and must not be output raw."
 
   - source_name: track_analysis_getUseDuration
     capability: track_analysis_activity_profile_api_direct
     priority: P0_or_P1_by_case
-    expected_runtime_mode: conditional
+    expected_runtime_mode: conditional_executable
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/track_analysis_api_direct_contract_current.md
       - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
-    runner_file: bin/track_analysis_runner
-    runner_present: false
-    runner_included_in_full_runtime: false
+    runner_file: computer_use_poc/browser_backed_service_client.py
+    runner_present: true
+    runner_included_in_full_runtime: true
     required_inputs:
       - user_id_or_device_id
       - appName
       - bounded_date_range
     allowed_actions:
-      - track_analysis.getUseDuration
+      - track_analysis_summary
     forbidden_actions:
       - raw_behavior_sequence_export
       - frontend_duration_as_human_proof
       - arbitrary_url_probe
     auth_dependency:
-      - future_runner_contract
-    current_status: playbook_ready_not_runner_ready
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
     failure_policy:
       - zero_duration_not_no_risk
-      - runner_missing_enters_tool_gap
+      - browser_backed_service_unavailable_enters_source_quality
       - no_data_not_risk_exclusion
     fallback_policy:
       - output_source_gap_or_query_plan
@@ -403,7 +410,72 @@ sources:
       - source_quality
     sensitive_output_policy: aggregate_duration_only
     notes:
-      - "No executable runner found locally."
+      - "Use duration is summarized through browser-backed track_analysis_summary."
+
+  - source_name: browser_backed_service_adapter
+    capability: multi_evidence_orchestration
+    priority: P0_or_P1_by_case
+    expected_runtime_mode: conditional_executable
+    playbook_file:
+      - computer_use_poc/browser_backed_service_adapter_v1.md
+      - computer_use_poc/platform_access/observation_schema_v0_1.yaml
+      - computer_use_poc/source_orchestration_plan_v1.yaml
+    runner_file: computer_use_poc/browser_backed_service_client.py
+    runner_present: true
+    runner_included_in_full_runtime: true
+    live_service_required: true
+    live_verification_required: true
+    covered_actions:
+      - track_analysis_summary
+      - rcp_snapshot
+      - weapon_inventory
+      - login_logs_search
+    required_inputs:
+      - fixed_action
+      - bounded_params
+      - local_service_base_url
+    allowed_actions:
+      - call_fixed_action_when_local_service_running
+      - normalize_source_card
+      - build_source_completion_matrix
+      - build_redacted_evidence_card
+      - run_self_test_without_service
+    forbidden_actions:
+      - arbitrary_url
+      - arbitrary_header
+      - raw_cookie
+      - raw_token
+      - raw_session
+      - raw_source_body_output
+      - chrome_profile_read
+      - sso_runner_debug
+      - direct_platform_call
+      - DataAgent_Hive_call
+    auth_dependency:
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
+    failure_policy:
+      - connection_refused_timeout_non_json_enters_source_quality
+      - source_status_preserved_completed_no_data_blocked_auth_failed_timeout_parse_error_invalid_parameter
+      - no_data_not_risk_exclusion
+      - sensitive_output_true_is_sensitive_output_violation
+    fallback_policy:
+      - do_not_directly_call_platform_when_service_unavailable
+      - output_partial_evidence_card_and_source_quality
+      - keep_failed_source_in_source_completion_matrix
+    evidence_output_fields:
+      - source_completion_matrix
+      - source_quality
+      - evidence_summary_by_source
+      - evidence_boundary
+      - missing_evidence
+      - next_action
+    sensitive_output_policy: sensitive_output_must_be_false
+    notes:
+      - "Full runtime includes the Dennis browser-backed service client and adapter contract."
+      - "The local browser-backed service is not started by full_runtime and must be provided separately for live smoke."
+      - "The client self-test is offline and does not access the platform."
 
   - source_name: dataagent_hive_registry
     capability: batch_risk_clustering_analysis
@@ -651,23 +723,23 @@ summary:
     - question_collection_feedback_writer
     - source_orchestration_validator
     - runtime_validation_scripts
-  runner_present_not_verified:
+  adapter_dry_run_ready:
+    - browser_backed_service_adapter
     - user_login_log
     - weapon_graphData
     - weapon_riskData
+    - track_analysis_profile
+    - track_analysis_getDeviceIds
+    - track_analysis_getUseDuration
+  runner_present_not_verified:
     - archives_center_profile
   dry_run_contract_ready:
     - tianshi_strategy_hit
     - rcp_event_list
-  playbook_ready_not_runner_ready:
-    - track_analysis_profile
-    - track_analysis_getDeviceIds
-    - track_analysis_getUseDuration
+  playbook_ready_not_runner_ready: []
   plan_only:
     - batch_risk_clustering
   cloud_skill_verified_contract:
     - dataagent_hive_registry
   current_p0_p1_tool_gaps:
-    - track_analysis_profile: missing bin/track_analysis_runner
-    - track_analysis_getDeviceIds: missing bin/track_analysis_runner
-    - track_analysis_getUseDuration: missing bin/track_analysis_runner
+    - direct_sso_runner_excluded_from_clean_full_runtime: use_browser_backed_service_adapter_for_local_smoke
