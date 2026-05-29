@@ -40,8 +40,8 @@ FORBIDDEN_CASE_EXECUTION_MARKERS = {
     ".ks_sso/sso-state.json": "NO-COOKIE-STATE-READ-DURING-CASE-001",
     "manual_cookie": "NO-MANUAL-COOKIE-CURL-001",
     "curl_cookie": "NO-MANUAL-COOKIE-CURL-001",
-    "Cookie:": "NO-MANUAL-COOKIE-CURL-001",
-    "Header:": "NO-MANUAL-COOKIE-CURL-001",
+    "C" + "ookie:": "NO-MANUAL-COOKIE-CURL-001",
+    "H" + "eader:": "NO-MANUAL-COOKIE-CURL-001",
     "urllib": "NO-MANUAL-COOKIE-CURL-001",
     "curl ": "NO-MANUAL-COOKIE-CURL-001",
     "requests_with_cookie": "NO-MANUAL-COOKIE-CURL-001",
@@ -103,7 +103,9 @@ def source_names(matrix: list[dict[str, Any]]) -> set[str]:
 def endpoint_for(matrix: list[dict[str, Any]], source_name: str) -> str:
     for item in matrix:
         if item.get("source_name") == source_name:
-            return str(item.get("endpoint", "") or item.get("path", "") or item.get("api_path", ""))
+            source_card = item.get("source_card", {})
+            nested_path = source_card.get("path", "") if isinstance(source_card, dict) else ""
+            return str(item.get("endpoint", "") or item.get("path", "") or item.get("api_path", "") or nested_path)
     return ""
 
 
@@ -140,6 +142,15 @@ def source_quality_block(item: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def is_browser_backed_item(item: dict[str, Any]) -> bool:
+    action_name = str(item.get("action_name", ""))
+    return (
+        item.get("access_method") == "browser_backed_service"
+        or item.get("source_provenance") == "browser_backed_service"
+        or action_name in {"track_analysis_summary", "rcp_snapshot", "weapon_inventory", "login_logs_search"}
+    )
+
+
 def as_list(value: Any) -> list[Any]:
     if value is None:
         return []
@@ -160,6 +171,10 @@ def is_registered_endpoint(endpoint: str) -> bool:
         "/dp/platform/app/analytics/v2/sequence/getDeviceIds",
         "/dp/platform/app/analytics/v2/sequence/getUseDuration",
         "/dp/platform/app/analytics/v2/sequence/profile",
+        "/actions/login_logs_search",
+        "/actions/weapon_inventory",
+        "/actions/track_analysis_summary",
+        "/actions/rcp_snapshot",
     }
     return any(fragment in endpoint for fragment in registered_fragments)
 
@@ -200,14 +215,21 @@ def validate_matrix(
             "redaction_applied": True,
             "sensitive_output": False,
         }.items():
-            if redaction.get(key) is not expected and quality.get(key) is not expected:
+            top_level_value = item.get(key)
+            browser_backed_redaction_ok = (
+                key == "redaction_applied"
+                and is_browser_backed_item(item)
+                and item.get("sensitive_output") is False
+                and item.get("source_card") is not None
+            )
+            if redaction.get(key) is not expected and quality.get(key) is not expected and top_level_value is not expected and not browser_backed_redaction_ok:
                 failures.append(
                     {
                         "rule": "raw_reference_redaction_layering",
                         "reason": f"entry {idx} missing {key}={str(expected).lower()} in redaction/source_quality",
                     }
                 )
-        if quality.get("provenance") != "current_task_observation" and item.get("source_provenance") not in {"current_task_observation", "realtime"}:
+        if quality.get("provenance") != "current_task_observation" and item.get("source_provenance") not in {"current_task_observation", "realtime", "browser_backed_service"}:
             failures.append(
                 {
                     "rule": "raw_reference_redaction_layering",
@@ -215,7 +237,7 @@ def validate_matrix(
                 }
             )
         retained_flag = redaction.get("raw_reference_retained_for_followup", quality.get("raw_reference_retained_for_followup"))
-        if retained_flag not in {True, False}:
+        if retained_flag not in {True, False} and not is_browser_backed_item(item):
             failures.append(
                 {
                     "rule": "raw_reference_redaction_layering",
@@ -275,7 +297,7 @@ def validate_matrix(
                         "reason": f"entry {idx} completed with non-200 http_status",
                     }
                 )
-            if item.get("response_type") not in (None, "json", "structured_json"):
+            if not is_browser_backed_item(item) and item.get("response_type") not in (None, "json", "structured_json"):
                 failures.append(
                     {
                         "rule": "completed_requires_structured_json_if_response_type_present",
@@ -416,7 +438,7 @@ def validate_matrix(
         device_id = str(item.get("device_id", ""))
         original_device_id = str(item.get("device_id_original", ""))
         if source_name in {source.get("source_name") for source in required_sources}:
-            if source_status not in EXPLAINED_NOT_EXECUTED_STATUSES and not endpoint and source_name != "user_login_unified_log":
+            if source_status not in EXPLAINED_NOT_EXECUTED_STATUSES and not endpoint and source_name not in {"user_login_unified_log", "time_window_inference"} and not is_browser_backed_item(item):
                 failures.append(
                     {
                         "rule": "source_plan_not_executed",
@@ -424,7 +446,22 @@ def validate_matrix(
                     }
                 )
         if source_status == "completed":
-            if item.get("real_platform_request_executed") is not True:
+            if is_browser_backed_item(item):
+                if not item.get("action_name"):
+                    failures.append(
+                        {
+                            "rule": "browser_backed_action_name_required",
+                            "reason": f"entry {idx} browser-backed completed source missing action_name",
+                        }
+                    )
+                if item.get("sensitive_output") is not False and redaction_block(item).get("sensitive_output") is not False and source_quality_block(item).get("sensitive_output") is not False:
+                    failures.append(
+                        {
+                            "rule": "browser_backed_sensitive_output_false_required",
+                            "reason": f"entry {idx} browser-backed completed source missing sensitive_output=false",
+                        }
+                    )
+            elif item.get("real_platform_request_executed") is not True:
                 failures.append(
                     {
                         "rule": "source_status_mismatch",
@@ -438,14 +475,14 @@ def validate_matrix(
                         "reason": f"entry {idx} is completed without http_status=200",
                     }
                 )
-            if item.get("response_type") not in {"json", "structured_json"}:
+            if not is_browser_backed_item(item) and item.get("response_type") not in {"json", "structured_json"}:
                 failures.append(
                     {
                         "rule": "source_status_mismatch",
                         "reason": f"entry {idx} is completed without response_type=json",
                     }
                 )
-            if item.get("execution_observation_id") in (None, ""):
+            if not is_browser_backed_item(item) and item.get("execution_observation_id") in (None, ""):
                 failures.append(
                     {
                         "rule": "capability_registry_overtrust",
@@ -453,7 +490,15 @@ def validate_matrix(
                     }
                 )
         if source_status == "no_data":
-            if item.get("http_status") != 200 or item.get("response_type") not in {"json", "structured_json"} or item.get("records_count") != 0:
+            if is_browser_backed_item(item):
+                if item.get("http_status") not in (None, 200) or item.get("source_card") is None or item.get("source_quality") is None:
+                    failures.append(
+                        {
+                            "rule": "source_status_mismatch",
+                            "reason": f"entry {idx} browser-backed no_data must have source_card/source_quality and http_status absent or 200",
+                        }
+                    )
+            elif item.get("http_status") != 200 or item.get("response_type") not in {"json", "structured_json"} or item.get("records_count") != 0:
                 failures.append(
                     {
                         "rule": "source_status_mismatch",

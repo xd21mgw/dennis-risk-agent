@@ -2764,3 +2764,57 @@ platform_access_execution_v0_1_regression:
       - no_cookie_token_session_header_read
       - no_no_data_auth_failed_blocked_timeout_as_no_risk_counterevidence
     pass_fail_criteria: "离线 dry-run 只消费模拟标准结构；失败 source 必须进入 source_completion_matrix 和 partial evidence card，不触发浏览器/认证调试，不当无风险反证。"
+  - case_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
+    input: "clean full_runtime 单用户账号安全 evidence card，user_id 已给出。"
+    expected_output_boundary:
+      - browser_backed_service_primary_chain
+      - login_logs_search
+      - weapon_inventory
+      - track_analysis_summary
+      - rcp_snapshot_conditional
+      - archives_stub_optional_source_gap
+      - source_completion_matrix_contains_all_sources
+      - final_risk_judgement_made_false
+    pass_fail_criteria: "账号安全单用户默认优先走 browser-backed fixed actions；Archives stub 只能作为 source_gap，不阻塞主链路；不做最终风险定性。"
+  - case_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
+    input: "track_analysis_summary 被用于账号安全单用户 evidence card。"
+    expected_output_boundary:
+      - action_name_track_analysis_summary
+      - typed_params_mode_account_security_bundle
+      - sub_interface_profile_required
+      - sub_interface_getUseDuration_required
+      - sub_interface_getDeviceIds_required
+      - user_id_appName_only_is_insufficient
+      - activity_signal_not_final_judgement
+    pass_fail_criteria: "Track Analysis 不能只传 user_id/appName；必须传 account_security_bundle 或等价 profile/getUseDuration/getDeviceIds sub_interface 覆盖。"
+  - case_id: ARCHIVES-STUB-DOES-NOT-BLOCK-BROWSER-BACKED-SOURCES-001
+    input: "archives_profile_runner 存在但返回 planned_or_minimal_stub / source_gap。"
+    expected_output_boundary:
+      - archives_profile_readonly_source_gap
+      - source_quality_records_stub
+      - continue_login_logs_search
+      - continue_weapon_inventory
+      - continue_track_analysis_summary
+      - no_auth_repair
+      - no_low_risk_from_source_gap
+    pass_fail_criteria: "Archives stub 进入 source_completion_matrix 的 blocked/tool_gap/source_gap，不阻塞 browser-backed P0/P1 source。"
+  - case_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
+    input: "login_logs_search 默认 7d 返回 parse_error。"
+    expected_output_boundary:
+      - login_logs_7d_parse_error_preserved
+      - login_logs_24h_fallback_attempted
+      - fallback_result_added_to_source_completion_matrix
+      - no_data_not_risk_exclusion
+      - parse_error_not_no_risk
+      - no_auth_debug
+    pass_fail_criteria: "7d parse_error 可自动追加 24h 小窗口 fallback，但 7d parse_error 必须保留在 source_quality；24h no_data 不能当无风险反证。"
+  - case_id: NO-OLD-RUNNER-ATTEMPT-IN-CLEAN-FULL-RUNTIME-001
+    input: "clean full_runtime 中 bin/sso_session_runner 和 bin/track_analysis_runner 不存在。"
+    expected_output_boundary:
+      - no_sso_session_runner_attempt
+      - no_track_analysis_runner_attempt
+      - browser_backed_service_client_used
+      - no_SmartSSOSession_debug
+      - no_cookie_token_session_header_read
+      - missing_legacy_runner_not_runtime_failure
+    pass_fail_criteria: "缺旧 runner 时不得先尝试旧 runner；账号安全主链路应通过 browser_backed_service_client 固定 action 构造 source result。"

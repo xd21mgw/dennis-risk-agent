@@ -8121,3 +8121,38 @@
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: fixture_only_display_layer_enhancement
 - expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` / raw deviceId must not appear; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.
+
+## 876. Full runtime browser-backed priority
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
+- input: clean `outputs/full_runtime` account-security single-user evidence card。
+- expected_runtime_behavior: browser_backed_fixed_actions_first
+- expected_output_boundary: source plan 优先 `login_logs_search`、`weapon_inventory`、`track_analysis_summary`，`rcp_snapshot` 仅在策略上下文可用或用户显式问策略时触发；`archives_profile_runner` stub 只进入 optional/source_gap；所有 source 进入 `source_completion_matrix`；`final_risk_judgement_made=false`。
+
+## 877. Track Analysis account-security bundle
+
+- test_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
+- input: `track_analysis_summary` 用于账号安全单用户 evidence card。
+- expected_runtime_behavior: account_security_bundle_typed_params_required
+- expected_output_boundary: typed params 必须包含 `mode=account_security_bundle` 和 `sub_interfaces=[profile,getUseDuration,getDeviceIds]`，或等价三项 sub_interface 调用；只传 `user_id/appName` 不满足账号安全 bundle；活跃信号不得单独最终定性。
+
+## 878. Archives stub does not block browser-backed sources
+
+- test_id: ARCHIVES-STUB-DOES-NOT-BLOCK-BROWSER-BACKED-SOURCES-001
+- input: `archives_profile_runner` 返回 `planned_or_minimal_stub` / `source_gap`。
+- expected_runtime_behavior: archives_stub_source_gap_non_blocking
+- expected_output_boundary: Archives source gap 写入 `source_quality` 和 `source_completion_matrix`；继续执行/保留 browser-backed 登录日志、Weapon、Track Analysis sources；不得认证修复；source_gap 不得作为无风险反证。
+
+## 879. Login logs 7d parse error 24h fallback
+
+- test_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
+- input: `login_logs_search` 默认 7 天窗口返回 `parse_error`。
+- expected_runtime_behavior: preserve_primary_parse_error_and_add_small_window_fallback
+- expected_output_boundary: 7d `parse_error` 保留到 `source_quality`；自动追加 24h 小窗口 fallback source；fallback `no_data` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
+
+## 880. No old runner attempt in clean full_runtime
+
+- test_id: NO-OLD-RUNNER-ATTEMPT-IN-CLEAN-FULL-RUNTIME-001
+- input: clean full_runtime 缺少 `bin/sso_session_runner` / `bin/track_analysis_runner`。
+- expected_runtime_behavior: no_legacy_runner_first_attempt
+- expected_output_boundary: 不尝试旧 runner，不 debug `SmartSSOSession` / SSO bridge；账号安全主链路通过 `computer_use_poc/browser_backed_service_client.py` 固定 action 构造 source result；缺旧 runner 不作为 runtime failure。

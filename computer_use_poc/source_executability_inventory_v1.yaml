@@ -150,6 +150,8 @@ sources:
       - login_log_window_incomplete_when_over_online_window
       - no_data_not_risk_exclusion
     fallback_policy:
+      - default_last_7d_parse_error_auto_fallback_to_24h_small_window
+      - preserve_7d_parse_error_in_source_quality_when_24h_fallback_runs
       - long_window_requires_DataAgent_Hive_query_plan_with_per_call_authorization
       - main_agent_must_not_take_over
     evidence_output_fields:
@@ -163,6 +165,7 @@ sources:
     notes:
       - "Clean full_runtime excludes the old SSO runner assets."
       - "Login log smoke uses the browser-backed fixed action when the local service is already running."
+      - "bin/sso_session_runner is not expected in clean full_runtime; absence must not trigger an old runner attempt."
 
   - source_name: weapon_graphData
     capability: user_device_resolution
@@ -178,6 +181,7 @@ sources:
     runner_included_in_full_runtime: true
     required_inputs:
       - user_id
+      - mode=account_security_user_device_graph_with_conditional_riskData
     allowed_actions:
       - weapon_inventory
     forbidden_actions:
@@ -194,6 +198,7 @@ sources:
       - graphData_no_data_not_no_device
       - auth_failed_or_timeout_enters_source_quality
       - raw_device_id_private_checkpoint_only
+      - riskData_missing_raw_ANDROID_or_IOS_device_checkpoint_means_not_checked
     fallback_policy:
       - use_track_analysis_device_candidates_only_if_available_and_mark_cross_source_device_id
       - do_not_replace_apiv2_with_unregistered_paths
@@ -206,11 +211,12 @@ sources:
     sensitive_output_policy: mask_device_ids_in_user_visible_output
     notes:
       - "Clean full_runtime uses browser-backed weapon_inventory summary, not the old SSO runner."
+      - "The same fixed action may chain graphData to riskData only when graphData retained a raw ANDROID_/IOS_ device id safe handle."
 
   - source_name: weapon_riskData
     capability: device_risk_read
     priority: P0-conditional
-    expected_runtime_mode: conditional
+    expected_runtime_mode: optional_source_gap_when_stub
     playbook_file:
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml
@@ -274,7 +280,7 @@ sources:
     auth_dependency:
       - archives_auth_state_if_future_connected
       - browser_same_origin_if_auth_ready
-    current_status: runner_present_not_verified
+    current_status: optional_stub_source_gap_not_main_chain
     failure_policy:
       - stub_returns_blocked_source_gap_until_connected
       - auth_failed_or_blocked_enters_source_quality
@@ -282,6 +288,7 @@ sources:
     fallback_policy:
       - partial_evidence_card_on_source_gap
       - no_inline_auth_repair
+      - do_not_block_browser_backed_login_weapon_track_sources
     evidence_output_fields:
       - account_profile_summary
       - account_state_summary
@@ -292,6 +299,60 @@ sources:
     sensitive_output_policy: redact_personal_info_user_device_ip
     notes:
       - "Runner exists and is included, but mother implementation is a minimal stub returning source_gap/blocker, not live platform data."
+      - "In clean full_runtime single-user account-security evidence cards, Archives must enter source_completion_matrix as optional source_gap when still stubbed; it must not be attempted as the primary chain or block browser-backed sources."
+
+  - source_name: track_analysis_account_security_bundle
+    capability: track_analysis_activity_profile_api_direct
+    priority: P0_or_P1_by_case
+    expected_runtime_mode: conditional_executable
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/track_analysis_api_direct_contract_current.md
+      - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
+      - computer_use_poc/browser_backed_service_adapter_v1.md
+    runner_file: computer_use_poc/browser_backed_service_client.py
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - user_id
+      - appName=KUAISHOU
+      - mode=account_security_bundle
+      - sub_interfaces=profile,getUseDuration,getDeviceIds
+    allowed_actions:
+      - track_analysis_summary
+    forbidden_actions:
+      - track_analysis_runner_execution_in_clean_full_runtime
+      - raw_event_sequence_export
+      - behavior_replay_export
+      - frontend_activity_as_human_proof
+      - arbitrary_url_probe
+      - SPA_DOM_default
+    auth_dependency:
+      - browser_backed_service_handles_auth_boundary
+      - dennis_client_must_not_read_auth_material
+    current_status: adapter_dry_run_ready
+    failure_policy:
+      - missing_sub_interface_enters_source_quality
+      - partial_sub_interface_result_enters_source_completion_matrix
+      - browser_backed_service_unavailable_enters_source_quality
+      - no_data_not_risk_exclusion
+      - activity_signal_not_final_judgement
+    fallback_policy:
+      - output_source_gap_or_partial_evidence_card
+      - do_not_try_missing_bin_track_analysis_runner
+      - do_not_default_to_SPA_DOM
+    evidence_output_fields:
+      - profile_card
+      - device_ids_summary
+      - daily_duration_rows_summary
+      - event_day_activity_alignment
+      - sub_interfaces_completed
+      - sub_interfaces_missing
+      - source_quality
+    sensitive_output_policy: aggregate_profile_duration_and_device_counts_only
+    notes:
+      - "Account-security single-user evidence cards must call track_analysis_summary with account_security_bundle mode or equivalent sub_interface coverage for profile/getUseDuration/getDeviceIds."
+      - "Calling track_analysis_summary with only user_id/appName is insufficient for the account-security bundle."
 
   - source_name: track_analysis_profile
     capability: track_analysis_activity_profile_api_direct
@@ -307,6 +368,7 @@ sources:
     required_inputs:
       - user_id_or_device_id
       - appName
+      - sub_interface=profile_or_mode=account_security_bundle
     allowed_actions:
       - track_analysis_summary
     forbidden_actions:
@@ -333,6 +395,7 @@ sources:
     sensitive_output_policy: aggregate_profile_only_redact_user_device
     notes:
       - "Clean full_runtime uses browser-backed track_analysis_summary for profile/getDeviceIds/getUseDuration summary."
+      - "bin/track_analysis_runner is not expected in clean full_runtime; absence must not trigger an old runner attempt."
 
   - source_name: track_analysis_getDeviceIds
     capability: track_analysis_activity_profile_api_direct
@@ -348,6 +411,7 @@ sources:
     required_inputs:
       - user_id
       - appName
+      - sub_interface=getDeviceIds_or_mode=account_security_bundle
     allowed_actions:
       - track_analysis_summary
     forbidden_actions:
@@ -387,6 +451,7 @@ sources:
       - user_id_or_device_id
       - appName
       - bounded_date_range
+      - sub_interface=getUseDuration_or_mode=account_security_bundle
     allowed_actions:
       - track_analysis_summary
     forbidden_actions:
@@ -430,6 +495,12 @@ sources:
       - rcp_snapshot
       - weapon_inventory
       - login_logs_search
+    default_single_user_account_security_sequence:
+      - login_logs_search:last_7d_with_24h_parse_error_fallback
+      - weapon_inventory:user_graph_with_conditional_ANDROID_IOS_riskData
+      - track_analysis_summary:account_security_bundle_profile_getUseDuration_getDeviceIds
+      - rcp_snapshot:conditional_when_strategy_context_available
+      - archives_profile_readonly:optional_source_gap_when_stub
     required_inputs:
       - fixed_action
       - bounded_params

@@ -69,6 +69,72 @@ platform_access_observation:
 
 Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`。如果 plan 合格但 execution 失败，先查 config/runtime、runner/safeBin/auth 和 source_orchestration；如果 execution 成功但结论差，先查 evidence_reasoning 和 output_contract。
 
+### Browser-Backed Service Result Output
+
+`browser_backed_service` 是 Dennis 的允许访问方式之一，但浏览器和登录态只属于本地 browser-backed API service。Dennis 只调用固定 action endpoint，接收标准 source result，并把失败写入 source completion matrix。
+
+```yaml
+browser_backed_source_result:
+  source_name:
+  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_summary
+  typed_params_summary:
+    mode:
+    sub_interfaces: []
+    fallback_window:
+  source_status: completed | blocked | auth_failed | invalid_parameter | parse_error | timeout | platform_partial_available
+  failure_layer: no_failure | same_origin_context | auth_session | network | platform_contract | parameter_contract | parser | timeout | runner_invocation
+  error_type:
+  latency_ms:
+  source_card:
+  source_quality:
+  sensitive_output: false
+  source_provenance: browser_backed_service
+```
+
+`blocked` / `auth_failed` / `network_error` / `platform_error` 是 source_quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
+
+账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
+
+```yaml
+account_security_browser_backed_source_plan:
+  - source_name: user_login_unified_log
+    access_method: browser_backed_service
+    action_name: login_logs_search
+    typed_params:
+      user_id: "{user_id}"
+      window: last_7d
+      recallSource: "2,0,1,3"
+    fallback: 7d_parse_error_auto_add_24h_fallback_and_preserve_primary_source_quality
+  - source_name: weapon_user_to_device_graph
+    access_method: browser_backed_service
+    action_name: weapon_inventory
+    typed_params:
+      user_id: "{user_id}"
+      mode: account_security_user_device_graph_with_conditional_riskData
+      riskData_trigger_device_prefix: [ANDROID_, IOS_]
+    fallback: raw_device_id_checkpoint_missing_means_riskData_not_checked
+  - source_name: track_analysis_account_security_bundle
+    access_method: browser_backed_service
+    action_name: track_analysis_summary
+    typed_params:
+      user_id: "{user_id}"
+      appName: KUAISHOU
+      mode: account_security_bundle
+      sub_interfaces: [profile, getUseDuration, getDeviceIds]
+    fallback: sub_interface_failures_enter_source_completion_matrix
+  - source_name: rcp_strategy_hit_entry
+    access_method: browser_backed_service
+    action_name: rcp_snapshot
+    trigger_condition: source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit
+  - source_name: archives_profile_readonly
+    access_method: optional_controlled_runner
+    runner_name: archives_profile_runner
+    trigger_condition: live_runner_connected
+    fallback: stub_source_gap_does_not_block_browser_backed_sources
+```
+
+`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按固定 action 输出 source card。所有 completed / no_data / parse_error / source_gap source 都必须进入 `source_completion_matrix`，且 evidence card 默认 `final_risk_judgement_made=false`。
+
 ### ATO Source Priority / Access Method Output
 
 证据价值决定 `source_priority`，执行方式决定 `access_method`。API direct first 是同等证据价值下的低成本 / 稳定采集路径优先，不是 source priority 的唯一判定标准。
@@ -80,7 +146,7 @@ source_plan_item:
   source_name:
   source_priority: P0 | P0-explicit | P0-conditional | P1 | P2 | conditional
   trigger_condition:
-  access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized
+  access_method: api_direct | controlled_runner | browser_backed_service | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized
   purpose:
   fallback:
   source_quality_required: true
@@ -93,9 +159,9 @@ source_plan:
   - source_name: 档案中心用户分析
     source_priority: P0
     trigger_condition: ATO 单案默认需要
-    access_method: api_direct_if_available / controlled_browser_if_cookie_activation_required
+    access_method: optional_controlled_runner_when_live_connected
     purpose: 账号状态、注册/实名/基础画像、账号历史风险、当前状态
-    fallback: auth_failed/blocked 进入 source_quality，不得静默跳过
+    fallback: stub/source_gap/auth_failed/blocked 进入 source_quality，不得静默跳过；clean full_runtime 中不阻塞 browser-backed 主链路
     readiness_status: planned_or_minimal_stub
     runner_name: archives_profile_runner
     output_if_completed:
@@ -127,15 +193,16 @@ source_plan:
   - source_name: Weapon graphData
     source_priority: P0
     trigger_condition: ATO 单案默认需要
-    access_method: controlled_runner
+    access_method: browser_backed_service
+    action_name: weapon_inventory
     purpose: 用户-设备关系、异常设备候选
     fallback: no_data 不得作为无设备反证
   - source_name: Weapon riskData
     source_priority: P0-conditional
     trigger_condition: graphData/login_log/发布链路/track-analysis 发现可疑 deviceId
-    access_method: controlled_runner
+    access_method: browser_backed_service via weapon_inventory
     purpose: 查询设备风险标签
-    fallback: missing_device_reference 时标记未覆盖
+    fallback: graphData 未保留 raw ANDROID_/IOS_ device_id safe handle 时标记 `missing_required_fields` / `not_checked`
     output_if_completed:
       risk_label_summary:
         label_count:
@@ -156,6 +223,17 @@ source_plan:
       - final answer / evidence card / run log 不输出完整 labelInfo 原文
       - labelInfo 为空时标 `risk_label_summary.empty=true` 和 `no_risk_label_not_no_risk_proof=true`
       - 设备风险标签是设备侧证据，不单独定性 ATO / 垃圾注册 / 群控
+  - source_name: Track Analysis 账号安全 bundle
+    source_priority: P0_or_P1_by_case
+    trigger_condition: ATO / 账号安全单用户默认需要
+    access_method: browser_backed_service
+    action_name: track_analysis_summary
+    typed_params:
+      mode: account_security_bundle
+      appName: KUAISHOU
+      sub_interfaces: [profile, getUseDuration, getDeviceIds]
+    purpose: 画像、设备列表、使用时长和事件日活跃对齐补证
+    fallback: 任一 sub_interface no_data/blocked/parse_error 进入 source_quality，不做无风险反证
 ```
 
 ATO 输出必须包含 `time_window_reasoning`：

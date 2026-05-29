@@ -37,6 +37,9 @@ ACTION_TO_SOURCE = {
     "login_logs_search": "login_logs_search",
 }
 
+ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds")
+ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
+
 FORBIDDEN_INPUT_KEYS = {
     "url",
     "uri",
@@ -167,6 +170,90 @@ class BrowserBackedServiceClient:
             )
 
         return normalize_service_response(action_name, service_payload, http_status=http_status)
+
+
+def build_account_security_browser_backed_requests(
+    user_id: str,
+    app_name: str = "KUAISHOU",
+    include_rcp_snapshot: bool = False,
+) -> list[Dict[str, Any]]:
+    """Return the clean full_runtime request plan for one account-security user.
+
+    This constructs fixed browser-backed actions only. It does not call the
+    local service, start a browser, inspect auth state, or use legacy runners.
+    """
+
+    if not isinstance(user_id, str) or not user_id.isdigit():
+        raise BrowserBackedServiceInputError("user_id must be a decimal string")
+    if app_name not in {"KUAISHOU", "NEBULA"}:
+        raise BrowserBackedServiceInputError("app_name must be KUAISHOU or NEBULA")
+
+    requests: list[Dict[str, Any]] = [
+        {
+            "source_name": "user_login_unified_log",
+            "action_name": "login_logs_search",
+            "typed_params": {
+                "user_id": user_id,
+                "window": "last_7d",
+                "recallSource": "2,0,1,3",
+            },
+            "fallback_on": {
+                "parse_error": {
+                    "source_name": "user_login_unified_log_24h_fallback",
+                    "action_name": "login_logs_search",
+                    "typed_params": {
+                        "user_id": user_id,
+                        "window": "last_24h",
+                        "recallSource": "2,0,1,3",
+                    },
+                    "preserve_primary_source_quality": True,
+                }
+            },
+        },
+        {
+            "source_name": "weapon_user_to_device_graph",
+            "action_name": "weapon_inventory",
+            "typed_params": {
+                "user_id": user_id,
+                "mode": "account_security_user_device_graph_with_conditional_riskData",
+                "riskData_trigger_device_prefix": list(ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES),
+            },
+        },
+        {
+            "source_name": "track_analysis_account_security_bundle",
+            "action_name": "track_analysis_summary",
+            "typed_params": {
+                "user_id": user_id,
+                "appName": app_name,
+                "mode": "account_security_bundle",
+                "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+            },
+        },
+    ]
+    if include_rcp_snapshot:
+        requests.append(
+            {
+                "source_name": "rcp_strategy_hit_entry",
+                "action_name": "rcp_snapshot",
+                "typed_params": {
+                    "entity_type": "user_id",
+                    "entity_id": user_id,
+                    "mode": "conditional_strategy_context_required",
+                },
+                "trigger_condition": "source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit",
+            }
+        )
+
+    for request in requests:
+        _validate_action_name(str(request["action_name"]))
+        _validate_typed_params(request.get("typed_params", {}))
+        fallback = request.get("fallback_on")
+        if isinstance(fallback, Mapping):
+            for fallback_plan in fallback.values():
+                if isinstance(fallback_plan, Mapping):
+                    _validate_action_name(str(fallback_plan["action_name"]))
+                    _validate_typed_params(fallback_plan.get("typed_params", {}))
+    return requests
 
 
 def normalize_service_response(
@@ -488,6 +575,17 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str) -> Dict[
 def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
     material = _summary_material(result)
     summary = _base_source_summary(result, "track_analysis")
+    summary["bundle_summary"] = _pick_fields(
+        material,
+        (
+            "mode",
+            "sub_interface",
+            "sub_interfaces",
+            "sub_interfaces_completed",
+            "sub_interfaces_missing",
+            "account_security_bundle",
+        ),
+    )
     summary["profile_summary"] = _pick_fields(
         material,
         (
@@ -784,6 +882,13 @@ def _fixture_payload(action_name: str, source_status: str, error_type: Optional[
             "active_days_bucket_present": True,
             "device_ids_count": 2,
         }
+        source_card["bundle_summary"] = {
+            "mode": "account_security_bundle",
+            "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+            "sub_interfaces_completed": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+            "sub_interfaces_missing": [],
+            "account_security_bundle": True,
+        }
         source_card["getUseDuration"] = {
             "rows_count": 7,
             "nonzero_days_count": 5,
@@ -902,6 +1007,26 @@ def run_fixture_tests() -> Dict[str, Any]:
     except BrowserBackedServiceInputError:
         results.append(("url_like_typed_param_rejected", "passed"))
 
+    account_security_plan = build_account_security_browser_backed_requests("2871834924")
+    assert [item["action_name"] for item in account_security_plan] == [
+        "login_logs_search",
+        "weapon_inventory",
+        "track_analysis_summary",
+    ]
+    login_plan = account_security_plan[0]
+    assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
+    weapon_plan = account_security_plan[1]
+    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "IOS_"]
+    track_plan = account_security_plan[2]
+    assert track_plan["typed_params"]["mode"] == "account_security_bundle"
+    assert track_plan["typed_params"]["sub_interfaces"] == ["profile", "getUseDuration", "getDeviceIds"]
+    serialized_plan = json.dumps(account_security_plan, ensure_ascii=True)
+    assert "sso_session_runner" not in serialized_plan
+    assert "track_analysis_runner" not in serialized_plan
+    assert "cookie" not in serialized_plan.lower()
+    assert "token" not in serialized_plan.lower()
+    results.append(("account_security_browser_backed_request_plan", "passed"))
+
     raw_payload = _fixture_payload("login_logs_search", "completed")
     raw_payload["data"]["login_records"] = [{"ip": "203.0.113.10", "deviceId": "ANDROID_raw"}]
     result = normalize_service_response("login_logs_search", raw_payload)
@@ -929,6 +1054,12 @@ def run_fixture_tests() -> Dict[str, Any]:
     ]
     four_source_card = build_partial_evidence_card(four_source_results)
     summaries = four_source_card["evidence_summary_by_source"]
+    assert summaries["track_analysis_summary"]["bundle_summary"]["mode"] == "account_security_bundle"
+    assert summaries["track_analysis_summary"]["bundle_summary"]["sub_interfaces"] == [
+        "profile",
+        "getUseDuration",
+        "getDeviceIds",
+    ]
     assert summaries["track_analysis_summary"]["profile_summary"]["register_time_present"] is True
     assert summaries["track_analysis_summary"]["use_duration_summary"]["rows_count"] == 7
     assert summaries["track_analysis_summary"]["device_ids_summary"]["device_ids_count"] == 2

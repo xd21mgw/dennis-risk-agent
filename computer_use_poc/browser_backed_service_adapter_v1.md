@@ -19,6 +19,60 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | Login log online source | `login_logs_search` | `POST /actions/login_logs_search` |
 | Track-analysis activity / profile | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
 
+For clean `full_runtime` single-user account-security evidence cards, these fixed actions are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
+
+## Account-Security Bundle Typed Params
+
+Default single-user account-security orchestration uses these typed params. The adapter must reject caller-provided URL, path, header, cookie, token, session, or secret fields before invocation.
+
+```yaml
+account_security_browser_backed_sequence:
+  - source_name: user_login_unified_log
+    action_name: login_logs_search
+    typed_params:
+      user_id: "{user_id}"
+      window: last_7d
+      recallSource: "2,0,1,3"
+    fallback_on:
+      parse_error:
+        source_name: user_login_unified_log_24h_fallback
+        action_name: login_logs_search
+        typed_params:
+          user_id: "{user_id}"
+          window: last_24h
+          recallSource: "2,0,1,3"
+        preserve_primary_source_quality: true
+  - source_name: weapon_user_to_device_graph
+    action_name: weapon_inventory
+    typed_params:
+      user_id: "{user_id}"
+      mode: account_security_user_device_graph_with_conditional_riskData
+      riskData_trigger_device_prefix:
+        - ANDROID_
+        - IOS_
+    boundary:
+      - riskData 仅在 graphData 保留 raw ANDROID_/IOS_ device_id safe handle 后执行
+      - raw device_id 缺失时标 missing_required_fields/not_checked，不伪装 completed
+  - source_name: track_analysis_account_security_bundle
+    action_name: track_analysis_summary
+    typed_params:
+      user_id: "{user_id}"
+      appName: KUAISHOU
+      mode: account_security_bundle
+      sub_interfaces:
+        - profile
+        - getUseDuration
+        - getDeviceIds
+    boundary:
+      - 只传 user_id/appName 不满足账号安全 bundle
+      - profile / getUseDuration / getDeviceIds 的完成、no_data、blocked、parse_error 必须分层进入 source_completion_matrix
+  - source_name: rcp_strategy_hit_entry
+    action_name: rcp_snapshot
+    trigger_condition: source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit
+```
+
+All attempted and skipped sources must be represented in `source_completion_matrix`. A 7-day `login_logs_search` `parse_error` may trigger the 24-hour fallback, but the 7-day parse error remains in `source_quality`. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
+
 ## Adapter Boundary
 
 Dennis must not:
@@ -184,6 +238,10 @@ The adapter does not persist raw response full bodies, raw login records, raw de
 Source-specific summary fields:
 
 - `track_analysis_summary`
+  - `bundle_summary.mode`
+  - `bundle_summary.sub_interfaces`
+  - `bundle_summary.sub_interfaces_completed`
+  - `bundle_summary.sub_interfaces_missing`
   - `profile_summary.register_time_present`
   - `profile_summary.fan_distribution_present`
   - `profile_summary.active_days_bucket_present`
