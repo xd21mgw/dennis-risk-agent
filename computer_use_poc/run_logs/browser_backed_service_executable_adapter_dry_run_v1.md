@@ -92,3 +92,47 @@ partial_evidence_card:
 - The adapter does not trigger browser debug or SSO debug.
 - The adapter does not read browser profile files, `.ks_sso`, cookie DBs, or credential material.
 - The adapter does not output raw response full bodies, raw login records, raw device identifiers, raw IPs, raw labelInfo, or raw originalLog.
+
+## Evidence Display Layer Enhancement
+
+This patch improves `build_partial_evidence_card()` so the evidence card is readable by strategy users, not only a technical source-card existence check.
+
+Added display-safe source summaries:
+
+- Track Analysis:
+  - `profile_summary`: `register_time_present`, `fan_distribution_present`, `active_days_bucket_present`, `device_ids_count`
+  - `use_duration_summary`: `rows_count`, `nonzero_days_count`, `total_duration`, `peak_date`
+  - `device_ids_summary`: `device_ids_count`, `device_model_fields_present`, `last_active_fields_present`
+- RCP:
+  - `event_count`, `table_header_columns`, `returned_columns_observed`, `first_event_shape_keys`, `dynamic_columns_observed`
+  - chaining-key presence for `hitFusePolicyCode`, `eventId`, `_occurTime`
+  - boundary: RCP is not final risk judgement
+- Weapon:
+  - `graph_status`, `related_device_count`, `related_user_count`
+  - `riskData_status`, `risk_label_count`, `risk_group_names_observed`, `readable_label_sample`, `userLevel_observed`
+  - raw `deviceId`, `labelInfo`, and `originalLog` remain suppressed
+- Login Logs:
+  - `records_count`, `time_window_observed`, `first_login_time_observed`, `last_login_time_observed`
+  - `no_data_not_risk_exclusion=true`
+
+The enhanced evidence card now includes:
+
+- `source_completion_matrix`
+- `source_quality`
+- `evidence_summary_by_source`
+- `evidence_boundary`
+- `missing_evidence`
+- `next_action`
+
+Validation:
+
+- `python3 -m py_compile computer_use_poc/browser_backed_service_client.py`: passed.
+- `python3 computer_use_poc/browser_backed_service_client.py --self-test`: passed, 15 fixture tests.
+- New fixture coverage:
+  - completed four-source fixture generates business summaries
+  - login logs `no_data` enters missing evidence / caveat
+  - Weapon raw `labelInfo` is not emitted
+  - RCP event list is not final judgement
+  - `sensitive_output=true` remains rejected
+
+This patch did not access the live platform, did not start browser-backed service, did not read Chrome profile / cookie / token / session / header / `.ks_sso`, did not call DataAgent/Hive, did not package, and did not commit git.

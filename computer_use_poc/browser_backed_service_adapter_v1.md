@@ -176,3 +176,58 @@ partial_evidence_card:
 ```
 
 The adapter does not persist raw response full bodies, raw login records, raw device identifiers, raw IPs, raw labelInfo, or raw originalLog. It relies on `source_card`, `source_quality`, and service-provided shape summaries that are already sanitized by the browser-backed service.
+
+## Evidence Display Summary
+
+`build_partial_evidence_card()` now extracts display-safe business summaries from `source_card` / `source_quality` instead of only reporting whether those objects exist.
+
+Source-specific summary fields:
+
+- `track_analysis_summary`
+  - `profile_summary.register_time_present`
+  - `profile_summary.fan_distribution_present`
+  - `profile_summary.active_days_bucket_present`
+  - `profile_summary.device_ids_count`
+  - `use_duration_summary.rows_count`
+  - `use_duration_summary.nonzero_days_count`
+  - `use_duration_summary.total_duration`
+  - `use_duration_summary.peak_date`
+  - `device_ids_summary.device_ids_count`
+  - `device_ids_summary.device_model_fields_present`
+  - `device_ids_summary.last_active_fields_present`
+- `rcp_snapshot`
+  - `event_summary.event_count`
+  - `event_summary.table_header_columns`
+  - `event_summary.returned_columns_observed`
+  - `event_summary.first_event_shape_keys`
+  - `event_summary.dynamic_columns_observed`
+  - `chaining_keys_present.hitFusePolicyCode`
+  - `chaining_keys_present.eventId`
+  - `chaining_keys_present._occurTime`
+  - Boundary: RCP is a strategy event entry source, not final risk judgement.
+- `weapon_inventory`
+  - `graph_summary.graph_status`
+  - `graph_summary.related_device_count`
+  - `graph_summary.related_user_count`
+  - `risk_summary.riskData_status`
+  - `risk_summary.risk_label_count`
+  - `risk_summary.risk_group_names_observed`
+  - `risk_summary.readable_label_sample`
+  - `risk_summary.userLevel_observed`
+- `login_logs_search`
+  - `login_window_summary.source_status`
+  - `login_window_summary.records_count`
+  - `login_window_summary.time_window_observed`
+  - `login_window_summary.first_login_time_observed`
+  - `login_window_summary.last_login_time_observed`
+  - Boundary: `no_data` means no visible rows in the observed window, not no-risk evidence.
+
+The display layer keeps:
+
+```yaml
+sensitive_output: false
+no_data_not_risk_exclusion: true
+final_risk_judgement_made: false
+```
+
+The display layer must not emit raw profile body, raw deviceId, raw IP, raw login records, raw labelInfo, or raw originalLog.

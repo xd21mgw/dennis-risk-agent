@@ -8107,3 +8107,17 @@
 - input: `computer_use_poc/setup_dataagent_local_env.py`、`computer_use_poc/dataagent_local_env_setup_guide_v1.md`。
 - expected_runtime_behavior: non_sensitive_local_env_helper
 - expected_output_boundary: helper 只允许创建 `~/.dennis-agent/dataagent.env` 的非敏感配置，目录权限 700、文件权限 600；不得写入 cookie/token/session/header/password/state；输出只显示 `<set>` / `<missing>`，不打印敏感值；`dataagent.env` 不得进入 repo / `outputs/full_runtime` / release / git；readiness check 在 env missing 但本地 env 文件存在时只提示 `source ~/.dennis-agent/dataagent.env`，不得自动 source 或打印文件内容。
+
+## 874. DataAgent response envelope schema drift probe
+
+- test_id: FULL-RUNTIME-DATAAGENT-RESPONSE-ENVELOPE-PROBE-001
+- input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --live-dry-run --allow-live-dry-run --probe-response-shape --case single_user_ato --json`。
+- expected_runtime_behavior: sanitized_shape_probe_only_after_explicit_authorization
+- expected_output_boundary: probe 不得输出 raw response；文本字段只能输出 length；SQL / query_id / trace_id 只能输出 present=true/false；不得输出 cookie/token/session/header；HTTP 200 但无 `MODEL_ANSWER` 不得标 completed；缺少可解释内容必须标 `parse_error` 或 `source_schema_drift`；`content_fallback` 可作为 `model_answer_source`，但必须带 caveat。
+
+## 875. Browser-backed evidence card display summary
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-EVIDENCE-DISPLAY-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: fixture_only_display_layer_enhancement
+- expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` / raw deviceId must not appear; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.

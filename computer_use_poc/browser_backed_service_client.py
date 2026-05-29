@@ -10,6 +10,7 @@ matrix / partial evidence card path.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import socket
 import time
@@ -70,6 +71,19 @@ BLOCKED_STATUSES = {"blocked", "network_error", "platform_error"}
 TIMEOUT_STATUSES = {"timeout"}
 PARSE_ERROR_STATUSES = {"parse_error"}
 INVALID_PARAMETER_STATUSES = {"parameter_error", "invalid_parameter", "wrong_request_body_shape"}
+DISPLAY_FORBIDDEN_FIELD_MARKERS = {
+    "raw_profile",
+    "raw_body",
+    "raw_response",
+    "raw_deviceid",
+    "raw_device_id",
+    "raw_ip",
+    "raw_login_records",
+    "raw_labelinfo",
+    "raw_originalLog",
+    "labelInfo",
+    "originalLog",
+}
 
 
 class BrowserBackedServiceInputError(ValueError):
@@ -266,9 +280,14 @@ def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[st
                 "source_card_present": result.get("source_card") is not None,
                 "source_quality_present": result.get("source_quality") is not None,
                 "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
+                "business_summary": build_business_evidence_summary(result),
             }
         )
 
+    evidence_summary_by_source = {
+        str(result.get("source_name")): build_business_evidence_summary(result) for result in materialized_results
+    }
+    missing_evidence = build_missing_evidence(materialized_results)
     return {
         "card_type": "partial_evidence_card",
         "sensitive_output": False,
@@ -280,8 +299,281 @@ def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[st
         "no_data_not_risk_exclusion": any(
             bool(result.get("no_data_not_risk_exclusion")) for result in materialized_results
         ),
+        "evidence_summary_by_source": evidence_summary_by_source,
+        "evidence_boundary": {
+            "no_data_not_no_risk": True,
+            "strategy_hit_device_risk_activity_profile_are_evidence_not_final_judgement": True,
+            "final_risk_judgement_made": False,
+        },
+        "missing_evidence": missing_evidence,
+        "next_action": build_next_action(missing_evidence),
+        "final_risk_judgement_made": False,
         "evidence_sections": evidence_sections,
     }
+
+
+def build_business_evidence_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    """Extract display-safe business evidence from source_card/source_quality."""
+
+    source_name = str(result.get("source_name") or "")
+    action_name = str(result.get("action_name") or "")
+    action = action_name or _source_to_action(source_name)
+    if action == "track_analysis_summary":
+        return _track_analysis_summary(result)
+    if action == "rcp_snapshot":
+        return _rcp_summary(result)
+    if action == "weapon_inventory":
+        return _weapon_summary(result)
+    if action == "login_logs_search":
+        return _login_logs_summary(result)
+    return _generic_summary(result)
+
+
+def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[str, Any]]:
+    missing: list[Dict[str, Any]] = []
+    for result in results:
+        source_name = str(result.get("source_name"))
+        status = result.get("source_status")
+        if status == "no_data":
+            missing.append(
+                {
+                    "source_name": source_name,
+                    "reason": "visible_window_no_data",
+                    "caveat": "no_data is not no-risk evidence",
+                }
+            )
+        elif status in {"blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"}:
+            missing.append(
+                {
+                    "source_name": source_name,
+                    "reason": f"source_status_{status}",
+                    "error_type": result.get("error_type"),
+                }
+            )
+    return missing
+
+
+def build_next_action(missing_evidence: list[Mapping[str, Any]]) -> Dict[str, Any]:
+    actions = ["confirm case complaint/event time window"]
+    if missing_evidence:
+        actions.append("retry or supplement missing sources only after source_quality is understood")
+    actions.append("use DataAgent/Hive only as a recommendation for long-window or cross-table follow-up")
+    return {
+        "recommended_follow_up": actions,
+        "dataagent_hive_called": False,
+        "dataagent_hive_boundary": "recommendation_only_not_called",
+    }
+
+
+def _source_to_action(source_name: str) -> str:
+    for action, source in ACTION_TO_SOURCE.items():
+        if source == source_name:
+            return action
+    return source_name
+
+
+def _summary_material(result: Mapping[str, Any]) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    for key in ("source_card", "source_quality", "response_shape_summary"):
+        value = result.get(key)
+        if isinstance(value, Mapping):
+            merged[key] = value
+    return merged
+
+
+def _find_first(value: Any, candidate_keys: Iterable[str]) -> Any:
+    candidates = set(candidate_keys)
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if key in candidates and _is_safe_display_value(key, nested):
+                return nested
+        for key, nested in value.items():
+            if not _is_safe_display_key(str(key)):
+                continue
+            found = _find_first(nested, candidates)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_first(item, candidates)
+            if found is not None:
+                return found
+    return None
+
+
+def _pick_fields(material: Mapping[str, Any], field_names: Iterable[str]) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+    for field_name in field_names:
+        value = _find_first(material, (field_name,))
+        if value is not None:
+            result[field_name] = _safe_display_value(field_name, value)
+    return result
+
+
+def _safe_display_value(key: str, value: Any) -> Any:
+    if not _is_safe_display_key(key):
+        return "<redacted>"
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return value[:160] if _is_safe_display_string(key, value) else "<redacted>"
+    if isinstance(value, list):
+        safe_values = []
+        for item in value[:8]:
+            if isinstance(item, (str, int, float, bool)) or item is None:
+                safe_values.append(_safe_display_value(key, item))
+            elif isinstance(item, Mapping):
+                safe_values.append(_safe_shape_keys(item))
+            else:
+                safe_values.append(type(item).__name__)
+        return safe_values
+    if isinstance(value, Mapping):
+        return _safe_shape_keys(value)
+    return str(type(value).__name__)
+
+
+def _is_safe_display_value(key: str, value: Any) -> bool:
+    if not _is_safe_display_key(key):
+        return False
+    if isinstance(value, Mapping):
+        return True
+    if isinstance(value, list):
+        return True
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return _is_safe_display_string(key, str(value))
+    return False
+
+
+def _is_safe_display_key(key: str) -> bool:
+    lowered = key.lower()
+    return not any(marker.lower() in lowered for marker in DISPLAY_FORBIDDEN_FIELD_MARKERS)
+
+
+def _is_safe_display_string(key: str, value: str) -> bool:
+    lowered_key = key.lower()
+    lowered_value = value.lower()
+    if not _is_safe_display_key(key):
+        return False
+    if "labelinfo" in lowered_value or "originallog" in lowered_value:
+        return False
+    if lowered_key.endswith("_count") or lowered_key.endswith("_present"):
+        return True
+    if "deviceid" in lowered_key or "device_id" in lowered_key or lowered_key in {"ip", "raw_ip"}:
+        return False
+    return True
+
+
+def _safe_shape_keys(value: Mapping[str, Any]) -> list[str]:
+    return [str(key) for key in value.keys() if _is_safe_display_key(str(key))][:16]
+
+
+def _base_source_summary(result: Mapping[str, Any], evidence_type: str) -> Dict[str, Any]:
+    return {
+        "evidence_type": evidence_type,
+        "source_name": result.get("source_name"),
+        "action_name": result.get("action_name"),
+        "source_status": result.get("source_status"),
+        "error_type": result.get("error_type"),
+        "latency_ms": result.get("latency_ms"),
+        "source_card_exists": result.get("source_card") is not None,
+        "source_quality_exists": result.get("source_quality") is not None,
+        "sensitive_output": False,
+        "raw_body_suppressed": True,
+        "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
+    }
+
+
+def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    material = _summary_material(result)
+    summary = _base_source_summary(result, "track_analysis")
+    summary["profile_summary"] = _pick_fields(
+        material,
+        (
+            "register_time_present",
+            "fan_distribution_present",
+            "active_days_bucket_present",
+            "device_ids_count",
+        ),
+    )
+    summary["use_duration_summary"] = _pick_fields(
+        material,
+        ("rows_count", "nonzero_days_count", "total_duration", "peak_date"),
+    )
+    summary["device_ids_summary"] = _pick_fields(
+        material,
+        ("device_ids_count", "device_model_fields_present", "last_active_fields_present"),
+    )
+    return summary
+
+
+def _rcp_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    material = _summary_material(result)
+    summary = _base_source_summary(result, "rcp_snapshot")
+    summary["event_summary"] = _pick_fields(
+        material,
+        (
+            "event_count",
+            "table_header_columns",
+            "returned_columns_observed",
+            "first_event_shape_keys",
+            "dynamic_columns_observed",
+        ),
+    )
+    summary["chaining_keys_present"] = {
+        "hitFusePolicyCode": _find_first(material, ("hitFusePolicyCode_present", "hitFusePolicyCode")) is not None,
+        "eventId": _find_first(material, ("eventId_present", "eventId")) is not None,
+        "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime")) is not None,
+    }
+    summary["boundary"] = "RCP is a strategy event entry source, not a final risk judgement."
+    return summary
+
+
+def _weapon_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    material = _summary_material(result)
+    summary = _base_source_summary(result, "weapon_inventory")
+    summary["graph_summary"] = _pick_fields(
+        material,
+        ("graph_status", "related_device_count", "related_user_count"),
+    )
+    summary["risk_summary"] = _pick_fields(
+        material,
+        (
+            "riskData_status",
+            "risk_label_count",
+            "risk_group_names_observed",
+            "readable_label_sample",
+            "userLevel_observed",
+        ),
+    )
+    summary["raw_weapon_fields_suppressed"] = ["raw deviceId", "raw labelInfo", "raw originalLog"]
+    return summary
+
+
+def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    material = _summary_material(result)
+    summary = _base_source_summary(result, "login_logs")
+    summary["login_window_summary"] = _pick_fields(
+        material,
+        (
+            "records_count",
+            "time_window_observed",
+            "first_login_time_observed",
+            "last_login_time_observed",
+        ),
+    )
+    if "records_count" not in summary["login_window_summary"] and result.get("source_status") == "no_data":
+        summary["login_window_summary"]["records_count"] = 0
+    summary["no_data_not_risk_exclusion"] = True
+    summary["caveat"] = "no_data only means no visible rows in the observed window; it is not no-risk evidence."
+    return summary
+
+
+def _generic_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+    summary = _base_source_summary(result, "generic_browser_backed_source")
+    summary["summary"] = "source result normalized; raw body suppressed"
+    return summary
 
 
 def _validate_local_base_url(base_url: str) -> str:
@@ -319,6 +611,10 @@ def _validate_typed_params(value: Any, path: str = "$") -> None:
 def _classify_url_error(exc: urllib.error.URLError) -> str:
     reason = exc.reason
     if isinstance(reason, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(reason, OSError) and reason.errno == errno.ECONNREFUSED:
+        return "connection_refused"
+    if "connection refused" in str(reason).lower():
         return "connection_refused"
     if isinstance(reason, socket.timeout):
         return "service_timeout"
@@ -455,7 +751,7 @@ class _FakeOpener:
 
 
 def _fixture_payload(action_name: str, source_status: str, error_type: Optional[str] = None) -> Dict[str, Any]:
-    return {
+    payload: Dict[str, Any] = {
         "action": action_name,
         "status": source_status,
         "source_status": source_status,
@@ -480,6 +776,56 @@ def _fixture_payload(action_name: str, source_status: str, error_type: Optional[
             }
         },
     }
+    source_card = payload["source_card"]
+    if action_name == "track_analysis_summary":
+        source_card["profile_summary"] = {
+            "register_time_present": True,
+            "fan_distribution_present": True,
+            "active_days_bucket_present": True,
+            "device_ids_count": 2,
+        }
+        source_card["getUseDuration"] = {
+            "rows_count": 7,
+            "nonzero_days_count": 5,
+            "total_duration": 32400,
+            "peak_date": "2026-05-28",
+        }
+        source_card["getDeviceIds"] = {
+            "device_ids_count": 2,
+            "device_model_fields_present": True,
+            "last_active_fields_present": True,
+        }
+    elif action_name == "rcp_snapshot":
+        source_card["event_summary"] = {
+            "event_count": 3,
+            "table_header_columns": ["eventId", "_occurTime", "hitFusePolicyCode"],
+            "returned_columns_observed": ["eventId", "_occurTime", "hitFusePolicyCode"],
+            "first_event_shape_keys": ["eventId", "_occurTime", "hitFusePolicyCode"],
+            "dynamic_columns_observed": ["hitFusePolicyCode"],
+            "hitFusePolicyCode_present": True,
+            "eventId_present": True,
+            "_occurTime_present": True,
+        }
+    elif action_name == "weapon_inventory":
+        source_card["weapon_summary"] = {
+            "graph_status": "completed",
+            "related_device_count": 2,
+            "related_user_count": 4,
+            "riskData_status": "completed",
+            "risk_label_count": 2,
+            "risk_group_names_observed": ["account_risk", "device_risk"],
+            "readable_label_sample": ["risk_label_sample"],
+            "userLevel_observed": True,
+            "raw_labelInfo": {"deviceId": "raw_device_should_not_render", "originalLog": "raw_log_should_not_render"},
+        }
+    elif action_name == "login_logs_search":
+        source_card["login_logs_summary"] = {
+            "records_count": 0 if source_status in NO_DATA_STATUSES else 2,
+            "time_window_observed": "visible_window",
+            "first_login_time_observed": None,
+            "last_login_time_observed": None,
+        }
+    return payload
 
 
 def run_fixture_tests() -> Dict[str, Any]:
@@ -574,6 +920,31 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert card["sensitive_output"] is False
     assert card["no_data_not_risk_exclusion"] is True
     results.append(("partial_evidence_card_mixed_sources", "passed"))
+
+    four_source_results = [
+        normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
+        normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "completed")),
+        normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed")),
+        normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "no_data")),
+    ]
+    four_source_card = build_partial_evidence_card(four_source_results)
+    summaries = four_source_card["evidence_summary_by_source"]
+    assert summaries["track_analysis_summary"]["profile_summary"]["register_time_present"] is True
+    assert summaries["track_analysis_summary"]["use_duration_summary"]["rows_count"] == 7
+    assert summaries["track_analysis_summary"]["device_ids_summary"]["device_ids_count"] == 2
+    assert summaries["rcp_snapshot"]["event_summary"]["event_count"] == 3
+    assert summaries["rcp_snapshot"]["chaining_keys_present"]["hitFusePolicyCode"] is True
+    assert "final risk judgement" in summaries["rcp_snapshot"]["boundary"].lower()
+    assert summaries["weapon_inventory"]["graph_summary"]["related_device_count"] == 2
+    assert summaries["weapon_inventory"]["risk_summary"]["risk_label_count"] == 2
+    assert summaries["login_logs_search"]["login_window_summary"]["records_count"] == 0
+    assert four_source_card["missing_evidence"][0]["source_name"] == "login_logs_search"
+    assert four_source_card["evidence_boundary"]["final_risk_judgement_made"] is False
+    serialized_card = json.dumps(four_source_card, ensure_ascii=True)
+    assert "raw_labelInfo" not in serialized_card
+    assert "raw_device_should_not_render" not in serialized_card
+    assert "raw_log_should_not_render" not in serialized_card
+    results.append(("four_source_business_evidence_summary", "passed"))
 
     return {
         "fixture_tests": len(results),
