@@ -408,14 +408,23 @@ sources:
   - source_name: dataagent_hive_registry
     capability: batch_risk_clustering_analysis
     priority: P2
-    expected_runtime_mode: plan_only
+    expected_runtime_mode: authorized_execution_only
     playbook_file:
+      - computer_use_poc/dataagent_connector_contract_v1.md
+      - computer_use_poc/dataagent_request_schema_v1.yaml
+      - computer_use_poc/dataagent_response_schema_v1.yaml
+      - computer_use_poc/dataagent_prompt_templates_v1.md
+      - computer_use_poc/dataagent_response_normalizer.py
+      - computer_use_poc/dataagent_connector_check.py
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
       - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
     runner_file: null
     runner_present: false
     runner_included_in_full_runtime: false
+    user_confirmation_required: true
+    live_api_verification_required: true
+    default_mode: dry_run_sql_generation
     required_inputs:
       - approved_query_scope
       - scenario
@@ -424,28 +433,49 @@ sources:
       - fields
     allowed_actions:
       - generate_query_plan
+      - build_conversational_api_prompt
+      - dry_run_sql_generation
+      - normalize_step_based_mock_response
       - recommend_tables_and_fields
       - summarize_already_returned_results
+      - authorized_live_query_after_per_call_user_confirmation
     forbidden_actions:
       - execute_without_per_call_user_authorization
       - generic_table_guess_before_registry
       - pending_query_as_completed_evidence
+      - structured_query_api_as_currently_available
+      - SDK_CLI_RPC_MCP_as_currently_available
+      - MODEL_THINKING_as_evidence
+      - TOOL_CALL_raw_as_evidence
+      - no_data_as_no_risk
+      - sensitive_plaintext_output
     auth_dependency:
       - explicit_per_call_user_authorization_for_execution
-    current_status: plan_only
+      - conversational_api_auth_out_of_scope_until_live_verification
+    current_status: connector_contract_ready
     failure_policy:
       - missing_hive_result_not_completed_evidence
       - permission_gap_enters_missing_evidence
+      - pending_failed_timeout_permission_denied_enter_source_quality
+      - MODEL_ANSWER_only_for_evidence_extraction
+      - no_data_not_risk_exclusion
     fallback_policy:
-      - plan_only_until_user_authorizes_DataAgent_Hive_call
+      - dry_run_sql_generation_until_user_authorizes_DataAgent_Hive_call
+      - preserve_Dennis_hive_registry_recommended_source
+      - mark_DataAgent_suggested_tables_as_candidate_source
     evidence_output_fields:
       - hive_registry_recommended_source
       - dataagent_candidate_source
+      - generated_sql
+      - normalized_model_answer
       - missing_hive_result
       - query_plan
+      - source_quality
     sensitive_output_policy: do_not_output_raw_sql_results_or_sensitive_plaintext
     notes:
-      - "Registry and templates are included in full_runtime; execution remains outside runtime without per-call authorization."
+      - "Conversational API /v1/chat/completions/full is the current MVP channel, but this inventory does not mark it live executable."
+      - "Structured-query API is design-only and must not be treated as currently available."
+      - "Registry and templates are included in full_runtime; live execution still requires per-call authorization and live API verification."
 
   - source_name: batch_risk_clustering
     capability: batch_risk_clustering_analysis
@@ -622,8 +652,9 @@ summary:
     - track_analysis_getDeviceIds
     - track_analysis_getUseDuration
   plan_only:
-    - dataagent_hive_registry
     - batch_risk_clustering
+  connector_contract_ready:
+    - dataagent_hive_registry
   current_p0_p1_tool_gaps:
     - track_analysis_profile: missing bin/track_analysis_runner
     - track_analysis_getDeviceIds: missing bin/track_analysis_runner

@@ -1,0 +1,151 @@
+schema_version: dataagent_response_schema_v1
+purpose: Normalized DataAgent response shape for Dennis full_runtime.
+
+raw_step_types:
+  - MODEL_THINKING
+  - TOOL_CALL
+  - MODEL_ANSWER
+  - AGENT_END
+
+evidence_extraction_rule:
+  model_answer_only: true
+  model_thinking_is_evidence: false
+  tool_call_raw_is_evidence: false
+  agent_end_metadata_only: true
+
+normalized_response:
+  request_id:
+    type: string
+    required: false
+  session_id:
+    type: string
+    required: false
+  query_id:
+    type: string
+    required: false
+  status:
+    type: string
+    required: true
+    allowed:
+      - pending
+      - running
+      - completed
+      - failed
+      - timeout
+      - no_data
+      - permission_denied
+      - sql_generated
+  generated_sql:
+    type: string
+    required: false
+    sensitive_field_policy: redact_sensitive_columns
+  result_rows:
+    type: list[object]
+    required: true
+    sensitive_field_policy: drop_sensitive_columns
+  columns:
+    type: list[string]
+    required: true
+    sensitive_field_policy: drop_sensitive_columns
+  row_count:
+    type: integer
+    required: true
+  error_message:
+    type: string
+    required: false
+    sensitive_field_policy: redact_sensitive_terms
+  permission_status:
+    type: string
+    required: true
+    allowed:
+      - not_started
+      - ok
+      - permission_denied
+      - unknown
+  data_freshness:
+    type: string
+    required: false
+  source_tables:
+    type: list[string]
+    required: true
+  query_time_range:
+    type: object
+    required: false
+  warnings:
+    type: list[string]
+    required: true
+  no_data_reason:
+    type: string
+    required: false
+  trace_id:
+    type: string
+    required: false
+  source_quality:
+    type: object
+    required: true
+    fields:
+      source_name: dataagent_hive
+      permission_status:
+      response_type:
+      reliability_level:
+      failure_reason:
+      no_data_not_risk_exclusion: true
+      pending_execution_not_evidence:
+      dataagent_called:
+      hive_called:
+      dry_run:
+
+source_observation_compatibility:
+  source_card:
+    required: true
+    fields:
+      source_name: dataagent_hive
+      source_status:
+      evidence_summary:
+      records_count:
+  source_quality:
+    required: true
+  source_checkpoint_private:
+    required: true
+    fields:
+      raw_references: []
+      downstream_source_chaining: []
+  redaction:
+    required: true
+    fields:
+      redaction_applied: true
+      sensitive_output: false
+
+sensitive_field_policy:
+  blocked_field_patterns:
+    - phone
+    - cookie
+    - token
+    - session
+    - header
+    - email
+    - id_card
+  behavior:
+    generated_sql: redact_identifier_or_literal
+    result_rows: drop_column_or_mask_value
+    error_message: redact_sensitive_terms
+    warnings: report_blocked_count_without_plaintext
+
+status_boundary:
+  sql_generated:
+    meaning: SQL or query plan exists but no DataAgent/Hive result has been executed.
+    evidence_allowed: false
+  no_data:
+    meaning: DataAgent/Hive returned no rows for the bounded query.
+    no_risk_evidence: false
+  pending:
+    evidence_allowed: false
+  running:
+    evidence_allowed: false
+  failed:
+    evidence_allowed: false
+  timeout:
+    evidence_allowed: false
+  permission_denied:
+    evidence_allowed: false
+

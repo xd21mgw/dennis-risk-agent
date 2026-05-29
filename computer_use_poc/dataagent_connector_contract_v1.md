@@ -1,0 +1,162 @@
+# DataAgent Connector Contract v1
+
+## Current Channel
+
+Current usable DataAgent entrypoint:
+
+```text
+POST https://video-data.corp.kuaishou.com/v1/chat/completions/full
+```
+
+This is the Conversational API MVP channel. Dennis must construct a structured natural-language prompt, send it through the Conversational API only after per-call user authorization, then normalize DataAgent's step-based response into source observation and evidence-card fields.
+
+## Currently Unavailable
+
+The following interfaces are not available in the current runtime contract:
+
+- SDK
+- CLI
+- RPC
+- MCP
+- structured-query API
+
+Structured-query schema may be used as a mid-term design direction only. It must not be described as an available live interface.
+
+## Dennis Boundary
+
+- Default mode is `dry_run_sql_generation`: generate a query plan / prompt / SQL candidate without calling DataAgent.
+- Real execution requires explicit user authorization for each query, including table, entity set, time window, fields, and business reason.
+- DataAgent is readonly for Dennis runtime. Write operations, mutation, table creation, table overwrite, policy operation, account operation, and enforcement are forbidden.
+- Do not output cookie, token, session, header, phone, email, id card, password, or equivalent sensitive plaintext.
+- `no_data` is not no-risk evidence.
+- `pending`, `running`, `failed`, `timeout`, and `permission_denied` must enter `source_quality`; none can be used as low-risk or no-risk proof.
+- Pending DataAgent execution is not evidence. It can only be reported as `missing_hive_result` / `dataagent_query_pending`.
+- DataAgent/Hive remains a follow-up source for offline history, aggregation, long-window gaps, cross-table validation, and batch clustering; it does not replace online P0 readonly sources.
+
+## Supported Modes
+
+```yaml
+supported_modes:
+  dry_run_sql_generation:
+    live_api_call: false
+    default: true
+    output: query_plan, conversational_prompt, generated_sql_candidate
+  authorized_live_query:
+    live_api_call: true
+    requires_per_call_user_authorization: true
+    current_contract_status: connector_contract_ready_not_live_executable
+  async_status_polling_future:
+    live_api_call: future
+    current_contract_status: design_only
+```
+
+## Conversational API Payload Boundary
+
+Dennis-side request builder should produce:
+
+```yaml
+endpoint: https://video-data.corp.kuaishou.com/v1/chat/completions/full
+method: POST
+payload:
+  messages:
+    - role: system
+      content: Dennis DataAgent connector boundary and output requirements
+    - role: user
+      content: structured prompt with task, tables, fields, filters, time window, max rows, no-data boundary
+  stream: false
+  session_id: runtime-generated safe id
+  user_id: Dennis requester safe id or approved requester id
+```
+
+The connector contract does not define a live HTTP client in this patch.
+
+## Step-Based Response Handling
+
+DataAgent returns step-based JSON. Dennis must inspect step type and extract evidence only from `MODEL_ANSWER`.
+
+Known raw step types:
+
+- `MODEL_THINKING`
+- `TOOL_CALL`
+- `MODEL_ANSWER`
+- `AGENT_END`
+
+Rules:
+
+- `MODEL_THINKING` is not evidence.
+- `TOOL_CALL` is not evidence unless reflected in `MODEL_ANSWER` and normalized.
+- `MODEL_ANSWER` is the only primary source for generated SQL, Markdown/table result, error, no-data, or permission outcome.
+- `AGENT_END` can provide terminal metadata only.
+- Raw step JSON must not be pasted into user-visible evidence.
+
+## Normalized Output Boundary
+
+Normalized DataAgent output must map to:
+
+- `dataagent_response_schema_v1.yaml`
+- source observation compatible fields:
+  - `source_card`
+  - `source_quality`
+  - `source_checkpoint_private`
+  - `redaction`
+
+If only SQL is generated and no query result is returned:
+
+```yaml
+status: sql_generated
+real_dataagent_query_executed: false
+result_rows: []
+row_count: 0
+source_quality:
+  pending_execution_not_evidence: true
+```
+
+If DataAgent returns a no-data result:
+
+```yaml
+status: no_data
+no_data_reason:
+source_quality:
+  no_data_not_risk_exclusion: true
+```
+
+If permission or runtime fails:
+
+```yaml
+status: permission_denied | failed | timeout
+source_quality:
+  permission_status:
+  failure_reason:
+```
+
+## Table Source Layering
+
+DataAgent prompts may recommend tables, but Dennis must preserve the existing Hive registry layers:
+
+- `recommended_source`: tables selected from Dennis registry / playbook.
+- `candidate_source`: DataAgent-suggested table or additional table requiring review.
+
+DataAgent output must not overwrite Dennis registry source selection when names conflict. Conflicts must be reported as source selection metadata.
+
+## Forbidden
+
+```yaml
+forbidden:
+  - live_call_without_per_call_authorization
+  - structured_query_api_as_currently_available
+  - SDK_CLI_RPC_MCP_claimed_available
+  - write_operation
+  - table_mutation
+  - policy_or_account_operation
+  - raw_cookie_output
+  - raw_token_output
+  - raw_session_output
+  - raw_header_output
+  - phone_plaintext_output
+  - id_card_plaintext_output
+  - MODEL_THINKING_as_evidence
+  - TOOL_CALL_as_evidence_without_MODEL_ANSWER_normalization
+  - no_data_as_no_risk
+  - pending_or_failed_as_completed_evidence
+```
+

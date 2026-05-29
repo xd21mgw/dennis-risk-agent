@@ -1,0 +1,149 @@
+schema_version: dataagent_request_schema_v1
+purpose: Dennis-side standard request shape for DataAgent Conversational API connector.
+
+current_available_channel:
+  name: Conversational API
+  method: POST
+  endpoint: https://video-data.corp.kuaishou.com/v1/chat/completions/full
+  stream_default: false
+
+currently_unavailable_channels:
+  sdk: unavailable
+  cli: unavailable
+  rpc: unavailable
+  mcp: unavailable
+  structured_query_api: design_only_not_available
+
+request_fields:
+  task_type:
+    type: string
+    required: true
+    allowed_examples:
+      - single_user_ato_evidence
+      - batch_user_ato_clustering
+      - strategy_hit_login_timeline_alignment
+  natural_language_query:
+    type: string
+    required: true
+  entity_type:
+    type: string
+    required: true
+    allowed_examples:
+      - user_id
+      - device_id
+      - source_id
+      - event_id
+      - batch_user_id
+  entity_ids:
+    type: list[string]
+    required: true
+    sensitive_output_policy: mask_or_safe_ref_when_user_visible
+  time_window:
+    type: object
+    required: true
+    fields:
+      start:
+        type: string
+        required: true
+      end:
+        type: string
+        required: true
+      timezone:
+        type: string
+        default: Asia/Shanghai
+      inferred:
+        type: boolean
+        default: false
+      bounded:
+        type: boolean
+        default: true
+  data_sources:
+    type: list[string]
+    required: true
+    source_layering:
+      recommended_source: Dennis registry/playbook selected source
+      candidate_source: DataAgent suggested or unverified source
+  fields:
+    type: list[string]
+    required: true
+  filters:
+    type: list[object]
+    required: false
+    default: []
+  group_by:
+    type: list[string]
+    required: false
+    default: []
+  output_format:
+    type: string
+    default: markdown_table
+    allowed:
+      - markdown_table
+      - sql_only
+      - summary_with_sql
+      - json_summary
+  max_rows:
+    type: integer
+    default: 100
+    min: 1
+    max: 1000
+  timeout:
+    type: integer
+    default_seconds: 120
+  dry_run:
+    type: boolean
+    default: true
+  reason:
+    type: string
+    required: true
+  business_context:
+    type: string
+    required: true
+  requester:
+    type: object
+    required: true
+    fields:
+      requester_id:
+        type: string
+        required: true
+      requester_role:
+        type: string
+        required: false
+  authorization_scope:
+    type: object
+    required: true
+    fields:
+      per_call_authorized:
+        type: boolean
+        default: false
+      authorized_tables:
+        type: list[string]
+        default: []
+      authorized_time_window:
+        type: object
+        required: false
+      authorized_purpose:
+        type: string
+        required: false
+
+conversational_api_payload_template:
+  messages:
+    - role: system
+      content: |
+        You are DataAgent. Return step-based JSON. Put final SQL/results/error only in MODEL_ANSWER.
+        Do not expose sensitive plaintext. Do not perform write operations.
+    - role: user
+      content: "${structured_dataagent_prompt}"
+  stream: false
+  session_id: "${safe_session_id}"
+  user_id: "${requester_safe_id}"
+
+execution_boundary:
+  default_mode: dry_run_sql_generation
+  live_query_requires_per_call_authorization: true
+  write_operation_allowed: false
+  structured_query_api_available_now: false
+  dataagent_hive_per_call_authorization_required: true
+  no_data_not_risk_exclusion: true
+  pending_failed_timeout_not_evidence: true
+
