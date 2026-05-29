@@ -1,0 +1,232 @@
+live_source_allowlist:
+  version: v1
+  global_forbidden_actions:
+    - arbitrary_url
+    - manual_cookie
+    - raw_header
+    - sso_state_file
+    - browser_auth_repair
+    - write_operation
+    - runner_debug
+    - unregistered_source_probe
+  sources:
+    - source_name: login_log
+      readonly: true
+      allowed_actions:
+        - bounded_single_user_login_log_read
+        - bounded_single_did_login_log_read
+        - source_checkpoint
+      forbidden_actions:
+        - raw_token_output
+        - unbounded_history_query
+        - bulk_user_query
+        - auth_debug
+      required_input_fields:
+        - user_id_or_did
+        - bounded_time_range
+      expected_observation_fields:
+        - source_status
+        - evidence_time_range
+        - login_success_summary
+        - login_failure_summary
+        - token_lifecycle_summary
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: redact_user_device_ip_token_session
+      source_failure_policy: record_source_quality_and_continue_partial
+    - source_name: weapon_graphData
+      readonly: true
+      allowed_actions:
+        - single_user_to_device_graph_read
+        - raw_reference_safe_id_checkpoint
+      forbidden_actions:
+        - arbitrary_graph_expansion
+        - unregistered_endpoint_probe
+        - raw_graph_payload_output
+      required_input_fields:
+        - user_id
+      expected_observation_fields:
+        - source_status
+        - related_device_candidates
+        - relation_strength_summary
+        - raw_reference_safe_id
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: mask_device_and_relation_detail
+      source_failure_policy: record_source_quality_and_continue_partial
+    - source_name: weapon_riskData
+      readonly: true
+      allowed_actions:
+        - single_device_risk_read
+        - device_risk_summary
+      forbidden_actions:
+        - user_id_as_device_id
+        - location_query_by_default
+        - raw_fingerprint_output
+      required_input_fields:
+        - raw_device_id_reference
+      expected_observation_fields:
+        - source_status
+        - device_risk_tags
+        - environment_risk_summary
+        - source_quality
+      failure_statuses:
+        - skipped
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: mask_device_fingerprint_and_location
+      source_failure_policy: missing_device_reference_means_not_checked
+    - source_name: tianshi_strategy_hit
+      readonly: true
+      allowed_actions:
+        - bounded_source_strategy_hit_read
+        - strategy_hit_overview
+      forbidden_actions:
+        - final_ato_judgement_from_strategy_hit
+        - raw_response_dump
+        - broad_cross_day_scan
+      required_input_fields:
+        - source_id_or_user_context
+        - bounded_time_range
+      expected_observation_fields:
+        - source_status
+        - hit_policies_summary
+        - risk_decision_summary
+        - event_type_summary
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: redact_source_id_and_request_payload
+      source_failure_policy: explicit_source_failure_must_be_visible
+    - source_name: rcp_event_list
+      readonly: true
+      allowed_actions:
+        - bounded_event_list_read
+        - representative_event_id_checkpoint
+      forbidden_actions:
+        - cross_day_unbounded_scan
+        - write_or_replay_event
+        - raw_response_dump
+      required_input_fields:
+        - event_type
+        - bounded_time_range
+        - source_id_or_condition
+      expected_observation_fields:
+        - source_status
+        - event_count_summary
+        - representative_event_refs
+        - policy_code_refs
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: mask_event_source_policy_and_payload
+      source_failure_policy: no_data_not_behavior_absence
+    - source_name: track_analysis_profile
+      readonly: true
+      allowed_actions:
+        - single_user_or_device_profile_read
+        - profile_card_summary
+      forbidden_actions:
+        - raw_event_sequence_export
+        - behavior_replay_export
+        - broad_user_search
+      required_input_fields:
+        - user_id_or_device_id
+        - app_name
+      expected_observation_fields:
+        - source_status
+        - profile_card
+        - latest_datetime
+        - active_days_bucket
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: aggregate_profile_only
+      source_failure_policy: record_source_quality_and_continue_partial
+    - source_name: track_analysis_use_duration
+      readonly: true
+      allowed_actions:
+        - bounded_daily_duration_read
+        - event_day_activity_alignment
+      forbidden_actions:
+        - raw_behavior_sequence_export
+        - unbounded_history_query
+        - frontend_activity_as_human_proof
+      required_input_fields:
+        - user_id_or_device_id
+        - app_name
+        - bounded_date_range
+      expected_observation_fields:
+        - source_status
+        - daily_duration_rows
+        - event_day_duration
+        - front_backend_activity_mismatch
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: aggregate_duration_only
+      source_failure_policy: duration_zero_not_no_risk
+    - source_name: archives_center_profile
+      readonly: true
+      allowed_actions:
+        - single_user_profile_summary_read
+        - account_state_summary
+        - publish_chain_summary_when_visible
+      forbidden_actions:
+        - write_operation
+        - permission_apply
+        - browser_auth_repair
+        - raw_personal_info_output
+      required_input_fields:
+        - user_id
+      expected_observation_fields:
+        - source_status
+        - account_profile_summary
+        - account_state_summary
+        - publish_chain_summary
+        - source_quality
+      failure_statuses:
+        - no_data
+        - auth_failed
+        - blocked
+        - timeout
+        - parse_error
+        - tool_gap
+      sensitive_output_policy: redact_personal_user_device_ip
+      source_failure_policy: auth_blocked_is_source_gap_not_low_risk
