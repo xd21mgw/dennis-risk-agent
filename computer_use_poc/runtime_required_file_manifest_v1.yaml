@@ -45,6 +45,7 @@ full_runtime_required:
     - computer_use_poc/user_login_log_internal_agent_playbook_v2_4_8.md
     - computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md
     - computer_use_poc/archives_center_internal_agent_playbook.md
+    - computer_use_poc/archives_center_integration_landscape_v1.md
     - computer_use_poc/archives_center_core_capability_map_v2_6_1.md
     - computer_use_poc/archives_center_api_inventory_v2_4_7_2.md
     - computer_use_poc/archives_center_user_lookup_flow.md

@@ -8129,6 +8129,13 @@
 - expected_runtime_behavior: fixture_only_display_layer_enhancement
 - expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` must not appear; deviceId display follows `output_scope`; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.
 
+## 875A. Archives Center browser-backed user analysis action
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-USER-ANALYSIS-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: archives_user_analysis_fixed_action_mock_pass
+- expected_output_boundary: `archives_user_analysis` must be fixed to `POST /actions/archives_user_analysis` and representative platform path `/v3/user/log/coreLogs/fetch`; typed params include `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, `haveParamAuth`, and operation filters; output includes `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, cookie/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+
 ## 876. Full runtime browser-backed priority
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001

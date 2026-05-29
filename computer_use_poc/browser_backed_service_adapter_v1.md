@@ -18,8 +18,11 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | Weapon device relation / risk | `weapon_inventory` | `POST /actions/weapon_inventory` |
 | Login log online source | `login_logs_search` | `POST /actions/login_logs_search` |
 | Track-analysis activity / profile | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
+| Archives Center user-analysis core logs | `archives_user_analysis` | `POST /actions/archives_user_analysis` |
 
 For clean `full_runtime` single-user account-security evidence cards, these fixed actions are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
+
+`archives_user_analysis` is available as an optional Archives Center P0 source. It is not added to the default four-source account-security main chain by this adapter patch.
 
 ## Account-Security Bundle Typed Params
 
@@ -199,11 +202,56 @@ The executable client is intentionally narrow:
   - `rcp_snapshot`
   - `weapon_inventory`
   - `login_logs_search`
+  - `archives_user_analysis`
 - Only typed params are serialized into the JSON body.
 - Caller-provided route, credential, or transport override fields are rejected before service invocation.
 - HTTP transport errors, connection refused, timeout, HTTP error, and non-JSON responses are normalized as source results instead of Dennis runtime failures.
 - `BrowserBackedServiceClient.call_account_security_sources()` is the executable single-user account-security helper. It expands Track Analysis sub-interfaces, preserves Weapon private safe handles when the service returns them, applies login-log parse fallback, and returns display-safe source results for evidence-card construction.
 - `build_small_batch_evidence_output()` is the small-batch display helper. In `internal_risk_review`, user titles must use raw copyable risk entity identifiers such as `用户 772671837`; in `external_share`, user titles must use aliases / masks such as `用户 U1（user_***1837）`. This only changes display; credential secrets and raw source dumps remain suppressed in every scope.
+- `build_archives_user_analysis_browser_backed_request()` builds the fixed typed-param plan for `archives_user_analysis`. The browser-backed service maps it to `POST /v3/user/log/coreLogs/fetch`; Dennis never passes URL/path/header/cookie/token/session.
+
+## Archives Center User Analysis
+
+Landscape: `computer_use_poc/archives_center_integration_landscape_v1.md`.
+
+Implemented action:
+
+```yaml
+source_name: archives_user_analysis
+action_name: archives_user_analysis
+local_service_endpoint: POST /actions/archives_user_analysis
+representative_platform_path: /v3/user/log/coreLogs/fetch
+typed_params:
+  user_id: "<decimal user id>"
+  mode: focused_login_risk_core_logs
+  beginTime: <millisecond timestamp>
+  endTime: <millisecond timestamp>
+  pageIndex: 1
+  pageSize: 30
+  haveParamAuth: 1
+  operation_filters:
+    loginStart: 1
+    registerBind: 1
+    resetPass: 1
+    protectAccount: 1
+    liveStream: 1
+    scanCode: 1
+    logout: 1
+    frozen: 1
+```
+
+Output contract:
+
+- `source_status`
+- `source_card`
+- `source_quality`
+- `key_entities`
+- `missing_fields`
+- `next_action`
+- `sensitive_output=false`
+- `no_data_not_risk_exclusion=true`
+
+The action returns a derived `risk_event_scan`; it must not return raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, or raw records.
 
 Fixture self-test:
 

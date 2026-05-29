@@ -29,6 +29,7 @@ ACTION_ENDPOINTS = {
     "rcp_snapshot": "/actions/rcp_snapshot",
     "weapon_inventory": "/actions/weapon_inventory",
     "login_logs_search": "/actions/login_logs_search",
+    "archives_user_analysis": "/actions/archives_user_analysis",
 }
 
 ACTION_TO_SOURCE = {
@@ -36,12 +37,24 @@ ACTION_TO_SOURCE = {
     "rcp_snapshot": "rcp_snapshot",
     "weapon_inventory": "weapon_inventory",
     "login_logs_search": "login_logs_search",
+    "archives_user_analysis": "archives_user_analysis",
 }
 
 ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds", "getLastestDateTime")
 ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
 TRACK_ANALYSIS_BUNDLE_SOURCE_NAME = "track_analysis_account_security_bundle"
 TRACK_ANALYSIS_BUNDLE_MODE = "account_security_bundle"
+ARCHIVES_USER_ANALYSIS_FIXED_PATH = "/v3/user/log/coreLogs/fetch"
+ARCHIVES_USER_ANALYSIS_FILTER_FIELDS = (
+    "loginStart",
+    "registerBind",
+    "resetPass",
+    "protectAccount",
+    "liveStream",
+    "scanCode",
+    "logout",
+    "frozen",
+)
 DEFAULT_OUTPUT_SCOPE = "internal_risk_review"
 OUTPUT_SCOPES = {"internal_risk_review", "external_share"}
 FIELD_CLASSIFICATION = {
@@ -62,10 +75,18 @@ FIELD_CLASSIFICATION = {
         "user_id",
         "uid",
         "device_id",
+        "deviceId",
         "did",
+        "DID",
         "ip",
+        "userIpDesc",
         "eventId",
         "sourceId",
+        "photo_id",
+        "photoId",
+        "live_id",
+        "liveId",
+        "strategy_id",
         "hitFusePolicyCode",
         "strategy_code",
         "logSource",
@@ -117,6 +138,10 @@ DISPLAY_FORBIDDEN_FIELD_MARKERS = {
     "raw_login_records",
     "raw_labelinfo",
     "raw_originalLog",
+    "requestParam",
+    "extraParam",
+    "logContent",
+    "full_json",
     "password",
     "authorization",
     "cookie",
@@ -363,6 +388,67 @@ def build_account_security_browser_backed_requests(
     return requests
 
 
+def build_archives_user_analysis_browser_backed_request(
+    user_id: str,
+    begin_time_ms: int,
+    end_time_ms: int,
+    page_index: int = 1,
+    page_size: int = 30,
+) -> Dict[str, Any]:
+    """Return the fixed Archives Center user-analysis action plan.
+
+    The local browser-backed service owns same-origin fetch and maps these typed
+    params to `/v3/user/log/coreLogs/fetch`; Dennis never passes URL/path/header
+    or auth material.
+    """
+
+    if not isinstance(user_id, str) or not user_id.isdigit():
+        raise BrowserBackedServiceInputError("user_id must be a decimal string")
+    if not isinstance(begin_time_ms, int) or not isinstance(end_time_ms, int) or begin_time_ms <= 0 or end_time_ms <= 0:
+        raise BrowserBackedServiceInputError("begin_time_ms and end_time_ms must be positive millisecond timestamps")
+    if begin_time_ms >= end_time_ms:
+        raise BrowserBackedServiceInputError("begin_time_ms must be before end_time_ms")
+    if not isinstance(page_index, int) or page_index < 1:
+        raise BrowserBackedServiceInputError("page_index must be a positive integer")
+    if not isinstance(page_size, int) or page_size < 1 or page_size > 100:
+        raise BrowserBackedServiceInputError("page_size must be between 1 and 100")
+
+    typed_params: Dict[str, Any] = {
+        "user_id": user_id,
+        "mode": "focused_login_risk_core_logs",
+        "beginTime": begin_time_ms,
+        "endTime": end_time_ms,
+        "pageIndex": page_index,
+        "pageSize": page_size,
+        "haveParamAuth": 1,
+        "operation_filters": {field: 1 for field in ARCHIVES_USER_ANALYSIS_FILTER_FIELDS},
+    }
+    request = {
+        "source_name": "archives_user_analysis",
+        "action_name": "archives_user_analysis",
+        "priority": "P0",
+        "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
+        "typed_params": typed_params,
+        "body_builder_summary": {
+            "service_side_body_builder": True,
+            "body_fields": [
+                "userId",
+                "beginTime",
+                "endTime",
+                "pageIndex",
+                "pageSize",
+                "haveParamAuth",
+                *ARCHIVES_USER_ANALYSIS_FILTER_FIELDS,
+            ],
+            "all_operation_filters_default_on": True,
+            "raw_requestParam_extraParam_output": False,
+        },
+    }
+    _validate_action_name(str(request["action_name"]))
+    _validate_typed_params(request["typed_params"])
+    return request
+
+
 def _typed_params_summary(typed_params: Any) -> Dict[str, Any]:
     if not isinstance(typed_params, Mapping):
         return {}
@@ -595,7 +681,59 @@ def normalize_service_response(
     if isinstance(response_summary, Mapping):
         normalized["response_shape_summary"] = dict(response_summary)
 
+    if action_name == "archives_user_analysis":
+        _attach_archives_user_analysis_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
+
     return normalized
+
+
+def _attach_archives_user_analysis_contract_fields(
+    normalized: Dict[str, Any],
+    service_payload: Mapping[str, Any],
+    source_card: Any,
+    source_quality: Any,
+    output_scope: str,
+) -> None:
+    material = {
+        "service_payload": service_payload,
+        "source_card": source_card if isinstance(source_card, Mapping) else {},
+        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
+    }
+    key_entities = service_payload.get("key_entities")
+    if not isinstance(key_entities, Mapping):
+        key_entities = _pick_fields(
+            material,
+            ("user_id", "userId", "deviceId", "device_id_sample", "ip", "userIpDesc", "photo_id", "photoId"),
+            output_scope,
+        )
+    missing_fields = service_payload.get("missing_fields")
+    if not isinstance(missing_fields, list):
+        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
+    if not isinstance(missing_fields, list):
+        missing_fields = []
+    next_action = service_payload.get("next_action")
+    if not isinstance(next_action, str) or not next_action:
+        next_action = _find_first(material, ("next_action",), output_scope)
+    if not isinstance(next_action, str) or not next_action:
+        next_action = "Cross-check Archives user analysis with login logs, Weapon, and RCP before any risk judgement."
+
+    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
+    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
+    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
+    normalized["no_data_not_risk_exclusion"] = True
+    if isinstance(normalized.get("source_quality"), Mapping):
+        quality = dict(normalized["source_quality"])
+        quality.setdefault("archives_action_contract", "archives_user_analysis")
+        quality["no_data_not_risk_exclusion"] = True
+        quality.setdefault("raw_response_full_body_returned", False)
+        quality.setdefault("requestParam_extraParam_suppressed", True)
+        normalized["source_quality"] = quality
+    if isinstance(normalized.get("source_card"), Mapping):
+        card = dict(normalized["source_card"])
+        card.setdefault("key_entities", normalized["key_entities"])
+        card.setdefault("missing_fields", normalized["missing_fields"])
+        card.setdefault("next_action", normalized["next_action"])
+        normalized["source_card"] = card
 
 
 def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -776,6 +914,8 @@ def build_business_evidence_summary(
         return _weapon_summary(result, scope)
     if action == "login_logs_search":
         return _login_logs_summary(result, scope)
+    if action == "archives_user_analysis":
+        return _archives_user_analysis_summary(result, scope)
     return _generic_summary(result, scope)
 
 
@@ -1064,7 +1204,7 @@ def _is_risk_entity_key(key: str) -> bool:
         return False
     return bool(
         re.search(
-            r"(user_?ids?|^uid$|device_?ids?|deviceid|device_did|^did$|(^|_)ip($|_)|ipaddr|clientip|remoteip|loginip|event_?id|source_?id|hitfusepolicycode|strategy|logsource|method|timestamp|occur_?time|_occurtime)",
+            r"(user_?ids?|^uid$|device_?ids?|deviceid|device_did|^did$|(^|_)ip($|_)|ipaddr|ipdesc|clientip|remoteip|loginip|event_?id|source_?id|photo_?id|live_?id|livestreamid|hitfusepolicycode|strategy|logsource|method|timestamp|occur_?time|_occurtime)",
             lowered,
             re.I,
         )
@@ -1298,6 +1438,56 @@ def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[st
     summary["no_data_not_risk_exclusion"] = True
     summary["blocked_parse_or_no_data_not_counter_evidence"] = result.get("source_status") in {"blocked", "parse_error", "no_data"}
     summary["caveat"] = "no_data / blocked / parse_error are source-quality states; they are not no-risk evidence."
+    return summary
+
+
+def _archives_user_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "archives_user_analysis", output_scope)
+    summary["action_contract"] = {
+        "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
+        "same_origin_service_owned": True,
+        "raw_full_body_suppressed": True,
+        "requestParam_extraParam_suppressed": True,
+    }
+    summary["risk_event_scan"] = _pick_fields(
+        material,
+        (
+            "total_records_visible",
+            "records_count",
+            "dataList_length",
+            "operation_type_counts",
+            "success_failure_counts",
+            "earliest_event_time",
+            "latest_event_time",
+            "login_method_sequence",
+            "ip_consistency",
+            "device_consistency",
+            "app_version_consistency",
+            "geo_consistency",
+            "suspicious_event_markers",
+            "pagination_required",
+            "coverage_limitations",
+        ),
+        output_scope,
+    )
+    summary["key_entities"] = _pick_fields(
+        material,
+        ("user_id", "userId", "deviceId", "device_id_sample", "ip", "userIpDesc", "photo_id", "photoId"),
+        output_scope,
+    )
+    summary["missing_fields"] = _pick_fields(
+        material,
+        ("missing_fields", "fields_missing", "required_fields_missing"),
+        output_scope,
+    ).get("missing_fields", [])
+    summary["next_action"] = _find_first(material, ("next_action",), output_scope) or (
+        "Use Archives Center user analysis as account-side observation; cross-check login logs/Weapon/RCP before judgement."
+    )
+    summary["boundary"] = (
+        "Archives user analysis is a P0 account-side observation source; no_data/empty_result is not no-risk evidence "
+        "and raw requestParam/extraParam/full response are never displayed."
+    )
     return summary
 
 
@@ -1714,6 +1904,50 @@ def _fixture_payload(
             "id_card": "110105199001011234",
             "real_name": "Fixture User",
         }
+    elif action_name == "archives_user_analysis":
+        source_card["archives_user_analysis_summary"] = {
+            "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
+            "records_count": 3,
+            "total_records_visible": 3,
+            "dataList_length": 3,
+            "operation_type_counts": {"loginStart": 2, "scanCode": 1},
+            "success_failure_counts": {"success": 2, "failed": 1},
+            "earliest_event_time": "2026-05-28 09:00:00",
+            "latest_event_time": "2026-05-28 11:00:00",
+            "login_method_sequence": ["loginStart", "scanCode"],
+            "ip_consistency": "mixed",
+            "device_consistency": "single_device",
+            "app_version_consistency": "stable",
+            "geo_consistency": "mixed_city",
+            "suspicious_event_markers": ["scanCode_after_loginStart"],
+            "pagination_required": False,
+            "coverage_limitations": ["archives_user_analysis_is_not_unified_login_log"],
+            "userId": "2871834924",
+            "deviceId": "ANDROID_archives_device_001",
+            "userIpDesc": "10.20.30.40",
+            "requestParam": "token=raw_token_should_not_render&open_id=raw_open_id_should_not_render",
+            "extraParam": "refresh_token=raw_refresh_token_should_not_render",
+        }
+        source_card["key_entities"] = {
+            "user_id": "2871834924",
+            "deviceId": "ANDROID_archives_device_001",
+            "ip": "10.20.30.40",
+            "photo_id": "photo_123456",
+        }
+        source_card["missing_fields"] = ["unified_login_full_window"]
+        source_card["next_action"] = "Cross-check with login logs and Weapon before judgement."
+        payload["key_entities"] = dict(source_card["key_entities"])
+        payload["missing_fields"] = list(source_card["missing_fields"])
+        payload["next_action"] = source_card["next_action"]
+        payload["source_quality"].update(
+            {
+                "no_data_not_risk_exclusion": True,
+                "archives_action_contract": "archives_user_analysis",
+                "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
+                "requestParam_extraParam_suppressed": True,
+                "raw_response_full_body_returned": False,
+            }
+        )
     return payload
 
 
@@ -1732,6 +1966,53 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert result["source_status"] == "no_data"
     assert result["no_data_not_risk_exclusion"] is True
     results.append(("login_logs_search_no_data", "passed"))
+
+    archives_plan = build_archives_user_analysis_browser_backed_request(
+        "2871834924",
+        begin_time_ms=1764201600000,
+        end_time_ms=1764288000000,
+    )
+    assert archives_plan["action_name"] == "archives_user_analysis"
+    assert archives_plan["fixed_path"] == ARCHIVES_USER_ANALYSIS_FIXED_PATH
+    assert archives_plan["typed_params"]["user_id"] == "2871834924"
+    assert archives_plan["typed_params"]["pageIndex"] == 1
+    assert archives_plan["typed_params"]["pageSize"] == 30
+    assert archives_plan["typed_params"]["operation_filters"] == {
+        field: 1 for field in ARCHIVES_USER_ANALYSIS_FILTER_FIELDS
+    }
+    serialized_archives_plan = json.dumps(archives_plan, ensure_ascii=True)
+    assert "cookie" not in serialized_archives_plan.lower()
+    assert "token" not in serialized_archives_plan.lower()
+    assert "session" not in serialized_archives_plan.lower()
+    assert "/v3/user/log/coreLogs/fetch" in serialized_archives_plan
+    assert "http://" not in serialized_archives_plan.lower()
+    assert "https://" not in serialized_archives_plan.lower()
+    results.append(("archives_user_analysis_typed_request_plan", "passed"))
+
+    archives_opener = _FakeOpener(_fixture_payload("archives_user_analysis", "completed"))
+    client = BrowserBackedServiceClient(opener=archives_opener)
+    archives_result = client.call_action("archives_user_analysis", archives_plan["typed_params"])
+    assert archives_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_user_analysis"])
+    assert archives_result["source_status"] == "completed"
+    assert archives_result["source_card"] and archives_result["source_quality"]
+    assert archives_result["key_entities"]["user_id"] == "2871834924"
+    assert archives_result["missing_fields"] == ["unified_login_full_window"]
+    assert archives_result["next_action"] == "Cross-check with login logs and Weapon before judgement."
+    assert archives_result["sensitive_output"] is False
+    assert archives_result["no_data_not_risk_exclusion"] is True
+    archives_card = build_partial_evidence_card([archives_result])
+    archives_summary = archives_card["evidence_summary_by_source"]["archives_user_analysis"]
+    assert archives_summary["action_contract"]["fixed_path"] == ARCHIVES_USER_ANALYSIS_FIXED_PATH
+    assert archives_summary["risk_event_scan"]["total_records_visible"] == 3
+    assert archives_summary["key_entities"]["deviceId"] == "ANDROID_archives_device_001"
+    archives_text = json.dumps(archives_card, ensure_ascii=True)
+    assert "raw_token_should_not_render" not in archives_text
+    assert "raw_open_id_should_not_render" not in archives_text
+    assert "raw_refresh_token_should_not_render" not in archives_text
+    assert '"requestParam":' not in archives_text
+    assert '"extraParam":' not in archives_text
+    assert archives_card["sensitive_output"] is False
+    results.append(("archives_user_analysis_standard_source_result", "passed"))
 
     blocked_payload = _fixture_payload("rcp_snapshot", "blocked", "platform_error")
     client = BrowserBackedServiceClient(opener=_FakeOpener(blocked_payload))
