@@ -317,9 +317,10 @@ sources:
       - user_id
       - appName=KUAISHOU
       - mode=account_security_bundle
-      - sub_interfaces=profile,getUseDuration,getDeviceIds
+      - sub_interfaces=profile,getUseDuration,getDeviceIds,getLastestDateTime
     allowed_actions:
       - track_analysis_summary
+      - expand_sub_interface_calls_profile_getUseDuration_getDeviceIds_getLastestDateTime
     forbidden_actions:
       - track_analysis_runner_execution_in_clean_full_runtime
       - raw_event_sequence_export
@@ -351,7 +352,8 @@ sources:
       - source_quality
     sensitive_output_policy: aggregate_profile_duration_and_device_counts_only
     notes:
-      - "Account-security single-user evidence cards must call track_analysis_summary with account_security_bundle mode or equivalent sub_interface coverage for profile/getUseDuration/getDeviceIds."
+      - "Account-security single-user evidence cards must call track_analysis_summary with account_security_bundle mode or equivalent expanded sub_interface coverage for profile/getUseDuration/getDeviceIds/getLastestDateTime."
+      - "The browser-backed client helper expands the bundle into four sub-interface calls and merges them into one Track Analysis source card."
       - "Calling track_analysis_summary with only user_id/appName is insufficient for the account-security bundle."
 
   - source_name: track_analysis_profile
@@ -496,10 +498,10 @@ sources:
       - weapon_inventory
       - login_logs_search
     default_single_user_account_security_sequence:
-      - login_logs_search:last_7d_with_24h_parse_error_fallback
+      - track_analysis_summary:account_security_bundle_expanded_profile_getUseDuration_getDeviceIds_getLastestDateTime
+      - rcp_snapshot:default_strategy_event_entry
       - weapon_inventory:user_graph_with_conditional_ANDROID_IOS_riskData
-      - track_analysis_summary:account_security_bundle_profile_getUseDuration_getDeviceIds
-      - rcp_snapshot:conditional_when_strategy_context_available
+      - login_logs_search:last_7d_with_24h_parse_error_fallback
       - archives_profile_readonly:optional_source_gap_when_stub
     required_inputs:
       - fixed_action
@@ -511,6 +513,7 @@ sources:
       - build_source_completion_matrix
       - build_redacted_evidence_card
       - run_self_test_without_service
+      - expand_track_analysis_account_security_bundle_sub_interfaces
     forbidden_actions:
       - arbitrary_url
       - arbitrary_header
