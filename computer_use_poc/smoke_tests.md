@@ -8120,7 +8120,7 @@
 - test_id: FULL-RUNTIME-BROWSER-BACKED-EVIDENCE-DISPLAY-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: fixture_only_display_layer_enhancement
-- expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` / raw deviceId must not appear; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.
+- expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` must not appear; deviceId display follows `output_scope`; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.
 
 ## 876. Full runtime browser-backed priority
 
@@ -8155,14 +8155,14 @@
 - test_id: WEAPON-RISKDATA-CHAINING-IN-EVIDENCE-CARD-001
 - input: `weapon_inventory` 用于账号安全单用户 evidence card，graphData 返回可用 raw device safe handle。
 - expected_runtime_behavior: weapon_inventory_graphdata_to_riskdata_chaining
-- expected_output_boundary: `weapon_inventory` 必须允许 graphData → riskData chaining；riskData 输入只能来自 current-task raw device safe handle；缺 device handle 时标 `missing_device_reference/not_checked`；设备风险标签摘要可进 evidence card，但 raw `labelInfo` / `originalLog` / raw deviceId 不输出；设备风险不单独定性。
+- expected_output_boundary: `weapon_inventory` 必须允许 graphData → riskData chaining；riskData 输入只能来自 current-task raw device safe handle；缺 device handle 时标 `missing_device_reference/not_checked`；设备风险标签摘要可进 evidence card，但 raw `labelInfo` / `originalLog` 不输出；related deviceId 展示按 `output_scope` 控制；设备风险不单独定性。
 
 ## 877C. Weapon safe handle preserved
 
 - test_id: WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: weapon_private_safe_handle_preserved
-- expected_output_boundary: normalizer 必须保留 `source_checkpoint_private.raw_references` 中的 current-task device safe handle 供 riskData chaining；evidence card / display summary 只展示 masked/summary，不输出 raw deviceId、raw `labelInfo` 或 raw `originalLog`。
+- expected_output_boundary: normalizer 必须保留 `source_checkpoint_private.raw_references` 中的 current-task device safe handle 供 riskData chaining；evidence card / display summary 不输出 raw `labelInfo` 或 raw `originalLog`；deviceId 展示按 `output_scope` 控制。
 
 ## 877D. RCP snapshot in account-security matrix
 
@@ -8205,3 +8205,24 @@
 - input: clean full_runtime 缺少 `bin/sso_session_runner` / `bin/track_analysis_runner`。
 - expected_runtime_behavior: no_legacy_runner_first_attempt
 - expected_output_boundary: 不尝试旧 runner，不 debug `SmartSSOSession` / SSO bridge；账号安全主链路通过 `computer_use_poc/browser_backed_service_client.py` 固定 action 构造 source result；缺旧 runner 不作为 runtime failure。
+
+## 881. Browser-backed internal risk entity display
+
+- test_id: BROWSER-BACKED-INTERNAL-RISK-ENTITY-DISPLAY-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`，构造含 IP / user_id / deviceId / eventId / sourceId 的四源 evidence card。
+- expected_runtime_behavior: internal_risk_review_allows_risk_entity_identifiers
+- expected_output_boundary: 默认 `output_scope=internal_risk_review`；evidence card 可展示最小必要风控实体字段；`sensitive_output=false` 仍表示无 credential_secret / raw full body / raw records / raw labelInfo / raw originalLog full dump。
+
+## 882. Browser-backed external share masks risk entities
+
+- test_id: BROWSER-BACKED-EXTERNAL-SHARE-MASKS-RISK-ENTITIES-001
+- input: `build_partial_evidence_card(..., output_scope="external_share")`。
+- expected_runtime_behavior: external_share_masks_risk_entity_identifiers
+- expected_output_boundary: IP / user_id / deviceId / eventId / sourceId / hitFusePolicyCode 必须 masked；cookie / token / session / header / authorization / password 任何模式都不得输出。
+
+## 883. Browser-backed pii strict masking
+
+- test_id: BROWSER-BACKED-PII-STRICT-MASKING-001
+- input: evidence card summary 中出现手机号、身份证号、真实姓名字段。
+- expected_runtime_behavior: pii_strict_masking_by_output_scope
+- expected_output_boundary: `internal_risk_review` 手机号输出 `1381234****`；`external_share` 输出 `138********`；完整手机号、完整身份证号、真实姓名原文任何模式都不得输出；普通数字 user_id 不得误判为手机号。

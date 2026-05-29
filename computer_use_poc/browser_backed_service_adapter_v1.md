@@ -132,6 +132,12 @@ browser_backed_source_result:
   latency_ms:
   source_card:
   source_quality:
+  output_scope: internal_risk_review | external_share
+  field_classification:
+    credential_secret: []
+    pii_strict: []
+    risk_entity_identifier: []
+    source_summary_metric: []
   sensitive_output: false
   source_provenance: browser_backed_service
 ```
@@ -145,7 +151,7 @@ Required service fields:
 - `latency_ms`
 - `sensitive_output=false`
 
-Dennis must not persist or display a raw response full body from the browser-backed service.
+Dennis must not persist or display a raw response full body from the browser-backed service. `output_scope` defaults to `internal_risk_review`; callers may request `external_share` when the evidence card is meant for sharing outside internal risk review.
 
 ## Status Normalization
 
@@ -232,6 +238,10 @@ Normalization buckets:
 
 `sensitive_output` must be exactly `false`. If the service returns any other value, the adapter replaces the result with `source_status=blocked`, `error_type=sensitive_output_violation`, and `sensitive_output=false`.
 
+`sensitive_output=false` means no credential secret plaintext, no raw full body, no raw records full dump, and no raw `labelInfo` / `originalLog` full dump. It does not mean all risk entity identifiers were removed. Under `internal_risk_review`, evidence cards may display UID/user_id, DID/device_id, IP, eventId, sourceId, hitFusePolicyCode, login method, logSource, and timestamp. Under `external_share`, those risk entity identifiers must be masked.
+
+Phone numbers are `pii_strict`: `internal_risk_review` may display `1381234****`, while `external_share` may display only `138********`; full phone numbers are never allowed. Full ID card numbers and real names are never displayed; only weak summaries such as `id_card_present=true`, `birth_year_present=true`, or `name_present=true` are allowed.
+
 ## Partial Evidence Construction
 
 `build_source_completion_matrix()` and `build_partial_evidence_card()` produce display-safe structures for Dennis runtime:
@@ -239,6 +249,8 @@ Normalization buckets:
 ```yaml
 partial_evidence_card:
   sensitive_output: false
+  output_scope: internal_risk_review
+  field_classification: {}
   completed_sources: []
   no_data_sources: []
   blocked_sources: []
@@ -246,7 +258,7 @@ partial_evidence_card:
   no_data_not_risk_exclusion: true
 ```
 
-The adapter does not persist raw response full bodies, raw login records, raw device identifiers, raw IPs, raw labelInfo, or raw originalLog. It relies on `source_card`, `source_quality`, and service-provided shape summaries that are already sanitized by the browser-backed service.
+The adapter does not persist raw response full bodies, raw login records full dumps, raw `labelInfo`, or raw `originalLog`. It relies on `source_card`, `source_quality`, and service-provided summaries that are already sanitized by the browser-backed service. Compact risk entity identifiers follow `output_scope`.
 
 ## Evidence Display Summary
 
@@ -270,6 +282,7 @@ Source-specific summary fields:
   - `use_duration_summary.total_duration`
   - `use_duration_summary.peak_date`
   - `device_ids_summary.device_ids_count`
+  - `device_ids_summary.device_id_sample`
   - `device_ids_summary.device_model_fields_present`
   - `device_ids_summary.last_active_fields_present`
 - `rcp_snapshot`
@@ -278,6 +291,11 @@ Source-specific summary fields:
   - `event_summary.returned_columns_observed`
   - `event_summary.first_event_shape_keys`
   - `event_summary.dynamic_columns_observed`
+  - `first_event_entity_samples.eventId`
+  - `first_event_entity_samples.sourceId`
+  - `first_event_entity_samples.deviceId`
+  - `first_event_entity_samples.hitFusePolicyCode`
+  - `first_event_entity_samples._occurTime`
   - `chaining_keys_present.hitFusePolicyCode`
   - `chaining_keys_present.eventId`
   - `chaining_keys_present._occurTime`
@@ -286,6 +304,8 @@ Source-specific summary fields:
   - `graph_summary.graph_status`
   - `graph_summary.related_device_count`
   - `graph_summary.related_user_count`
+  - `graph_summary.related_device_id_sample`
+  - `graph_summary.related_user_id_sample`
   - `risk_summary.riskData_status`
   - `risk_summary.risk_label_count`
   - `risk_summary.risk_group_names_observed`
@@ -299,6 +319,11 @@ Source-specific summary fields:
   - `login_window_summary.time_window_observed`
   - `login_window_summary.first_login_time_observed`
   - `login_window_summary.last_login_time_observed`
+  - `login_window_summary.ip_sample`
+  - `login_window_summary.device_id_sample`
+  - `login_window_summary.user_id_sample`
+  - `login_window_summary.method_sample`
+  - `login_window_summary.logSource_sample`
   - `login_window_summary.standard_browser_backed_source_result`
   - Boundary: `no_data` means no visible rows in the observed window, not no-risk evidence.
 
@@ -310,4 +335,4 @@ no_data_not_risk_exclusion: true
 final_risk_judgement_made: false
 ```
 
-The display layer must not emit raw profile body, raw deviceId, raw IP, raw login records, raw labelInfo, or raw originalLog.
+The display layer must not emit raw profile body, raw login records full dump, raw `labelInfo`, raw `originalLog`, credential material, full phone numbers, full ID card numbers, or real names. Risk entity identifiers are allowed only by `output_scope`.

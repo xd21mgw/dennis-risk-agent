@@ -16,12 +16,19 @@ This policy applies to:
 
 ## 2. Field Classes
 
-| class | examples | default_output_policy | severity_if_plaintext |
+Runtime and evidence-card code uses these canonical class names:
+
+- `credential_secret`
+- `pii_strict`
+- `risk_entity_identifier`
+- `source_summary_metric`
+
+| canonical class | examples | default_output_policy | severity_if_plaintext |
 |---|---|---|---|
-| P0 credential / authentication secrets | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, storageState, auth credential in headers, KIM code, login ticket, credential secret | `present_redacted` / `credential_present_redacted` only | P0 |
-| Highly sensitive personal information | phone number, ID card, real-name identity information, precise personal identity fields, verification code | `masked_redacted` / `safe_ref` / `count` / `distribution`; plaintext only with explicit internal authorization and strict necessity | P1/P0 depending exposure |
-| Risk entity fields | UID / user_id, DID, deviceId, deviceceid, IP, tokenId when it is an event identifier rather than a token secret, requestId, sourceId, strategyId, adminaction, appVersion, UA, device model, login method, coarse geo | controlled by audience scope; usable as analysis entities in trusted internal risk analysis | P1 if audience policy is wrong; not P0 credential leakage by default |
-| Derived / aggregate features | IP subnet, ASN, carrier, geo cluster, device risk tags, same-device count, registration cohort, behavior-object cluster, risk label distribution, success/failure counts, time-series summary | preferred output for reports and KIM responses | usually safe if no raw sensitive values |
+| `credential_secret` | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, storageState, auth credential in headers, KIM code, login ticket, credential secret | never plaintext; `present_redacted` / `credential_present_redacted` only | P0 |
+| `pii_strict` | phone number, ID card, real-name identity information, precise personal identity fields, verification code | limited masking / presence summary; no full plaintext | P1/P0 depending exposure |
+| `risk_entity_identifier` | UID / user_id, DID, deviceId, deviceceid, IP, tokenId when it is an event identifier rather than a token secret, eventId, sourceId, strategyId, hitFusePolicyCode, login method, logSource, timestamp, coarse geo | controlled by `output_scope`; usable as analysis entities in trusted internal risk analysis | P1 if audience policy is wrong; not P0 credential leakage by default |
+| `source_summary_metric` | IP subnet, ASN, carrier, geo cluster, device risk tags, same-device count, registration cohort, behavior-object cluster, risk label distribution, success/failure counts, time-series summary | preferred output for reports and KIM responses | usually safe if no raw sensitive values |
 
 ## 3. P0 Credential / Authentication Secrets
 
@@ -44,7 +51,7 @@ Output strategy:
 
 ## 4. Highly Sensitive Personal Information
 
-Default no plaintext:
+Default no full plaintext:
 
 - phone number.
 - ID card / real-name identity information.
@@ -53,9 +60,17 @@ Default no plaintext:
 
 Output strategy:
 
-- Use `masked_redacted`, `safe_ref`, `count`, or `distribution`.
-- Plaintext requires explicit internal authorization and strict necessity.
-- External or broad semi-open outputs should avoid plaintext.
+- phone number:
+  - `internal_risk_review`: keep first 7 digits, for example `1381234****`.
+  - `external_share`: keep first 3 digits, for example `138********`.
+  - Full phone number is never output.
+- ID card:
+  - never output the full number.
+  - `internal_risk_review`: only weak summary such as `id_card_present=true` and `birth_year_present=true`.
+  - `external_share`: only `id_card_present=true`.
+- real name:
+  - never output the raw name by default.
+  - use `name_present=true`.
 
 ## 5. Risk Entity Fields
 
@@ -99,21 +114,19 @@ Output strategy:
 - Prefer these features in KIM responses, reports, and cross-team sharing.
 - If derived features satisfy the analysis need, avoid raw detail.
 
-## 7. Audience Scope Matrix
+## 7. Output Scope Matrix
 
-| audience_scope | risk_entity_fields | credential_secrets | recommended_output |
-|---|---|---|---|
-| internal_trusted_risk_analysis | allowed when necessary | never plaintext | evidence card values or safe refs; credentials present_redacted |
-| KIM_semi_open | generally allowed with output-policy calibration | never plaintext | entity values when needed, otherwise safe_ref / partial mask / distribution |
-| broad_semi_open | default masked / safe_ref | never plaintext | safe_ref, count, distribution, derived features |
-| cross_team_or_external_share | default masked / aggregate only | never plaintext | masked, safe_ref, count, distribution, no raw detail |
+| output_scope | risk_entity_identifier | credential_secret | pii_strict | recommended_output |
+|---|---|---|---|---|
+| `internal_risk_review` | allowed when necessary | never plaintext | limited masking / weak summary | evidence card values or safe refs; credentials present_redacted |
+| `external_share` | masked / aggregate only | never plaintext | stricter masking / presence only | masked, safe_ref, count, distribution, no raw detail |
 
 ## 8. Validation Rules
 
 - IP / UID / DID / deviceId plaintext is not automatically P0 credential leakage.
 - Whether to mask risk entity fields depends on audience scope, sharing scope, field purpose, and output channel.
 - True P0 leakage only includes authentication credential plaintext or reusable secrets.
-- `no_sensitive_plaintext=true` must not be applied as a one-size-fits-all ban on all risk entity fields.
+- `sensitive_output=false` / `no_sensitive_plaintext=true` must not be applied as a one-size-fits-all ban on all risk entity fields. In browser-backed evidence cards it means no credential secrets and no raw full body / raw record / raw labelInfo / raw originalLog full dump.
 - Runtime validation and KIM E2E should classify fields through this policy.
 - Broad semi-open outputs should still default IP / UID / deviceId to safe refs or partial masks to prevent unbounded propagation.
 

@@ -87,11 +87,21 @@ browser_backed_source_result:
   latency_ms:
   source_card:
   source_quality:
+  output_scope: internal_risk_review | external_share
+  field_classification:
+    credential_secret: []
+    pii_strict: []
+    risk_entity_identifier: []
+    source_summary_metric: []
   sensitive_output: false
   source_provenance: browser_backed_service
 ```
 
 `blocked` / `auth_failed` / `network_error` / `platform_error` 是 source_quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
+
+默认 `output_scope=internal_risk_review`。内部研判 evidence card 可以展示最小必要风控实体字段，例如 UID / user_id、DID / device_id、IP、eventId、sourceId、hitFusePolicyCode、login method、logSource、timestamp。`output_scope=external_share` 时这些实体字段必须 masked。cookie / token / session / header / authorization / password、raw source body、raw login records、raw labelInfo、raw originalLog 任何模式都禁止输出。`sensitive_output=false` 只表示没有认证秘密和 raw dump，不表示没有展示风控实体字段。
+
+手机号属于 `pii_strict`：内部研判只可输出 `1381234****`，分享版只可输出 `138********`，任何模式都不得输出完整手机号。身份证号和真实姓名任何模式都不得输出原文；只能输出 `id_card_present=true`、必要时 `birth_year_present=true`，以及 `name_present=true`。
 
 账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
 
@@ -2082,6 +2092,7 @@ D. 先不要执行，只优化计划
 - blocked / partial source 必须显式展示 `permission_status`，并降低结论置信度。
 - `manual_input` 不能单独支撑 strong conclusion；`model_inference` 不能作为 raw evidence。
 - `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号等敏感原文；IP / UID / DID / deviceId 等风控实体字段按 `field_output_classification_policy_v1.md` 的受众范围决定是否输出原值、safe_ref 或 partial mask。
+- evidence card 默认使用 `output_scope=internal_risk_review`，内部研判可展示必要风控实体字段；`external_share` 分享版必须 masked。
 - IP / UID / DID / deviceId 完整输出不再默认等同 P0 credential leakage；真正 P0 只包括认证凭证明文和可直接复用的凭据。
 - `tokenId` 若只是 token 事件标识符，不是 token secret；建议默认输出 `token_id_ref` 或 partial mask。
 

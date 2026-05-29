@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import errno
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -41,6 +42,38 @@ ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDevice
 ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
 TRACK_ANALYSIS_BUNDLE_SOURCE_NAME = "track_analysis_account_security_bundle"
 TRACK_ANALYSIS_BUNDLE_MODE = "account_security_bundle"
+DEFAULT_OUTPUT_SCOPE = "internal_risk_review"
+OUTPUT_SCOPES = {"internal_risk_review", "external_share"}
+FIELD_CLASSIFICATION = {
+    "credential_secret": [
+        "cookie",
+        "token",
+        "session",
+        "header",
+        "authorization",
+        "password",
+        "raw_response_full_body",
+        "raw_login_records_full_dump",
+        "raw_labelInfo_full_dump",
+        "raw_originalLog_full_dump",
+    ],
+    "pii_strict": ["phone_number", "id_card", "real_name"],
+    "risk_entity_identifier": [
+        "user_id",
+        "uid",
+        "device_id",
+        "did",
+        "ip",
+        "eventId",
+        "sourceId",
+        "hitFusePolicyCode",
+        "strategy_code",
+        "logSource",
+        "method",
+        "timestamp",
+    ],
+    "source_summary_metric": ["records_count", "event_count", "duration", "field_presence", "latency_ms"],
+}
 
 FORBIDDEN_INPUT_KEYS = {
     "url",
@@ -80,14 +113,14 @@ DISPLAY_FORBIDDEN_FIELD_MARKERS = {
     "raw_profile",
     "raw_body",
     "raw_response",
-    "raw_deviceid",
-    "raw_device_id",
-    "raw_ip",
     "raw_login_records",
     "raw_labelinfo",
     "raw_originalLog",
-    "labelInfo",
-    "originalLog",
+    "password",
+    "authorization",
+    "cookie",
+    "session",
+    "credential",
 }
 
 
@@ -393,6 +426,8 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
     )
     source_quality = {
         "source_status": source_status,
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
         "sub_interface_statuses": sub_interface_statuses,
         "sub_interfaces_completed": completed,
         "sub_interfaces_missing": missing,
@@ -427,8 +462,14 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
             "getUseDuration": use_duration_summary,
             "getDeviceIds": device_ids_summary,
             "sub_interface_statuses": sub_interface_statuses,
+            "output_scope": DEFAULT_OUTPUT_SCOPE,
+            "field_classification": _field_classification_summary(),
             "body_policy": {
                 "raw_response_full_body_returned": False,
+                "credential_secret_plaintext_returned": False,
+                "raw_records_full_dump_returned": False,
+                "raw_labelInfo_full_dump_returned": False,
+                "raw_originalLog_full_dump_returned": False,
                 "sensitive_output": False,
             },
         },
@@ -501,8 +542,15 @@ def normalize_service_response(
     raw_status = _coerce_status(service_payload)
     error_type = service_payload.get("error_type")
     normalized_status, failure_layer = _normalize_status(raw_status, error_type)
-    source_card = service_payload.get("source_card") or _synthetic_source_card(action_name, normalized_status, error_type)
-    source_quality = service_payload.get("source_quality") or _synthetic_source_quality(normalized_status, error_type)
+    output_scope = _coerce_output_scope(service_payload.get("output_scope"))
+    source_card = _sanitize_display_material(
+        service_payload.get("source_card") or _synthetic_source_card(action_name, normalized_status, error_type),
+        output_scope,
+    )
+    source_quality = _sanitize_display_material(
+        service_payload.get("source_quality") or _synthetic_source_quality(normalized_status, error_type),
+        output_scope,
+    )
     source_checkpoint_private = _sanitize_source_checkpoint_private(service_payload)
     raw_reference_retained = bool(source_checkpoint_private.get("raw_references"))
     if isinstance(source_quality, Mapping):
@@ -510,6 +558,8 @@ def normalize_service_response(
         source_quality.setdefault("raw_reference_retained_for_followup", raw_reference_retained)
         source_quality.setdefault("redaction_applied", True)
         source_quality.setdefault("sensitive_output", False)
+        source_quality.setdefault("output_scope", output_scope)
+        source_quality.setdefault("field_classification", _field_classification_summary())
         source_quality.setdefault(
             "source_status_not_risk_exclusion",
             normalized_status in {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"},
@@ -525,6 +575,8 @@ def normalize_service_response(
         "error_type": error_type,
         "http_status": http_status,
         "latency_ms": service_payload.get("latency_ms"),
+        "output_scope": output_scope,
+        "field_classification": _field_classification_summary(),
         "source_card": source_card,
         "source_quality": source_quality,
         "source_checkpoint_private": source_checkpoint_private,
@@ -581,6 +633,7 @@ def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict
             "failure_layer": result.get("failure_layer"),
             "error_type": result.get("error_type"),
             "latency_ms": result.get("latency_ms"),
+            "output_scope": _coerce_output_scope(result.get("output_scope")),
             "source_card_present": result.get("source_card") is not None,
             "source_quality_present": result.get("source_quality") is not None,
             "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
@@ -590,9 +643,13 @@ def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict
     return matrix
 
 
-def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
+def build_partial_evidence_card(
+    results: Iterable[Mapping[str, Any]],
+    output_scope: str = DEFAULT_OUTPUT_SCOPE,
+) -> Dict[str, Any]:
     """Build a display-safe partial evidence card from normalized source results."""
 
+    scope = _coerce_output_scope(output_scope)
     materialized_results = [dict(result) for result in results]
     matrix = build_source_completion_matrix(materialized_results)
     evidence_sections = []
@@ -605,17 +662,20 @@ def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[st
                 "source_card_present": result.get("source_card") is not None,
                 "source_quality_present": result.get("source_quality") is not None,
                 "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
-                "business_summary": build_business_evidence_summary(result),
+                "business_summary": build_business_evidence_summary(result, output_scope=scope),
             }
         )
 
     evidence_summary_by_source = {
-        str(result.get("source_name")): build_business_evidence_summary(result) for result in materialized_results
+        str(result.get("source_name")): build_business_evidence_summary(result, output_scope=scope)
+        for result in materialized_results
     }
     missing_evidence = build_missing_evidence(materialized_results)
     return {
         "card_type": "partial_evidence_card",
         "sensitive_output": False,
+        "output_scope": scope,
+        "field_classification": _field_classification_summary(),
         "source_completion_matrix": matrix,
         "completed_sources": matrix["completed_sources"],
         "no_data_sources": matrix["no_data_sources"],
@@ -629,6 +689,10 @@ def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[st
             "no_data_not_no_risk": True,
             "strategy_hit_device_risk_activity_profile_are_evidence_not_final_judgement": True,
             "final_risk_judgement_made": False,
+            "sensitive_output_false_meaning": (
+                "no credential_secret, raw full body, raw records, raw labelInfo, or raw originalLog full dump; "
+                "risk_entity_identifier may appear in internal_risk_review"
+            ),
         },
         "missing_evidence": missing_evidence,
         "next_action": build_next_action(missing_evidence),
@@ -637,21 +701,28 @@ def build_partial_evidence_card(results: Iterable[Mapping[str, Any]]) -> Dict[st
     }
 
 
-def build_business_evidence_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
+def build_business_evidence_summary(
+    result: Mapping[str, Any],
+    output_scope: str = DEFAULT_OUTPUT_SCOPE,
+) -> Dict[str, Any]:
     """Extract display-safe business evidence from source_card/source_quality."""
 
+    if output_scope == DEFAULT_OUTPUT_SCOPE and result.get("output_scope"):
+        scope = _coerce_output_scope(result.get("output_scope"))
+    else:
+        scope = _coerce_output_scope(output_scope)
     source_name = str(result.get("source_name") or "")
     action_name = str(result.get("action_name") or "")
     action = action_name or _source_to_action(source_name)
     if action == "track_analysis_summary":
-        return _track_analysis_summary(result)
+        return _track_analysis_summary(result, scope)
     if action == "rcp_snapshot":
-        return _rcp_summary(result)
+        return _rcp_summary(result, scope)
     if action == "weapon_inventory":
-        return _weapon_summary(result)
+        return _weapon_summary(result, scope)
     if action == "login_logs_search":
-        return _login_logs_summary(result)
-    return _generic_summary(result)
+        return _login_logs_summary(result, scope)
+    return _generic_summary(result, scope)
 
 
 def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[str, Any]]:
@@ -715,12 +786,12 @@ def _source_to_action(source_name: str) -> str:
     return source_name
 
 
-def _summary_material(result: Mapping[str, Any]) -> Dict[str, Any]:
+def _summary_material(result: Mapping[str, Any], output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Dict[str, Any]:
     merged: Dict[str, Any] = {}
     for key in ("source_card", "source_quality", "response_shape_summary"):
         value = result.get(key)
         if isinstance(value, Mapping):
-            merged[key] = value
+            merged[key] = _sanitize_display_material(value, output_scope)
     return merged
 
 
@@ -737,60 +808,79 @@ def _has_private_raw_reference(result: Mapping[str, Any], ref_type: str) -> bool
     return False
 
 
-def _find_first(value: Any, candidate_keys: Iterable[str]) -> Any:
+def _find_first(value: Any, candidate_keys: Iterable[str], output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Any:
     candidates = set(candidate_keys)
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            if key in candidates and _is_safe_display_value(key, nested):
+            if key in candidates and _is_safe_display_value(key, nested, output_scope):
                 return nested
         for key, nested in value.items():
             if not _is_safe_display_key(str(key)):
                 continue
-            found = _find_first(nested, candidates)
+            found = _find_first(nested, candidates, output_scope)
             if found is not None:
                 return found
     elif isinstance(value, list):
         for item in value:
-            found = _find_first(item, candidates)
+            found = _find_first(item, candidates, output_scope)
             if found is not None:
                 return found
     return None
 
 
-def _pick_fields(material: Mapping[str, Any], field_names: Iterable[str]) -> Dict[str, Any]:
+def _pick_fields(
+    material: Mapping[str, Any],
+    field_names: Iterable[str],
+    output_scope: str = DEFAULT_OUTPUT_SCOPE,
+) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     for field_name in field_names:
-        value = _find_first(material, (field_name,))
+        value = _find_first(material, (field_name,), output_scope)
         if value is not None:
-            result[field_name] = _safe_display_value(field_name, value)
+            result[field_name] = _safe_display_value(field_name, value, output_scope)
     return result
 
 
-def _safe_display_value(key: str, value: Any) -> Any:
+def _safe_display_value(key: str, value: Any, output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Any:
     if not _is_safe_display_key(key):
         return "<redacted>"
     if isinstance(value, bool) or value is None:
         return value
+    if isinstance(value, str) and _is_masked_placeholder(value):
+        return value
+    if _is_phone_key(key) and (_looks_like_phone(str(value)) or _looks_like_internal_phone_mask(str(value))):
+        return _mask_phone(str(value), output_scope)
+    if _is_id_card_key(key) and _looks_like_id_card(str(value)):
+        return _id_card_summary(str(value), output_scope)
+    if _is_real_name_key(key):
+        return {"name_present": True}
+    if _is_risk_entity_key(key) and isinstance(value, (str, int, float)):
+        text = str(value)
+        return text[:160] if output_scope == "internal_risk_review" else _mask_risk_entity(key, text)
     if isinstance(value, (int, float)):
         return value
     if isinstance(value, str):
-        return value[:160] if _is_safe_display_string(key, value) else "<redacted>"
+        return _display_string_value(key, value, output_scope)
     if isinstance(value, list):
         safe_values = []
         for item in value[:8]:
             if isinstance(item, (str, int, float, bool)) or item is None:
-                safe_values.append(_safe_display_value(key, item))
+                safe_values.append(_safe_display_value(key, item, output_scope))
             elif isinstance(item, Mapping):
                 safe_values.append(_safe_shape_keys(item))
             else:
                 safe_values.append(type(item).__name__)
         return safe_values
     if isinstance(value, Mapping):
-        return _safe_shape_keys(value)
+        return {
+            str(nested_key): _safe_display_value(str(nested_key), nested_value, output_scope)
+            for nested_key, nested_value in list(value.items())[:16]
+            if _is_safe_display_key(str(nested_key))
+        }
     return str(type(value).__name__)
 
 
-def _is_safe_display_value(key: str, value: Any) -> bool:
+def _is_safe_display_value(key: str, value: Any, output_scope: str = DEFAULT_OUTPUT_SCOPE) -> bool:
     if not _is_safe_display_key(key):
         return False
     if isinstance(value, Mapping):
@@ -798,34 +888,189 @@ def _is_safe_display_value(key: str, value: Any) -> bool:
     if isinstance(value, list):
         return True
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return _is_safe_display_string(key, str(value))
+        return _is_safe_display_string(key, str(value), output_scope)
     return False
 
 
 def _is_safe_display_key(key: str) -> bool:
     lowered = key.lower()
+    if lowered in {"labelinfo", "originallog"}:
+        return False
     return not any(marker.lower() in lowered for marker in DISPLAY_FORBIDDEN_FIELD_MARKERS)
 
 
-def _is_safe_display_string(key: str, value: str) -> bool:
+def _is_safe_display_string(key: str, value: str, output_scope: str = DEFAULT_OUTPUT_SCOPE) -> bool:
     lowered_key = key.lower()
     lowered_value = value.lower()
     if not _is_safe_display_key(key):
         return False
     if "labelinfo" in lowered_value or "originallog" in lowered_value:
         return False
+    if _is_credential_secret_key(key) or _looks_like_credential_secret(value):
+        return False
+    if _is_real_name_key(key):
+        return False
+    if _is_id_card_key(key) and _looks_like_id_card(value):
+        return False
+    if _is_phone_key(key) and _looks_like_phone(value):
+        return True
     if lowered_key.endswith("_count") or lowered_key.endswith("_present"):
         return True
-    if "deviceid" in lowered_key or "device_id" in lowered_key or lowered_key in {"ip", "raw_ip"}:
+    if output_scope == "external_share" and _is_risk_entity_key(key):
+        return True
+    if _is_risk_entity_key(key):
+        return True
+    if _looks_like_phone(value) or _looks_like_id_card(value):
         return False
     return True
+
+
+def _display_string_value(key: str, value: str, output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Any:
+    if not _is_safe_display_string(key, value, output_scope):
+        if _is_real_name_key(key):
+            return {"name_present": True}
+        if _is_id_card_key(key) and _looks_like_id_card(value):
+            return _id_card_summary(value, output_scope)
+        return "<redacted>"
+    if _is_phone_key(key) and _looks_like_phone(value):
+        return _mask_phone(value, output_scope)
+    if _is_id_card_key(key) and _looks_like_id_card(value):
+        return _id_card_summary(value, output_scope)
+    if _is_real_name_key(key):
+        return {"name_present": True}
+    if _is_risk_entity_key(key):
+        return value[:160] if output_scope == "internal_risk_review" else _mask_risk_entity(key, value)
+    if _looks_like_phone(value) or _looks_like_id_card(value) or _looks_like_credential_secret(value):
+        return "<redacted>"
+    return value[:160]
+
+
+def _sanitize_display_material(value: Any, output_scope: str = DEFAULT_OUTPUT_SCOPE, key: str = "") -> Any:
+    if isinstance(value, Mapping):
+        result: Dict[str, Any] = {}
+        for nested_key, nested_value in value.items():
+            nested_key_text = str(nested_key)
+            if not _is_safe_display_key(nested_key_text):
+                continue
+            result[nested_key_text] = _sanitize_display_material(nested_value, output_scope, nested_key_text)
+        return result
+    if isinstance(value, list):
+        return [_sanitize_display_material(item, output_scope, key) for item in value[:50]]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return _safe_display_value(key or "value", value, output_scope)
+    return str(type(value).__name__)
 
 
 def _safe_shape_keys(value: Mapping[str, Any]) -> list[str]:
     return [str(key) for key in value.keys() if _is_safe_display_key(str(key))][:16]
 
 
-def _base_source_summary(result: Mapping[str, Any], evidence_type: str) -> Dict[str, Any]:
+def _coerce_output_scope(scope: Any) -> str:
+    return str(scope) if isinstance(scope, str) and scope in OUTPUT_SCOPES else DEFAULT_OUTPUT_SCOPE
+
+
+def _field_classification_summary() -> Dict[str, list[str]]:
+    return {key: list(values) for key, values in FIELD_CLASSIFICATION.items()}
+
+
+def _is_credential_secret_key(key: str) -> bool:
+    lowered = key.lower()
+    if "tokenid" in lowered or "token_id" in lowered:
+        return False
+    return any(
+        marker in lowered
+        for marker in (
+            "cookie",
+            "authorization",
+            "password",
+            "credential",
+            "secret",
+            "session",
+            "header",
+            "accesstoken",
+            "access_token",
+            "refreshtoken",
+            "refresh_token",
+            "jwt",
+            "csrf",
+        )
+    ) or lowered == "token"
+
+
+def _looks_like_credential_secret(value: str) -> bool:
+    text = str(value)
+    return bool(re.search(r"(authorization|cookie|token|session|password|credential|secret)\s*[:=]\s*\S+", text, re.I))
+
+
+def _is_risk_entity_key(key: str) -> bool:
+    lowered = key.lower()
+    if _is_credential_secret_key(key):
+        return False
+    if lowered.endswith("_count") or lowered.endswith("_present") or lowered in {"count", "records_count", "event_count"}:
+        return False
+    return bool(
+        re.search(
+            r"(user_?ids?|^uid$|device_?ids?|deviceid|device_did|^did$|(^|_)ip($|_)|ipaddr|clientip|remoteip|loginip|event_?id|source_?id|hitfusepolicycode|strategy|logsource|method|timestamp)",
+            lowered,
+            re.I,
+        )
+    )
+
+
+def _is_phone_key(key: str) -> bool:
+    return bool(re.search(r"(phone|mobile|手机号|手机|电话号码|phone_number)", str(key), re.I))
+
+
+def _looks_like_phone(value: str) -> bool:
+    return bool(re.fullmatch(r"1\d{10}", re.sub(r"\D", "", str(value))))
+
+
+def _looks_like_internal_phone_mask(value: str) -> bool:
+    return bool(re.fullmatch(r"1\d{6}\*{4}", str(value)))
+
+
+def _mask_phone(value: str, output_scope: str) -> str:
+    digits = re.sub(r"\D", "", str(value))
+    return f"{digits[:3]}********" if output_scope == "external_share" else f"{digits[:7]}****"
+
+
+def _is_id_card_key(key: str) -> bool:
+    return bool(re.search(r"(id.?card|identity|身份证|证件号|idno)", str(key), re.I))
+
+
+def _looks_like_id_card(value: str) -> bool:
+    return bool(re.fullmatch(r"\d{17}[\dXx]", str(value)))
+
+
+def _id_card_summary(value: str, output_scope: str) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"id_card_present": True}
+    if output_scope == "internal_risk_review":
+        result["birth_year_present"] = bool(re.fullmatch(r"\d{6}\d{4}\d{7}[\dXx]", str(value)))
+    return result
+
+
+def _is_real_name_key(key: str) -> bool:
+    return bool(re.search(r"(^name$|real.?name|姓名|真实姓名)", str(key), re.I))
+
+
+def _mask_risk_entity(key: str, value: str) -> str:
+    text = str(value)
+    lowered = str(key).lower()
+    if "ip" in lowered or re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", text):
+        parts = text.split(".")
+        return f"{parts[0]}.{parts[1]}.*.*" if len(parts) == 4 else "[masked_ip]"
+    if "device" in lowered or "did" in lowered or text.startswith(("ANDROID_", "IOS_")):
+        return f"[masked_device_id:length={len(text)}]"
+    if "user" in lowered or lowered == "uid":
+        return f"[masked_user_id:length={len(text)}]"
+    return f"[masked_identifier:length={len(text)}]"
+
+
+def _is_masked_placeholder(value: str) -> bool:
+    return bool(re.fullmatch(r"\[masked_[a-z_]+:length=\d+\]", str(value)))
+
+
+def _base_source_summary(result: Mapping[str, Any], evidence_type: str, output_scope: str) -> Dict[str, Any]:
     return {
         "evidence_type": evidence_type,
         "source_name": result.get("source_name"),
@@ -833,17 +1078,21 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str) -> Dict[
         "source_status": result.get("source_status"),
         "error_type": result.get("error_type"),
         "latency_ms": result.get("latency_ms"),
+        "output_scope": output_scope,
+        "field_classification": _field_classification_summary(),
         "source_card_exists": result.get("source_card") is not None,
         "source_quality_exists": result.get("source_quality") is not None,
         "sensitive_output": False,
         "raw_body_suppressed": True,
+        "raw_records_full_dump_suppressed": True,
+        "credential_secret_plaintext_suppressed": True,
         "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
     }
 
 
-def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    material = _summary_material(result)
-    summary = _base_source_summary(result, "track_analysis")
+def _track_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "track_analysis", output_scope)
     summary["bundle_summary"] = _pick_fields(
         material,
         (
@@ -854,6 +1103,7 @@ def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "sub_interfaces_missing",
             "account_security_bundle",
         ),
+        output_scope,
     )
     summary["profile_summary"] = _pick_fields(
         material,
@@ -863,6 +1113,7 @@ def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "active_days_bucket_present",
             "device_ids_count",
         ),
+        output_scope,
     )
     summary["latest_timestamp_summary"] = _pick_fields(
         material,
@@ -870,21 +1121,24 @@ def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "latest_datetime_present",
             "uid_did_relation_latest_datetime_present",
         ),
+        output_scope,
     )
     summary["use_duration_summary"] = _pick_fields(
         material,
         ("rows_count", "nonzero_days_count", "total_duration", "peak_date"),
+        output_scope,
     )
     summary["device_ids_summary"] = _pick_fields(
         material,
-        ("device_ids_count", "device_model_fields_present", "last_active_fields_present"),
+        ("device_ids_count", "device_id_sample", "device_id_sample_masked", "device_model_fields_present", "last_active_fields_present"),
+        output_scope,
     )
     return summary
 
 
-def _rcp_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    material = _summary_material(result)
-    summary = _base_source_summary(result, "rcp_snapshot")
+def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "rcp_snapshot", output_scope)
     summary["event_summary"] = _pick_fields(
         material,
         (
@@ -894,22 +1148,28 @@ def _rcp_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "first_event_shape_keys",
             "dynamic_columns_observed",
         ),
+        output_scope,
+    )
+    summary["first_event_entity_samples"] = _pick_fields(material, ("first_event_entity_samples",), output_scope).get(
+        "first_event_entity_samples",
+        {},
     )
     summary["chaining_keys_present"] = {
-        "hitFusePolicyCode": _find_first(material, ("hitFusePolicyCode_present", "hitFusePolicyCode")) is not None,
-        "eventId": _find_first(material, ("eventId_present", "eventId")) is not None,
-        "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime")) is not None,
+        "hitFusePolicyCode": _find_first(material, ("hitFusePolicyCode_present", "hitFusePolicyCode"), output_scope) is not None,
+        "eventId": _find_first(material, ("eventId_present", "eventId"), output_scope) is not None,
+        "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime"), output_scope) is not None,
     }
     summary["boundary"] = "RCP is a strategy event entry source, not a final risk judgement."
     return summary
 
 
-def _weapon_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    material = _summary_material(result)
-    summary = _base_source_summary(result, "weapon_inventory")
+def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "weapon_inventory", output_scope)
     summary["graph_summary"] = _pick_fields(
         material,
-        ("graph_status", "related_device_count", "related_user_count"),
+        ("graph_status", "related_device_count", "related_user_count", "related_device_id_sample", "related_user_id_sample"),
+        output_scope,
     )
     summary["risk_summary"] = _pick_fields(
         material,
@@ -920,8 +1180,14 @@ def _weapon_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "readable_label_sample",
             "userLevel_observed",
         ),
+        output_scope,
     )
-    summary["raw_weapon_fields_suppressed"] = ["raw deviceId", "raw labelInfo", "raw originalLog"]
+    summary["original_log_summary"] = _pick_fields(
+        material,
+        ("originalLog_key_summary", "originalLog_eventId_sample"),
+        output_scope,
+    )
+    summary["raw_weapon_fields_suppressed"] = ["raw labelInfo full dump", "raw originalLog full dump"]
     summary["chaining_summary"] = {
         "raw_device_safe_handle_retained": _has_private_raw_reference(result, "device_id"),
         "riskData_chaining_uses_safe_handle_only": True,
@@ -930,9 +1196,9 @@ def _weapon_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
     return summary
 
 
-def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    material = _summary_material(result)
-    summary = _base_source_summary(result, "login_logs")
+def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    material = _summary_material(result, output_scope)
+    summary = _base_source_summary(result, "login_logs", output_scope)
     summary["login_window_summary"] = _pick_fields(
         material,
         (
@@ -940,7 +1206,14 @@ def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "time_window_observed",
             "first_login_time_observed",
             "last_login_time_observed",
+            "ip_sample",
+            "device_id_sample",
+            "user_id_sample",
+            "method_sample",
+            "logSource_sample",
+            "phone_number_sample",
         ),
+        output_scope,
     )
     summary["login_window_summary"]["source_status"] = result.get("source_status")
     summary["login_window_summary"]["error_type"] = result.get("error_type")
@@ -950,6 +1223,11 @@ def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
         and result.get("latency_ms") is not None
         and result.get("sensitive_output") is False
     )
+    summary["pii_strict_summary"] = _pick_fields(
+        material,
+        ("phone_number_sample", "id_card", "id_card_present", "birth_year_present", "real_name", "name_present"),
+        output_scope,
+    )
     if "records_count" not in summary["login_window_summary"] and result.get("source_status") == "no_data":
         summary["login_window_summary"]["records_count"] = 0
     summary["no_data_not_risk_exclusion"] = True
@@ -958,8 +1236,8 @@ def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
     return summary
 
 
-def _generic_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
-    summary = _base_source_summary(result, "generic_browser_backed_source")
+def _generic_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
+    summary = _base_source_summary(result, "generic_browser_backed_source", output_scope)
     summary["summary"] = "source result normalized; raw body suppressed"
     return summary
 
@@ -1027,6 +1305,8 @@ def _transport_result(
         "error_type": error_type,
         "http_status": http_status,
         "latency_ms": int((time.monotonic() - started_at) * 1000),
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
         "source_card": _synthetic_source_card(action_name, normalized_status, error_type),
         "source_quality": _synthetic_source_quality(normalized_status, error_type, detail=detail),
         "sensitive_output": False,
@@ -1147,8 +1427,14 @@ def _synthetic_source_card(action_name: str, source_status: str, error_type: Opt
         "source_provenance": "browser_backed_service",
         "body_policy": {
             "raw_response_full_body_returned": False,
+            "credential_secret_plaintext_returned": False,
+            "raw_records_full_dump_returned": False,
+            "raw_labelInfo_full_dump_returned": False,
+            "raw_originalLog_full_dump_returned": False,
             "sensitive_output": False,
         },
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
     }
 
 
@@ -1162,6 +1448,8 @@ def _synthetic_source_quality(source_status: str, error_type: Optional[str], det
         "redaction_applied": True,
         "raw_reference_retained_for_followup": False,
         "sensitive_output": False,
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
     }
     if detail:
         result["sanitized_detail"] = detail[:160]
@@ -1213,16 +1501,30 @@ def _fixture_payload(
         "source_status": source_status,
         "error_type": error_type,
         "latency_ms": 123,
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
         "source_card": {
             "source_name": ACTION_TO_SOURCE[action_name],
             "action_name": action_name,
             "source_status": source_status,
-            "body_policy": {"raw_response_full_body_returned": False},
+            "output_scope": DEFAULT_OUTPUT_SCOPE,
+            "field_classification": _field_classification_summary(),
+            "body_policy": {
+                "raw_response_full_body_returned": False,
+                "credential_secret_plaintext_returned": False,
+                "raw_records_full_dump_returned": False,
+                "raw_labelInfo_full_dump_returned": False,
+                "raw_originalLog_full_dump_returned": False,
+                "sensitive_output": False,
+            },
         },
         "source_quality": {
             "source_status": source_status,
             "error_type": error_type,
+            "output_scope": DEFAULT_OUTPUT_SCOPE,
+            "field_classification": _field_classification_summary(),
             "no_data_not_risk_exclusion": source_status in NO_DATA_STATUSES,
+            "sensitive_output_false_meaning": "no credential_secret/raw dumps; risk entities allowed in internal review",
         },
         "sensitive_output": False,
         "data": {
@@ -1254,6 +1556,7 @@ def _fixture_payload(
                 "fan_distribution_present": True,
                 "active_days_bucket_present": True,
                 "device_ids_count": 2,
+                "user_id_sample": "2871834924",
             }
         if track_sub_interface in {None, "getLastestDateTime"}:
             source_card["latest_timestamp_summary"] = {
@@ -1270,6 +1573,8 @@ def _fixture_payload(
         if track_sub_interface in {None, "getDeviceIds"}:
             source_card["getDeviceIds"] = {
                 "device_ids_count": 2,
+                "device_id_sample": "ANDROID_track_device_001",
+                "deviceIds": ["ANDROID_track_device_001", "IOS_track_device_002"],
                 "device_model_fields_present": True,
                 "last_active_fields_present": True,
             }
@@ -1280,6 +1585,13 @@ def _fixture_payload(
             "returned_columns_observed": ["eventId", "_occurTime", "hitFusePolicyCode"],
             "first_event_shape_keys": ["eventId", "_occurTime", "hitFusePolicyCode"],
             "dynamic_columns_observed": ["hitFusePolicyCode"],
+            "first_event_entity_samples": {
+                "eventId": "evt_rcp_001",
+                "sourceId": "src_rcp_001",
+                "deviceId": "ANDROID_rcp_device_001",
+                "hitFusePolicyCode": "BS_fake_account_register",
+                "_occurTime": "2026-05-29 10:00:00",
+            },
             "hitFusePolicyCode_present": True,
             "eventId_present": True,
             "_occurTime_present": True,
@@ -1289,11 +1601,14 @@ def _fixture_payload(
             "graph_status": "completed",
             "related_device_count": 2,
             "related_user_count": 4,
+            "related_device_id_sample": "ANDROID_weapon_device_001",
+            "related_user_id_sample": "2871834924",
             "riskData_status": "completed",
             "risk_label_count": 2,
             "risk_group_names_observed": ["account_risk", "device_risk"],
             "readable_label_sample": ["risk_label_sample"],
             "userLevel_observed": True,
+            "originalLog_eventId_sample": "evt_weapon_001",
             "raw_labelInfo": {"deviceId": "raw_device_should_not_render", "originalLog": "raw_log_should_not_render"},
         }
         payload["source_checkpoint_private"] = {
@@ -1325,6 +1640,14 @@ def _fixture_payload(
             "time_window_observed": "visible_window",
             "first_login_time_observed": None,
             "last_login_time_observed": None,
+            "ip_sample": "10.20.30.40",
+            "device_id_sample": "ANDROID_login_device_001",
+            "user_id_sample": "2871834924",
+            "method_sample": "PASSWORD",
+            "logSource_sample": "account_login",
+            "phone_number_sample": "13812345678",
+            "id_card": "110105199001011234",
+            "real_name": "Fixture User",
         }
     return payload
 
@@ -1481,9 +1804,93 @@ def run_fixture_tests() -> Dict[str, Any]:
     raw_payload["data"]["login_records"] = [{"ip": "203.0.113.10", "deviceId": "ANDROID_raw"}]
     result = normalize_service_response("login_logs_search", raw_payload)
     serialized_result = json.dumps(result, ensure_ascii=True)
-    assert "login_records" not in serialized_result
+    assert "203.0.113.10" not in serialized_result
     assert "ANDROID_raw" not in serialized_result
     results.append(("raw_login_record_body_not_output", "passed"))
+
+    internal_results = [
+        normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
+        normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "completed")),
+        normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed")),
+        normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "completed")),
+    ]
+    internal_card = build_partial_evidence_card(internal_results)
+    internal_text = json.dumps(internal_card, ensure_ascii=True)
+    assert internal_card["output_scope"] == "internal_risk_review"
+    assert "10.20.30.40" in internal_text
+    assert "ANDROID_login_device_001" in internal_text
+    assert "ANDROID_weapon_device_001" in internal_text
+    assert "2871834924" in internal_text
+    assert "evt_rcp_001" in internal_text
+    assert "evt_weapon_001" in internal_text
+    assert "src_rcp_001" in internal_text
+    assert internal_card["evidence_boundary"]["sensitive_output_false_meaning"].startswith("no credential_secret")
+    assert internal_card["sensitive_output"] is False
+    assert "13812345678" not in internal_text
+    assert "1381234****" in internal_text
+    assert "110105199001011234" not in internal_text
+    assert "Fixture User" not in internal_text
+    assert "raw_device_should_not_render" not in internal_text
+    assert "raw_log_should_not_render" not in internal_text
+    results.append(("internal_risk_review_entity_fields_allowed", "passed"))
+
+    external_card = build_partial_evidence_card(internal_results, output_scope="external_share")
+    external_text = json.dumps(external_card, ensure_ascii=True)
+    assert external_card["output_scope"] == "external_share"
+    assert "10.20.30.40" not in external_text
+    assert "10.20.*.*" in external_text
+    assert "ANDROID_login_device_001" not in external_text
+    assert "ANDROID_weapon_device_001" not in external_text
+    assert "[masked_device_id:length=24]" in external_text
+    assert "evt_rcp_001" not in external_text
+    assert "evt_weapon_001" not in external_text
+    assert "src_rcp_001" not in external_text
+    assert "[masked_identifier:length=11]" in external_text
+    assert "2871834924" not in external_text
+    assert "[masked_user_id:length=10]" in external_text
+    assert "13812345678" not in external_text
+    assert "138********" in external_text
+    assert "110105199001011234" not in external_text
+    assert "Fixture User" not in external_text
+    results.append(("external_share_risk_entities_masked", "passed"))
+
+    numeric_user_payload = _fixture_payload("login_logs_search", "completed")
+    numeric_user_payload["source_card"]["login_logs_summary"]["user_id_sample"] = "12345678901"
+    numeric_user_result = normalize_service_response("login_logs_search", numeric_user_payload)
+    numeric_user_card = build_partial_evidence_card([numeric_user_result])
+    numeric_user_summary = numeric_user_card["evidence_summary_by_source"]["login_logs_search"]
+    assert numeric_user_summary["login_window_summary"]["user_id_sample"] == "12345678901"
+    assert numeric_user_summary["login_window_summary"]["phone_number_sample"] == "1381234****"
+    numeric_user_text = json.dumps(numeric_user_card, ensure_ascii=True)
+    assert "13812345678" not in numeric_user_text
+    results.append(("phone_masking_does_not_reclassify_numeric_user_id", "passed"))
+
+    credential_payload = _fixture_payload("login_logs_search", "completed")
+    credential_payload["source_card"]["login_logs_summary"]["authorization"] = "Bearer raw_secret_value"
+    credential_payload["source_card"]["login_logs_summary"]["cookie"] = "ks_session=raw_cookie_value"
+    credential_payload["source_card"]["login_logs_summary"]["token"] = "raw_token_value"
+    credential_result = normalize_service_response("login_logs_search", credential_payload)
+    credential_card = build_partial_evidence_card([credential_result])
+    credential_text = json.dumps(credential_card, ensure_ascii=True)
+    assert "raw_secret_value" not in credential_text
+    assert "raw_cookie_value" not in credential_text
+    assert "raw_token_value" not in credential_text
+    assert credential_card["sensitive_output"] is False
+    results.append(("credential_secret_never_output", "passed"))
+
+    raw_dump_payload = _fixture_payload("weapon_inventory", "completed")
+    raw_dump_payload["source_card"]["raw_body"] = {"full": "raw_full_body_should_not_render"}
+    raw_dump_payload["source_card"]["raw_login_records"] = [{"ip": "198.51.100.10"}]
+    raw_dump_payload["source_card"]["raw_labelInfo"] = {"label": "raw_label_should_not_render"}
+    raw_dump_payload["source_card"]["raw_originalLog"] = {"eventId": "raw_original_event_should_not_render"}
+    raw_dump_result = normalize_service_response("weapon_inventory", raw_dump_payload)
+    raw_dump_card = build_partial_evidence_card([raw_dump_result])
+    raw_dump_text = json.dumps(raw_dump_card, ensure_ascii=True)
+    assert "raw_full_body_should_not_render" not in raw_dump_text
+    assert "198.51.100.10" not in raw_dump_text
+    assert "raw_label_should_not_render" not in raw_dump_text
+    assert "raw_original_event_should_not_render" not in raw_dump_text
+    results.append(("raw_body_records_labelinfo_originallog_not_output", "passed"))
 
     completed = normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed"))
     no_data = normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "no_data"))
@@ -1559,7 +1966,7 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert four_source_card["missing_evidence"][0]["source_name"] == "login_logs_search"
     assert four_source_card["evidence_boundary"]["final_risk_judgement_made"] is False
     serialized_card = json.dumps(four_source_card, ensure_ascii=True)
-    assert "raw_labelInfo" not in serialized_card
+    assert '"raw_labelInfo":' not in serialized_card
     assert "raw_device_should_not_render" not in serialized_card
     assert "raw_log_should_not_render" not in serialized_card
     results.append(("four_source_business_evidence_summary", "passed"))
