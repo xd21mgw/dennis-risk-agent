@@ -99,14 +99,41 @@ Evidence handling:
 - `TOOL_CALL` can provide provenance such as `query_id`, generated SQL, table names, and trace handle, but it cannot be used directly as a business conclusion.
 - `AGENT_END` is terminal metadata only.
 
+## Sanitized Fixture
+
+The local repo carries a sanitized cloud Skill parity fixture:
+
+```yaml
+fixture: computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
+contains_raw_cookie_token_session_header: false
+contains_real_query_id_or_trace_id: false
+contains_real_user_data: false
+response_envelope:
+  steps:
+    - type: MODEL_THINKING
+    - type: TOOL_CALL
+      provenance_only:
+        query_id_present: true
+        trace_id_present: true
+        generated_sql_present: true
+    - type: MODEL_ANSWER
+      evidence_source: true
+    - type: AGENT_END
+```
+
+This fixture is the first source for local parser parity. Live response-shape probing is only a fallback when the cloud Skill fixture and contract are insufficient, and must remain gated by explicit live dry-run authorization.
+
 ## Local Normalization Contract
 
 The local normalizer must support:
 
 - extract `MODEL_ANSWER`
+- support `steps[]`, `data.steps[]`, `data.messages[]`, `result.steps[]`, OpenAI-like `choices[].message.content` / `choices[].delta.content`, and top-level `answer` / `content` fallback
 - parse SQL block from `MODEL_ANSWER`
 - parse Markdown table from `MODEL_ANSWER`
 - preserve `TOOL_CALL.query_id` / `TOOL_CALL.generated_sql` as provenance only
+- mark fallback text as `model_answer_source=content_fallback` or `answer_field`
+- mark missing interpretable content as `source_schema_drift` / `missing_model_answer`
 - output `status=sql_generated` when SQL is present but no table/result rows exist
 - output `status=completed` when normalized table rows exist
 - output `status=no_data` only when MODEL_ANSWER states no data
@@ -126,4 +153,3 @@ local_live_verified: false
 ```
 
 Passing parity check means `cloud_skill_verified_contract + local_connector_contract_ready`, not local live execution.
-

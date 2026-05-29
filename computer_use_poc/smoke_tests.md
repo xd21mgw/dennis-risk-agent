@@ -8113,7 +8113,7 @@
 - test_id: FULL-RUNTIME-DATAAGENT-RESPONSE-ENVELOPE-PROBE-001
 - input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --live-dry-run --allow-live-dry-run --probe-response-shape --case single_user_ato --json`。
 - expected_runtime_behavior: sanitized_shape_probe_only_after_explicit_authorization
-- expected_output_boundary: probe 不得输出 raw response；文本字段只能输出 length；SQL / query_id / trace_id 只能输出 present=true/false；不得输出 cookie/token/session/header；HTTP 200 但无 `MODEL_ANSWER` 不得标 completed；缺少可解释内容必须标 `parse_error` 或 `source_schema_drift`；`content_fallback` 可作为 `model_answer_source`，但必须带 caveat。
+- expected_output_boundary: probe 不得输出 raw response；文本字段只能输出 length；SQL / query_id / trace_id 只能分别通过 `sql_field_paths_present_only`、`query_id_paths_present_only`、`trace_id_paths_present_only` 输出 present=true/false；不得输出 cookie/token/session/header；HTTP 200 但无 `MODEL_ANSWER` 不得标 completed；缺少可解释内容必须标 `parse_error` 或 `source_schema_drift`；`content_fallback` 可作为 `model_answer_source`，但必须带 caveat。
 
 ## 875. Browser-backed evidence card display summary
 

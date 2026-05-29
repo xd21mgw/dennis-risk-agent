@@ -35,6 +35,16 @@ normalized_response:
       - no_data
       - permission_denied
       - sql_generated
+      - parse_error
+      - source_schema_drift
+  model_answer_source:
+    type: string
+    required: true
+    allowed:
+      - model_answer_step
+      - content_fallback
+      - answer_field
+      - missing
   generated_sql:
     type: string
     required: false
@@ -111,6 +121,18 @@ normalized_response:
     required: true
     fields:
       source_name: dataagent_hive
+      source_status:
+        allowed:
+          - pending
+          - running
+          - completed
+          - failed
+          - timeout
+          - no_data
+          - permission_denied
+          - sql_generated
+          - parse_error
+          - source_schema_drift
       permission_status:
       response_type:
       reliability_level:
@@ -125,6 +147,12 @@ normalized_response:
         meaning: true only when step-based JSON was received and accepted for normalization.
       model_answer_extracted:
         meaning: true only when MODEL_ANSWER content was extracted.
+      model_answer_source:
+        allowed:
+          - model_answer_step
+          - content_fallback
+          - answer_field
+          - missing
       dataagent_called:
         meaning: legacy compatibility alias; do not use as a substitute for step_response_received.
       hive_called:
@@ -161,6 +189,8 @@ sensitive_field_policy:
     - token
     - session
     - header
+    - authorization
+    - password
     - email
     - id_card
   behavior:
@@ -186,3 +216,46 @@ status_boundary:
     evidence_allowed: false
   permission_denied:
     evidence_allowed: false
+  parse_error:
+    meaning: Response content existed but could not be normalized into supported evidence.
+    evidence_allowed: false
+  source_schema_drift:
+    meaning: HTTP response shape did not expose MODEL_ANSWER or supported fallback content.
+    evidence_allowed: false
+
+response_shape_probe:
+  purpose: Sanitized envelope-shape inspection for live dry-run response schema drift.
+  raw_response_body_output: false
+  fields:
+    http_status:
+    content_type:
+    top_level_type:
+    top_level_keys:
+      sensitive_key_policy: redact_sensitive_key_names
+    candidate_paths:
+    step_like_array_paths:
+    observed_type_fields:
+    observed_subtype_fields:
+    possible_model_answer_paths:
+    possible_tool_call_paths:
+      sql_policy: present_boolean_only
+      query_id_policy: present_boolean_only
+      trace_id_policy: present_boolean_only
+    text_field_paths_with_lengths_only:
+      value_policy: length_only_no_text
+    sql_field_paths_present_only:
+      value_policy: present_boolean_only_no_sql
+    query_id_paths_present_only:
+      value_policy: present_boolean_only_no_query_id
+    trace_id_paths_present_only:
+      value_policy: present_boolean_only_no_trace_id
+    response_size_bytes:
+  forbidden_output:
+    - raw_response_body
+    - raw_sql
+    - raw_query_id
+    - raw_trace_id
+    - cookie
+    - token
+    - session
+    - header

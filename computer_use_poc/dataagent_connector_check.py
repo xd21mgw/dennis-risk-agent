@@ -34,7 +34,10 @@ REQUIRED_FILES = [
 ]
 PARITY_FIXTURE = COMPUTER_USE_POC / "test_fixtures" / "dataagent_cloud_skill_response_mock.json"
 
-SENSITIVE_OUTPUT_RE = re.compile(r"\b(phone|cookie|token|session|header|email|id_card)\b", re.IGNORECASE)
+SENSITIVE_OUTPUT_RE = re.compile(
+    r"\b(phone|cookie|token|session|header|authorization|password|email|id_card)\b",
+    re.IGNORECASE,
+)
 
 
 def read_file(name: str) -> str:
@@ -100,6 +103,69 @@ FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info;
     ),
 }
 
+ENVELOPE_MOCKS: dict[str, dict[str, Any]] = {
+    "cloud_skill_steps": {
+        "steps": [
+            {"subType": "MODEL_THINKING", "content": "not evidence"},
+            {
+                "subType": "TOOL_CALL",
+                "query_id": "mock_query_id",
+                "trace_id": "mock_trace_id",
+                "generated_sql": "SELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1",
+            },
+            {
+                "subType": "MODEL_ANSWER",
+                "content": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```",
+            },
+            {"subType": "AGENT_END", "content": "done"},
+        ]
+    },
+    "choices_message_content": {
+        "choices": [
+            {
+                "message": {
+                    "content": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```"
+                }
+            }
+        ]
+    },
+    "choices_delta_content": {
+        "choices": [
+            {
+                "delta": {
+                    "content": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```"
+                }
+            }
+        ]
+    },
+    "data_steps": {
+        "data": {
+            "steps": [
+                {"subType": "MODEL_THINKING", "content": "not evidence"},
+                {
+                    "subType": "TOOL_CALL",
+                    "queryId": "mock_query_id",
+                    "generated_sql": "SELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1",
+                },
+                {
+                    "subType": "MODEL_ANSWER",
+                    "content": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```",
+                },
+            ]
+        }
+    },
+    "answer_field": {
+        "answer": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```"
+    },
+    "missing_model_answer": {
+        "code": 0,
+        "data": {
+            "requestAccepted": True,
+            "items": [],
+        },
+    },
+}
+
 
 def check_required_files() -> list[str]:
     errors: list[str] = []
@@ -135,6 +201,10 @@ def check_contract_text() -> list[str]:
         errors.append("request_schema_structured_query_boundary_missing")
     if "MODEL_THINKING" not in response_schema or "MODEL_ANSWER" not in response_schema:
         errors.append("response_schema_step_types_missing")
+    if "source_schema_drift" not in response_schema or "parse_error" not in response_schema:
+        errors.append("response_schema_schema_drift_status_missing")
+    if "response_shape_probe" not in response_schema:
+        errors.append("response_schema_probe_contract_missing")
     for template_id in (
         "single_user_ato_evidence",
         "batch_user_ato_clustering",
@@ -248,6 +318,55 @@ def check_normalizer() -> tuple[list[dict[str, Any]], list[str]]:
     return results, errors
 
 
+def check_envelope_compatibility() -> tuple[list[dict[str, Any]], list[str]]:
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    expected = {
+        "cloud_skill_steps": ("sql_generated", "model_answer_step", True),
+        "choices_message_content": ("sql_generated", "content_fallback", True),
+        "choices_delta_content": ("sql_generated", "content_fallback", True),
+        "data_steps": ("sql_generated", "model_answer_step", True),
+        "answer_field": ("sql_generated", "answer_field", True),
+        "missing_model_answer": ("source_schema_drift", "missing", False),
+    }
+    for name, payload in ENVELOPE_MOCKS.items():
+        normalized = normalize_dataagent_response(payload)
+        expected_status, expected_source, expected_extracted = expected[name]
+        result = {
+            "mock": name,
+            "status": normalized["status"],
+            "source_status": normalized["source_card"]["source_status"],
+            "model_answer_source": normalized.get("model_answer_source"),
+            "model_answer_extracted": normalized.get("model_answer_extracted"),
+            "generated_sql_present": bool(normalized.get("generated_sql")),
+            "query_id_present": bool(normalized.get("query_id")),
+            "tool_call_provenance_only": bool(
+                (normalized.get("tool_call_provenance") or {}).get("provenance_only_not_business_conclusion")
+            ),
+        }
+        results.append(result)
+        if normalized["status"] != expected_status:
+            errors.append(f"envelope_status_mismatch:{name}:{normalized['status']}")
+        if normalized["source_card"]["source_status"] != expected_status:
+            errors.append(f"envelope_source_status_mismatch:{name}")
+        if normalized.get("model_answer_source") != expected_source:
+            errors.append(f"envelope_model_answer_source_mismatch:{name}:{normalized.get('model_answer_source')}")
+        if normalized.get("model_answer_extracted") is not expected_extracted:
+            errors.append(f"envelope_model_answer_extracted_mismatch:{name}")
+        if name == "missing_model_answer":
+            if normalized["status"] == "completed":
+                errors.append("missing_model_answer_marked_completed")
+            if normalized.get("error_message") != "missing_model_answer":
+                errors.append("missing_model_answer_reason_missing")
+        if name in {"cloud_skill_steps", "data_steps"}:
+            provenance = normalized.get("tool_call_provenance") or {}
+            if not provenance.get("query_id"):
+                errors.append(f"{name}_query_id_not_extracted_as_provenance")
+            if not provenance.get("generated_sql"):
+                errors.append(f"{name}_generated_sql_not_extracted_as_provenance")
+    return results, errors
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check local DataAgent connector contract.")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
@@ -259,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
         errors.extend(check_contract_text())
     normalizer_results, normalizer_errors = check_normalizer()
     errors.extend(normalizer_errors)
+    envelope_results, envelope_errors = check_envelope_compatibility()
+    errors.extend(envelope_errors)
     cloud_skill_parity, parity_errors = check_cloud_skill_parity()
     errors.extend(parity_errors)
 
@@ -275,6 +396,7 @@ def main(argv: list[str] | None = None) -> int:
         "structured_query_api_currently_available": False,
         "cloud_skill_parity": cloud_skill_parity,
         "normalizer_results": normalizer_results,
+        "envelope_compatibility_results": envelope_results,
         "errors": errors,
     }
     if args.json:

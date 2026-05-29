@@ -18,8 +18,32 @@ from typing import Any
 SOURCE_NAME = "dataagent_hive"
 MODEL_ANSWER = "MODEL_ANSWER"
 STEP_TYPES = {"MODEL_THINKING", "TOOL_CALL", "MODEL_ANSWER", "AGENT_END"}
+STEP_CONTAINER_PATHS = (
+    ("steps",),
+    ("messages",),
+    ("events",),
+    ("data",),
+    ("data", "steps"),
+    ("data", "messages"),
+    ("data", "events"),
+    ("result", "steps"),
+    ("result", "messages"),
+    ("result", "events"),
+)
+ANSWER_FIELD_PATHS = (
+    ("answer",),
+    ("model_answer",),
+    ("result", "answer"),
+    ("data", "answer"),
+)
+CONTENT_FALLBACK_PATHS = (
+    ("content",),
+    ("message", "content"),
+    ("data", "content"),
+    ("result", "content"),
+)
 SENSITIVE_FIELD_RE = re.compile(
-    r"\b(phone|cookie|token|session|header|email|id_card)\b",
+    r"\b(phone|cookie|token|session|header|authorization|password|email|id_card)\b",
     re.IGNORECASE,
 )
 PERMISSION_RE = re.compile(r"(permission\s*denied|not\s*authorized|unauthorized|权限|无权限|denied)", re.IGNORECASE)
@@ -39,7 +63,7 @@ def load_json(path: Path | None) -> Any:
 def step_type(step: Any) -> str | None:
     if not isinstance(step, dict):
         return None
-    for key in ("type", "step_type", "stepType", "name", "event"):
+    for key in ("type", "step_type", "stepType", "subType", "subtype", "name", "event"):
         value = step.get(key)
         if isinstance(value, str) and value.upper() in STEP_TYPES:
             return value.upper()
@@ -61,36 +85,65 @@ def step_content(step: dict[str, Any]) -> str:
     return ""
 
 
+def get_path(payload: Any, path: tuple[str, ...]) -> Any:
+    value = payload
+    for key in path:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
+def iter_choice_content(payload: Any) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    choices = payload.get("choices")
+    if not isinstance(choices, list):
+        return []
+    contents: list[str] = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        for container_key in ("message", "delta"):
+            container = choice.get(container_key)
+            if isinstance(container, dict):
+                content = container.get("content")
+                if isinstance(content, str) and content.strip():
+                    contents.append(content)
+    return contents
+
+
 def iter_steps(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
     if not isinstance(payload, dict):
         return []
-    for key in ("steps", "data", "events", "messages"):
-        value = payload.get(key)
+    for path in STEP_CONTAINER_PATHS:
+        value = get_path(payload, path)
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
-    choices = payload.get("choices")
-    if isinstance(choices, list):
-        steps: list[dict[str, Any]] = []
-        for choice in choices:
-            if isinstance(choice, dict):
-                message = choice.get("message")
-                if isinstance(message, dict):
-                    steps.append({"type": MODEL_ANSWER, "content": step_content(message)})
-        return steps
     return []
 
 
-def extract_model_answer(payload: Any, steps: list[dict[str, Any]] | None = None) -> tuple[str, list[str]]:
+def extract_model_answer(payload: Any, steps: list[dict[str, Any]] | None = None) -> tuple[str, list[str], str]:
     steps = steps if steps is not None else iter_steps(payload)
     seen_types = [step_type(step) or "UNKNOWN" for step in steps]
     answers = [step_content(step) for step in steps if step_type(step) == MODEL_ANSWER and step_content(step)]
-    if not answers and isinstance(payload, dict):
-        direct = payload.get("model_answer") or payload.get("answer")
-        if isinstance(direct, str):
-            answers.append(direct)
-    return "\n\n".join(answers), seen_types
+    if answers:
+        return "\n\n".join(answers), seen_types, "model_answer_step"
+    if isinstance(payload, dict):
+        for path in ANSWER_FIELD_PATHS:
+            direct = get_path(payload, path)
+            if isinstance(direct, str) and direct.strip():
+                return direct, seen_types, "answer_field"
+        choice_contents = iter_choice_content(payload)
+        if choice_contents:
+            return "\n\n".join(choice_contents), seen_types, "content_fallback"
+        for path in CONTENT_FALLBACK_PATHS:
+            direct = get_path(payload, path)
+            if isinstance(direct, str) and direct.strip():
+                return direct, seen_types, "content_fallback"
+    return "", seen_types, "missing"
 
 
 def collect_first_value(value: Any, keys: set[str]) -> Any:
@@ -110,15 +163,16 @@ def collect_first_value(value: Any, keys: set[str]) -> Any:
     return None
 
 
-def extract_tool_call_provenance(steps: list[dict[str, Any]]) -> tuple[dict[str, Any], int]:
+def extract_tool_call_provenance(steps: list[dict[str, Any]], payload: Any | None = None) -> tuple[dict[str, Any], int]:
     provenance: dict[str, Any] = {}
     sensitive_count = 0
-    for step in steps:
-        if step_type(step) != "TOOL_CALL":
-            continue
-        query_id = collect_first_value(step, {"query_id", "queryId"})
-        trace_id = collect_first_value(step, {"trace_id", "traceId"})
-        generated_sql = collect_first_value(step, {"generated_sql", "generatedSql", "sql"})
+    sources = [step for step in steps if step_type(step) == "TOOL_CALL"]
+    if payload is not None:
+        sources.append(payload)
+    for source in sources:
+        query_id = collect_first_value(source, {"query_id", "queryId", "queryID", "sql_id", "sqlId"})
+        trace_id = collect_first_value(source, {"trace_id", "traceId", "traceID"})
+        generated_sql = collect_first_value(source, {"generated_sql", "generatedSql", "sql"})
         if query_id and "query_id" not in provenance:
             safe_query_id, count = redact_sensitive_text(str(query_id))
             provenance["query_id"] = safe_query_id
@@ -214,7 +268,7 @@ def infer_status(
     if not answer.strip():
         if tool_call_generated_sql:
             return "sql_generated", "tool_call_sql_provenance_only"
-        return "failed", "missing_model_answer"
+        return "source_schema_drift", "missing_model_answer"
     if PERMISSION_RE.search(answer):
         return "permission_denied", "permission_denied"
     if TIMEOUT_RE.search(answer):
@@ -227,13 +281,13 @@ def infer_status(
         return "completed", None
     if generated_sql:
         return "sql_generated", None
-    return "failed", "unrecognized_model_answer"
+    return "parse_error", "unrecognized_model_answer"
 
 
 def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     steps = iter_steps(payload)
-    answer, raw_step_types = extract_model_answer(payload, steps)
-    tool_call_provenance, tool_sensitive_count = extract_tool_call_provenance(steps)
+    answer, raw_step_types, model_answer_source = extract_model_answer(payload, steps)
+    tool_call_provenance, tool_sensitive_count = extract_tool_call_provenance(steps, payload)
     safe_answer, answer_sensitive_count = redact_sensitive_text(answer)
     generated_sql, sql_sensitive_count = extract_sql(safe_answer)
     generated_sql_source = "MODEL_ANSWER" if generated_sql else None
@@ -254,7 +308,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     sensitive_blocked_count = answer_sensitive_count + sql_sensitive_count + table_sensitive_count + tool_sensitive_count
 
     permission_status = "permission_denied" if status == "permission_denied" else "ok"
-    if status in {"failed", "timeout"}:
+    if status in {"failed", "timeout", "parse_error", "source_schema_drift"}:
         permission_status = "unknown"
     if status == "sql_generated":
         permission_status = "not_started"
@@ -266,9 +320,11 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         warnings.append("non_MODEL_ANSWER_steps_ignored_for_evidence")
     if tool_call_provenance:
         warnings.append("TOOL_CALL_provenance_not_business_conclusion")
+    if model_answer_source == "content_fallback":
+        warnings.append("content_fallback_used_as_model_answer_source")
     if status == "sql_generated":
         warnings.append("sql_generated_not_executed_evidence")
-    if status in {"no_data", "permission_denied", "failed", "timeout"}:
+    if status in {"no_data", "permission_denied", "failed", "timeout", "parse_error", "source_schema_drift"}:
         warnings.append(f"{status}_not_no_risk_evidence")
 
     request_id = None
@@ -282,7 +338,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         trace_id = payload.get("trace_id") or tool_call_provenance.get("trace_id")
 
     no_data_reason = status_reason if status == "no_data" else None
-    error_message = status_reason if status in {"failed", "timeout", "permission_denied"} else None
+    error_message = status_reason if status in {"failed", "timeout", "permission_denied", "parse_error", "source_schema_drift"} else None
     if error_message:
         error_message, blocked = redact_sensitive_text(error_message)
         sensitive_blocked_count += blocked
@@ -302,6 +358,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "http_request_sent": False,
         "step_response_received": step_response_received,
         "model_answer_extracted": model_answer_extracted,
+        "model_answer_source": model_answer_source,
         "dataagent_called": False,
         "hive_called": False,
         "dry_run": dry_run,
@@ -325,6 +382,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "session_id": session_id,
         "query_id": query_id,
         "status": status,
+        "model_answer_source": model_answer_source,
         "generated_sql": generated_sql,
         "generated_sql_source": generated_sql_source,
         "result_rows": result_rows,
@@ -365,6 +423,10 @@ def build_evidence_summary(status: str, row_count: int, generated_sql: str | Non
         return "DataAgent MODEL_ANSWER reported timeout."
     if status == "sql_generated" and generated_sql:
         return "DataAgent MODEL_ANSWER generated SQL only; no query result was executed."
+    if status == "parse_error":
+        return "DataAgent response content existed but could not be normalized as evidence."
+    if status == "source_schema_drift":
+        return "DataAgent response shape did not expose MODEL_ANSWER or supported content fallback."
     return "DataAgent MODEL_ANSWER could not be normalized as completed evidence."
 
 
