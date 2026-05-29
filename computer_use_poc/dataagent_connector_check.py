@@ -154,6 +154,45 @@ ENVELOPE_MOCKS: dict[str, dict[str, Any]] = {
             ]
         }
     },
+    "cloud_live_nested_stepdata": {
+        "data": {
+            "steps": [
+                {
+                    "data": {
+                        "stepData": {
+                            "subType": "MODEL_THINKING",
+                            "componentInfo": {
+                                "props": {
+                                    "content": "planning text is not evidence",
+                                }
+                            },
+                        }
+                    }
+                },
+                {
+                    "data": {
+                        "stepData": {
+                            "subType": "MODEL_ANSWER",
+                            "componentInfo": {
+                                "props": {
+                                    "content": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```",
+                                }
+                            },
+                        }
+                    }
+                },
+                {
+                    "data": {
+                        "stepData": {
+                            "subType": "TOOL_CALL",
+                            "queryId": "mock_nested_query_id",
+                            "generated_sql": "SELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1",
+                        }
+                    }
+                },
+            ]
+        }
+    },
     "answer_field": {
         "answer": "```sql\nSELECT user_id FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info LIMIT 1;\n```"
     },
@@ -162,6 +201,20 @@ ENVELOPE_MOCKS: dict[str, dict[str, Any]] = {
         "data": {
             "requestAccepted": True,
             "items": [],
+        },
+    },
+    "query_id_only_unknown_steps": {
+        "code": 0,
+        "query_id": "mock_query_id_present_only",
+        "data": {
+            "steps": [
+                {
+                    "stage": "accepted",
+                    "payload": {
+                        "queryId": "mock_nested_query_id_present_only",
+                    },
+                }
+            ]
         },
     },
 }
@@ -326,8 +379,10 @@ def check_envelope_compatibility() -> tuple[list[dict[str, Any]], list[str]]:
         "choices_message_content": ("sql_generated", "content_fallback", True),
         "choices_delta_content": ("sql_generated", "content_fallback", True),
         "data_steps": ("sql_generated", "model_answer_step", True),
+        "cloud_live_nested_stepdata": ("sql_generated", "model_answer_step", True),
         "answer_field": ("sql_generated", "answer_field", True),
         "missing_model_answer": ("source_schema_drift", "missing", False),
+        "query_id_only_unknown_steps": ("source_schema_drift", "missing", False),
     }
     for name, payload in ENVELOPE_MOCKS.items():
         normalized = normalize_dataagent_response(payload)
@@ -358,7 +413,14 @@ def check_envelope_compatibility() -> tuple[list[dict[str, Any]], list[str]]:
                 errors.append("missing_model_answer_marked_completed")
             if normalized.get("error_message") != "missing_model_answer":
                 errors.append("missing_model_answer_reason_missing")
-        if name in {"cloud_skill_steps", "data_steps"}:
+        if name == "query_id_only_unknown_steps":
+            if normalized["status"] == "completed":
+                errors.append("query_id_only_unknown_steps_marked_completed")
+            if not normalized.get("query_id"):
+                errors.append("query_id_only_unknown_steps_query_id_not_provenance")
+            if normalized.get("generated_sql"):
+                errors.append("query_id_only_unknown_steps_generated_sql_should_be_absent")
+        if name in {"cloud_skill_steps", "data_steps", "cloud_live_nested_stepdata"}:
             provenance = normalized.get("tool_call_provenance") or {}
             if not provenance.get("query_id"):
                 errors.append(f"{name}_query_id_not_extracted_as_provenance")

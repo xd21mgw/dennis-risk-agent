@@ -8113,7 +8113,14 @@
 - test_id: FULL-RUNTIME-DATAAGENT-RESPONSE-ENVELOPE-PROBE-001
 - input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --live-dry-run --allow-live-dry-run --probe-response-shape --case single_user_ato --json`。
 - expected_runtime_behavior: sanitized_shape_probe_only_after_explicit_authorization
-- expected_output_boundary: probe 不得输出 raw response；文本字段只能输出 length；SQL / query_id / trace_id 只能分别通过 `sql_field_paths_present_only`、`query_id_paths_present_only`、`trace_id_paths_present_only` 输出 present=true/false；不得输出 cookie/token/session/header；HTTP 200 但无 `MODEL_ANSWER` 不得标 completed；缺少可解释内容必须标 `parse_error` 或 `source_schema_drift`；`content_fallback` 可作为 `model_answer_source`，但必须带 caveat。
+- expected_output_boundary: probe 不得输出 raw response；文本字段只能输出 length；SQL / query_id / trace_id 只能分别通过 `sql_field_paths_present_only`、`query_id_paths_present_only`、`trace_id_paths_present_only` 输出 present=true/false；不得输出 cookie/token/session/header；真实 step type 路径 `data.steps[].data.stepData.subType` 和文本路径 `data.steps[].data.stepData.componentInfo.props.content` 应可被 normalizer mock 覆盖；HTTP 200 但无 `MODEL_ANSWER` 不得标 completed；缺少可解释内容必须标 `parse_error` 或 `source_schema_drift`；`content_fallback` 可作为 `model_answer_source`，但必须带 caveat。
+
+## 874A. DataAgent query id only is provenance
+
+- test_id: FULL-RUNTIME-DATAAGENT-QUERY-ID-ONLY-SCHEMA-DRIFT-001
+- input: DataAgent response contains `query_id` / nested `queryId` and unknown step-like objects, but no `MODEL_ANSWER`, no supported `answer` / `content`, and no generated SQL.
+- expected_runtime_behavior: query_id_provenance_only_no_answer
+- expected_output_boundary: `query_id_present=true` 可作为 provenance；`raw_step_types_observed=UNKNOWN` 且 `model_answer_extracted=false` 时必须输出 `source_schema_drift` / `missing_model_answer`，不得标 completed，不得调用 Hive，不得提交 SQL，不得输出 raw response。
 
 ## 875. Browser-backed evidence card display summary
 

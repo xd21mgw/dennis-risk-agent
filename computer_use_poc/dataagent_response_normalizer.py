@@ -63,25 +63,43 @@ def load_json(path: Path | None) -> Any:
 def step_type(step: Any) -> str | None:
     if not isinstance(step, dict):
         return None
-    for key in ("type", "step_type", "stepType", "subType", "subtype", "name", "event"):
-        value = step.get(key)
-        if isinstance(value, str) and value.upper() in STEP_TYPES:
-            return value.upper()
-    role = step.get("role")
-    if isinstance(role, str) and role.upper() == MODEL_ANSWER:
-        return MODEL_ANSWER
+    for candidate in step_payload_candidates(step):
+        for key in ("type", "step_type", "stepType", "subType", "subtype", "name", "event"):
+            value = candidate.get(key)
+            if isinstance(value, str) and value.upper() in STEP_TYPES:
+                return value.upper()
+        role = candidate.get("role")
+        if isinstance(role, str) and role.upper() == MODEL_ANSWER:
+            return MODEL_ANSWER
     return None
 
 
+def step_payload_candidates(step: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = [step]
+    data = step.get("data")
+    if isinstance(data, dict):
+        step_data = data.get("stepData")
+        if isinstance(step_data, dict):
+            candidates.append(step_data)
+            component_info = step_data.get("componentInfo")
+            if isinstance(component_info, dict):
+                candidates.append(component_info)
+                props = component_info.get("props")
+                if isinstance(props, dict):
+                    candidates.append(props)
+    return candidates
+
+
 def step_content(step: dict[str, Any]) -> str:
-    for key in ("content", "text", "message", "answer", "output"):
-        value = step.get(key)
-        if isinstance(value, str):
-            return value
-        if isinstance(value, dict):
-            nested = value.get("content") or value.get("text")
-            if isinstance(nested, str):
-                return nested
+    for candidate in step_payload_candidates(step):
+        for key in ("content", "text", "message", "answer", "output"):
+            value = candidate.get(key)
+            if isinstance(value, str):
+                return value
+            if isinstance(value, dict):
+                nested = value.get("content") or value.get("text")
+                if isinstance(nested, str):
+                    return nested
     return ""
 
 

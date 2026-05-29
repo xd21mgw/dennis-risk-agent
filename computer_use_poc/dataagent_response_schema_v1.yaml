@@ -12,6 +12,14 @@ evidence_extraction_rule:
   model_thinking_is_evidence: false
   tool_call_raw_is_evidence: false
   agent_end_metadata_only: true
+  supported_live_step_paths:
+    - steps[].subType
+    - data.steps[].subType
+    - data.steps[].data.stepData.subType
+  supported_live_content_paths:
+    - steps[].content
+    - data.steps[].content
+    - data.steps[].data.stepData.componentInfo.props.content
 
 normalized_response:
   request_id:
