@@ -7890,3 +7890,24 @@
 - input: mother repo 中存在 `bin/sso_session_runner` / `bin/archives_profile_runner`。
 - expected_runtime_behavior: present_required_runners_included
 - expected_output_boundary: 若 runner 确认是 runtime 必需且存在，应纳入 `full_runtime_required` 并出现在 `outputs/full_runtime/RUNTIME_MANIFEST.md`；不存在的 tianshi/track runner 只标 tool_gap，不造 runner。
+
+## 843. Full runtime source runner health check plan exists
+
+- test_id: FULL-RUNTIME-SOURCE-RUNNER-HEALTH-CHECK-PLAN-001
+- input: `computer_use_poc/source_runner_health_check_plan_v1.md` and `computer_use_poc/source_runner_health_check.py`。
+- expected_runtime_behavior: local_no_platform_runner_contract_check_available
+- expected_output_boundary: health check 只覆盖已存在并已进入 full_runtime 的 `user_login_log`、`weapon_graphData`、`weapon_riskData`、`archives_center_profile`；不得新增 runner、不得访问真实平台、不得调用 DataAgent/Hive。
+
+## 844. runner_present_not_verified is not executable
+
+- test_id: FULL-RUNTIME-RUNNER-PRESENT-NOT-VERIFIED-NOT-EXECUTABLE-001
+- input: inventory 中 `current_status=runner_present_not_verified` 的 source。
+- expected_runtime_behavior: runner_present_not_verified_boundary
+- expected_output_boundary: runner_present_not_verified 只能表示 runner 文件存在并已进入 full_runtime；不得标记为 live executable、source completed、no_data、低风险或无风险。只有 safe dry-run 或授权 live readonly acceptance 后才可升级状态。
+
+## 845. Local runner health check blocks platform access
+
+- test_id: FULL-RUNTIME-LOCAL-RUNNER-HEALTH-CHECK-NO-PLATFORM-001
+- input: `python3 computer_use_poc/source_runner_health_check.py`。
+- expected_runtime_behavior: local_contract_check_only
+- expected_output_boundary: 对 `sso_session_runner` 只跑缺必填参数路径，必须 `real_platform_request_executed=false`；对 `archives_profile_runner` 只跑本地 stub，必须 `real_platform_request_executed=false`；输出不得包含 cookie/token/session/header/authorization/password 明文。
