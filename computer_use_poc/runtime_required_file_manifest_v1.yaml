@@ -74,6 +74,8 @@ full_runtime_required:
     - computer_use_poc/dataagent_local_dryrun_parity_plan_v1.md
     - computer_use_poc/dataagent_local_dryrun_invocation_template_v1.md
     - computer_use_poc/dataagent_local_dryrun_parity_check.py
+    - computer_use_poc/setup_dataagent_local_env.py
+    - computer_use_poc/dataagent_local_env_setup_guide_v1.md
     - computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
     - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
     - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
@@ -156,4 +158,6 @@ excluded_files:
     - "**/*session-state*"
     - "**/*session_dump*"
     - "**/*session*.json"
+    - "**/dataagent.env"
+    - "~/.dennis-agent/**"
     - outputs/release/**

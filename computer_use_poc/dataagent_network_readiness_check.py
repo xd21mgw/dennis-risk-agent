@@ -16,11 +16,14 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 
 DEFAULT_ENDPOINT_PATH = "/v1/chat/completions/full"
 DEFAULT_TIMEOUT_SECONDS = 5.0
+LOCAL_ENV_FILE = Path.home() / ".dennis-agent" / "dataagent.env"
+LOCAL_ENV_SOURCE_COMMAND = "source ~/.dennis-agent/dataagent.env"
 ALLOWED_NETWORK_STATUS = {
     "env_missing",
     "dns_failed",
@@ -151,7 +154,7 @@ def run_check(env: dict[str, str]) -> dict[str, Any]:
     if timeout_warning:
         checks["timeout_warning"] = timeout_warning
     if env_error:
-        return status_result(
+        result = status_result(
             network_status="env_missing" if env_error.startswith("missing_") else "unknown",
             endpoint_url=endpoint_url,
             base_url=base_url,
@@ -159,6 +162,10 @@ def run_check(env: dict[str, str]) -> dict[str, Any]:
             reason=env_error,
             checks=checks,
         )
+        if env_error.startswith("missing_") and LOCAL_ENV_FILE.exists():
+            result["local_env_file_present"] = True
+            result["next_action"] = LOCAL_ENV_SOURCE_COMMAND
+        return result
 
     assert endpoint_url is not None
     try:

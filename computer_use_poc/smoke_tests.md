@@ -8100,3 +8100,10 @@
 - input: `python3 computer_use_poc/dataagent_network_readiness_check.py --json`。
 - expected_runtime_behavior: network_preflight_only
 - expected_output_boundary: 未配置 `DATAAGENT_BASE_URL` / `DATAAGENT_ENDPOINT_URL` 时必须 fail closed 为 `network_status=env_missing`；配置后只允许检查 DNS、TCP/TLS、HTTP endpoint 和 read timeout 分类；不得发送业务 payload、不得提交 SQL、不得调用 Hive、不得读取 `.ks_sso`、不得构造或输出 cookie/token/session/header；`401/403` 只标 `auth_required` / `permission_denied` permission boundary，不当 connector 失败。
+
+## 873. DataAgent local env setup helper
+
+- test_id: FULL-RUNTIME-DATAAGENT-LOCAL-ENV-SETUP-001
+- input: `computer_use_poc/setup_dataagent_local_env.py`、`computer_use_poc/dataagent_local_env_setup_guide_v1.md`。
+- expected_runtime_behavior: non_sensitive_local_env_helper
+- expected_output_boundary: helper 只允许创建 `~/.dennis-agent/dataagent.env` 的非敏感配置，目录权限 700、文件权限 600；不得写入 cookie/token/session/header/password/state；输出只显示 `<set>` / `<missing>`，不打印敏感值；`dataagent.env` 不得进入 repo / `outputs/full_runtime` / release / git；readiness check 在 env missing 但本地 env 文件存在时只提示 `source ~/.dennis-agent/dataagent.env`，不得自动 source 或打印文件内容。
