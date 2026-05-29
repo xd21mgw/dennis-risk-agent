@@ -390,8 +390,9 @@ def validate_matrix(
             continue
         required_path = source.get("required_path_contains")
         endpoint = endpoint_for(matrix, name)
-        status = str(next((item.get("source_status") for item in matrix if item.get("source_name") == name), ""))
-        if required_path and required_path not in endpoint and status not in NON_ENDPOINT_STATUSES:
+        entry = next((item for item in matrix if item.get("source_name") == name), {})
+        status = str(entry.get("source_status", ""))
+        if required_path and required_path not in endpoint and status not in NON_ENDPOINT_STATUSES and not is_browser_backed_item(entry):
             failures.append(
                 {
                     "rule": "required_p0_source_path_missing",
@@ -399,21 +400,30 @@ def validate_matrix(
                 }
             )
         if name == "weapon_user_to_device_graph":
-            if FORBIDDEN_WEAPON_GRAPH_PATH in endpoint:
+            if is_browser_backed_item(entry):
+                if entry.get("action_name") != "weapon_inventory":
+                    failures.append(
+                        {
+                            "rule": "browser_backed_action_name_required",
+                            "reason": "weapon_user_to_device_graph must use browser-backed action_name=weapon_inventory",
+                        }
+                    )
+            elif FORBIDDEN_WEAPON_GRAPH_PATH in endpoint:
                 failures.append(
                     {
                         "rule": "weapon_forbidden_api_graphdata_path",
                         "reason": "weapon_user_to_device_graph must not use /api/graphData",
                     }
                 )
-            for marker in ["product=KUAISHOU", "productName=KUAISHOU", "groupKey=USER_ID", "dimKey=DEVICE_ID"]:
-                if marker not in endpoint:
-                    failures.append(
-                        {
-                            "rule": "weapon_graphdata_query_shape_drift",
-                            "reason": f"weapon_user_to_device_graph missing {marker}",
-                        }
-                    )
+            if not is_browser_backed_item(entry):
+                for marker in ["product=KUAISHOU", "productName=KUAISHOU", "groupKey=USER_ID", "dimKey=DEVICE_ID"]:
+                    if marker not in endpoint:
+                        failures.append(
+                            {
+                                "rule": "weapon_graphdata_query_shape_drift",
+                                "reason": f"weapon_user_to_device_graph missing {marker}",
+                            }
+                        )
         if name == "weapon_device_risk_if_device_id_available":
             for marker in ["product=KUAISHOU", "deviceIds="]:
                 if marker not in endpoint and status not in NON_ENDPOINT_STATUSES:

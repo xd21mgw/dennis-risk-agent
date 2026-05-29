@@ -27,6 +27,41 @@ Default single-user account-security orchestration uses these typed params. The 
 
 ```yaml
 account_security_browser_backed_sequence:
+  - source_name: track_analysis_account_security_bundle
+    action_name: track_analysis_summary
+    typed_params:
+      user_id: "{user_id}"
+      appName: KUAISHOU
+      mode: account_security_bundle
+      sub_interfaces:
+        - profile
+        - getUseDuration
+        - getDeviceIds
+        - getLastestDateTime
+    boundary:
+      - 只传 user_id/appName 不满足账号安全 bundle
+      - profile / getUseDuration / getDeviceIds / getLastestDateTime 的完成、no_data、blocked、parse_error 必须分层进入 source_completion_matrix
+  - source_name: rcp_strategy_hit_entry
+    action_name: rcp_snapshot
+    typed_params:
+      entity_type: user_id
+      entity_id: "{user_id}"
+      mode: account_security_strategy_event_entry
+    boundary:
+      - 默认进入单用户账号安全 source_completion_matrix
+      - 策略事件入口是风险线索，不是最终风险定性
+  - source_name: weapon_user_to_device_graph
+    action_name: weapon_inventory
+    typed_params:
+      user_id: "{user_id}"
+      mode: account_security_user_device_graph_with_conditional_riskData
+      riskData_trigger_device_prefix:
+        - ANDROID_
+        - IOS_
+    boundary:
+      - riskData 仅在 graphData 保留 raw ANDROID_/IOS_ device_id safe handle 后执行
+      - raw device_id 缺失时标 missing_required_fields/not_checked，不伪装 completed
+      - riskData 的标签摘要进入 evidence card，raw labelInfo / originalLog 不输出
   - source_name: user_login_unified_log
     action_name: login_logs_search
     typed_params:
@@ -42,36 +77,15 @@ account_security_browser_backed_sequence:
           window: last_24h
           recallSource: "2,0,1,3"
         preserve_primary_source_quality: true
-  - source_name: weapon_user_to_device_graph
-    action_name: weapon_inventory
-    typed_params:
-      user_id: "{user_id}"
-      mode: account_security_user_device_graph_with_conditional_riskData
-      riskData_trigger_device_prefix:
-        - ANDROID_
-        - IOS_
+        fallback_result_must_be_standard_browser_backed_source_result: true
     boundary:
-      - riskData 仅在 graphData 保留 raw ANDROID_/IOS_ device_id safe handle 后执行
-      - raw device_id 缺失时标 missing_required_fields/not_checked，不伪装 completed
-  - source_name: track_analysis_account_security_bundle
-    action_name: track_analysis_summary
-    typed_params:
-      user_id: "{user_id}"
-      appName: KUAISHOU
-      mode: account_security_bundle
-      sub_interfaces:
-        - profile
-        - getUseDuration
-        - getDeviceIds
-    boundary:
-      - 只传 user_id/appName 不满足账号安全 bundle
-      - profile / getUseDuration / getDeviceIds 的完成、no_data、blocked、parse_error 必须分层进入 source_completion_matrix
-  - source_name: rcp_strategy_hit_entry
-    action_name: rcp_snapshot
-    trigger_condition: source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit
+      - parse_error / no_data / auth_failed / blocked 都是 source_quality
+      - 不能把失败或空结果解释为无风险反证
 ```
 
-All attempted and skipped sources must be represented in `source_completion_matrix`. A 7-day `login_logs_search` `parse_error` may trigger the 24-hour fallback, but the 7-day parse error remains in `source_quality`. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
+All four browser-backed sources must be represented in `source_completion_matrix` by default. A 7-day `login_logs_search` `parse_error` may trigger the 24-hour fallback, but both the 7-day primary result and 24-hour fallback must be normalized as standard browser-backed source results with `source_card`, `source_quality`, `latency_ms`, and `sensitive_output=false`. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
+
+`archives_profile_readonly` is not part of the default browser-backed four-source main chain while `archives_profile_runner` remains a stub. It may be represented only as `missing_evidence.optional_source_gap` / `source_quality.missing_sources`, and it must not block Track Analysis, RCP, Weapon, or Login Logs.
 
 ## Adapter Boundary
 
@@ -242,6 +256,8 @@ Source-specific summary fields:
   - `bundle_summary.sub_interfaces`
   - `bundle_summary.sub_interfaces_completed`
   - `bundle_summary.sub_interfaces_missing`
+  - `latest_timestamp_summary.latest_datetime_present`
+  - `latest_timestamp_summary.uid_did_relation_latest_datetime_present`
   - `profile_summary.register_time_present`
   - `profile_summary.fan_distribution_present`
   - `profile_summary.active_days_bucket_present`

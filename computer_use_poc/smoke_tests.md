@@ -8127,28 +8127,56 @@
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
 - input: clean `outputs/full_runtime` account-security single-user evidence card。
 - expected_runtime_behavior: browser_backed_fixed_actions_first
-- expected_output_boundary: source plan 优先 `login_logs_search`、`weapon_inventory`、`track_analysis_summary`，`rcp_snapshot` 仅在策略上下文可用或用户显式问策略时触发；`archives_profile_runner` stub 只进入 optional/source_gap；所有 source 进入 `source_completion_matrix`；`final_risk_judgement_made=false`。
+- expected_output_boundary: source plan 默认四源为 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；`archives_profile_runner` stub 只进入 `missing_evidence.optional_source_gap`，不进入四源主链路；四源进入 `source_completion_matrix`；`final_risk_judgement_made=false`。
+
+## 876A. Account-security browser-backed four source
+
+- test_id: ACCOUNT-SECURITY-BROWSER-BACKED-FOUR-SOURCE-001
+- input: single-user account-security evidence card source template。
+- expected_runtime_behavior: browser_backed_four_source_default_matrix
+- expected_output_boundary: 默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；不得回退为旧三源加 conditional rcp；Archives stub 只作为 optional source gap；不做最终风险定性。
 
 ## 877. Track Analysis account-security bundle
 
 - test_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
 - input: `track_analysis_summary` 用于账号安全单用户 evidence card。
 - expected_runtime_behavior: account_security_bundle_typed_params_required
-- expected_output_boundary: typed params 必须包含 `mode=account_security_bundle` 和 `sub_interfaces=[profile,getUseDuration,getDeviceIds]`，或等价三项 sub_interface 调用；只传 `user_id/appName` 不满足账号安全 bundle；活跃信号不得单独最终定性。
+- expected_output_boundary: typed params 必须包含 `mode=account_security_bundle` 和 `sub_interfaces=[profile,getUseDuration,getDeviceIds,getLastestDateTime]`，或等价逐项 sub_interface 调用；只传 `user_id/appName` 或只跑 latest timestamp 不满足账号安全 bundle；活跃信号不得单独最终定性。
+
+## 877A. Weapon riskData chaining in evidence card
+
+- test_id: WEAPON-RISKDATA-CHAINING-IN-EVIDENCE-CARD-001
+- input: `weapon_inventory` 用于账号安全单用户 evidence card，graphData 返回可用 raw device safe handle。
+- expected_runtime_behavior: weapon_inventory_graphdata_to_riskdata_chaining
+- expected_output_boundary: `weapon_inventory` 必须允许 graphData → riskData chaining；riskData 输入只能来自 current-task raw device safe handle；缺 device handle 时标 `missing_device_reference/not_checked`；设备风险标签摘要可进 evidence card，但 raw `labelInfo` / `originalLog` / raw deviceId 不输出；设备风险不单独定性。
+
+## 877B. RCP snapshot in account-security matrix
+
+- test_id: RCP-SNAPSHOT-IN-ACCOUNT-SECURITY-MATRIX-001
+- input: single-user account-security evidence card，即使用户未显式问策略命中。
+- expected_runtime_behavior: rcp_snapshot_default_strategy_event_entry
+- expected_output_boundary: `rcp_snapshot` 默认进入四源 `source_completion_matrix`；source_status / no_data / parse_error / blocked 均保留为 source_quality；策略事件入口不是最终风险定性；无命中不等于无风险。
 
 ## 878. Archives stub does not block browser-backed sources
 
 - test_id: ARCHIVES-STUB-DOES-NOT-BLOCK-BROWSER-BACKED-SOURCES-001
 - input: `archives_profile_runner` 返回 `planned_or_minimal_stub` / `source_gap`。
 - expected_runtime_behavior: archives_stub_source_gap_non_blocking
-- expected_output_boundary: Archives source gap 写入 `source_quality` 和 `source_completion_matrix`；继续执行/保留 browser-backed 登录日志、Weapon、Track Analysis sources；不得认证修复；source_gap 不得作为无风险反证。
+- expected_output_boundary: Archives source gap 写入 `missing_evidence.optional_source_gap` / `source_quality.missing_sources`；不进入默认四源主链路；继续执行/保留 Track Analysis、RCP、Weapon、Login Logs sources；不得认证修复；source_gap 不得作为无风险反证。
+
+## 878A. Archives stub optional gap not blocking
+
+- test_id: ARCHIVES-STUB-OPTIONAL-GAP-NOT-BLOCKING-001
+- input: clean full_runtime 中 `archives_profile_runner` 仍是 stub。
+- expected_runtime_behavior: archives_stub_optional_gap_not_main_chain
+- expected_output_boundary: `archives_profile_readonly` 只能作为 optional source gap / missing evidence；不得阻断 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；不得因 stub gap 输出低风险或无风险。
 
 ## 879. Login logs 7d parse error 24h fallback
 
 - test_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
 - input: `login_logs_search` 默认 7 天窗口返回 `parse_error`。
 - expected_runtime_behavior: preserve_primary_parse_error_and_add_small_window_fallback
-- expected_output_boundary: 7d `parse_error` 保留到 `source_quality`；自动追加 24h 小窗口 fallback source；fallback `no_data` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
+- expected_output_boundary: 7d `parse_error` 必须是标准 browser-backed source result，包含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false`；自动追加 24h 小窗口 fallback source；fallback `no_data` / `parse_error` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
 
 ## 880. No old runner attempt in clean full_runtime
 

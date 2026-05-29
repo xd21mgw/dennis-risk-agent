@@ -97,14 +97,23 @@ browser_backed_source_result:
 
 ```yaml
 account_security_browser_backed_source_plan:
-  - source_name: user_login_unified_log
+  - source_name: track_analysis_account_security_bundle
     access_method: browser_backed_service
-    action_name: login_logs_search
+    action_name: track_analysis_summary
     typed_params:
       user_id: "{user_id}"
-      window: last_7d
-      recallSource: "2,0,1,3"
-    fallback: 7d_parse_error_auto_add_24h_fallback_and_preserve_primary_source_quality
+      appName: KUAISHOU
+      mode: account_security_bundle
+      sub_interfaces: [profile, getUseDuration, getDeviceIds, getLastestDateTime]
+    fallback: sub_interface_failures_enter_source_completion_matrix
+  - source_name: rcp_strategy_hit_entry
+    access_method: browser_backed_service
+    action_name: rcp_snapshot
+    typed_params:
+      entity_type: user_id
+      entity_id: "{user_id}"
+      mode: account_security_strategy_event_entry
+    boundary: strategy_event_entry_not_final_risk_judgement
   - source_name: weapon_user_to_device_graph
     access_method: browser_backed_service
     action_name: weapon_inventory
@@ -113,27 +122,23 @@ account_security_browser_backed_source_plan:
       mode: account_security_user_device_graph_with_conditional_riskData
       riskData_trigger_device_prefix: [ANDROID_, IOS_]
     fallback: raw_device_id_checkpoint_missing_means_riskData_not_checked
-  - source_name: track_analysis_account_security_bundle
+    chaining: graphData_to_riskData_when_raw_device_id_safe_handle_exists
+  - source_name: user_login_unified_log
     access_method: browser_backed_service
-    action_name: track_analysis_summary
+    action_name: login_logs_search
     typed_params:
       user_id: "{user_id}"
-      appName: KUAISHOU
-      mode: account_security_bundle
-      sub_interfaces: [profile, getUseDuration, getDeviceIds]
-    fallback: sub_interface_failures_enter_source_completion_matrix
-  - source_name: rcp_strategy_hit_entry
-    access_method: browser_backed_service
-    action_name: rcp_snapshot
-    trigger_condition: source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit
+      window: last_7d
+      recallSource: "2,0,1,3"
+    fallback: 7d_parse_error_auto_add_24h_fallback_and_preserve_primary_source_quality_as_standard_source_result
   - source_name: archives_profile_readonly
-    access_method: optional_controlled_runner
+    access_method: optional_controlled_runner_only_when_live_connected
     runner_name: archives_profile_runner
-    trigger_condition: live_runner_connected
-    fallback: stub_source_gap_does_not_block_browser_backed_sources
+    default_when_stub: missing_evidence.optional_source_gap
+    fallback: stub_source_gap_does_not_block_or_enter_default_four_source_matrix
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按固定 action 输出 source card。所有 completed / no_data / parse_error / source_gap source 都必须进入 `source_completion_matrix`，且 evidence card 默认 `final_risk_judgement_made=false`。
+`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 输出标准 source card。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须归一成含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false` 的 browser-backed source result，不得输出未标准化 parse error。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
 
 ### ATO Source Priority / Access Method Output
 
@@ -231,8 +236,8 @@ source_plan:
     typed_params:
       mode: account_security_bundle
       appName: KUAISHOU
-      sub_interfaces: [profile, getUseDuration, getDeviceIds]
-    purpose: 画像、设备列表、使用时长和事件日活跃对齐补证
+      sub_interfaces: [profile, getUseDuration, getDeviceIds, getLastestDateTime]
+    purpose: 画像、设备列表、使用时长、latest timestamp 和事件日活跃对齐补证
     fallback: 任一 sub_interface no_data/blocked/parse_error 进入 source_quality，不做无风险反证
 ```
 

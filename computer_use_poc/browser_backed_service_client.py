@@ -37,7 +37,7 @@ ACTION_TO_SOURCE = {
     "login_logs_search": "login_logs_search",
 }
 
-ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds")
+ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds", "getLastestDateTime")
 ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
 
 FORBIDDEN_INPUT_KEYS = {
@@ -175,7 +175,7 @@ class BrowserBackedServiceClient:
 def build_account_security_browser_backed_requests(
     user_id: str,
     app_name: str = "KUAISHOU",
-    include_rcp_snapshot: bool = False,
+    include_rcp_snapshot: bool = True,
 ) -> list[Dict[str, Any]]:
     """Return the clean full_runtime request plan for one account-security user.
 
@@ -189,36 +189,6 @@ def build_account_security_browser_backed_requests(
         raise BrowserBackedServiceInputError("app_name must be KUAISHOU or NEBULA")
 
     requests: list[Dict[str, Any]] = [
-        {
-            "source_name": "user_login_unified_log",
-            "action_name": "login_logs_search",
-            "typed_params": {
-                "user_id": user_id,
-                "window": "last_7d",
-                "recallSource": "2,0,1,3",
-            },
-            "fallback_on": {
-                "parse_error": {
-                    "source_name": "user_login_unified_log_24h_fallback",
-                    "action_name": "login_logs_search",
-                    "typed_params": {
-                        "user_id": user_id,
-                        "window": "last_24h",
-                        "recallSource": "2,0,1,3",
-                    },
-                    "preserve_primary_source_quality": True,
-                }
-            },
-        },
-        {
-            "source_name": "weapon_user_to_device_graph",
-            "action_name": "weapon_inventory",
-            "typed_params": {
-                "user_id": user_id,
-                "mode": "account_security_user_device_graph_with_conditional_riskData",
-                "riskData_trigger_device_prefix": list(ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES),
-            },
-        },
         {
             "source_name": "track_analysis_account_security_bundle",
             "action_name": "track_analysis_summary",
@@ -238,11 +208,44 @@ def build_account_security_browser_backed_requests(
                 "typed_params": {
                     "entity_type": "user_id",
                     "entity_id": user_id,
-                    "mode": "conditional_strategy_context_required",
+                    "mode": "account_security_strategy_event_entry",
                 },
-                "trigger_condition": "source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit",
             }
         )
+    requests.extend(
+        [
+            {
+                "source_name": "weapon_user_to_device_graph",
+                "action_name": "weapon_inventory",
+                "typed_params": {
+                    "user_id": user_id,
+                    "mode": "account_security_user_device_graph_with_conditional_riskData",
+                    "riskData_trigger_device_prefix": list(ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES),
+                },
+            },
+            {
+                "source_name": "user_login_unified_log",
+                "action_name": "login_logs_search",
+                "typed_params": {
+                    "user_id": user_id,
+                    "window": "last_7d",
+                    "recallSource": "2,0,1,3",
+                },
+                "fallback_on": {
+                    "parse_error": {
+                        "source_name": "user_login_unified_log_24h_fallback",
+                        "action_name": "login_logs_search",
+                        "typed_params": {
+                            "user_id": user_id,
+                            "window": "last_24h",
+                            "recallSource": "2,0,1,3",
+                        },
+                        "preserve_primary_source_quality": True,
+                    }
+                },
+            },
+        ]
+    )
 
     for request in requests:
         _validate_action_name(str(request["action_name"]))
@@ -595,6 +598,13 @@ def _track_analysis_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "device_ids_count",
         ),
     )
+    summary["latest_timestamp_summary"] = _pick_fields(
+        material,
+        (
+            "latest_datetime_present",
+            "uid_did_relation_latest_datetime_present",
+        ),
+    )
     summary["use_duration_summary"] = _pick_fields(
         material,
         ("rows_count", "nonzero_days_count", "total_duration", "peak_date"),
@@ -889,6 +899,10 @@ def _fixture_payload(action_name: str, source_status: str, error_type: Optional[
             "sub_interfaces_missing": [],
             "account_security_bundle": True,
         }
+        source_card["latest_timestamp_summary"] = {
+            "latest_datetime_present": True,
+            "uid_did_relation_latest_datetime_present": True,
+        }
         source_card["getUseDuration"] = {
             "rows_count": 7,
             "nonzero_days_count": 5,
@@ -1009,17 +1023,25 @@ def run_fixture_tests() -> Dict[str, Any]:
 
     account_security_plan = build_account_security_browser_backed_requests("2871834924")
     assert [item["action_name"] for item in account_security_plan] == [
-        "login_logs_search",
-        "weapon_inventory",
         "track_analysis_summary",
+        "rcp_snapshot",
+        "weapon_inventory",
+        "login_logs_search",
     ]
-    login_plan = account_security_plan[0]
-    assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
-    weapon_plan = account_security_plan[1]
-    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "IOS_"]
-    track_plan = account_security_plan[2]
+    track_plan = account_security_plan[0]
     assert track_plan["typed_params"]["mode"] == "account_security_bundle"
-    assert track_plan["typed_params"]["sub_interfaces"] == ["profile", "getUseDuration", "getDeviceIds"]
+    assert track_plan["typed_params"]["sub_interfaces"] == [
+        "profile",
+        "getUseDuration",
+        "getDeviceIds",
+        "getLastestDateTime",
+    ]
+    rcp_plan = account_security_plan[1]
+    assert rcp_plan["typed_params"]["mode"] == "account_security_strategy_event_entry"
+    weapon_plan = account_security_plan[2]
+    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "IOS_"]
+    login_plan = account_security_plan[3]
+    assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
     serialized_plan = json.dumps(account_security_plan, ensure_ascii=True)
     assert "sso_session_runner" not in serialized_plan
     assert "track_analysis_runner" not in serialized_plan
@@ -1046,6 +1068,14 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert card["no_data_not_risk_exclusion"] is True
     results.append(("partial_evidence_card_mixed_sources", "passed"))
 
+    parse_error = normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "parse_error", "parse_error"))
+    parse_error_card = build_partial_evidence_card([parse_error])
+    assert parse_error["source_status"] == "parse_error"
+    assert parse_error["source_card"] and parse_error["source_quality"]
+    assert parse_error["sensitive_output"] is False
+    assert parse_error_card["source_completion_matrix"]["parse_error_sources"] == ["login_logs_search"]
+    results.append(("login_logs_parse_error_standard_source_result", "passed"))
+
     four_source_results = [
         normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
         normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "completed")),
@@ -1059,8 +1089,10 @@ def run_fixture_tests() -> Dict[str, Any]:
         "profile",
         "getUseDuration",
         "getDeviceIds",
+        "getLastestDateTime",
     ]
     assert summaries["track_analysis_summary"]["profile_summary"]["register_time_present"] is True
+    assert summaries["track_analysis_summary"]["latest_timestamp_summary"]["latest_datetime_present"] is True
     assert summaries["track_analysis_summary"]["use_duration_summary"]["rows_count"] == 7
     assert summaries["track_analysis_summary"]["device_ids_summary"]["device_ids_count"] == 2
     assert summaries["rcp_snapshot"]["event_summary"]["event_count"] == 3

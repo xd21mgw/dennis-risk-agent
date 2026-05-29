@@ -15,13 +15,13 @@
       "clean_full_runtime_source_policy": {
         "primary_access_method": "browser_backed_service",
         "fixed_actions_first": [
-          "login_logs_search",
-          "weapon_inventory",
           "track_analysis_summary",
-          "rcp_snapshot"
+          "rcp_snapshot",
+          "weapon_inventory",
+          "login_logs_search"
         ],
         "old_runner_attempt_policy": "do_not_attempt_missing_sso_session_runner_or_track_analysis_runner_in_clean_full_runtime",
-        "archives_stub_policy": "archives_profile_runner_stub_enters_optional_source_gap_and_does_not_block_browser_backed_sources",
+        "archives_stub_policy": "archives_profile_runner_stub_enters_missing_evidence_optional_source_gap_not_default_four_source_matrix_and_does_not_block_browser_backed_sources",
         "final_risk_judgement_made": false
       },
       "required_p0_sources": [
@@ -44,42 +44,58 @@
           "rule": "do_not_use_latest_7_days_as_only_window_when_event_time_missing"
         },
         {
-          "source_name": "archives_profile_readonly",
-          "source_priority": "P0",
-          "source_type": "account_baseline",
-          "access_method": "optional_controlled_runner_source_gap_when_stub",
-          "runner_name": "archives_profile_runner",
-          "readiness_status": "planned_or_minimal_stub",
-          "latest_live_validation": "ARCHIVES-CENTER-BROWSER-ACTIVATION-PREFLIGHT-001",
-          "profile_reachable": true,
-          "activation_required_in_latest_validation": false,
-          "required": false,
-          "optional_in_clean_full_runtime_when_stub": true,
-          "source_completion_matrix_status_when_stub": "blocked_or_tool_gap_source_gap",
-          "supported_input": "user_id",
-          "purpose": "user_profile_account_status_ban_or_downrank_register_device_login_device_summary",
-          "success_marker": "archives_profile_source_status=completed_when_homeInfo_available",
-          "fallback_status": "archives_auth_gap_or_archives_browser_timeout_or_blocked_enters_source_quality",
-          "boundary": "readonly_no_auth_repair_no_cookie_token_session_header_output_no_publish_device_id_means_no_publish_device_anomaly_judgement_stub_gap_does_not_block_browser_backed_chain"
-        },
-        {
-          "source_name": "user_login_unified_log",
+          "source_name": "track_analysis_account_security_bundle",
           "source_priority": "P0",
           "source_type": "browser_backed_service",
           "access_method": "browser_backed_service",
-          "browser_backed_action_name": "login_logs_search",
+          "browser_backed_action_name": "track_analysis_summary",
           "required": true,
           "typed_params_contract": {
             "user_id": "{userId}",
-            "window": "last_7d",
-            "recallSource": "2,0,1,3",
-            "fallback_on_status": [
-              "parse_error"
-            ],
-            "fallback_window": "last_24h"
+            "appName": "KUAISHOU",
+            "mode": "account_security_bundle",
+            "sub_interfaces": [
+              "profile",
+              "getUseDuration",
+              "getDeviceIds",
+              "getLastestDateTime"
+            ]
           },
-          "fallback_status": "login_logs_7d_parse_error_preserved_and_24h_fallback_added_to_source_completion_matrix",
-          "boundary": "no_data_parse_error_timeout_blocked_not_no_risk_evidence"
+          "required_sub_interfaces": [
+            "profile",
+            "getUseDuration",
+            "getDeviceIds",
+            "getLastestDateTime"
+          ],
+          "output_summary": [
+            "profile_card",
+            "device_ids_summary",
+            "daily_duration_summary",
+            "latest_timestamp_summary",
+            "event_day_activity_alignment_if_time_anchor_available"
+          ],
+          "fallback_status": "each_sub_interface_blocked_auth_failed_timeout_parse_error_enters_source_quality",
+          "boundary": "frontend_activity_signal_not_final_judgement_no_data_parse_error_source_gap_not_risk_exclusion"
+        },
+        {
+          "source_name": "rcp_strategy_hit_entry",
+          "source_priority": "P0",
+          "source_type": "browser_backed_service",
+          "access_method": "browser_backed_service",
+          "browser_backed_action_name": "rcp_snapshot",
+          "required": true,
+          "typed_params_contract": {
+            "entity_type": "user_id",
+            "entity_id": "{userId}",
+            "mode": "account_security_strategy_event_entry"
+          },
+          "output_summary": [
+            "event_count",
+            "hit_policy_or_chaining_key_presence",
+            "risk_decision_distribution_if_available"
+          ],
+          "fallback_status": "blocked_auth_failed_timeout_parse_error_enter_source_quality",
+          "boundary": "strategy_event_entry_not_final_risk_judgement_no_hit_not_risk_exclusion"
         },
         {
           "source_name": "weapon_user_to_device_graph",
@@ -99,38 +115,43 @@
             ]
           },
           "riskData_execution_rule": "execute_riskData_only_when_graphData_retains_raw_ANDROID_or_IOS_device_id_checkpoint",
-          "riskData_missing_rule": "raw_device_id_checkpoint_missing_enters_source_quality_not_completed_riskData"
+          "riskData_missing_rule": "raw_device_id_checkpoint_missing_enters_source_quality_not_completed_riskData",
+          "riskData_chaining_allowed": true,
+          "boundary": "graphData_no_device_not_no_risk_riskData_no_label_not_no_risk"
         },
         {
-          "source_name": "track_analysis_account_security_bundle",
-          "source_priority": "P0_or_P1_by_case",
+          "source_name": "user_login_unified_log",
+          "source_priority": "P0",
           "source_type": "browser_backed_service",
           "access_method": "browser_backed_service",
-          "browser_backed_action_name": "track_analysis_summary",
+          "browser_backed_action_name": "login_logs_search",
           "required": true,
           "typed_params_contract": {
             "user_id": "{userId}",
-            "appName": "KUAISHOU",
-            "mode": "account_security_bundle",
-            "sub_interfaces": [
-              "profile",
-              "getUseDuration",
-              "getDeviceIds"
-            ]
+            "window": "last_7d",
+            "recallSource": "2,0,1,3",
+            "fallback_on_status": [
+              "parse_error"
+            ],
+            "fallback_window": "last_24h"
           },
-          "required_sub_interfaces": [
-            "profile",
-            "getUseDuration",
-            "getDeviceIds"
-          ],
-          "output_summary": [
-            "profile_card",
-            "device_ids_summary",
-            "daily_duration_summary",
-            "event_day_activity_alignment_if_time_anchor_available"
-          ],
-          "fallback_status": "blocked_auth_failed_timeout_parse_error_enter_source_quality",
-          "boundary": "frontend_activity_signal_not_final_judgement_no_data_not_risk_exclusion"
+          "fallback_status": "login_logs_7d_parse_error_preserved_and_24h_fallback_added_as_standard_browser_backed_source_result",
+          "boundary": "no_data_parse_error_timeout_blocked_are_source_quality_not_no_risk_evidence"
+        }
+      ],
+      "optional_source_gaps": [
+        {
+          "source_name": "archives_profile_readonly",
+          "source_priority": "optional",
+          "source_type": "optional_controlled_runner",
+          "access_method": "optional_controlled_runner_source_gap_when_stub",
+          "runner_name": "archives_profile_runner",
+          "readiness_status": "planned_or_minimal_stub",
+          "live_runner_connected": false,
+          "default_matrix_policy": "do_not_include_in_browser_backed_four_source_main_chain_when_stub",
+          "evidence_card_location_when_stub": "missing_evidence.optional_source_gap",
+          "fallback_status": "archives_profile_stub_source_gap",
+          "boundary": "readonly_no_auth_repair_no_cookie_token_session_header_output_stub_gap_does_not_block_browser_backed_chain"
         }
       ],
       "conditional_sources": [
@@ -169,10 +190,10 @@
           "boundary": "tab_switch_failed_not_platform_unavailable_publish_device_missing_is_missing_evidence"
         },
         {
-          "source_name": "tianshi_strategy_hit_if_user_asks_policy_hit",
+          "source_name": "tianshi_strategy_detail_if_user_asks_policy_hit",
           "source_priority": "P0-explicit",
           "readiness_status": "playbook_ready_not_runner_ready",
-          "condition": "user_explicitly_asks_policy_hit_or_strategy_hit_auxiliary_judgement",
+          "condition": "user_explicitly_asks_policy_detail_or_event_attribution_after_rcp_snapshot",
           "fallback_status": "runner_missing_or_missing_required_fields"
         },
         {
@@ -264,26 +285,34 @@
             "required_sub_interfaces": [
               "profile",
               "getUseDuration",
-              "getDeviceIds"
+              "getDeviceIds",
+              "getLastestDateTime"
             ]
           }
         },
         "single_user_account_security_default_sequence": [
           {
-            "source_name": "user_login_unified_log",
-            "action_name": "login_logs_search",
+            "source_name": "track_analysis_account_security_bundle",
+            "action_name": "track_analysis_summary",
             "typed_params": {
               "user_id": "{userId}",
-              "window": "last_7d"
-            },
-            "fallback_on_parse_error": {
-              "source_name": "user_login_unified_log_24h_fallback",
-              "action_name": "login_logs_search",
-              "typed_params": {
-                "user_id": "{userId}",
-                "window": "last_24h"
-              },
-              "preserve_primary_parse_error_in_source_quality": true
+              "appName": "KUAISHOU",
+              "mode": "account_security_bundle",
+              "sub_interfaces": [
+                "profile",
+                "getUseDuration",
+                "getDeviceIds",
+                "getLastestDateTime"
+              ]
+            }
+          },
+          {
+            "source_name": "rcp_strategy_hit_entry",
+            "action_name": "rcp_snapshot",
+            "typed_params": {
+              "entity_type": "user_id",
+              "entity_id": "{userId}",
+              "mode": "account_security_strategy_event_entry"
             }
           },
           {
@@ -299,29 +328,31 @@
             }
           },
           {
-            "source_name": "track_analysis_account_security_bundle",
-            "action_name": "track_analysis_summary",
+            "source_name": "user_login_unified_log",
+            "action_name": "login_logs_search",
             "typed_params": {
               "user_id": "{userId}",
-              "appName": "KUAISHOU",
-              "mode": "account_security_bundle",
-              "sub_interfaces": [
-                "profile",
-                "getUseDuration",
-                "getDeviceIds"
-              ]
+              "window": "last_7d",
+              "recallSource": "2,0,1,3"
+            },
+            "fallback_on_parse_error": {
+              "source_name": "user_login_unified_log_24h_fallback",
+              "action_name": "login_logs_search",
+              "typed_params": {
+                "user_id": "{userId}",
+                "window": "last_24h",
+                "recallSource": "2,0,1,3"
+              },
+              "preserve_primary_parse_error_in_source_quality": true,
+              "fallback_result_must_be_standard_browser_backed_source_result": true
             }
-          },
-          {
-            "source_name": "rcp_strategy_hit_entry",
-            "action_name": "rcp_snapshot",
-            "trigger_condition": "source_id_or_event_context_available_or_user_explicitly_asks_strategy_hit"
-          },
+          }
+        ],
+        "optional_source_gaps_not_in_default_sequence": [
           {
             "source_name": "archives_profile_readonly",
             "action_name": "archives.profile_home_info",
-            "trigger_condition": "archives_profile_runner_live_connected",
-            "stub_behavior": "optional_source_gap_does_not_block_browser_backed_sources"
+            "stub_behavior": "missing_evidence_optional_source_gap_does_not_block_browser_backed_sources"
           }
         ],
         "required_result_fields": [
