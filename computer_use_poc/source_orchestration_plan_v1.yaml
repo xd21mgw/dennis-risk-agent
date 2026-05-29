@@ -61,6 +61,19 @@
               "getLastestDateTime"
             ]
           },
+          "execution_contract": {
+            "client_helper": "BrowserBackedServiceClient.call_account_security_sources",
+            "expanded_sub_interface_calls_required": true,
+            "single_call_with_sub_interfaces_list_is_plan_only_not_complete_bundle": true,
+            "per_call_typed_params": {
+              "mode": "account_security_bundle",
+              "sub_interface": "profile|getUseDuration|getDeviceIds|getLastestDateTime",
+              "sub_interfaces": [
+                "{single_sub_interface}"
+              ]
+            },
+            "merge_policy": "merge four standard track_analysis_summary results into one track_analysis_account_security_bundle source result"
+          },
           "required_sub_interfaces": [
             "profile",
             "getUseDuration",
@@ -294,6 +307,7 @@
           {
             "source_name": "track_analysis_account_security_bundle",
             "action_name": "track_analysis_summary",
+            "execution_contract": "expanded_sub_interface_calls_required",
             "typed_params": {
               "user_id": "{userId}",
               "appName": "KUAISHOU",
@@ -304,6 +318,60 @@
                 "getDeviceIds",
                 "getLastestDateTime"
               ]
+            },
+            "expanded_sub_interface_calls": {
+              "required": true,
+              "calls": [
+                {
+                  "action_name": "track_analysis_summary",
+                  "typed_params": {
+                    "user_id": "{userId}",
+                    "appName": "KUAISHOU",
+                    "mode": "account_security_bundle",
+                    "sub_interface": "profile",
+                    "sub_interfaces": [
+                      "profile"
+                    ]
+                  }
+                },
+                {
+                  "action_name": "track_analysis_summary",
+                  "typed_params": {
+                    "user_id": "{userId}",
+                    "appName": "KUAISHOU",
+                    "mode": "account_security_bundle",
+                    "sub_interface": "getUseDuration",
+                    "sub_interfaces": [
+                      "getUseDuration"
+                    ]
+                  }
+                },
+                {
+                  "action_name": "track_analysis_summary",
+                  "typed_params": {
+                    "user_id": "{userId}",
+                    "appName": "KUAISHOU",
+                    "mode": "account_security_bundle",
+                    "sub_interface": "getDeviceIds",
+                    "sub_interfaces": [
+                      "getDeviceIds"
+                    ]
+                  }
+                },
+                {
+                  "action_name": "track_analysis_summary",
+                  "typed_params": {
+                    "user_id": "{userId}",
+                    "appName": "KUAISHOU",
+                    "mode": "account_security_bundle",
+                    "sub_interface": "getLastestDateTime",
+                    "sub_interfaces": [
+                      "getLastestDateTime"
+                    ]
+                  }
+                }
+              ],
+              "completion_rule": "all sub-interface statuses enter merged source_quality; wrong sub-interface response remains missing, not completed"
             }
           },
           {

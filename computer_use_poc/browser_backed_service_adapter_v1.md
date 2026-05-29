@@ -85,6 +85,8 @@ account_security_browser_backed_sequence:
 
 All four browser-backed sources must be represented in `source_completion_matrix` by default. A 7-day `login_logs_search` `parse_error` may trigger the 24-hour fallback, but both the 7-day primary result and 24-hour fallback must be normalized as standard browser-backed source results with `source_card`, `source_quality`, `latency_ms`, and `sensitive_output=false`. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
 
+For `track_analysis_account_security_bundle`, a single `sub_interfaces` list is only the source plan shape. The executable helper expands it into four `track_analysis_summary` calls with `sub_interface=profile|getUseDuration|getDeviceIds|getLastestDateTime`, then merges those standard action results into one Track Analysis source card. If the service returns a different observed sub-interface than requested, that requested sub-interface stays missing in `source_quality` instead of being treated as completed.
+
 `archives_profile_readonly` is not part of the default browser-backed four-source main chain while `archives_profile_runner` remains a stub. It may be represented only as `missing_evidence.optional_source_gap` / `source_quality.missing_sources`, and it must not block Track Analysis, RCP, Weapon, or Login Logs.
 
 ## Adapter Boundary
@@ -194,6 +196,7 @@ The executable client is intentionally narrow:
 - Only typed params are serialized into the JSON body.
 - Caller-provided route, credential, or transport override fields are rejected before service invocation.
 - HTTP transport errors, connection refused, timeout, HTTP error, and non-JSON responses are normalized as source results instead of Dennis runtime failures.
+- `BrowserBackedServiceClient.call_account_security_sources()` is the executable single-user account-security helper. It expands Track Analysis sub-interfaces, preserves Weapon private safe handles when the service returns them, applies login-log parse fallback, and returns display-safe source results for evidence-card construction.
 
 Fixture self-test:
 
@@ -288,12 +291,15 @@ Source-specific summary fields:
   - `risk_summary.risk_group_names_observed`
   - `risk_summary.readable_label_sample`
   - `risk_summary.userLevel_observed`
+  - `chaining_summary.raw_device_safe_handle_retained`
+  - `chaining_summary.riskData_chaining_uses_safe_handle_only`
 - `login_logs_search`
   - `login_window_summary.source_status`
   - `login_window_summary.records_count`
   - `login_window_summary.time_window_observed`
   - `login_window_summary.first_login_time_observed`
   - `login_window_summary.last_login_time_observed`
+  - `login_window_summary.standard_browser_backed_source_result`
   - Boundary: `no_data` means no visible rows in the observed window, not no-risk evidence.
 
 The display layer keeps:

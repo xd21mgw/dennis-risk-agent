@@ -2801,6 +2801,18 @@ platform_access_execution_v0_1_regression:
       - user_id_appName_only_is_insufficient
       - activity_signal_not_final_judgement
     pass_fail_criteria: "Track Analysis 不能只传 user_id/appName 或只跑 latest timestamp；必须传 account_security_bundle 或等价 profile/getUseDuration/getDeviceIds/getLastestDateTime sub_interface 覆盖。"
+  - case_id: ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES
+    input: "browser_backed_service_client account-security helper 执行 Track Analysis bundle。"
+    expected_output_boundary:
+      - call_account_security_sources_expands_track_analysis_summary
+      - sub_interface_profile_called
+      - sub_interface_getUseDuration_called
+      - sub_interface_getDeviceIds_called
+      - sub_interface_getLastestDateTime_called
+      - four_sub_interface_results_merged_into_one_track_source
+      - profile_useDuration_deviceIds_latest_summaries_visible_in_evidence_card
+      - wrong_sub_interface_result_stays_missing_not_completed
+    pass_fail_criteria: "默认执行 helper 必须把 Track Analysis account_security_bundle 展开为四个固定 action 子调用，合并后 evidence card 显示 profile/useDuration/deviceIds/latest 四类摘要；不能只显示 latest timestamp。"
   - case_id: WEAPON-RISKDATA-CHAINING-IN-EVIDENCE-CARD-001
     input: "weapon_inventory 用于账号安全单用户 evidence card，graphData 返回可链路 device_id。"
     expected_output_boundary:
@@ -2811,6 +2823,16 @@ platform_access_execution_v0_1_regression:
       - raw_labelInfo_originalLog_deviceId_not_output
       - device_risk_not_standalone_judgement
     pass_fail_criteria: "Weapon 必须通过 browser-backed `weapon_inventory` 承担 graphData→riskData 链路；有 raw device safe handle 时允许 riskData，缺失时写 missing_device_reference，不伪装 completed。"
+  - case_id: WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED
+    input: "weapon_inventory 标准结果包含 source_checkpoint_private.raw_references device_id safe handle。"
+    expected_output_boundary:
+      - source_checkpoint_private_preserved
+      - raw_reference_safe_id_retained_current_task_only
+      - device_safe_handle_available_for_riskData_chaining
+      - masked_device_id_only_in_display
+      - raw_device_value_not_in_evidence_card
+      - raw_labelInfo_originalLog_not_in_evidence_card
+    pass_fail_criteria: "client normalizer 不得丢弃 Weapon 当前任务 private safe handle；display/evidence card 只能展示 masked/summary，不能输出 raw deviceId、labelInfo、originalLog。"
   - case_id: RCP-SNAPSHOT-IN-ACCOUNT-SECURITY-MATRIX-001
     input: "single_user_account_security evidence card 没有显式策略问题。"
     expected_output_boundary:
@@ -2830,6 +2852,19 @@ platform_access_execution_v0_1_regression:
       - sensitive_output_false
       - parse_error_or_no_data_not_no_risk
     pass_fail_criteria: "登录日志失败或空结果必须归一化为标准 browser-backed source result，不得裸输出未标准化 parse_error。"
+  - case_id: LOGIN-LOGS-STANDARD-SOURCE-RESULT-IN-EVIDENCE-CARD
+    input: "login_logs_search 返回 network_error / no_data / parse_error 任一标准 action result。"
+    expected_output_boundary:
+      - source_card_present
+      - source_quality_present
+      - latency_ms_present
+      - sensitive_output_false
+      - network_error_bucketed_as_blocked_source_quality
+      - no_data_bucketed_as_no_data_source_quality
+      - parse_error_bucketed_as_parse_error_source_quality
+      - login_window_summary_marks_standard_browser_backed_source_result
+      - no_data_blocked_parse_error_not_no_risk
+    pass_fail_criteria: "login_logs_search 的 network_error/no_data/parse_error 都必须进入 source_completion_matrix 和 evidence_summary_by_source，不得变成 runtime crash、空研判或低风险反证。"
   - case_id: ARCHIVES-STUB-DOES-NOT-BLOCK-BROWSER-BACKED-SOURCES-001
     input: "archives_profile_runner 存在但返回 planned_or_minimal_stub / source_gap。"
     expected_output_boundary:

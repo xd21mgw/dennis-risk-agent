@@ -8143,14 +8143,28 @@
 - expected_runtime_behavior: account_security_bundle_typed_params_required
 - expected_output_boundary: typed params 必须包含 `mode=account_security_bundle` 和 `sub_interfaces=[profile,getUseDuration,getDeviceIds,getLastestDateTime]`，或等价逐项 sub_interface 调用；只传 `user_id/appName` 或只跑 latest timestamp 不满足账号安全 bundle；活跃信号不得单独最终定性。
 
-## 877A. Weapon riskData chaining in evidence card
+## 877A. Track Analysis bundle expands four sub-interfaces
+
+- test_id: ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: track_analysis_bundle_expanded_and_merged
+- expected_output_boundary: account-security helper 默认展开 `track_analysis_summary` 四个子调用：`profile`、`getUseDuration`、`getDeviceIds`、`getLastestDateTime`；合并后的 evidence card 必须展示 profile/useDuration/deviceIds/latest 摘要；如果 observed sub-interface 与 requested 不一致，requested sub-interface 仍标 missing，不能伪装 completed。
+
+## 877B. Weapon riskData chaining in evidence card
 
 - test_id: WEAPON-RISKDATA-CHAINING-IN-EVIDENCE-CARD-001
 - input: `weapon_inventory` 用于账号安全单用户 evidence card，graphData 返回可用 raw device safe handle。
 - expected_runtime_behavior: weapon_inventory_graphdata_to_riskdata_chaining
 - expected_output_boundary: `weapon_inventory` 必须允许 graphData → riskData chaining；riskData 输入只能来自 current-task raw device safe handle；缺 device handle 时标 `missing_device_reference/not_checked`；设备风险标签摘要可进 evidence card，但 raw `labelInfo` / `originalLog` / raw deviceId 不输出；设备风险不单独定性。
 
-## 877B. RCP snapshot in account-security matrix
+## 877C. Weapon safe handle preserved
+
+- test_id: WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: weapon_private_safe_handle_preserved
+- expected_output_boundary: normalizer 必须保留 `source_checkpoint_private.raw_references` 中的 current-task device safe handle 供 riskData chaining；evidence card / display summary 只展示 masked/summary，不输出 raw deviceId、raw `labelInfo` 或 raw `originalLog`。
+
+## 877D. RCP snapshot in account-security matrix
 
 - test_id: RCP-SNAPSHOT-IN-ACCOUNT-SECURITY-MATRIX-001
 - input: single-user account-security evidence card，即使用户未显式问策略命中。
@@ -8177,6 +8191,13 @@
 - input: `login_logs_search` 默认 7 天窗口返回 `parse_error`。
 - expected_runtime_behavior: preserve_primary_parse_error_and_add_small_window_fallback
 - expected_output_boundary: 7d `parse_error` 必须是标准 browser-backed source result，包含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false`；自动追加 24h 小窗口 fallback source；fallback `no_data` / `parse_error` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
+
+## 879A. Login logs standard source result in evidence card
+
+- test_id: LOGIN-LOGS-STANDARD-SOURCE-RESULT-IN-EVIDENCE-CARD
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: login_logs_network_no_data_parse_error_standardized
+- expected_output_boundary: `login_logs_search` 的 `network_error` 必须进入 blocked source_quality，`no_data` 进入 no_data source_quality，`parse_error` 进入 parse_error source_quality；三者都要出现在 evidence card 的登录日志摘要中，并明确不是无风险反证。
 
 ## 880. No old runner attempt in clean full_runtime
 

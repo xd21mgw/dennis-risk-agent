@@ -39,6 +39,8 @@ ACTION_TO_SOURCE = {
 
 ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds", "getLastestDateTime")
 ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
+TRACK_ANALYSIS_BUNDLE_SOURCE_NAME = "track_analysis_account_security_bundle"
+TRACK_ANALYSIS_BUNDLE_MODE = "account_security_bundle"
 
 FORBIDDEN_INPUT_KEYS = {
     "url",
@@ -171,11 +173,60 @@ class BrowserBackedServiceClient:
 
         return normalize_service_response(action_name, service_payload, http_status=http_status)
 
+    def call_account_security_sources(
+        self,
+        user_id: str,
+        app_name: str = "KUAISHOU",
+        include_rcp_snapshot: bool = True,
+    ) -> list[Dict[str, Any]]:
+        """Call the default single-user account-security browser-backed sources.
+
+        Track Analysis remains one evidence source, but its account-security
+        bundle is collected through four explicit sub-interface calls before
+        being merged into one display-safe source result.
+        """
+
+        results: list[Dict[str, Any]] = []
+        track_results: list[Dict[str, Any]] = []
+        for request_plan in build_account_security_browser_backed_requests(
+            user_id,
+            app_name=app_name,
+            include_rcp_snapshot=include_rcp_snapshot,
+            expand_track_analysis_bundle=True,
+        ):
+            action_name = str(request_plan["action_name"])
+            result = self.call_action(action_name, request_plan.get("typed_params", {}))
+            result["planned_source_name"] = request_plan.get("source_name")
+            result["typed_params_summary"] = _typed_params_summary(request_plan.get("typed_params", {}))
+            if request_plan.get("bundle_source_name") == TRACK_ANALYSIS_BUNDLE_SOURCE_NAME:
+                result["requested_track_sub_interface"] = request_plan.get("track_sub_interface")
+                track_results.append(result)
+                continue
+
+            results.append(result)
+            fallback = request_plan.get("fallback_on")
+            if result.get("source_status") == "parse_error" and isinstance(fallback, Mapping):
+                fallback_plan = fallback.get("parse_error")
+                if isinstance(fallback_plan, Mapping):
+                    fallback_result = self.call_action(
+                        str(fallback_plan["action_name"]),
+                        fallback_plan.get("typed_params", {}),
+                    )
+                    fallback_result["planned_source_name"] = fallback_plan.get("source_name")
+                    fallback_result["typed_params_summary"] = _typed_params_summary(fallback_plan.get("typed_params", {}))
+                    fallback_result["fallback_for"] = request_plan.get("source_name")
+                    results.append(fallback_result)
+
+        if track_results:
+            results.insert(0, merge_track_analysis_account_security_bundle(track_results))
+        return results
+
 
 def build_account_security_browser_backed_requests(
     user_id: str,
     app_name: str = "KUAISHOU",
     include_rcp_snapshot: bool = True,
+    expand_track_analysis_bundle: bool = True,
 ) -> list[Dict[str, Any]]:
     """Return the clean full_runtime request plan for one account-security user.
 
@@ -188,18 +239,37 @@ def build_account_security_browser_backed_requests(
     if app_name not in {"KUAISHOU", "NEBULA"}:
         raise BrowserBackedServiceInputError("app_name must be KUAISHOU or NEBULA")
 
-    requests: list[Dict[str, Any]] = [
-        {
-            "source_name": "track_analysis_account_security_bundle",
-            "action_name": "track_analysis_summary",
-            "typed_params": {
-                "user_id": user_id,
-                "appName": app_name,
-                "mode": "account_security_bundle",
-                "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-            },
-        },
-    ]
+    requests: list[Dict[str, Any]] = []
+    if expand_track_analysis_bundle:
+        for sub_interface in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES:
+            requests.append(
+                {
+                    "source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
+                    "bundle_source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
+                    "track_sub_interface": sub_interface,
+                    "action_name": "track_analysis_summary",
+                    "typed_params": {
+                        "user_id": user_id,
+                        "appName": app_name,
+                        "mode": TRACK_ANALYSIS_BUNDLE_MODE,
+                        "sub_interface": sub_interface,
+                        "sub_interfaces": [sub_interface],
+                    },
+                }
+            )
+    else:
+        requests.append(
+            {
+                "source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
+                "action_name": "track_analysis_summary",
+                "typed_params": {
+                    "user_id": user_id,
+                    "appName": app_name,
+                    "mode": TRACK_ANALYSIS_BUNDLE_MODE,
+                    "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+                },
+            }
+        )
     if include_rcp_snapshot:
         requests.append(
             {
@@ -259,6 +329,150 @@ def build_account_security_browser_backed_requests(
     return requests
 
 
+def _typed_params_summary(typed_params: Any) -> Dict[str, Any]:
+    if not isinstance(typed_params, Mapping):
+        return {}
+    return {
+        str(key): value
+        for key, value in typed_params.items()
+        if str(key) not in {"user_id", "entity_id"}
+    }
+
+
+def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Merge four track-analysis sub-interface action results into one source.
+
+    The merge is intentionally conservative: a sub-interface is considered
+    completed only when the observed sub-interface matches the requested one.
+    This prevents a service-side fallback to `getLastestDateTime` from being
+    presented as a complete account-security bundle.
+    """
+
+    materialized = [dict(result) for result in results]
+    sub_interface_statuses: Dict[str, Dict[str, Any]] = {}
+    profile_summary: Dict[str, Any] = {}
+    latest_timestamp_summary: Dict[str, Any] = {}
+    use_duration_summary: Dict[str, Any] = {}
+    device_ids_summary: Dict[str, Any] = {}
+    total_latency = 0
+
+    for result in materialized:
+        requested = str(result.get("requested_track_sub_interface") or "")
+        observed = _observed_track_sub_interface(result) or requested
+        status = str(result.get("source_status") or "blocked")
+        total_latency += int(result.get("latency_ms") or 0)
+        matched = bool(requested and observed == requested)
+        summary = build_business_evidence_summary(result)
+        if requested:
+            sub_interface_statuses[requested] = {
+                "source_status": status if matched else "wrong_sub_interface_result",
+                "observed_sub_interface": observed or None,
+                "error_type": result.get("error_type"),
+                "latency_ms": result.get("latency_ms"),
+            }
+        if not matched:
+            continue
+        profile_summary.update(summary.get("profile_summary") or {})
+        latest_timestamp_summary.update(summary.get("latest_timestamp_summary") or {})
+        use_duration_summary.update(summary.get("use_duration_summary") or {})
+        device_ids_summary.update(summary.get("device_ids_summary") or {})
+
+    completed = [
+        sub_interface
+        for sub_interface, info in sub_interface_statuses.items()
+        if info.get("source_status") == "completed"
+    ]
+    missing = [
+        sub_interface
+        for sub_interface in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES
+        if sub_interface not in completed
+    ]
+    source_status = _merged_bundle_status(
+        [str(result.get("source_status") or "blocked") for result in materialized],
+        completed_count=len(completed),
+    )
+    source_quality = {
+        "source_status": source_status,
+        "sub_interface_statuses": sub_interface_statuses,
+        "sub_interfaces_completed": completed,
+        "sub_interfaces_missing": missing,
+        "partial_source": bool(missing),
+        "no_data_not_risk_exclusion": True,
+        "activity_signal_not_final_judgement": True,
+        "redaction_applied": True,
+        "raw_reference_retained_for_followup": False,
+        "sensitive_output": False,
+    }
+    return {
+        "source_name": "track_analysis_summary",
+        "planned_source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
+        "action_name": "track_analysis_summary",
+        "source_status": source_status,
+        "failure_layer": "no_failure" if source_status == "completed" else "source_observation",
+        "error_type": None,
+        "latency_ms": total_latency,
+        "source_card": {
+            "source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
+            "action_name": "track_analysis_summary",
+            "source_status": source_status,
+            "bundle_summary": {
+                "mode": TRACK_ANALYSIS_BUNDLE_MODE,
+                "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+                "sub_interfaces_completed": completed,
+                "sub_interfaces_missing": missing,
+                "account_security_bundle": True,
+            },
+            "profile_summary": profile_summary,
+            "latest_timestamp_summary": latest_timestamp_summary,
+            "getUseDuration": use_duration_summary,
+            "getDeviceIds": device_ids_summary,
+            "sub_interface_statuses": sub_interface_statuses,
+            "body_policy": {
+                "raw_response_full_body_returned": False,
+                "sensitive_output": False,
+            },
+        },
+        "source_quality": source_quality,
+        "source_checkpoint_private": {"raw_references": [], "downstream_source_chaining": []},
+        "redaction": {
+            "redaction_applied": True,
+            "raw_reference_retained_for_followup": False,
+            "sensitive_output": False,
+        },
+        "sensitive_output": False,
+        "source_provenance": "browser_backed_service",
+        "no_data_not_risk_exclusion": True,
+    }
+
+
+def _observed_track_sub_interface(result: Mapping[str, Any]) -> str | None:
+    for container in (
+        result.get("response_shape_summary"),
+        result.get("source_card"),
+        result.get("source_quality"),
+    ):
+        found = _find_first(container, ("sub_interface", "observed_sub_interface"))
+        if isinstance(found, str) and found:
+            return found
+    return None
+
+
+def _merged_bundle_status(statuses: list[str], completed_count: int) -> str:
+    if completed_count:
+        return "completed"
+    if not statuses:
+        return "blocked"
+    if all(status == "no_data" for status in statuses):
+        return "no_data"
+    if all(status == "parse_error" for status in statuses):
+        return "parse_error"
+    if all(status == "timeout" for status in statuses):
+        return "timeout"
+    if all(status == "auth_failed" for status in statuses):
+        return "auth_failed"
+    return "blocked"
+
+
 def normalize_service_response(
     action_name: str,
     service_payload: Mapping[str, Any],
@@ -289,6 +503,17 @@ def normalize_service_response(
     normalized_status, failure_layer = _normalize_status(raw_status, error_type)
     source_card = service_payload.get("source_card") or _synthetic_source_card(action_name, normalized_status, error_type)
     source_quality = service_payload.get("source_quality") or _synthetic_source_quality(normalized_status, error_type)
+    source_checkpoint_private = _sanitize_source_checkpoint_private(service_payload)
+    raw_reference_retained = bool(source_checkpoint_private.get("raw_references"))
+    if isinstance(source_quality, Mapping):
+        source_quality = dict(source_quality)
+        source_quality.setdefault("raw_reference_retained_for_followup", raw_reference_retained)
+        source_quality.setdefault("redaction_applied", True)
+        source_quality.setdefault("sensitive_output", False)
+        source_quality.setdefault(
+            "source_status_not_risk_exclusion",
+            normalized_status in {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"},
+        )
     no_data_not_risk_exclusion = _extract_no_data_marker(source_quality, normalized_status)
 
     normalized: Dict[str, Any] = {
@@ -302,6 +527,12 @@ def normalize_service_response(
         "latency_ms": service_payload.get("latency_ms"),
         "source_card": source_card,
         "source_quality": source_quality,
+        "source_checkpoint_private": source_checkpoint_private,
+        "redaction": {
+            "redaction_applied": True,
+            "raw_reference_retained_for_followup": raw_reference_retained,
+            "sensitive_output": False,
+        },
         "sensitive_output": False,
         "source_provenance": "browser_backed_service",
         "no_data_not_risk_exclusion": no_data_not_risk_exclusion,
@@ -350,7 +581,11 @@ def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict
             "failure_layer": result.get("failure_layer"),
             "error_type": result.get("error_type"),
             "latency_ms": result.get("latency_ms"),
+            "source_card_present": result.get("source_card") is not None,
+            "source_quality_present": result.get("source_quality") is not None,
             "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
+            "source_status_not_risk_exclusion": status in {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"},
+            "sensitive_output": False,
         }
     return matrix
 
@@ -424,6 +659,24 @@ def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[st
     for result in results:
         source_name = str(result.get("source_name"))
         status = result.get("source_status")
+        source_quality = result.get("source_quality") if isinstance(result.get("source_quality"), Mapping) else {}
+        source_card = result.get("source_card") if isinstance(result.get("source_card"), Mapping) else {}
+        for sub_interface in source_quality.get("sub_interfaces_missing", []) if isinstance(source_quality.get("sub_interfaces_missing"), list) else []:
+            missing.append(
+                {
+                    "source_name": source_name,
+                    "reason": f"track_analysis_sub_interface_missing:{sub_interface}",
+                    "caveat": "account-security track bundle is partial until this sub-interface is collected",
+                }
+            )
+        if source_name == "weapon_inventory" and _find_first(source_card, ("riskData_status",)) == "not_executed_missing_device_id":
+            missing.append(
+                {
+                    "source_name": source_name,
+                    "reason": "weapon_riskData_missing_device_safe_handle",
+                    "caveat": "riskData must use a retained current-task raw device safe handle, not a masked display id",
+                }
+            )
         if status == "no_data":
             missing.append(
                 {
@@ -469,6 +722,19 @@ def _summary_material(result: Mapping[str, Any]) -> Dict[str, Any]:
         if isinstance(value, Mapping):
             merged[key] = value
     return merged
+
+
+def _has_private_raw_reference(result: Mapping[str, Any], ref_type: str) -> bool:
+    checkpoint = result.get("source_checkpoint_private")
+    if not isinstance(checkpoint, Mapping):
+        return False
+    refs = checkpoint.get("raw_references")
+    if not isinstance(refs, list):
+        return False
+    for ref in refs:
+        if isinstance(ref, Mapping) and ref.get("ref_type") == ref_type and ref.get("raw_reference_safe_id"):
+            return True
+    return False
 
 
 def _find_first(value: Any, candidate_keys: Iterable[str]) -> Any:
@@ -656,6 +922,11 @@ def _weapon_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
         ),
     )
     summary["raw_weapon_fields_suppressed"] = ["raw deviceId", "raw labelInfo", "raw originalLog"]
+    summary["chaining_summary"] = {
+        "raw_device_safe_handle_retained": _has_private_raw_reference(result, "device_id"),
+        "riskData_chaining_uses_safe_handle_only": True,
+        "raw_device_id_suppressed_from_display": True,
+    }
     return summary
 
 
@@ -671,10 +942,19 @@ def _login_logs_summary(result: Mapping[str, Any]) -> Dict[str, Any]:
             "last_login_time_observed",
         ),
     )
+    summary["login_window_summary"]["source_status"] = result.get("source_status")
+    summary["login_window_summary"]["error_type"] = result.get("error_type")
+    summary["login_window_summary"]["standard_browser_backed_source_result"] = (
+        result.get("source_card") is not None
+        and result.get("source_quality") is not None
+        and result.get("latency_ms") is not None
+        and result.get("sensitive_output") is False
+    )
     if "records_count" not in summary["login_window_summary"] and result.get("source_status") == "no_data":
         summary["login_window_summary"]["records_count"] = 0
     summary["no_data_not_risk_exclusion"] = True
-    summary["caveat"] = "no_data only means no visible rows in the observed window; it is not no-risk evidence."
+    summary["blocked_parse_or_no_data_not_counter_evidence"] = result.get("source_status") in {"blocked", "parse_error", "no_data"}
+    summary["caveat"] = "no_data / blocked / parse_error are source-quality states; they are not no-risk evidence."
     return summary
 
 
@@ -801,6 +1081,63 @@ def _safe_nested_get(payload: Mapping[str, Any], keys: Iterable[str]) -> Any:
     return current
 
 
+def _sanitize_source_checkpoint_private(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    """Keep only safe private chaining handles from a service payload.
+
+    Raw reference values are not copied into the normalized result. The service
+    may provide `raw_reference_safe_id` handles that are valid for current-task
+    source chaining; those handles are preserved in the private checkpoint.
+    """
+
+    checkpoint = payload.get("source_checkpoint_private") or _safe_nested_get(payload, ("data", "source_checkpoint_private"))
+    if not isinstance(checkpoint, Mapping):
+        return {"raw_references": [], "downstream_source_chaining": []}
+
+    raw_references = []
+    for ref in checkpoint.get("raw_references", []) if isinstance(checkpoint.get("raw_references"), list) else []:
+        if not isinstance(ref, Mapping):
+            continue
+        ref_type = str(ref.get("ref_type") or "")
+        safe_id = ref.get("raw_reference_safe_id")
+        if not ref_type or not safe_id:
+            continue
+        raw_references.append(
+            {
+                "ref_type": ref_type,
+                "raw_reference_safe_id": safe_id,
+                "alias": ref.get("alias"),
+                "masked_value": ref.get("masked_value"),
+                "allowed_downstream_sources": list(ref.get("allowed_downstream_sources") or []),
+                "retention_scope": ref.get("retention_scope", "current_task_only"),
+            }
+        )
+
+    raw_device_handles = checkpoint.get("raw_device_ids_for_chaining")
+    if isinstance(raw_device_handles, list):
+        for index, handle in enumerate(raw_device_handles):
+            if not isinstance(handle, Mapping):
+                continue
+            safe_id = handle.get("raw_reference_safe_id")
+            if not safe_id:
+                continue
+            raw_references.append(
+                {
+                    "ref_type": "device_id",
+                    "raw_reference_safe_id": safe_id,
+                    "alias": handle.get("alias") or f"device_ref_{index + 1}",
+                    "masked_value": handle.get("masked_value"),
+                    "allowed_downstream_sources": list(handle.get("allowed_downstream_sources") or ["weapon_device_risk_if_device_id_available"]),
+                    "retention_scope": handle.get("retention_scope", "current_task_only"),
+                }
+            )
+
+    downstream = checkpoint.get("downstream_source_chaining")
+    return {
+        "raw_references": raw_references,
+        "downstream_source_chaining": downstream if isinstance(downstream, list) else [],
+    }
+
+
 def _synthetic_source_card(action_name: str, source_status: str, error_type: Optional[str]) -> Dict[str, Any]:
     return {
         "source_name": ACTION_TO_SOURCE[action_name],
@@ -821,6 +1158,10 @@ def _synthetic_source_quality(source_status: str, error_type: Optional[str], det
         "error_type": error_type,
         "quality_status": "source_unavailable" if source_status != "completed" else "usable",
         "no_data_not_risk_exclusion": source_status == "no_data",
+        "source_status_not_risk_exclusion": source_status != "completed",
+        "redaction_applied": True,
+        "raw_reference_retained_for_followup": False,
+        "sensitive_output": False,
     }
     if detail:
         result["sanitized_detail"] = detail[:160]
@@ -855,10 +1196,17 @@ class _FakeOpener:
         self.calls.append({"url": request.full_url, "timeout": timeout, "body": request.data})
         if self.exc:
             raise self.exc
-        return _FakeResponse(200, self.payload or {})
+        payload = self.payload(request) if callable(self.payload) else self.payload
+        return _FakeResponse(200, payload or {})
 
 
-def _fixture_payload(action_name: str, source_status: str, error_type: Optional[str] = None) -> Dict[str, Any]:
+def _fixture_payload(
+    action_name: str,
+    source_status: str,
+    error_type: Optional[str] = None,
+    *,
+    track_sub_interface: Optional[str] = None,
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "action": action_name,
         "status": source_status,
@@ -886,34 +1234,45 @@ def _fixture_payload(action_name: str, source_status: str, error_type: Optional[
     }
     source_card = payload["source_card"]
     if action_name == "track_analysis_summary":
-        source_card["profile_summary"] = {
-            "register_time_present": True,
-            "fan_distribution_present": True,
-            "active_days_bucket_present": True,
-            "device_ids_count": 2,
-        }
         source_card["bundle_summary"] = {
-            "mode": "account_security_bundle",
+            "mode": TRACK_ANALYSIS_BUNDLE_MODE,
             "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-            "sub_interfaces_completed": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-            "sub_interfaces_missing": [],
+            "sub_interfaces_completed": [track_sub_interface] if track_sub_interface else list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
+            "sub_interfaces_missing": [
+                item for item in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES if track_sub_interface and item != track_sub_interface
+            ],
             "account_security_bundle": True,
         }
-        source_card["latest_timestamp_summary"] = {
-            "latest_datetime_present": True,
-            "uid_did_relation_latest_datetime_present": True,
+        payload["data"]["response_summary"]["track_analysis"] = {
+            "sub_interface": track_sub_interface or "account_security_bundle",
+            "appName": "KUAISHOU",
+            "no_data_not_risk_exclusion": True,
         }
-        source_card["getUseDuration"] = {
-            "rows_count": 7,
-            "nonzero_days_count": 5,
-            "total_duration": 32400,
-            "peak_date": "2026-05-28",
-        }
-        source_card["getDeviceIds"] = {
-            "device_ids_count": 2,
-            "device_model_fields_present": True,
-            "last_active_fields_present": True,
-        }
+        if track_sub_interface in {None, "profile"}:
+            source_card["profile_summary"] = {
+                "register_time_present": True,
+                "fan_distribution_present": True,
+                "active_days_bucket_present": True,
+                "device_ids_count": 2,
+            }
+        if track_sub_interface in {None, "getLastestDateTime"}:
+            source_card["latest_timestamp_summary"] = {
+                "latest_datetime_present": True,
+                "uid_did_relation_latest_datetime_present": True,
+            }
+        if track_sub_interface in {None, "getUseDuration"}:
+            source_card["getUseDuration"] = {
+                "rows_count": 7,
+                "nonzero_days_count": 5,
+                "total_duration": 32400,
+                "peak_date": "2026-05-28",
+            }
+        if track_sub_interface in {None, "getDeviceIds"}:
+            source_card["getDeviceIds"] = {
+                "device_ids_count": 2,
+                "device_model_fields_present": True,
+                "last_active_fields_present": True,
+            }
     elif action_name == "rcp_snapshot":
         source_card["event_summary"] = {
             "event_count": 3,
@@ -936,6 +1295,29 @@ def _fixture_payload(action_name: str, source_status: str, error_type: Optional[
             "readable_label_sample": ["risk_label_sample"],
             "userLevel_observed": True,
             "raw_labelInfo": {"deviceId": "raw_device_should_not_render", "originalLog": "raw_log_should_not_render"},
+        }
+        payload["source_checkpoint_private"] = {
+            "raw_references": [
+                {
+                    "ref_type": "device_id",
+                    "raw_reference_safe_id": "device_safe_handle_001",
+                    "alias": "device_ref_1",
+                    "masked_value": "ANDROID_***9999",
+                    "allowed_downstream_sources": ["weapon_device_risk_if_device_id_available"],
+                    "retention_scope": "current_task_only",
+                    "raw_value": "ANDROID_raw_device_should_not_render",
+                }
+            ],
+            "raw_device_ids_for_chaining": [
+                {
+                    "raw_reference_safe_id": "device_safe_handle_001",
+                    "alias": "device_ref_1",
+                    "masked_value": "ANDROID_***9999",
+                    "allowed_downstream_sources": ["weapon_device_risk_if_device_id_available"],
+                    "raw_value": "ANDROID_raw_device_should_not_render",
+                }
+            ],
+            "downstream_source_chaining": ["weapon_device_risk_if_device_id_available"],
         }
     elif action_name == "login_logs_search":
         source_card["login_logs_summary"] = {
@@ -1021,14 +1403,17 @@ def run_fixture_tests() -> Dict[str, Any]:
     except BrowserBackedServiceInputError:
         results.append(("url_like_typed_param_rejected", "passed"))
 
-    account_security_plan = build_account_security_browser_backed_requests("2871834924")
-    assert [item["action_name"] for item in account_security_plan] == [
+    account_security_source_plan = build_account_security_browser_backed_requests(
+        "2871834924",
+        expand_track_analysis_bundle=False,
+    )
+    assert [item["action_name"] for item in account_security_source_plan] == [
         "track_analysis_summary",
         "rcp_snapshot",
         "weapon_inventory",
         "login_logs_search",
     ]
-    track_plan = account_security_plan[0]
+    track_plan = account_security_source_plan[0]
     assert track_plan["typed_params"]["mode"] == "account_security_bundle"
     assert track_plan["typed_params"]["sub_interfaces"] == [
         "profile",
@@ -1036,18 +1421,61 @@ def run_fixture_tests() -> Dict[str, Any]:
         "getDeviceIds",
         "getLastestDateTime",
     ]
-    rcp_plan = account_security_plan[1]
+    rcp_plan = account_security_source_plan[1]
     assert rcp_plan["typed_params"]["mode"] == "account_security_strategy_event_entry"
-    weapon_plan = account_security_plan[2]
+    weapon_plan = account_security_source_plan[2]
     assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "IOS_"]
-    login_plan = account_security_plan[3]
+    login_plan = account_security_source_plan[3]
     assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
-    serialized_plan = json.dumps(account_security_plan, ensure_ascii=True)
+    expanded_account_security_plan = build_account_security_browser_backed_requests("2871834924")
+    assert [item.get("track_sub_interface") for item in expanded_account_security_plan[:4]] == [
+        "profile",
+        "getUseDuration",
+        "getDeviceIds",
+        "getLastestDateTime",
+    ]
+    assert [item["action_name"] for item in expanded_account_security_plan[:4]] == ["track_analysis_summary"] * 4
+    serialized_plan = json.dumps(expanded_account_security_plan, ensure_ascii=True)
     assert "sso_session_runner" not in serialized_plan
     assert "track_analysis_runner" not in serialized_plan
     assert "cookie" not in serialized_plan.lower()
     assert "token" not in serialized_plan.lower()
     results.append(("account_security_browser_backed_request_plan", "passed"))
+
+    def account_security_payload(request: urllib.request.Request) -> Dict[str, Any]:
+        body = json.loads((request.data or b"{}").decode("utf-8"))
+        if request.full_url.endswith(ACTION_ENDPOINTS["track_analysis_summary"]):
+            return _fixture_payload("track_analysis_summary", "completed", track_sub_interface=body.get("sub_interface"))
+        if request.full_url.endswith(ACTION_ENDPOINTS["rcp_snapshot"]):
+            return _fixture_payload("rcp_snapshot", "completed")
+        if request.full_url.endswith(ACTION_ENDPOINTS["weapon_inventory"]):
+            return _fixture_payload("weapon_inventory", "completed")
+        if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
+            return _fixture_payload("login_logs_search", "no_data")
+        return {}
+
+    account_security_opener = _FakeOpener(account_security_payload)
+    account_security_results = BrowserBackedServiceClient(opener=account_security_opener).call_account_security_sources("2871834924")
+    assert len(account_security_opener.calls) == 7
+    assert [result["source_name"] for result in account_security_results] == [
+        "track_analysis_summary",
+        "rcp_snapshot",
+        "weapon_inventory",
+        "login_logs_search",
+    ]
+    account_security_card = build_partial_evidence_card(account_security_results)
+    track_summary = account_security_card["evidence_summary_by_source"]["track_analysis_summary"]
+    assert track_summary["bundle_summary"]["sub_interfaces_completed"] == [
+        "profile",
+        "getUseDuration",
+        "getDeviceIds",
+        "getLastestDateTime",
+    ]
+    assert track_summary["profile_summary"]["register_time_present"] is True
+    assert track_summary["use_duration_summary"]["rows_count"] == 7
+    assert track_summary["device_ids_summary"]["device_ids_count"] == 2
+    assert track_summary["latest_timestamp_summary"]["latest_datetime_present"] is True
+    results.append(("ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES", "passed"))
 
     raw_payload = _fixture_payload("login_logs_search", "completed")
     raw_payload["data"]["login_records"] = [{"ip": "203.0.113.10", "deviceId": "ANDROID_raw"}]
@@ -1075,6 +1503,33 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert parse_error["sensitive_output"] is False
     assert parse_error_card["source_completion_matrix"]["parse_error_sources"] == ["login_logs_search"]
     results.append(("login_logs_parse_error_standard_source_result", "passed"))
+
+    network_error = normalize_service_response(
+        "login_logs_search",
+        _fixture_payload("login_logs_search", "network_error", "network_error"),
+    )
+    network_error_card = build_partial_evidence_card([network_error])
+    network_login_summary = network_error_card["evidence_summary_by_source"]["login_logs_search"]
+    assert network_error["source_status"] == "blocked"
+    assert network_error["source_card"] and network_error["source_quality"]
+    assert network_error["latency_ms"] == 123
+    assert network_error["sensitive_output"] is False
+    assert network_error_card["source_completion_matrix"]["blocked_sources"] == ["login_logs_search"]
+    assert network_login_summary["login_window_summary"]["standard_browser_backed_source_result"] is True
+    assert network_login_summary["blocked_parse_or_no_data_not_counter_evidence"] is True
+    results.append(("LOGIN-LOGS-STANDARD-SOURCE-RESULT-IN-EVIDENCE-CARD", "passed"))
+
+    weapon_result = normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed"))
+    weapon_card = build_partial_evidence_card([weapon_result])
+    weapon_summary = weapon_card["evidence_summary_by_source"]["weapon_inventory"]
+    assert _has_private_raw_reference(weapon_result, "device_id") is True
+    assert weapon_summary["chaining_summary"]["raw_device_safe_handle_retained"] is True
+    serialized_weapon_result = json.dumps(weapon_result, ensure_ascii=True)
+    serialized_weapon_card = json.dumps(weapon_card, ensure_ascii=True)
+    assert "ANDROID_raw_device_should_not_render" not in serialized_weapon_result
+    assert "ANDROID_raw_device_should_not_render" not in serialized_weapon_card
+    assert "raw_value" not in serialized_weapon_result
+    results.append(("WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED", "passed"))
 
     four_source_results = [
         normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
