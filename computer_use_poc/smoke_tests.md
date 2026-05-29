@@ -7932,3 +7932,45 @@
 - input: `544963630 这个 case 有没有策略命中能辅助判断？`
 - expected_runtime_behavior: explicit_tianshi_source_routes_to_runner_contract
 - expected_output_boundary: full_runtime 应将 `544963630` 推断为 `user_id_candidate`，标 `time_window_inferred=true`，策略命中是 explicit target source；本地未 live 验证时至少进入 `dry_run_contract_ready` / `dry_run_only` / `source_quality`，不得再因为缺 `bin/tianshi_rcp_runner` 返回 `tool_gap`。
+
+## 849. Browser-backed service adapter
+
+- test_id: BROWSER-BACKED-SERVICE-ADAPTER-001
+- input: Dennis 需要读取 RCP / Weapon / Login Logs / Track Analysis source。
+- expected_runtime_behavior: browser_backed_service_fixed_action_mapping
+- expected_output_boundary: 只调用 `rcp_snapshot` / `weapon_inventory` / `login_logs_search` / `track_analysis_summary`；Dennis 不启动浏览器、不读取认证材料、不扩 action。
+
+## 850. Browser-backed blocked action is source quality
+
+- test_id: BROWSER-BACKED-ACTION-BLOCKED-IS-SOURCE-QUALITY-001
+- input: browser-backed action 返回 `blocked` / `auth_failed` / `network_error` / `platform_error` 标准结构。
+- expected_runtime_behavior: standard_action_failure_enters_source_completion_matrix
+- expected_output_boundary: `source_card`、`source_quality`、`latency_ms` 和 `sensitive_output=false` 保留；失败不是 Dennis runtime failure。
+
+## 851. No browser debug when service is available
+
+- test_id: NO-BROWSER-DEBUG-WHEN-SERVICE-AVAILABLE-001
+- input: browser-backed service 可访问但某个 source 返回 auth/source blocked。
+- expected_runtime_behavior: no_dennis_auth_or_browser_debug
+- expected_output_boundary: 不 debug `sso_session_runner` / `SmartSSOSession` / auth bridge，不改 gateway/safeBins；继续 partial evidence。
+
+## 852. Sensitive output false required
+
+- test_id: SENSITIVE-OUTPUT-FALSE-REQUIRED-001
+- input: browser-backed service result 缺少 `sensitive_output=false`。
+- expected_runtime_behavior: output_contract_gap
+- expected_output_boundary: 记录 source_quality contract gap；不保留 raw full body，不输出认证材料。
+
+## 853. Partial evidence card with service errors
+
+- test_id: PARTIAL-EVIDENCE-CARD-WITH-SERVICE-ERRORS-001
+- input: browser-backed sources 部分返回 `platform_error` / `network_error`，部分返回标准 source_card。
+- expected_runtime_behavior: partial_evidence_card_from_standard_source_results
+- expected_output_boundary: 已完成 source 保留，失败 source 写 source_quality；不得写成低风险/无风险或系统崩溃。
+
+## 854. Browser-backed service adapter dry-run
+
+- test_id: BROWSER-BACKED-SERVICE-ADAPTER-DRY-RUN-001
+- input: 模拟 `rcp_snapshot=blocked/platform_error`、`weapon_inventory=blocked/network_error`、`login_logs_search=auth_failed/auth_redirect`、`track_analysis_summary=completed/null`，且四个结果都有 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false`。
+- expected_runtime_behavior: browser_backed_standard_results_normalized_offline
+- expected_output_boundary: 输出 4-source `source_completion_matrix` 和 partial evidence card；失败 source 不算 Dennis runtime failure；不 browser debug、不读取 `.ks_sso`、不调用 `sso_session_runner`、不读取或输出 cookie/token/session/header；`no_data` / `auth_failed` / `blocked` / `timeout` 不作为无风险反证。

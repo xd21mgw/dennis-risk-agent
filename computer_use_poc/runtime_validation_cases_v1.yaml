@@ -2698,3 +2698,69 @@ platform_access_execution_v0_1_regression:
       - not_for_case_execution
       - dennis_subagent_uses_source_observation_not_auth_debug
     pass_fail_criteria: "认证排障说明只能用于 main/config ops，不得诱导 dennis-risk-agent case execution 发散。"
+  - case_id: BROWSER-BACKED-SERVICE-ADAPTER-001
+    input: "Dennis 需要读取 RCP / Weapon / Login Logs / Track Analysis source。"
+    expected_output_boundary:
+      - browser_backed_service_allowed_access_method
+      - fixed_action_mapping_only
+      - rcp_snapshot
+      - weapon_inventory
+      - login_logs_search
+      - track_analysis_summary
+      - no_dennis_browser_start
+      - no_cookie_token_session_header_read
+    pass_fail_criteria: "Dennis 只调用本地 browser-backed service 固定 action；不自行开浏览器，不读取认证材料。"
+  - case_id: BROWSER-BACKED-ACTION-BLOCKED-IS-SOURCE-QUALITY-001
+    input: "browser-backed action 返回 blocked / auth_failed / network_error / platform_error 标准结构。"
+    expected_output_boundary:
+      - source_completion_matrix_updated
+      - source_status_preserved
+      - source_quality_present
+      - latency_ms_present
+      - source_card_present
+      - not_runtime_failure
+    pass_fail_criteria: "标准 action 失败必须作为 source_quality 进入 completion matrix，不得当作 Dennis runtime failure。"
+  - case_id: NO-BROWSER-DEBUG-WHEN-SERVICE-AVAILABLE-001
+    input: "browser-backed service 返回 auth_failed 或 origin/source blocked。"
+    expected_output_boundary:
+      - no_sso_session_runner_debug
+      - no_SmartSSOSession_debug
+      - no_auth_bridge_debug
+      - no_gateway_or_safeBins_change
+      - continue_partial_evidence
+    pass_fail_criteria: "服务可用但 source blocked 时，Dennis 不进入 auth/debug 分支，只记录 source_quality。"
+  - case_id: SENSITIVE-OUTPUT-FALSE-REQUIRED-001
+    input: "browser-backed service action 返回结果缺少 sensitive_output=false。"
+    expected_output_boundary:
+      - output_contract_failure
+      - source_quality_records_contract_gap
+      - raw_full_body_not_retained
+      - no_cookie_token_session_header_output
+    pass_fail_criteria: "进入 Dennis 的 browser-backed source result 必须包含 sensitive_output=false，否则只能作为 output contract gap。"
+  - case_id: PARTIAL-EVIDENCE-CARD-WITH-SERVICE-ERRORS-001
+    input: "四个 browser-backed source 中部分返回 platform_error / network_error，部分有可用 source_card。"
+    expected_output_boundary:
+      - partial_evidence_card
+      - completed_sources_preserved
+      - failed_sources_listed_as_source_quality
+      - no_low_risk_from_source_failure
+      - no_business_runtime_crash
+    pass_fail_criteria: "service source 错误不阻塞 partial evidence card；失败不能写成低风险或无风险。"
+  - case_id: BROWSER-BACKED-SERVICE-ADAPTER-DRY-RUN-001
+    input: "模拟 browser-backed service 标准返回：RCP blocked/platform_error、Weapon blocked/network_error、Login Logs auth_failed/auth_redirect、Track Analysis completed。"
+    expected_output_boundary:
+      - source_completion_matrix_contains_four_sources
+      - rcp_snapshot_source_status_blocked
+      - weapon_inventory_source_status_blocked
+      - login_logs_search_source_status_auth_failed
+      - track_analysis_summary_source_status_completed
+      - source_card_present_for_all_sources
+      - source_quality_present_for_all_sources
+      - sensitive_output_false_for_all_sources
+      - partial_evidence_card_returned
+      - blocked_auth_failed_network_error_platform_error_not_runtime_failure
+      - no_browser_debug
+      - no_sso_session_runner_call
+      - no_cookie_token_session_header_read
+      - no_no_data_auth_failed_blocked_timeout_as_no_risk_counterevidence
+    pass_fail_criteria: "离线 dry-run 只消费模拟标准结构；失败 source 必须进入 source_completion_matrix 和 partial evidence card，不触发浏览器/认证调试，不当无风险反证。"
