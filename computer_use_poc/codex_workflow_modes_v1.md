@@ -1,6 +1,6 @@
 # Codex Workflow Modes v1
 
-本文说明 Codex 在 Dennis Agent 四种协作模式下如何启动、提问和验收。
+本文说明 Codex 在 Dennis Agent 协作模式下如何启动、提问和验收。当前推荐的本地上线体感模拟入口是 `full_runtime`，不是 `runtime_preview_snapshot` / `minimal_guard_preview`。
 
 ## 1. development_mode
 
@@ -29,57 +29,54 @@ Codex 行为：
 验收方式：
 
 - 日常小修跑 `git diff --check` 和 YAML parse。
-- Python / runner / validator 改动跑 `python3 -m py_compile` 和 self-test。
-- release 前再跑 scanner / preflight / preview validator。
+- Python / runner / builder 改动跑 `python3 -m py_compile` 和 self-test。
+- release 前再跑 scanner / preflight / full_runtime 本地验证。
 
-## 2. runtime_preview_mode
+## 2. full_runtime_mode
 
 启动方式：
 
 ```bash
-python3 computer_use_poc/runtime_preview_snapshot_builder.py
-cd outputs/runtime_preview_snapshot
+python3 computer_use_poc/runtime_snapshot_builder.py --mode full_runtime
+cd outputs/full_runtime
 codex
 ```
 
-关键原则：
+定位：
 
-- Codex 启动后会加载当前目录 `AGENTS.md`。
-- 因此 snapshot 根目录必须有强 `AGENTS.md`。
-- preview 默认只读取当前 snapshot 内文件。
-- preview 不知道就 blocked，不许编。
-- preview 输出不是正式平台结论。
+- `full_runtime` 是本地完整 dennis-risk-agent 运行态，用于模拟线上真实用户体感。
+- 它不是 preview harness，也不是 contract checker。
+- 用户日常想看“上线后 Dennis 怎么答”，应使用 `outputs/full_runtime`。
 
-用户裸问风控 case：
+Codex 行为：
 
-- snapshot `AGENTS.md` 应默认按 `live_readonly_preview` 执行。
-- 仅允许访问 `runtime_preview/live_source_allowlist.yaml` 中登记的只读 source。
-- source 失败必须区分 `completed`、`no_data`、`auth_failed`、`blocked`、`timeout`、`parse_error`、`tool_gap`。
+- Codex 启动后会加载 `outputs/full_runtime/AGENTS.md`。
+- 裸问单 case 风控问题默认按 dennis-risk-agent runtime 执行。
+- 纯数字 ID + case / ATO / 账号安全 / 策略命中上下文，默认推断为 `user_id_candidate`，并在 `routing_metadata` 标 `entity_type_inferred=true`。
+- 用户未给时间窗时，按 source playbook/default window 做 bounded_time_range inference，并标 `time_window_inferred=true`。
+- 不要因缺少实体类型或时间窗就机械 blocked。
+- 策略命中问题属于 explicit source，不能静默跳过。
+- 输出顺序应用户友好：先结论 / 判断，再 evidence card，再 source_completion_matrix/source_quality，最后 routing_metadata。
 
-用户问批量、举一返三、策略推荐、方法论：
+full_runtime 安全边界：
 
-- 默认 `offline_preview` / `plan_mode`。
-- 不访问平台。
-- 不逐个扩量查数。
-- DataAgent / Hive 只输出 query plan 和逐次授权边界。
-
-用户明确说“开发模式 / 修改文件”：
-
-- 不在 snapshot 里直接改母体。
-- 回到 repo 根目录进入 `development_mode`。
+- 不读取 source repo 的 `run_logs/**`、历史 `outputs/**`、`.ks_sso/**`、`TOOLS.md`、old patch、local-file-in-chat。
+- 不主动搜索 `skills/**` 或旧 runtime summaries，除非 full_runtime manifest 明确包含并已经复制进 `outputs/full_runtime`。
+- 不 debug 认证 / SmartSSOSession / sso_session_runner。
+- 不手拼 Cookie / Header。
+- 不访问未登记 source。
+- source 失败进入 `source_quality`。
+- `no_data` / `blocked` / `timeout` / `auth_failed` / `parse_error` / `tool_gap` 不能当无风险反证。
+- DataAgent / Hive 仍需逐次授权。
 
 验收方式：
 
 ```bash
-python3 computer_use_poc/runtime_preview_validator.py --report outputs/local_preview/preview_report.md
+python3 -m py_compile computer_use_poc/runtime_snapshot_builder.py
+python3 computer_use_poc/runtime_snapshot_builder.py --mode full_runtime
 ```
 
-preview 结果状态：
-
-- `PASS_EXPECTED_BEHAVIOR`
-- `PREVIEW_FAILED_CONTRACT_VIOLATION`
-- `PREVIEW_BLOCKED_INSUFFICIENT_CONTRACT`
-- `PREVIEW_BLOCKED_CONTRACT_CONFLICT`
+然后检查 `outputs/full_runtime/AGENTS.md`、`outputs/full_runtime/RUNTIME_MANIFEST.md` 和核心 runtime 文件是否存在，且不包含 excluded files。
 
 ## 3. release_mode
 
@@ -98,15 +95,16 @@ codex
 
 Codex 行为：
 
-- 先跑 asset scanner / release preflight / preview validator。
+- 先跑 asset scanner / release preflight / full_runtime 本地验证。
 - 不按每个 patch 打包。
 - 不把 repository template 误称为 live runtime 已生效。
+- `online_release_overlay` 是线上发布包；`full_runtime` 是本地完整运行态。
 
 验收方式：
 
 - package scanner pass。
 - release preflight pass。
-- preview validator pass 或明确 blocked 原因。
+- `outputs/full_runtime` 可生成且核心 contract 完整。
 - release run log 完整记录。
 
 ## 4. cloud_acceptance_mode
@@ -127,25 +125,14 @@ Codex 行为：
 云端调度低频原则：
 
 - 只有入口、权限、工具、channel mapping 变化才调整云端。
-- 普通规则、模板、回归和 validator 修复先回本地母体。
+- 普通规则、模板、回归和 builder 修复先回本地母体。
 
-## 5. preview 输出边界
+## 5. Deprecated Preview Harness
 
-preview 必须区分：
+`runtime_preview_snapshot` / `minimal_guard_preview` 已废弃为历史机制，不再作为推荐入口。
 
-- `completed`
-- `no_data`
-- `auth_failed`
-- `blocked`
-- `timeout`
-- `parse_error`
-- `tool_gap`
+原因：
 
-preview 禁止：
-
-- 把 `no_data` 当无风险。
-- 把策略命中当最终 ATO 结论。
-- 把 stale data 当实时查询。
-- 把 mock 当真实平台查询。
-- 把 partial 包装成 final。
-- source failed 后 debug auth、手拼 cookie/header 或猜 URL。
+- 它过于偏 contract 校验和保守 blocked。
+- 不能代表用户想看的线上 Dennis 真实体感。
+- 后续安全边界迁移到 `full_runtime`，不再保留 preview harness 作为主流程。

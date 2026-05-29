@@ -1,0 +1,136 @@
+manifest_version: runtime_required_file_manifest_v1
+
+full_runtime_required:
+  generated_files:
+    - AGENTS.md
+    - RUNTIME_MANIFEST.md
+  files:
+    - computer_use_poc/full_runtime_inference_contract_v1.md
+    - computer_use_poc/runtime_semi_open_user_guide_v1.md
+    - computer_use_poc/multi_entry_runtime_guard_v1.md
+    - computer_use_poc/scene_to_capability_routing.md
+    - computer_use_poc/capability_registry.md
+    - computer_use_poc/answer_experience_templates.md
+    - computer_use_poc/source_orchestration_plan_v1.yaml
+    - computer_use_poc/source_orchestration_check.py
+    - computer_use_poc/platform_call_playbook_index.md
+    - computer_use_poc/runtime_validation_cases_v1.yaml
+    - computer_use_poc/runtime_integration_validation_checklist_v1.md
+    - computer_use_poc/observation_contract_v2_4_6.md
+    - computer_use_poc/field_output_classification_policy_v1.md
+    - computer_use_poc/security_preflight_policy.yaml
+    - computer_use_poc/security_preflight_request_contract_validator.py
+    - computer_use_poc/general_evidence_reasoning_contract_v1.md
+    - computer_use_poc/raw_reference_redaction_contract_v1.md
+    - computer_use_poc/sensitive_field_redaction_policy.md
+    - computer_use_poc/readonly_safety_rules.md
+    - computer_use_poc/capability_security_policy.md
+    - computer_use_poc/asset_extraction_guard_policy.md
+    - computer_use_poc/asset_extraction_policy_v1.md
+    - computer_use_poc/source_readiness_matrix_v1.yaml
+    - computer_use_poc/runner_registry_v1.yaml
+    - computer_use_poc/bin_runner_contract_v1.md
+    - computer_use_poc/failure_triage_card_template_v1.md
+    - computer_use_poc/plan_mode_capability_v1.md
+    - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md
+    - computer_use_poc/user_login_log_internal_agent_playbook_v2_4_8.md
+    - computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md
+    - computer_use_poc/archives_center_internal_agent_playbook.md
+    - computer_use_poc/archives_center_core_capability_map_v2_6_1.md
+    - computer_use_poc/archives_center_api_inventory_v2_4_7_2.md
+    - computer_use_poc/archives_center_user_lookup_flow.md
+    - computer_use_poc/device_sdk_api_routing_rules_v2_5_3.md
+    - computer_use_poc/device_sdk_api_answer_contract_v2_5_3.md
+    - computer_use_poc/device_sdk_api_error_semantics_v2_5_2.md
+    - computer_use_poc/device_sdk_api_direct_readonly_playbook_v2_5_2.md
+    - computer_use_poc/device_sdk_foundation_internal_agent_playbook_v2_5_0.md
+    - computer_use_poc/device_sdk_api_observation_contract_v2_5_2.md
+    - computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md
+    - computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md
+    - computer_use_poc/frontend_activity_profile_internal_agent_playbook_v2_5_2.md
+    - computer_use_poc/frontend_activity_profile_observation_schema_v2_5_2.md
+    - computer_use_poc/track_analysis_api_direct_contract_current.md
+    - computer_use_poc/tianshi_strategy_hit_readonly_poc_v2_5_5.md
+    - computer_use_poc/tianshi_strategy_hit_routing_v2_5_6.md
+    - computer_use_poc/tianshi_eventlist_api_read_poc_v2_5_9.md
+    - computer_use_poc/e2e_multi_evidence_readonly_test_v2_5_8.md
+    - computer_use_poc/multi_evidence_orchestration_example_v2_5_7.md
+    - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
+    - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+    - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_l1_feature_query_contract_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_case_schema_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_clustering_methodology_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_threshold_policy_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_response_template_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_evidence_card_template_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_pattern_summary_template_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_risk_representative_sampling_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_top_dimension_drilldown_template_v1.md
+    - computer_use_poc/batch_risk_clustering/batch_frequent_pattern_contribution_template_v1.md
+    - computer_use_poc/batch_risk_clustering/abnormal_correlation_matrix_v1.md
+    - computer_use_poc/batch_risk_clustering/README.md
+    - computer_use_poc/question_collection/pilot_observation_writer.py
+    - computer_use_poc/question_collection/runtime_question_record_collector_stub_v1.py
+    - computer_use_poc/question_collection/question_record_schema_v1.md
+    - computer_use_poc/question_collection/runtime_append_only_logging_contract_v1.md
+    - computer_use_poc/question_collection/user_feedback_capture_v1.md
+    - computer_use_poc/question_collection/question_learning_policy_v1.md
+    - computer_use_poc/question_collection/case_learning_note_template_v1.md
+    - computer_use_poc/question_collection/README.md
+  optional_files:
+    - computer_use_poc/runtime_integration_validation_checklist.md
+    - computer_use_poc/user_login_log_reliable_window_contract_v1.md
+  globs:
+    - skills/dennis_risk_agent_skills_v2_1_focused_deep/11_runtime_summaries/*.md
+    - computer_use_poc/tool_contracts/**
+    - computer_use_poc/platform_access/**
+    - computer_use_poc/tianshi_strategy_platform_contracts/**
+    - computer_use_poc/strategy_governance/**
+    - computer_use_poc/multi_evidence_orchestration_contracts/**
+  optional_globs:
+    - computer_use_poc/observation_contract*.md
+
+online_release_overlay_required:
+  files:
+    - AGENTS.md
+    - computer_use_poc/runtime_preflight_check.py
+    - computer_use_poc/release_preflight_check.py
+    - computer_use_poc/package_asset_scanner.py
+    - computer_use_poc/package_asset_scanner_rules.json
+    - computer_use_poc/release_overlay_readiness_checklist.md
+    - computer_use_poc/runtime_required_file_manifest_v1.yaml
+    - computer_use_poc/full_runtime_inference_contract_v1.md
+  optional_files:
+    - computer_use_poc/runtime_config_apply_checklist_v1.md
+
+excluded_files:
+  patterns:
+    - computer_use_poc/run_logs/**
+    - outputs/**
+    - .ks_sso/**
+    - TOOLS.md
+    - "**/old patch/**"
+    - "**/local-file-in-chat/**"
+    - computer_use_poc/test_fixtures/package_asset_scanner_risky_mock/**
+    - computer_use_poc/test_fixtures/**/skills/**
+    - skills/**/02_domain_skills/**
+    - skills/**/03_domain_skills/**
+    - skills/**/04_workflows/**
+    - skills/**/05_response_contracts/**
+    - skills/**/06_dataagent_templates/**
+    - skills/**/07_regression_cases/**
+    - computer_use_poc/batch_risk_clustering/batch_risk_golden*
+    - computer_use_poc/batch_risk_clustering/*golden*
+    - computer_use_poc/batch_risk_clustering/*text_dry_run*
+    - computer_use_poc/batch_risk_clustering/*quality_rubric*
+    - computer_use_poc/question_collection/question_learning_candidate_queue_v1.csv
+    - computer_use_poc/question_collection/runtime_question_record_sample_v1.jsonl
+    - computer_use_poc/question_collection/question_collection_text_regression_run_v1.md
+    - computer_use_poc/question_collection/runtime_logging_smoke_test_v1.md
+    - "**/*.har"
+    - "**/*cookie*"
+    - "**/*header*"
+    - "**/*token*"
+    - "**/*session*"
+    - outputs/release/**
