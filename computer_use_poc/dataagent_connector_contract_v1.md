@@ -62,6 +62,53 @@ Structured-query schema may be used as a mid-term design direction only. It must
 - Pending DataAgent execution is not evidence. It can only be reported as `missing_hive_result` / `dataagent_query_pending`.
 - DataAgent/Hive remains a follow-up source for offline history, aggregation, long-window gaps, cross-table validation, and batch clustering; it does not replace online P0 readonly sources.
 
+## Local Network Readiness Boundary
+
+`computer_use_poc/dataagent_network_readiness_check.py` is a local connectivity preflight only. It is not a DataAgent business query runner.
+
+Supported command:
+
+```text
+python3 computer_use_poc/dataagent_network_readiness_check.py --json
+```
+
+Configuration:
+
+- `DATAAGENT_BASE_URL`: required unless `DATAAGENT_ENDPOINT_URL` is set.
+- `DATAAGENT_ENDPOINT_URL`: optional full endpoint override.
+- `DATAAGENT_ENDPOINT_PATH`: optional path override, default `/v1/chat/completions/full`.
+- `DATAAGENT_HTTP_TIMEOUT_SECONDS`: optional timeout override.
+
+Readiness checks:
+
+- env configured
+- DNS resolution
+- TCP connection
+- TLS handshake for HTTPS
+- HTTP endpoint reachability
+- read timeout classification
+
+Allowed `network_status` values:
+
+- `env_missing`
+- `dns_failed`
+- `tcp_failed`
+- `tls_failed`
+- `http_reachable`
+- `auth_required`
+- `permission_denied`
+- `read_timeout`
+- `unknown`
+
+Boundary:
+
+- No business DataAgent payload is sent.
+- No Hive SQL is submitted.
+- No `.ks_sso` file is read.
+- No cookie/token/session/header is printed.
+- No manual authentication header is constructed.
+- `401` / `403` are permission boundaries, not connector contract failures.
+
 ## Supported Modes
 
 ```yaml
@@ -97,7 +144,7 @@ payload:
   user_id: Dennis requester safe id or approved requester id
 ```
 
-The connector contract does not define a live HTTP client in this patch.
+Network readiness probing is separated from business dry-run invocation. Connectivity checks must not send the Conversational API business payload, and business dry-run invocation remains gated by explicit `--allow-live-dry-run`.
 
 ## Step-Based Response Handling
 

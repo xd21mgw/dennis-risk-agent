@@ -8093,3 +8093,10 @@
 - input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --self-test-status-semantics --json`。
 - expected_runtime_behavior: local_status_semantics_only
 - expected_output_boundary: `dataagent_api_attempted`、`http_request_sent`、`step_response_received`、`model_answer_extracted` 必须分层输出；已发出 HTTP 但未收到 step response 不得表达成 `real_dataagent_api_called=false`；read timeout 必须映射为 `source_status=timeout`、`failure_reason=read_timeout`；`hive_called=false`、`sql_submitted=false`。
+
+## 872. DataAgent local network readiness check
+
+- test_id: FULL-RUNTIME-DATAAGENT-NETWORK-READINESS-001
+- input: `python3 computer_use_poc/dataagent_network_readiness_check.py --json`。
+- expected_runtime_behavior: network_preflight_only
+- expected_output_boundary: 未配置 `DATAAGENT_BASE_URL` / `DATAAGENT_ENDPOINT_URL` 时必须 fail closed 为 `network_status=env_missing`；配置后只允许检查 DNS、TCP/TLS、HTTP endpoint 和 read timeout 分类；不得发送业务 payload、不得提交 SQL、不得调用 Hive、不得读取 `.ks_sso`、不得构造或输出 cookie/token/session/header；`401/403` 只标 `auth_required` / `permission_denied` permission boundary，不当 connector 失败。
