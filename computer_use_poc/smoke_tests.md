@@ -7848,3 +7848,45 @@
 - input: 小 patch 或阶段性稳定点。
 - expected_runtime_behavior: release_only_at_stable_checkpoint
 - expected_output_boundary: 小 patch 不打包；阶段性稳定点才跑 asset scanner / release preflight / full_runtime 本地验证并生成 safe delta / runtime overlay。
+
+## 837. Full runtime source executability inventory exists
+
+- test_id: FULL-RUNTIME-SOURCE-EXECUTABILITY-INVENTORY-EXISTS-001
+- input: `computer_use_poc/source_executability_inventory_v1.yaml`。
+- expected_runtime_behavior: source_executability_inventory_available
+- expected_output_boundary: inventory 存在，逐 source 记录 capability、priority、expected_runtime_mode、playbook_file、runner_file、runner_present、runner_included_in_full_runtime、current_status、failure_policy 和 sensitive_output_policy。
+
+## 838. Tianshi strategy hit status explicit
+
+- test_id: FULL-RUNTIME-TIANSHI-STRATEGY-HIT-STATUS-001
+- input: `source_executability_inventory_v1.yaml` 中 `tianshi_strategy_hit` / `rcp_event_list`。
+- expected_runtime_behavior: tianshi_runner_gap_explicit
+- expected_output_boundary: 状态明确为 `playbook_ready_not_runner_ready`；不得伪装成 executable；runner 缺口输出为 `tool_gap` / `source_quality`，不能输出 no_data 或 low risk。
+
+## 839. P0 source status explicit
+
+- test_id: FULL-RUNTIME-P0-SOURCE-STATUS-EXPLICIT-001
+- input: inventory 中 login_log / weapon / track-analysis / archives_center / DataAgent-Hive。
+- expected_runtime_behavior: p0_p1_source_status_explicit
+- expected_output_boundary: login_log、weapon_graphData、weapon_riskData、archives_center_profile、track_analysis_profile/getDeviceIds/getUseDuration、DataAgent-Hive 状态均明确；runner_present_not_verified、playbook_ready_not_runner_ready、plan_only 不得混写为 completed。
+
+## 840. Playbook ready not executable
+
+- test_id: FULL-RUNTIME-PLAYBOOK-READY-NOT-EXECUTABLE-001
+- input: inventory source current_status=`playbook_ready_not_runner_ready`。
+- expected_runtime_behavior: playbook_ready_not_runner_ready_boundary
+- expected_output_boundary: playbook_ready_not_runner_ready 不得伪装成 executable；full_runtime 回答应输出 source_quality/tool_gap 或 query plan，不得说平台查询完成。
+
+## 841. Tool gap not no data or low risk
+
+- test_id: FULL-RUNTIME-TOOL-GAP-NOT-NO-DATA-LOW-RISK-001
+- input: full_runtime source 返回 tool_gap / runner_missing / runner_dependency_error。
+- expected_runtime_behavior: tool_gap_source_quality_boundary
+- expected_output_boundary: `tool_gap` 必须进入 source_quality；不得输出为 `no_data`、低风险、无风险或没有命中。
+
+## 842. Full runtime manifest includes present required runners
+
+- test_id: FULL-RUNTIME-MANIFEST-INCLUDES-PRESENT-REQUIRED-RUNNERS-001
+- input: mother repo 中存在 `bin/sso_session_runner` / `bin/archives_profile_runner`。
+- expected_runtime_behavior: present_required_runners_included
+- expected_output_boundary: 若 runner 确认是 runtime 必需且存在，应纳入 `full_runtime_required` 并出现在 `outputs/full_runtime/RUNTIME_MANIFEST.md`；不存在的 tianshi/track runner 只标 tool_gap，不造 runner。

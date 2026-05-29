@@ -1,0 +1,619 @@
+schema_version: source_executability_inventory_v1
+scope: full_runtime_local_inventory
+inventory_mode: local_files_only_no_platform_call
+generated_for_runtime_mode: full_runtime
+global_boundaries:
+  no_real_platform_access: true
+  no_dataagent_hive_call: true
+  no_cookie_header_manual_auth: true
+  no_sso_runner_debug: true
+  no_cloud_config_change: true
+  no_package_or_git_submit: true
+  source_failure_not_no_risk: true
+  dataagent_hive_per_call_authorization_required: true
+
+sources:
+  - source_name: tianshi_strategy_hit
+    capability: strategy_hit_read
+    priority: P0-explicit
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/tianshi_strategy_hit_readonly_poc_v2_5_5.md
+      - computer_use_poc/tianshi_strategy_hit_routing_v2_5_6.md
+      - computer_use_poc/tianshi_strategy_platform_contracts/02_fast_query_hbase_strategy_hit_contract_v1.md
+    runner_file: bin/tianshi_rcp_runner
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - user_id_or_source_id
+      - bounded_time_range
+    allowed_actions:
+      - tianshi.fastQueryHbase
+      - strategy_hit_overview_lookup
+    forbidden_actions:
+      - strategy_hit_as_final_ato_judgement
+      - raw_response_dump
+      - arbitrary_url_probe
+      - auth_debug
+      - manual_cookie_header
+    auth_dependency:
+      - future_runner_contract
+      - browser_same_origin_if_explicitly_registered
+    current_status: playbook_ready_not_runner_ready
+    failure_policy:
+      - source_status=tool_gap_when_runner_missing
+      - explicit_source_failure_must_enter_source_quality
+      - no_data_not_risk_exclusion
+    fallback_policy:
+      - do_not_silently_skip_explicit_source
+      - output_partial_evidence_card
+      - use_query_plan_if_required_fields_missing_or_runner_absent
+    evidence_output_fields:
+      - hit_policy_summary
+      - risk_decision_summary
+      - event_type_summary
+      - source_quality
+      - missing_required_fields
+    sensitive_output_policy: redact_source_id_policy_payload_and_operator
+    notes:
+      - "Full runtime currently has playbooks/contracts, but no tianshi_rcp_runner binary in the mother repo."
+      - "544963630-style strategy-hit questions should not be globally blocked; report tool_gap/source_quality if runner is unavailable."
+
+  - source_name: rcp_event_list
+    capability: tianshi_eventlist_read
+    priority: P0-explicit_or_conditional
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/tianshi_eventlist_api_read_poc_v2_5_9.md
+      - computer_use_poc/platform_access/tianshi_rcp_api_contract_v0_1.yaml
+      - computer_use_poc/tianshi_strategy_platform_contracts/03_eventlist_api_read_event_detail_contract_v1.md
+    runner_file: bin/tianshi_rcp_runner
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - event_type_or_source_condition
+      - bounded_time_range
+      - source_id_or_event_context
+    allowed_actions:
+      - rcp.eventList
+      - rcp.rcpEventDetail_when_upstream_event_id_available
+      - rcp.featureList_when_upstream_event_context_available
+    forbidden_actions:
+      - guessed_request_body_as_verified
+      - user_id_direct_event_detail
+      - arbitrary_url_probe
+      - raw_response_dump
+      - auth_debug
+    auth_dependency:
+      - browser_same_origin_or_future_runner_contract
+    current_status: playbook_ready_not_runner_ready
+    failure_policy:
+      - missing_upstream_id_enters_source_quality
+      - timeout_not_no_data
+      - no_data_not_behavior_absence
+    fallback_policy:
+      - output_query_plan_or_partial_evidence_when_runner_missing
+      - fastQueryHbase_is_fallback_optional_not_blocker
+    evidence_output_fields:
+      - event_count_summary
+      - representative_event_refs
+      - policy_code_refs
+      - source_quality
+      - failure_layer
+    sensitive_output_policy: mask_event_source_policy_request_payload
+    notes:
+      - "RCP eventList contract is detailed, but local full_runtime does not include an executable runner."
+
+  - source_name: user_login_log
+    capability: login_log_read
+    priority: P0
+    expected_runtime_mode: executable
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md
+      - computer_use_poc/tool_contracts/user_login_log_reliable_window_contract_v1.md
+    runner_file: bin/sso_session_runner
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - user_id
+      - bounded_time_range_optional
+    allowed_actions:
+      - login_log.query_user_login_log
+    forbidden_actions:
+      - curl_cookie
+      - manual_cookie_header
+      - auth_bridge_debug
+      - unbounded_history_query
+      - raw_token_output
+    auth_dependency:
+      - SmartSSOSession_inside_controlled_runner
+      - controlled_cookie_state_fallback_inside_runner
+    current_status: runner_present_not_verified
+    failure_policy:
+      - auth_failed_or_blocked_enters_source_quality
+      - login_log_window_incomplete_when_over_online_window
+      - no_data_not_risk_exclusion
+    fallback_policy:
+      - long_window_requires_DataAgent_Hive_query_plan_with_per_call_authorization
+      - main_agent_must_not_take_over
+    evidence_output_fields:
+      - login_events
+      - login_method_summary
+      - device_summary
+      - ip_region_summary
+      - reliable_window_boundary
+      - source_quality
+    sensitive_output_policy: redact_token_session_cookie_header_ip_device_as_required
+    notes:
+      - "Runner exists in mother repo and is included in full_runtime. This inventory did not execute it or verify live auth."
+
+  - source_name: weapon_graphData
+    capability: user_device_resolution
+    priority: P0
+    expected_runtime_mode: executable
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml
+      - computer_use_poc/entity_resolution_user_device_contract_v2_6_0.md
+      - computer_use_poc/entity_resolution_user_device_routing_rules_v2_6_0.md
+    runner_file: bin/sso_session_runner
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - user_id
+    allowed_actions:
+      - weapon.graph_data
+    forbidden_actions:
+      - api_graphData_legacy_path
+      - arbitrary_url_probe
+      - raw_graph_payload_output
+      - manual_cookie_header
+    auth_dependency:
+      - SmartSSOSession_inside_controlled_runner
+    current_status: runner_present_not_verified
+    failure_policy:
+      - graphData_no_data_not_no_device
+      - auth_failed_or_timeout_enters_source_quality
+      - raw_device_id_private_checkpoint_only
+    fallback_policy:
+      - use_track_analysis_device_candidates_only_if_available_and_mark_cross_source_device_id
+      - do_not_replace_apiv2_with_unregistered_paths
+    evidence_output_fields:
+      - user_device_edges
+      - candidate_device_ids
+      - graph_edge_count
+      - source_quality
+      - raw_reference_safe_id
+    sensitive_output_policy: mask_device_ids_in_user_visible_output
+    notes:
+      - "Uses sso_session_runner weapon.graph_data. Inventory did not execute platform request."
+
+  - source_name: weapon_riskData
+    capability: device_risk_read
+    priority: P0-conditional
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/platform_access/weapon_api_contract_v0_1.yaml
+      - computer_use_poc/device_sdk_foundation_internal_agent_playbook_v2_5_0.md
+      - computer_use_poc/device_sdk_api_direct_readonly_playbook_v2_5_2.md
+    runner_file: bin/sso_session_runner
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - raw_device_id_reference
+    allowed_actions:
+      - weapon.risk_data
+    forbidden_actions:
+      - user_id_as_device_id
+      - location_query_by_default
+      - raw_device_fingerprint_output
+      - arbitrary_url_probe
+      - manual_cookie_header
+    auth_dependency:
+      - SmartSSOSession_inside_controlled_runner
+    current_status: runner_present_not_verified
+    failure_policy:
+      - missing_device_reference_means_not_checked
+      - device_risk_not_standalone_judgement
+      - auth_failed_or_timeout_enters_source_quality
+    fallback_policy:
+      - wait_for_device_id_from_graphData_login_log_publish_chain_or_track_analysis
+      - do_not_call_with_masked_device_id
+    evidence_output_fields:
+      - device_risk_tags
+      - environment_risk_summary
+      - source_quality
+    sensitive_output_policy: redact_device_fingerprint_location_and_raw_payload
+    notes:
+      - "Conditional source only after raw device reference is retained in private checkpoint."
+
+  - source_name: archives_center_profile
+    capability: archives_profile_readonly
+    priority: P0
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/archives_center_internal_agent_playbook.md
+      - computer_use_poc/archives_center_core_capability_map_v2_6_1.md
+      - computer_use_poc/platform_access/archives_center_contract_v0_1.yaml
+    runner_file: bin/archives_profile_runner
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - user_id
+    allowed_actions:
+      - archives.profile_home_info
+    forbidden_actions:
+      - auth_repair_in_business_case
+      - write_operation
+      - raw_personal_info_output
+      - manual_cookie_header
+      - arbitrary_url_probe
+    auth_dependency:
+      - archives_auth_state_if_future_connected
+      - browser_same_origin_if_auth_ready
+    current_status: runner_present_not_verified
+    failure_policy:
+      - stub_returns_blocked_source_gap_until_connected
+      - auth_failed_or_blocked_enters_source_quality
+      - no_data_not_risk_exclusion
+    fallback_policy:
+      - partial_evidence_card_on_source_gap
+      - no_inline_auth_repair
+    evidence_output_fields:
+      - account_profile_summary
+      - account_state_summary
+      - ban_or_downrank_summary
+      - login_device_summary
+      - register_device_summary
+      - source_quality
+    sensitive_output_policy: redact_personal_info_user_device_ip
+    notes:
+      - "Runner exists and is included, but mother implementation is a minimal stub returning source_gap/blocker, not live platform data."
+
+  - source_name: track_analysis_profile
+    capability: track_analysis_activity_profile_api_direct
+    priority: P0_or_P1_by_case
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/track_analysis_api_direct_contract_current.md
+      - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
+    runner_file: bin/track_analysis_runner
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - user_id_or_device_id
+      - appName
+    allowed_actions:
+      - track_analysis.profile
+      - track_analysis.getLastestDateTime
+    forbidden_actions:
+      - raw_event_sequence_export
+      - behavior_replay_export
+      - frontend_activity_as_human_proof
+      - arbitrary_url_probe
+    auth_dependency:
+      - future_runner_contract
+      - same_origin_if_explicitly_registered
+    current_status: playbook_ready_not_runner_ready
+    failure_policy:
+      - endpoint_verified_but_runner_missing_enters_tool_gap
+      - no_data_not_risk_exclusion
+      - activity_signal_not_final_judgement
+    fallback_policy:
+      - output_source_gap_or_query_plan
+      - do_not_default_to_SPA_DOM
+    evidence_output_fields:
+      - profile_card
+      - latest_datetime
+      - active_days_bucket
+      - source_quality
+    sensitive_output_policy: aggregate_profile_only_redact_user_device
+    notes:
+      - "Contracts are included; no track_analysis_runner exists in mother repo."
+
+  - source_name: track_analysis_getDeviceIds
+    capability: track_analysis_activity_profile_api_direct
+    priority: P0_or_P1_by_case
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/track_analysis_api_direct_contract_current.md
+      - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
+    runner_file: bin/track_analysis_runner
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - user_id
+      - appName
+    allowed_actions:
+      - track_analysis.getDeviceIds
+    forbidden_actions:
+      - unbounded_user_device_export
+      - raw_relation_dump
+      - arbitrary_url_probe
+    auth_dependency:
+      - future_runner_contract
+    current_status: playbook_ready_not_runner_ready
+    failure_policy:
+      - runner_missing_enters_tool_gap
+      - returned_device_candidates_are_auxiliary_not_final
+    fallback_policy:
+      - keep_weapon_graphData_as_primary_when_available
+      - mark_cross_source_device_id_when_used_downstream
+    evidence_output_fields:
+      - device_ids
+      - uid_did_relation_latest_datetime
+      - source_quality
+    sensitive_output_policy: mask_device_ids_in_user_visible_output
+    notes:
+      - "No executable runner found locally."
+
+  - source_name: track_analysis_getUseDuration
+    capability: track_analysis_activity_profile_api_direct
+    priority: P0_or_P1_by_case
+    expected_runtime_mode: conditional
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/track_analysis_api_direct_contract_current.md
+      - computer_use_poc/platform_access/track_analysis_api_contract_v0_1.yaml
+    runner_file: bin/track_analysis_runner
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - user_id_or_device_id
+      - appName
+      - bounded_date_range
+    allowed_actions:
+      - track_analysis.getUseDuration
+    forbidden_actions:
+      - raw_behavior_sequence_export
+      - frontend_duration_as_human_proof
+      - arbitrary_url_probe
+    auth_dependency:
+      - future_runner_contract
+    current_status: playbook_ready_not_runner_ready
+    failure_policy:
+      - zero_duration_not_no_risk
+      - runner_missing_enters_tool_gap
+      - no_data_not_risk_exclusion
+    fallback_policy:
+      - output_source_gap_or_query_plan
+    evidence_output_fields:
+      - daily_duration_rows
+      - event_day_duration
+      - front_backend_activity_mismatch
+      - source_quality
+    sensitive_output_policy: aggregate_duration_only
+    notes:
+      - "No executable runner found locally."
+
+  - source_name: dataagent_hive_registry
+    capability: batch_risk_clustering_analysis
+    priority: P2
+    expected_runtime_mode: plan_only
+    playbook_file:
+      - computer_use_poc/platform_call_playbook_index.md
+      - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
+      - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
+    runner_file: null
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - approved_query_scope
+      - scenario
+      - table
+      - time_window
+      - fields
+    allowed_actions:
+      - generate_query_plan
+      - recommend_tables_and_fields
+      - summarize_already_returned_results
+    forbidden_actions:
+      - execute_without_per_call_user_authorization
+      - generic_table_guess_before_registry
+      - pending_query_as_completed_evidence
+    auth_dependency:
+      - explicit_per_call_user_authorization_for_execution
+    current_status: plan_only
+    failure_policy:
+      - missing_hive_result_not_completed_evidence
+      - permission_gap_enters_missing_evidence
+    fallback_policy:
+      - plan_only_until_user_authorizes_DataAgent_Hive_call
+    evidence_output_fields:
+      - hive_registry_recommended_source
+      - dataagent_candidate_source
+      - missing_hive_result
+      - query_plan
+    sensitive_output_policy: do_not_output_raw_sql_results_or_sensitive_plaintext
+    notes:
+      - "Registry and templates are included in full_runtime; execution remains outside runtime without per-call authorization."
+
+  - source_name: batch_risk_clustering
+    capability: batch_risk_clustering_analysis
+    priority: plan_mode
+    expected_runtime_mode: plan_only
+    playbook_file:
+      - computer_use_poc/batch_risk_clustering/README.md
+      - computer_use_poc/batch_risk_clustering/batch_risk_clustering_methodology_v1.md
+      - computer_use_poc/batch_risk_clustering/batch_risk_threshold_policy_v1.md
+      - computer_use_poc/batch_risk_clustering/batch_risk_response_template_v1.md
+    runner_file: null
+    runner_present: false
+    runner_included_in_full_runtime: false
+    required_inputs:
+      - entity_list_or_batch_description
+      - risk_definition
+      - time_window
+    allowed_actions:
+      - generate_batch_plan
+      - propose_feature_matrix
+      - select_representative_samples
+      - produce_pattern_summary_from_provided_data
+    forbidden_actions:
+      - default_online_per_entity_execution_for_10_plus_entities
+      - DataAgent_Hive_without_authorization
+      - similarity_as_gang_conclusion_without_evidence
+    auth_dependency:
+      - none_for_plan_mode
+    current_status: plan_only
+    failure_policy:
+      - insufficient_batch_fields_becomes_missing_evidence
+    fallback_policy:
+      - representative_sampling_plan
+      - DataAgent_Hive_query_plan_when_needed
+    evidence_output_fields:
+      - abnormal_correlation_matrix
+      - representative_samples
+      - pattern_summary
+      - required_validation
+    sensitive_output_policy: aggregate_or_mask_entities_by_audience
+    notes:
+      - "Runtime includes methodology and templates, not a platform runner."
+
+  - source_name: question_collection_feedback_writer
+    capability: learning_candidate_capture
+    priority: post_answer_accounting
+    expected_runtime_mode: executable
+    playbook_file:
+      - computer_use_poc/question_collection/README.md
+      - computer_use_poc/question_collection/runtime_append_only_logging_contract_v1.md
+      - computer_use_poc/question_collection/question_record_schema_v1.md
+    runner_file: computer_use_poc/question_collection/pilot_observation_writer.py
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - json_record
+      - optional_log_dir
+      - optional_candidate_queue
+    allowed_actions:
+      - append_local_observation_log
+      - append_safe_feedback_candidate
+      - redact_sensitive_text
+    forbidden_actions:
+      - write_to_source_template_queue
+      - write_to_release_template_queue
+      - platform_access
+      - DataAgent_Hive_call
+      - credential_plaintext_output
+    auth_dependency:
+      - none
+    current_status: executable
+    failure_policy:
+      - invalid_json_or_path_violation_fails_closed
+      - sensitive_fields_redacted
+    fallback_policy:
+      - no_platform_fallback
+    evidence_output_fields:
+      - record_id
+      - log_path
+      - candidate_appended
+      - redaction_applied
+    sensitive_output_policy: redact_cookie_token_session_header_phone
+    notes:
+      - "Local writer is included in full_runtime; it writes only local logs/queues and is not a platform source."
+
+  - source_name: source_orchestration_validator
+    capability: multi_evidence_orchestration_contracts
+    priority: local_validation
+    expected_runtime_mode: executable
+    playbook_file:
+      - computer_use_poc/source_orchestration_plan_v1.yaml
+      - computer_use_poc/runtime_validation_cases_v1.yaml
+    runner_file: computer_use_poc/source_orchestration_check.py
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - task_type
+      - entity_count
+      - source_completion_matrix_json
+    allowed_actions:
+      - validate_source_completion_matrix
+      - validate_registered_endpoint_paths
+      - detect_forbidden_case_execution_markers
+    forbidden_actions:
+      - platform_access
+      - auth_state_read
+      - source_wrapper_execution
+      - DataAgent_Hive_call
+    auth_dependency:
+      - none
+    current_status: executable
+    failure_policy:
+      - validation_failure_is_contract_gap_not_source_evidence
+    fallback_policy:
+      - fix_local_contract_or_source_matrix
+    evidence_output_fields:
+      - validation_status
+      - failed_rules
+      - source_matrix_gaps
+    sensitive_output_policy: no_raw_credentials_in_matrix
+    notes:
+      - "Offline-only local validator. It should never be treated as live platform evidence."
+
+  - source_name: runtime_validation_scripts
+    capability: plan_only_diagnostic
+    priority: local_validation
+    expected_runtime_mode: executable
+    playbook_file:
+      - computer_use_poc/runtime_validation_cases_v1.yaml
+      - computer_use_poc/security_preflight_policy.yaml
+    runner_file: computer_use_poc/security_preflight_request_contract_validator.py
+    runner_present: true
+    runner_included_in_full_runtime: true
+    required_inputs:
+      - local_contract_samples
+    allowed_actions:
+      - validate_request_contract_shape
+      - validate_safety_field_quality
+    forbidden_actions:
+      - platform_access
+      - auth_state_read
+      - DataAgent_Hive_call
+      - cloud_config_change
+    auth_dependency:
+      - none
+    current_status: executable
+    failure_policy:
+      - validation_failure_is_local_contract_gap
+    fallback_policy:
+      - update_local_tests_or_contracts
+    evidence_output_fields:
+      - validation_status
+      - errors
+      - warnings
+    sensitive_output_policy: no_sensitive_plaintext
+    notes:
+      - "Offline validation only; not a business source."
+
+summary:
+  executable_or_local_executable:
+    - question_collection_feedback_writer
+    - source_orchestration_validator
+    - runtime_validation_scripts
+  runner_present_not_verified:
+    - user_login_log
+    - weapon_graphData
+    - weapon_riskData
+    - archives_center_profile
+  playbook_ready_not_runner_ready:
+    - tianshi_strategy_hit
+    - rcp_event_list
+    - track_analysis_profile
+    - track_analysis_getDeviceIds
+    - track_analysis_getUseDuration
+  plan_only:
+    - dataagent_hive_registry
+    - batch_risk_clustering
+  current_p0_p1_tool_gaps:
+    - tianshi_strategy_hit: missing bin/tianshi_rcp_runner
+    - rcp_event_list: missing bin/tianshi_rcp_runner
+    - track_analysis_profile: missing bin/track_analysis_runner
+    - track_analysis_getDeviceIds: missing bin/track_analysis_runner
+    - track_analysis_getUseDuration: missing bin/track_analysis_runner

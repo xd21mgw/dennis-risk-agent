@@ -5,6 +5,7 @@ full_runtime_required:
     - AGENTS.md
     - RUNTIME_MANIFEST.md
   files:
+    - computer_use_poc/source_executability_inventory_v1.yaml
     - computer_use_poc/full_runtime_inference_contract_v1.md
     - computer_use_poc/runtime_semi_open_user_guide_v1.md
     - computer_use_poc/multi_entry_runtime_guard_v1.md
@@ -30,6 +31,10 @@ full_runtime_required:
     - computer_use_poc/source_readiness_matrix_v1.yaml
     - computer_use_poc/runner_registry_v1.yaml
     - computer_use_poc/bin_runner_contract_v1.md
+    - bin/sso_session_runner
+    - computer_use_poc/sso_session_runner.py
+    - bin/archives_profile_runner
+    - computer_use_poc/archives_profile_runner.py
     - computer_use_poc/failure_triage_card_template_v1.md
     - computer_use_poc/plan_mode_capability_v1.md
     - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md
@@ -132,5 +137,9 @@ excluded_files:
     - "**/*cookie*"
     - "**/*header*"
     - "**/*token*"
-    - "**/*session*"
+    - "**/*raw_session*"
+    - "**/*session_state*"
+    - "**/*session-state*"
+    - "**/*session_dump*"
+    - "**/*session*.json"
     - outputs/release/**
