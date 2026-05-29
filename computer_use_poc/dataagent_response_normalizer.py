@@ -82,8 +82,8 @@ def iter_steps(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def extract_model_answer(payload: Any) -> tuple[str, list[str]]:
-    steps = iter_steps(payload)
+def extract_model_answer(payload: Any, steps: list[dict[str, Any]] | None = None) -> tuple[str, list[str]]:
+    steps = steps if steps is not None else iter_steps(payload)
     seen_types = [step_type(step) or "UNKNOWN" for step in steps]
     answers = [step_content(step) for step in steps if step_type(step) == MODEL_ANSWER and step_content(step)]
     if not answers and isinstance(payload, dict):
@@ -91,6 +91,50 @@ def extract_model_answer(payload: Any) -> tuple[str, list[str]]:
         if isinstance(direct, str):
             answers.append(direct)
     return "\n\n".join(answers), seen_types
+
+
+def collect_first_value(value: Any, keys: set[str]) -> Any:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key in keys and nested not in (None, ""):
+                return nested
+        for nested in value.values():
+            found = collect_first_value(nested, keys)
+            if found not in (None, ""):
+                return found
+    elif isinstance(value, list):
+        for nested in value:
+            found = collect_first_value(nested, keys)
+            if found not in (None, ""):
+                return found
+    return None
+
+
+def extract_tool_call_provenance(steps: list[dict[str, Any]]) -> tuple[dict[str, Any], int]:
+    provenance: dict[str, Any] = {}
+    sensitive_count = 0
+    for step in steps:
+        if step_type(step) != "TOOL_CALL":
+            continue
+        query_id = collect_first_value(step, {"query_id", "queryId"})
+        trace_id = collect_first_value(step, {"trace_id", "traceId"})
+        generated_sql = collect_first_value(step, {"generated_sql", "generatedSql", "sql"})
+        if query_id and "query_id" not in provenance:
+            safe_query_id, count = redact_sensitive_text(str(query_id))
+            provenance["query_id"] = safe_query_id
+            sensitive_count += count
+        if trace_id and "trace_id" not in provenance:
+            safe_trace_id, count = redact_sensitive_text(str(trace_id))
+            provenance["trace_id"] = safe_trace_id
+            sensitive_count += count
+        if generated_sql and "generated_sql" not in provenance:
+            safe_sql, count = redact_sensitive_text(str(generated_sql).strip())
+            provenance["generated_sql"] = safe_sql
+            provenance["source_tables"] = extract_source_tables(safe_sql)
+            sensitive_count += count
+    if provenance:
+        provenance["provenance_only_not_business_conclusion"] = True
+    return provenance, sensitive_count
 
 
 def redact_sensitive_text(text: str) -> tuple[str, int]:
@@ -160,8 +204,16 @@ def extract_source_tables(text: str) -> list[str]:
     return [table for table in tables if not table.startswith("http")]
 
 
-def infer_status(answer: str, *, generated_sql: str | None, row_count: int) -> tuple[str, str | None]:
+def infer_status(
+    answer: str,
+    *,
+    generated_sql: str | None,
+    row_count: int,
+    tool_call_generated_sql: str | None = None,
+) -> tuple[str, str | None]:
     if not answer.strip():
+        if tool_call_generated_sql:
+            return "sql_generated", "tool_call_sql_provenance_only"
         return "failed", "missing_model_answer"
     if PERMISSION_RE.search(answer):
         return "permission_denied", "permission_denied"
@@ -179,14 +231,27 @@ def infer_status(answer: str, *, generated_sql: str | None, row_count: int) -> t
 
 
 def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
-    answer, raw_step_types = extract_model_answer(payload)
+    steps = iter_steps(payload)
+    answer, raw_step_types = extract_model_answer(payload, steps)
+    tool_call_provenance, tool_sensitive_count = extract_tool_call_provenance(steps)
     safe_answer, answer_sensitive_count = redact_sensitive_text(answer)
     generated_sql, sql_sensitive_count = extract_sql(safe_answer)
+    generated_sql_source = "MODEL_ANSWER" if generated_sql else None
+    if not generated_sql and tool_call_provenance.get("generated_sql"):
+        generated_sql = str(tool_call_provenance["generated_sql"])
+        generated_sql_source = "TOOL_CALL_PROVENANCE_ONLY"
     columns, result_rows, table_sensitive_count = parse_markdown_table(safe_answer)
     row_count = len(result_rows)
-    status, status_reason = infer_status(safe_answer, generated_sql=generated_sql, row_count=row_count)
+    status, status_reason = infer_status(
+        safe_answer,
+        generated_sql=generated_sql,
+        row_count=row_count,
+        tool_call_generated_sql=tool_call_provenance.get("generated_sql"),
+    )
     source_tables = extract_source_tables(generated_sql or safe_answer)
-    sensitive_blocked_count = answer_sensitive_count + sql_sensitive_count + table_sensitive_count
+    if tool_call_provenance.get("source_tables"):
+        source_tables = sorted(set(source_tables + list(tool_call_provenance["source_tables"])))
+    sensitive_blocked_count = answer_sensitive_count + sql_sensitive_count + table_sensitive_count + tool_sensitive_count
 
     permission_status = "permission_denied" if status == "permission_denied" else "ok"
     if status in {"failed", "timeout"}:
@@ -199,6 +264,8 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         warnings.append(f"sensitive_fields_blocked_count={sensitive_blocked_count}")
     if any(step_type != MODEL_ANSWER for step_type in raw_step_types):
         warnings.append("non_MODEL_ANSWER_steps_ignored_for_evidence")
+    if tool_call_provenance:
+        warnings.append("TOOL_CALL_provenance_not_business_conclusion")
     if status == "sql_generated":
         warnings.append("sql_generated_not_executed_evidence")
     if status in {"no_data", "permission_denied", "failed", "timeout"}:
@@ -211,8 +278,8 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     if isinstance(payload, dict):
         request_id = payload.get("request_id")
         session_id = payload.get("session_id")
-        query_id = payload.get("query_id")
-        trace_id = payload.get("trace_id")
+        query_id = payload.get("query_id") or tool_call_provenance.get("query_id")
+        trace_id = payload.get("trace_id") or tool_call_provenance.get("trace_id")
 
     no_data_reason = status_reason if status == "no_data" else None
     error_message = status_reason if status in {"failed", "timeout", "permission_denied"} else None
@@ -253,6 +320,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "query_id": query_id,
         "status": status,
         "generated_sql": generated_sql,
+        "generated_sql_source": generated_sql_source,
         "result_rows": result_rows,
         "columns": columns,
         "row_count": row_count,
@@ -265,6 +333,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "no_data_reason": no_data_reason,
         "trace_id": trace_id,
         "source_quality": source_quality,
+        "tool_call_provenance": tool_call_provenance,
         "source_card": source_card,
         "source_checkpoint_private": {
             "raw_references": [],

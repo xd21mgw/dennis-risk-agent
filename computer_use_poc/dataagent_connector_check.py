@@ -25,12 +25,14 @@ from dataagent_response_normalizer import normalize_dataagent_response  # noqa: 
 
 
 REQUIRED_FILES = [
+    "dataagent_cloud_skill_parity_contract_v1.md",
     "dataagent_connector_contract_v1.md",
     "dataagent_request_schema_v1.yaml",
     "dataagent_response_schema_v1.yaml",
     "dataagent_prompt_templates_v1.md",
     "dataagent_response_normalizer.py",
 ]
+PARITY_FIXTURE = COMPUTER_USE_POC / "test_fixtures" / "dataagent_cloud_skill_response_mock.json"
 
 SENSITIVE_OUTPUT_RE = re.compile(r"\b(phone|cookie|token|session|header|email|id_card)\b", re.IGNORECASE)
 
@@ -115,6 +117,7 @@ def check_contract_text() -> list[str]:
     templates = read_file("dataagent_prompt_templates_v1.md")
 
     required_contract_terms = [
+        "cloud_skill_verified_contract",
         "Conversational API",
         "/v1/chat/completions/full",
         "structured-query API",
@@ -149,6 +152,50 @@ def check_contract_text() -> list[str]:
         if table not in templates:
             errors.append(f"prompt_template_missing_table:{table}")
     return errors
+
+
+def check_cloud_skill_parity() -> tuple[dict[str, Any], list[str]]:
+    errors: list[str] = []
+    if not PARITY_FIXTURE.is_file():
+        return {"parity_mock_pass": False}, [f"missing_file:{PARITY_FIXTURE.relative_to(REPO_ROOT)}"]
+
+    fixture_text = PARITY_FIXTURE.read_text(encoding="utf-8")
+    if SENSITIVE_OUTPUT_RE.search(fixture_text):
+        errors.append("parity_fixture_contains_sensitive_term")
+
+    payload = json.loads(fixture_text)
+    normalized = normalize_dataagent_response(payload)
+    observed_types = set(normalized.get("raw_step_types_observed", []))
+    required_types = {"MODEL_THINKING", "TOOL_CALL", "MODEL_ANSWER", "AGENT_END"}
+    missing_types = sorted(required_types.difference(observed_types))
+    if missing_types:
+        errors.append(f"parity_fixture_missing_step_types:{','.join(missing_types)}")
+    if normalized.get("status") != "completed":
+        errors.append(f"parity_status_unexpected:{normalized.get('status')}")
+    if not normalized.get("model_answer_extracted"):
+        errors.append("parity_model_answer_not_extracted")
+    tool_provenance = normalized.get("tool_call_provenance") or {}
+    if not tool_provenance.get("query_id"):
+        errors.append("parity_tool_call_query_id_missing")
+    if not tool_provenance.get("generated_sql"):
+        errors.append("parity_tool_call_generated_sql_missing")
+    if not tool_provenance.get("provenance_only_not_business_conclusion"):
+        errors.append("parity_tool_call_boundary_missing")
+    if normalized.get("sensitive_output") is not False:
+        errors.append("parity_sensitive_output_not_false")
+
+    result = {
+        "cloud_skill_contract_known": True,
+        "local_live_verified": False,
+        "parity_mock_pass": not errors,
+        "status": normalized.get("status"),
+        "row_count": normalized.get("row_count"),
+        "model_answer_extracted": normalized.get("model_answer_extracted"),
+        "tool_call_query_id_present": bool(tool_provenance.get("query_id")),
+        "tool_call_generated_sql_present": bool(tool_provenance.get("generated_sql")),
+        "tool_call_provenance_only": bool(tool_provenance.get("provenance_only_not_business_conclusion")),
+    }
+    return result, errors
 
 
 def check_normalizer() -> tuple[list[dict[str, Any]], list[str]]:
@@ -212,15 +259,21 @@ def main(argv: list[str] | None = None) -> int:
         errors.extend(check_contract_text())
     normalizer_results, normalizer_errors = check_normalizer()
     errors.extend(normalizer_errors)
+    cloud_skill_parity, parity_errors = check_cloud_skill_parity()
+    errors.extend(parity_errors)
 
     payload = {
         "status": "PASS_DATAAGENT_CONNECTOR_CONTRACT_CHECK" if not errors else "FAILED_DATAAGENT_CONNECTOR_CONTRACT_CHECK",
+        "cloud_skill_contract_known": True,
+        "local_live_verified": False,
+        "parity_mock_pass": cloud_skill_parity.get("parity_mock_pass") is True,
         "real_dataagent_api_called": False,
         "hive_called": False,
         "sql_submitted": False,
         "default_mode": "dry_run_sql_generation",
         "per_call_authorization_required": True,
         "structured_query_api_currently_available": False,
+        "cloud_skill_parity": cloud_skill_parity,
         "normalizer_results": normalizer_results,
         "errors": errors,
     }

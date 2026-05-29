@@ -10,6 +10,31 @@ POST https://video-data.corp.kuaishou.com/v1/chat/completions/full
 
 This is the Conversational API MVP channel. Dennis must construct a structured natural-language prompt, send it through the Conversational API only after per-call user authorization, then normalize DataAgent's step-based response into source observation and evidence-card fields.
 
+## Cloud Skill Verified Contract
+
+Status: `cloud_skill_verified_contract`.
+
+The cloud Dennis/DataAgent Skill has already successfully interacted with DataAgent through the Conversational API. The known entry parameters and payload structure are aligned with this local connector design:
+
+- endpoint: `POST /v1/chat/completions/full`
+- payload: `messages`, `stream=false`, `session_id`, `user_id`
+- response: step-based JSON with `MODEL_THINKING`, `TOOL_CALL`, `MODEL_ANSWER`, and `AGENT_END`
+
+The local full_runtime connector target is therefore parity with the cloud Skill contract, not redefining the DataAgent API from scratch. Local work should focus on:
+
+- request parity check
+- prompt dry-run generation
+- mock step-response normalization
+- later explicitly authorized live API smoke test
+
+Boundary:
+
+- cloud Skill verified does not mean local live verified.
+- Before a local live readonly check succeeds, do not mark `local_live_verified`.
+- The local status is `cloud_skill_verified_contract + local_connector_contract_ready`.
+- Real execution still requires per-call user authorization.
+- Readonly, sensitive-field interception, and `no_data_not_risk_exclusion` remain mandatory.
+
 ## Currently Unavailable
 
 The following interfaces are not available in the current runtime contract:
@@ -159,4 +184,3 @@ forbidden:
   - no_data_as_no_risk
   - pending_or_failed_as_completed_evidence
 ```
-

@@ -65,11 +65,13 @@ full_runtime_required:
     - computer_use_poc/multi_evidence_orchestration_example_v2_5_7.md
     - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
     - computer_use_poc/dataagent_connector_contract_v1.md
+    - computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md
     - computer_use_poc/dataagent_request_schema_v1.yaml
     - computer_use_poc/dataagent_response_schema_v1.yaml
     - computer_use_poc/dataagent_prompt_templates_v1.md
     - computer_use_poc/dataagent_response_normalizer.py
     - computer_use_poc/dataagent_connector_check.py
+    - computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
     - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
     - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
     - computer_use_poc/batch_risk_clustering/batch_l1_feature_query_contract_v1.md

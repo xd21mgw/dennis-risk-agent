@@ -410,12 +410,14 @@ sources:
     priority: P2
     expected_runtime_mode: authorized_execution_only
     playbook_file:
+      - computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md
       - computer_use_poc/dataagent_connector_contract_v1.md
       - computer_use_poc/dataagent_request_schema_v1.yaml
       - computer_use_poc/dataagent_response_schema_v1.yaml
       - computer_use_poc/dataagent_prompt_templates_v1.md
       - computer_use_poc/dataagent_response_normalizer.py
       - computer_use_poc/dataagent_connector_check.py
+      - computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
       - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
@@ -424,7 +426,10 @@ sources:
     runner_included_in_full_runtime: false
     user_confirmation_required: true
     live_api_verification_required: true
+    local_connector_contract_ready: true
+    local_live_verification_required: true
     default_mode: dry_run_sql_generation
+    evidence_boundary: pending_or_sql_generated_not_evidence
     required_inputs:
       - approved_query_scope
       - scenario
@@ -452,12 +457,13 @@ sources:
     auth_dependency:
       - explicit_per_call_user_authorization_for_execution
       - conversational_api_auth_out_of_scope_until_live_verification
-    current_status: connector_contract_ready
+    current_status: cloud_skill_verified_contract
     failure_policy:
       - missing_hive_result_not_completed_evidence
       - permission_gap_enters_missing_evidence
       - pending_failed_timeout_permission_denied_enter_source_quality
       - MODEL_ANSWER_only_for_evidence_extraction
+      - TOOL_CALL_SQL_trace_as_provenance_only
       - no_data_not_risk_exclusion
     fallback_policy:
       - dry_run_sql_generation_until_user_authorizes_DataAgent_Hive_call
@@ -473,7 +479,8 @@ sources:
       - source_quality
     sensitive_output_policy: do_not_output_raw_sql_results_or_sensitive_plaintext
     notes:
-      - "Conversational API /v1/chat/completions/full is the current MVP channel, but this inventory does not mark it live executable."
+      - "Cloud Dennis/DataAgent Skill has verified the Conversational API /v1/chat/completions/full contract."
+      - "Local full_runtime connector is aligned for parity but is not local_live_verified."
       - "Structured-query API is design-only and must not be treated as currently available."
       - "Registry and templates are included in full_runtime; live execution still requires per-call authorization and live API verification."
 
@@ -653,7 +660,7 @@ summary:
     - track_analysis_getUseDuration
   plan_only:
     - batch_risk_clustering
-  connector_contract_ready:
+  cloud_skill_verified_contract:
     - dataagent_hive_registry
   current_p0_p1_tool_gaps:
     - track_analysis_profile: missing bin/track_analysis_runner

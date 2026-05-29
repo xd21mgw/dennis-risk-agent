@@ -7979,8 +7979,8 @@
 
 - test_id: FULL-RUNTIME-DATAAGENT-CONNECTOR-CONTRACT-EXISTS-001
 - input: `computer_use_poc/dataagent_connector_contract_v1.md`、request/response schema、prompt templates、normalizer、connector check。
-- expected_runtime_behavior: dataagent_connector_contract_ready
-- expected_output_boundary: DataAgent 从纯 plan_only 推进到 `connector_contract_ready`；不得标 live executable；不得真实调用 DataAgent/Hive。
+- expected_runtime_behavior: dataagent_cloud_skill_verified_contract_and_local_connector_ready
+- expected_output_boundary: DataAgent 从纯 plan_only 推进到 `cloud_skill_verified_contract + local_connector_contract_ready`；不得标 `local_live_verified` 或 live executable；不得真实调用 DataAgent/Hive。
 
 ## 856. DataAgent Conversational API is MVP channel
 
@@ -8023,3 +8023,31 @@
 - input: DataAgent normalizer 只提取到 SQL，没有查询结果。
 - expected_runtime_behavior: status_sql_generated
 - expected_output_boundary: 输出 `status=sql_generated` 和 `pending_execution_not_evidence=true`；不得说成已查数、已完成或 no_data。
+
+## 862. DataAgent cloud Skill parity contract
+
+- test_id: FULL-RUNTIME-DATAAGENT-CLOUD-SKILL-PARITY-001
+- input: `computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md` 和 `computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json`。
+- expected_runtime_behavior: cloud_skill_parity_contract_available
+- expected_output_boundary: 文档说明云上 Skill 已验证 DataAgent 入口参数；本地目标是 parity check / dry_run / 后续 live API 小测，不得重新发明 API schema。
+
+## 863. Cloud verified is not local live verified
+
+- test_id: FULL-RUNTIME-DATAAGENT-CLOUD-VERIFIED-NOT-LOCAL-LIVE-001
+- input: inventory 中 `dataagent_hive_registry`。
+- expected_runtime_behavior: cloud_skill_verified_contract_not_local_live_verified
+- expected_output_boundary: `current_status=cloud_skill_verified_contract`、`local_connector_contract_ready=true`、`local_live_verification_required=true`；不得标 `local_live_verified` 或 executable。
+
+## 864. DataAgent cloud mock normalizes MODEL_ANSWER
+
+- test_id: FULL-RUNTIME-DATAAGENT-CLOUD-MOCK-MODEL-ANSWER-001
+- input: cloud Skill step-based mock，包含 `MODEL_THINKING` / `TOOL_CALL` / `MODEL_ANSWER` / `AGENT_END`。
+- expected_runtime_behavior: cloud_skill_mock_parity_pass
+- expected_output_boundary: normalizer 提取 `MODEL_ANSWER` 作为可展示解释；`TOOL_CALL.query_id` / SQL / trace 只能作为 provenance，不得直接当业务结论。
+
+## 865. DataAgent connector does not redefine API schema
+
+- test_id: FULL-RUNTIME-DATAAGENT-NO-API-REINVENTION-001
+- input: 本地 DataAgent connector 文档和 request schema。
+- expected_runtime_behavior: parity_with_cloud_skill_contract
+- expected_output_boundary: 本地 connector 与云上 Skill 的 `messages / stream / session_id / user_id` payload、step response 和 MODEL_ANSWER 解析规则对齐；structured-query API 仍为设计方案，不得当当前可用。

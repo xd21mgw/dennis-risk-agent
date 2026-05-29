@@ -1,0 +1,26 @@
+{
+  "request_id": "cloud_skill_mock_request_001",
+  "query_id": "cloud_skill_mock_query_001",
+  "trace_id": "cloud_skill_mock_trace_001",
+  "steps": [
+    {
+      "type": "MODEL_THINKING",
+      "content": "Plan the warehouse lookup and keep reasoning out of evidence."
+    },
+    {
+      "type": "TOOL_CALL",
+      "tool_name": "dataagent_conversational_api",
+      "query_id": "cloud_skill_tool_query_001",
+      "trace_id": "cloud_skill_tool_trace_001",
+      "generated_sql": "SELECT user_id, op_time, device_id, login_type FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info WHERE p_date = '20260528' AND user_id = 544963630 LIMIT 20"
+    },
+    {
+      "type": "MODEL_ANSWER",
+      "content": "```sql\nSELECT user_id, op_time, device_id, login_type\nFROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info\nWHERE p_date = '20260528' AND user_id = 544963630\nLIMIT 20;\n```\n\n| user_id | op_time | device_id | login_type |\n| --- | --- | --- | --- |\n| 544963630 | 2026-05-28 10:00:00 | device_ref_1 | app_login |\n\nThis mock answer is for local parity only. The row above is synthetic and does not prove a real query completed."
+    },
+    {
+      "type": "AGENT_END",
+      "content": "finished"
+    }
+  ]
+}
