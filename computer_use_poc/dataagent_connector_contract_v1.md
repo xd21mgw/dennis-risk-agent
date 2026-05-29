@@ -32,6 +32,7 @@ Boundary:
 - cloud Skill verified does not mean local live verified.
 - Before a local live readonly check succeeds, do not mark `local_live_verified`.
 - The local status is `cloud_skill_verified_contract + local_connector_contract_ready`.
+- Plan B local live parity dry-run status is `local_live_parity_dryrun_pending`.
 - Real execution still requires per-call user authorization.
 - Readonly, sensitive-field interception, and `no_data_not_risk_exclusion` remain mandatory.
 
@@ -50,7 +51,10 @@ Structured-query schema may be used as a mid-term design direction only. It must
 ## Dennis Boundary
 
 - Default mode is `dry_run_sql_generation`: generate a query plan / prompt / SQL candidate without calling DataAgent.
+- `dry_run=true` only means SQL generation / dry-run response. It does not mean data was queried, Hive ran, or evidence completed.
+- `sql_generated` must not enter completed evidence. It is pending execution / provenance only.
 - Real execution requires explicit user authorization for each query, including table, entity set, time window, fields, and business reason.
+- Any future `dry_run=false` execution requires per-call authorization before the request is sent.
 - DataAgent is readonly for Dennis runtime. Write operations, mutation, table creation, table overwrite, policy operation, account operation, and enforcement are forbidden.
 - Do not output cookie, token, session, header, phone, email, id card, password, or equivalent sensitive plaintext.
 - `no_data` is not no-risk evidence.

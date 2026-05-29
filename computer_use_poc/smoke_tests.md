@@ -8051,3 +8051,45 @@
 - input: 本地 DataAgent connector 文档和 request schema。
 - expected_runtime_behavior: parity_with_cloud_skill_contract
 - expected_output_boundary: 本地 connector 与云上 Skill 的 `messages / stream / session_id / user_id` payload、step response 和 MODEL_ANSWER 解析规则对齐；structured-query API 仍为设计方案，不得当当前可用。
+
+## 866. DataAgent local dry-run parity plan exists
+
+- test_id: FULL-RUNTIME-DATAAGENT-LOCAL-DRYRUN-PARITY-PLAN-001
+- input: `computer_use_poc/dataagent_local_dryrun_parity_plan_v1.md`、`dataagent_local_dryrun_invocation_template_v1.md`、`dataagent_local_dryrun_parity_check.py`。
+- expected_runtime_behavior: local_live_parity_dryrun_pending
+- expected_output_boundary: Plan B 只准备本地 dry-run parity；默认不真实访问 DataAgent、不调用 Hive、不提交 SQL。
+
+## 867. DataAgent local dry-run mock does not call API
+
+- test_id: FULL-RUNTIME-DATAAGENT-LOCAL-DRYRUN-MOCK-NO-API-001
+- input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --mock --json`。
+- expected_runtime_behavior: mock_normalizer_only
+- expected_output_boundary: 使用 cloud Skill mock 验证 normalizer；`real_dataagent_api_called=false`、`hive_called=false`、`sql_submitted=false`。
+
+## 868. DataAgent print payload does not send request
+
+- test_id: FULL-RUNTIME-DATAAGENT-PRINT-PAYLOAD-NO-REQUEST-001
+- input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --print-payload --case single_user_ato --json`。
+- expected_runtime_behavior: print_payload_only
+- expected_output_boundary: 只打印脱敏 Conversational API payload，包含 `messages`、`stream=false`、`session_id`、`user_id`；不得发 HTTP 请求。
+
+## 869. DataAgent live dry-run requires explicit allow flag
+
+- test_id: FULL-RUNTIME-DATAAGENT-LIVE-DRYRUN-REQUIRES-ALLOW-001
+- input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --live-dry-run --json`。
+- expected_runtime_behavior: live_dryrun_fail_closed_without_allow
+- expected_output_boundary: 没有 `--allow-live-dry-run` 必须 fail closed；不得真实访问 DataAgent。
+
+## 870. DataAgent dry_run true not completed evidence
+
+- test_id: FULL-RUNTIME-DATAAGENT-DRYRUN-TRUE-NOT-COMPLETED-001
+- input: DataAgent dry_run=true 只生成 SQL。
+- expected_runtime_behavior: dry_run_sql_generation_only
+- expected_output_boundary: `dry_run=true` 不得标 completed evidence；`sql_generated` 不等于已查数；`dry_run=false` 仍需逐次授权。
+
+## 871. DataAgent dry-run status field semantics
+
+- test_id: FULL-RUNTIME-DATAAGENT-DRYRUN-STATUS-SEMANTICS-001
+- input: `python3 computer_use_poc/dataagent_local_dryrun_parity_check.py --self-test-status-semantics --json`。
+- expected_runtime_behavior: local_status_semantics_only
+- expected_output_boundary: `dataagent_api_attempted`、`http_request_sent`、`step_response_received`、`model_answer_extracted` 必须分层输出；已发出 HTTP 但未收到 step response 不得表达成 `real_dataagent_api_called=false`；read timeout 必须映射为 `source_status=timeout`、`failure_reason=read_timeout`；`hive_called=false`、`sql_submitted=false`。

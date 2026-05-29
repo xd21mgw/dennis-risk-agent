@@ -287,8 +287,9 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         error_message, blocked = redact_sensitive_text(error_message)
         sensitive_blocked_count += blocked
 
-    dataagent_called = status != "sql_generated"
     dry_run = status == "sql_generated"
+    step_response_received = bool(steps)
+    model_answer_extracted = bool(answer.strip())
     source_quality = {
         "source_name": SOURCE_NAME,
         "permission_status": permission_status,
@@ -297,9 +298,14 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "failure_reason": status_reason,
         "no_data_not_risk_exclusion": True,
         "pending_execution_not_evidence": status in {"pending", "running", "sql_generated"},
-        "dataagent_called": dataagent_called,
-        "hive_called": dataagent_called,
+        "dataagent_api_attempted": False,
+        "http_request_sent": False,
+        "step_response_received": step_response_received,
+        "model_answer_extracted": model_answer_extracted,
+        "dataagent_called": False,
+        "hive_called": False,
         "dry_run": dry_run,
+        "sql_submitted": False,
         "normalized_from_mock": True,
     }
     source_card = {
@@ -343,7 +349,8 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "redaction_applied": True,
         "sensitive_output": False,
         "raw_step_types_observed": raw_step_types,
-        "model_answer_extracted": bool(answer.strip()),
+        "step_response_received": step_response_received,
+        "model_answer_extracted": model_answer_extracted,
     }
 
 

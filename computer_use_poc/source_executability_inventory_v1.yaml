@@ -417,6 +417,9 @@ sources:
       - computer_use_poc/dataagent_prompt_templates_v1.md
       - computer_use_poc/dataagent_response_normalizer.py
       - computer_use_poc/dataagent_connector_check.py
+      - computer_use_poc/dataagent_local_dryrun_parity_plan_v1.md
+      - computer_use_poc/dataagent_local_dryrun_invocation_template_v1.md
+      - computer_use_poc/dataagent_local_dryrun_parity_check.py
       - computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
       - computer_use_poc/platform_call_playbook_index.md
       - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
@@ -428,6 +431,8 @@ sources:
     live_api_verification_required: true
     local_connector_contract_ready: true
     local_live_verification_required: true
+    local_dryrun_parity_plan_ready: true
+    local_dryrun_live_call_required: true
     default_mode: dry_run_sql_generation
     evidence_boundary: pending_or_sql_generated_not_evidence
     required_inputs:

@@ -39,6 +39,12 @@ normalized_response:
     type: string
     required: false
     sensitive_field_policy: redact_sensitive_columns
+  generated_sql_source:
+    type: string
+    required: false
+    allowed:
+      - MODEL_ANSWER
+      - TOOL_CALL_PROVENANCE_ONLY
   result_rows:
     type: list[object]
     required: true
@@ -80,6 +86,26 @@ normalized_response:
   trace_id:
     type: string
     required: false
+  tool_call_provenance:
+    type: object
+    required: false
+    evidence_boundary: provenance_only_not_business_conclusion
+    fields:
+      query_id:
+        type: string
+        required: false
+      trace_id:
+        type: string
+        required: false
+      generated_sql:
+        type: string
+        required: false
+      source_tables:
+        type: list[string]
+        required: false
+      provenance_only_not_business_conclusion:
+        type: boolean
+        required: true
   source_quality:
     type: object
     required: true
@@ -91,9 +117,21 @@ normalized_response:
       failure_reason:
       no_data_not_risk_exclusion: true
       pending_execution_not_evidence:
+      dataagent_api_attempted:
+        meaning: true when the runner attempted to call the DataAgent API path.
+      http_request_sent:
+        meaning: true when an HTTP request was actually sent; read timeout keeps this true.
+      step_response_received:
+        meaning: true only when step-based JSON was received and accepted for normalization.
+      model_answer_extracted:
+        meaning: true only when MODEL_ANSWER content was extracted.
       dataagent_called:
+        meaning: legacy compatibility alias; do not use as a substitute for step_response_received.
       hive_called:
+        expected_for_dry_run: false
       dry_run:
+      sql_submitted:
+        expected_for_dry_run: false
 
 source_observation_compatibility:
   source_card:
@@ -148,4 +186,3 @@ status_boundary:
     evidence_allowed: false
   permission_denied:
     evidence_allowed: false
-
