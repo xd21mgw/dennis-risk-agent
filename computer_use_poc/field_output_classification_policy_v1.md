@@ -27,7 +27,7 @@ Runtime and evidence-card code uses these canonical class names:
 |---|---|---|---|
 | `credential_secret` | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, storageState, auth credential in headers, KIM code, login ticket, credential secret | never plaintext; `present_redacted` / `credential_present_redacted` only | P0 |
 | `pii_strict` | phone number, ID card, real-name identity information, precise personal identity fields, verification code | limited masking / presence summary; no full plaintext | P1/P0 depending exposure |
-| `risk_entity_identifier` | UID / user_id, DID, deviceId, deviceceid, IP, tokenId when it is an event identifier rather than a token secret, eventId, sourceId, strategyId, hitFusePolicyCode, login method, logSource, timestamp, coarse geo | controlled by `output_scope`; usable as analysis entities in trusted internal risk analysis | P1 if audience policy is wrong; not P0 credential leakage by default |
+| `risk_entity_identifier` | UID / user_id, DID, deviceId, deviceceid, IP, tokenId when it is an event identifier rather than a token secret, eventId, sourceId, strategyId, hitFusePolicyCode, login method, logSource, timestamp / `_occurTime`, coarse geo | controlled by `output_scope`; usable as analysis entities in trusted internal risk analysis | P1 if audience policy is wrong; not P0 credential leakage by default |
 | `source_summary_metric` | IP subnet, ASN, carrier, geo cluster, device risk tags, same-device count, registration cohort, behavior-object cluster, risk label distribution, success/failure counts, time-series summary | preferred output for reports and KIM responses | usually safe if no raw sensitive values |
 
 ## 3. P0 Credential / Authentication Secrets
@@ -85,9 +85,9 @@ Risk entity fields are normal inputs for risk analysis:
 
 Output strategy:
 
-- Trusted internal risk analysis: may output as analysis entities for evidence cards, pattern summaries, and case tables when necessary.
+- Trusted internal risk analysis: may output raw values as analysis entities for evidence cards, pattern summaries, and case tables when necessary. For small-batch internal evidence output, user headings should use copyable raw user IDs, for example `用户 772671837`, not `U1`, tail-only labels, or `user_***1837`.
 - KIM semi-open: may output by default when useful, but avoid large-scale detail export; use `safe_ref` or partial mask when the audience or channel is broader.
-- Larger semi-open, cross-team sharing, or outbound materials: default to `masked`, `safe_ref`, `count`, or `distribution`.
+- Larger semi-open, cross-team sharing, or outbound materials: default to `masked`, `safe_ref`, `count`, or `distribution`. `external_share` small-batch headings may use aliases such as `用户 U1（user_***1837）` or `用户 A`.
 - Do not confuse risk entity fields with token / cookie / session / password credential secrets.
 
 `tokenId` rule:

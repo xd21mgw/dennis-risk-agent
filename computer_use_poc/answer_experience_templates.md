@@ -101,6 +101,8 @@ browser_backed_source_result:
 
 默认 `output_scope=internal_risk_review`。内部研判 evidence card 可以展示最小必要风控实体字段，例如 UID / user_id、DID / device_id、IP、eventId、sourceId、hitFusePolicyCode、login method、logSource、timestamp。`output_scope=external_share` 时这些实体字段必须 masked。cookie / token / session / header / authorization / password、raw source body、raw login records、raw labelInfo、raw originalLog 任何模式都禁止输出。`sensitive_output=false` 只表示没有认证秘密和 raw dump，不表示没有展示风控实体字段。
 
+小批量 evidence 输出的用户标题同样受 `output_scope` 控制。`internal_risk_review` 必须直接展示可复制回查的真实 user_id，例如 `用户 772671837`、`用户 3481089791`；不得写成 `U1` / `U2`、尾号、`user_***1837`。`external_share` 才允许写 `用户 U1（user_***1837）`、`用户 U2（user_***9791）` 或用户 A/B。deviceId / DID、IP、eventId、sourceId、hitFusePolicyCode、logSource、method、timestamp 在 `internal_risk_review` 下可按最小必要原值展示；在 `external_share` 下必须 masked。
+
 手机号属于 `pii_strict`：内部研判只可输出 `1381234****`，分享版只可输出 `138********`，任何模式都不得输出完整手机号。身份证号和真实姓名任何模式都不得输出原文；只能输出 `id_card_present=true`、必要时 `birth_year_present=true`，以及 `name_present=true`。
 
 账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
@@ -971,6 +973,10 @@ Small batch 输出模板：
 batch_id:
 user_count:
 execution_mode: small_batch_execution_with_checkpoint
+output_scope: internal_risk_review | external_share
+user_title_policy:
+  internal_risk_review: 用户 {raw_user_id}
+  external_share: 用户 U{index}（user_***last4） | 用户 A/B
 per_user_evidence_card:
 per_user_source_status:
 completed_users:

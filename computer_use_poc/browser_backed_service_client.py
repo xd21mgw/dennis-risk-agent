@@ -71,6 +71,7 @@ FIELD_CLASSIFICATION = {
         "logSource",
         "method",
         "timestamp",
+        "_occurTime",
     ],
     "source_summary_metric": ["records_count", "event_count", "duration", "field_presence", "latency_ms"],
 }
@@ -701,6 +702,59 @@ def build_partial_evidence_card(
     }
 
 
+def build_small_batch_evidence_output(
+    user_results: Iterable[Mapping[str, Any]],
+    output_scope: str = DEFAULT_OUTPUT_SCOPE,
+) -> Dict[str, Any]:
+    """Build display-safe small-batch evidence output.
+
+    Each item in `user_results` must contain `user_id` and `results` (or
+    `source_results`). Internal review output keeps the raw risk entity user id
+    in the user title so reviewers can copy it for follow-up; external sharing
+    gets a stable local alias and masked user id.
+    """
+
+    scope = _coerce_output_scope(output_scope)
+    per_user_evidence = []
+    for index, item in enumerate(user_results, start=1):
+        user_id = str(item.get("user_id") or "")
+        source_results = item.get("results") or item.get("source_results") or []
+        evidence_card = build_partial_evidence_card(source_results, output_scope=scope)
+        entry: Dict[str, Any] = {
+            "user_title": _small_batch_user_title(user_id, index, scope),
+            "source_completion_matrix": evidence_card["source_completion_matrix"],
+            "completed_sources": evidence_card["completed_sources"],
+            "no_data_sources": evidence_card["no_data_sources"],
+            "blocked_sources": evidence_card["blocked_sources"],
+            "evidence_summary_by_source": evidence_card["evidence_summary_by_source"],
+            "missing_evidence": evidence_card["missing_evidence"],
+            "sensitive_output": False,
+            "final_risk_judgement_made": False,
+        }
+        if scope == "internal_risk_review":
+            entry["user_id"] = user_id
+        else:
+            entry["user_ref"] = f"U{index}"
+            entry["user_id"] = _external_user_id_label(user_id)
+        per_user_evidence.append(entry)
+
+    return {
+        "card_type": "small_batch_evidence_summary",
+        "execution_mode": "small_batch_execution_with_checkpoint",
+        "output_scope": scope,
+        "user_count": len(per_user_evidence),
+        "per_user_evidence": per_user_evidence,
+        "sensitive_output": False,
+        "final_risk_judgement_made": False,
+        "display_policy": {
+            "internal_risk_review_user_title": "用户 {raw_user_id}",
+            "external_share_user_title": "用户 U{index}（user_***last4）",
+            "risk_entity_identifier_internal_raw_allowed": True,
+            "risk_entity_identifier_external_masked": True,
+        },
+    }
+
+
 def build_business_evidence_summary(
     result: Mapping[str, Any],
     output_scope: str = DEFAULT_OUTPUT_SCOPE,
@@ -1010,7 +1064,7 @@ def _is_risk_entity_key(key: str) -> bool:
         return False
     return bool(
         re.search(
-            r"(user_?ids?|^uid$|device_?ids?|deviceid|device_did|^did$|(^|_)ip($|_)|ipaddr|clientip|remoteip|loginip|event_?id|source_?id|hitfusepolicycode|strategy|logsource|method|timestamp)",
+            r"(user_?ids?|^uid$|device_?ids?|deviceid|device_did|^did$|(^|_)ip($|_)|ipaddr|clientip|remoteip|loginip|event_?id|source_?id|hitfusepolicycode|strategy|logsource|method|timestamp|occur_?time|_occurtime)",
             lowered,
             re.I,
         )
@@ -1064,6 +1118,17 @@ def _mask_risk_entity(key: str, value: str) -> str:
     if "user" in lowered or lowered == "uid":
         return f"[masked_user_id:length={len(text)}]"
     return f"[masked_identifier:length={len(text)}]"
+
+
+def _external_user_id_label(user_id: str) -> str:
+    text = str(user_id)
+    return f"user_***{text[-4:]}" if len(text) >= 4 else "user_***"
+
+
+def _small_batch_user_title(user_id: str, index: int, output_scope: str) -> str:
+    if output_scope == "internal_risk_review":
+        return f"用户 {user_id}"
+    return f"用户 U{index}（{_external_user_id_label(user_id)}）"
 
 
 def _is_masked_placeholder(value: str) -> bool:
@@ -1853,6 +1918,61 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert "110105199001011234" not in external_text
     assert "Fixture User" not in external_text
     results.append(("external_share_risk_entities_masked", "passed"))
+
+    def fixture_results_for_user(user_id: str) -> list[Dict[str, Any]]:
+        track_payload = _fixture_payload("track_analysis_summary", "completed")
+        track_payload["source_card"]["profile_summary"]["user_id_sample"] = user_id
+        rcp_payload = _fixture_payload("rcp_snapshot", "completed")
+        weapon_payload = _fixture_payload("weapon_inventory", "completed")
+        weapon_payload["source_card"]["weapon_summary"]["related_user_id_sample"] = user_id
+        login_payload = _fixture_payload("login_logs_search", "completed")
+        login_payload["source_card"]["login_logs_summary"]["user_id_sample"] = user_id
+        return [
+            normalize_service_response("track_analysis_summary", track_payload),
+            normalize_service_response("rcp_snapshot", rcp_payload),
+            normalize_service_response("weapon_inventory", weapon_payload),
+            normalize_service_response("login_logs_search", login_payload),
+        ]
+
+    small_batch_input = [
+        {"user_id": "772671837", "results": fixture_results_for_user("772671837")},
+        {"user_id": "3481089791", "results": fixture_results_for_user("3481089791")},
+    ]
+    internal_batch = build_small_batch_evidence_output(small_batch_input, output_scope="internal_risk_review")
+    internal_batch_text = json.dumps(internal_batch, ensure_ascii=False)
+    assert internal_batch["output_scope"] == "internal_risk_review"
+    assert "用户 772671837" in internal_batch_text
+    assert "用户 3481089791" in internal_batch_text
+    assert "U1" not in internal_batch_text
+    assert "U2" not in internal_batch_text
+    assert "尾号" not in internal_batch_text
+    assert "user_***1837" not in internal_batch_text
+    assert "user_***9791" not in internal_batch_text
+    assert "ANDROID_login_device_001" in internal_batch_text
+    assert "ANDROID_weapon_device_001" in internal_batch_text
+    assert "evt_rcp_001" in internal_batch_text
+    assert "src_rcp_001" in internal_batch_text
+    assert "10.20.30.40" in internal_batch_text
+    results.append(("small_batch_internal_titles_show_raw_user_ids", "passed"))
+
+    external_batch = build_small_batch_evidence_output(small_batch_input, output_scope="external_share")
+    external_batch_text = json.dumps(external_batch, ensure_ascii=False)
+    assert external_batch["output_scope"] == "external_share"
+    assert "用户 U1（user_***1837）" in external_batch_text
+    assert "用户 U2（user_***9791）" in external_batch_text
+    assert "772671837" not in external_batch_text
+    assert "3481089791" not in external_batch_text
+    assert "ANDROID_login_device_001" not in external_batch_text
+    assert "ANDROID_weapon_device_001" not in external_batch_text
+    assert "evt_rcp_001" not in external_batch_text
+    assert "src_rcp_001" not in external_batch_text
+    assert "10.20.30.40" not in external_batch_text
+    assert "10.20.*.*" in external_batch_text
+    assert "13812345678" not in external_batch_text
+    assert "138********" in external_batch_text
+    assert "raw_device_should_not_render" not in external_batch_text
+    assert "raw_log_should_not_render" not in external_batch_text
+    results.append(("small_batch_external_titles_mask_user_ids", "passed"))
 
     numeric_user_payload = _fixture_payload("login_logs_search", "completed")
     numeric_user_payload["source_card"]["login_logs_summary"]["user_id_sample"] = "12345678901"

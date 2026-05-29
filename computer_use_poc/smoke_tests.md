@@ -8226,3 +8226,17 @@
 - input: evidence card summary 中出现手机号、身份证号、真实姓名字段。
 - expected_runtime_behavior: pii_strict_masking_by_output_scope
 - expected_output_boundary: `internal_risk_review` 手机号输出 `1381234****`；`external_share` 输出 `138********`；完整手机号、完整身份证号、真实姓名原文任何模式都不得输出；普通数字 user_id 不得误判为手机号。
+
+## 884. Small batch internal user titles keep raw user id
+
+- test_id: SMALL-BATCH-INTERNAL-RISK-REVIEW-RAW-USER-TITLES-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`，构造 `user_id=["772671837","3481089791"]` 的 small batch evidence output。
+- expected_runtime_behavior: small_batch_internal_titles_copyable_user_ids
+- expected_output_boundary: `output_scope=internal_risk_review` 时用户标题必须包含 `用户 772671837` 和 `用户 3481089791`；不得只输出 `U1` / `U2`、尾号 1837/9791 或 `user_***1837` / `user_***9791`；deviceId、eventId、sourceId、IP 等风险实体字段如存在可原值展示；仍不得输出 cookie/token/session/header/authorization/password 或 raw body/raw records/raw labelInfo/raw originalLog。
+
+## 885. Small batch external share masks user titles and risk entities
+
+- test_id: SMALL-BATCH-EXTERNAL-SHARE-MASKED-USER-TITLES-001
+- input: `build_small_batch_evidence_output(..., output_scope="external_share")`，构造同一组 `user_id=["772671837","3481089791"]`。
+- expected_runtime_behavior: small_batch_external_titles_alias_and_mask
+- expected_output_boundary: `external_share` 不得暴露完整 user_id；允许输出 `用户 U1（user_***1837）`、`用户 U2（user_***9791）` 或用户 A/B；deviceId、eventId、sourceId、IP、hitFusePolicyCode、logSource、method、timestamp 必须 masked；credential secret 和 raw dump 仍任何模式禁止。

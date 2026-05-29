@@ -2910,3 +2910,26 @@ platform_access_execution_v0_1_regression:
       - no_cookie_token_session_header_read
       - missing_legacy_runner_not_runtime_failure
     pass_fail_criteria: "缺旧 runner 时不得先尝试旧 runner；账号安全主链路应通过 browser_backed_service_client 固定 action 构造 source result。"
+  - case_id: SMALL-BATCH-INTERNAL-RISK-REVIEW-RAW-USER-TITLES-001
+    input: "small batch evidence output, user_id=[772671837,3481089791], output_scope=internal_risk_review。"
+    expected_output_boundary:
+      - small_batch_execution_with_checkpoint
+      - user_title_contains_raw_user_id_772671837
+      - user_title_contains_raw_user_id_3481089791
+      - no_u1_u2_only_title
+      - no_tail_only_user_title
+      - no_masked_user_id_in_internal_title
+      - risk_entity_identifier_raw_allowed_internal
+      - credential_secret_not_output
+      - raw_body_records_labelInfo_originalLog_not_output
+    pass_fail_criteria: "internal_risk_review 小批量输出必须用 `用户 772671837` / `用户 3481089791` 等可复制真实 user_id 标题；不得只写 U1/U2、尾号或 user_***。"
+  - case_id: SMALL-BATCH-EXTERNAL-SHARE-MASKED-USER-TITLES-001
+    input: "small batch evidence output, user_id=[772671837,3481089791], output_scope=external_share。"
+    expected_output_boundary:
+      - external_share_masks_full_user_id
+      - user_title_alias_allowed
+      - user_title_user_last4_mask_allowed
+      - risk_entity_identifier_masked_external
+      - credential_secret_not_output
+      - raw_body_records_labelInfo_originalLog_not_output
+    pass_fail_criteria: "external_share 不得暴露完整 user_id；允许 `用户 U1（user_***1837）` / `用户 U2（user_***9791）` 或用户 A/B；deviceId/eventId/sourceId/IP 等风险实体字段必须 masked。"

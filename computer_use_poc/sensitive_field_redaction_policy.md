@@ -54,21 +54,24 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 
 ```text
 原始：123456789
-输出：user_ref_001 或 user_id=123***789
+internal_risk_review 输出：用户 123456789
+external_share 输出：用户 U1（user_***6789）或 user_ref_001
 ```
 
 ### device_id
 
 ```text
 原始：ANDROID_abcdef1234567890
-输出：ANDROID_abcd***7890
+internal_risk_review 输出：ANDROID_abcdef1234567890
+external_share 输出：[masked_device_id:length=24] 或 ANDROID_abcd***7890
 ```
 
 ### IP
 
 ```text
 原始：10.20.30.40
-输出：10.20.*.* 或 ip_same_region=true / ip_changed=true
+internal_risk_review 输出：10.20.30.40
+external_share 输出：10.20.*.* 或 ip_same_region=true / ip_changed=true
 ```
 
 ### 手机号
@@ -112,7 +115,7 @@ external_share 输出：id_card_present=true
 
 - 只输出最小必要信息。
 - 优先输出派生特征，不输出原始值。
-- 关联实体在 `internal_risk_review` 下可按最小必要展示；在 `external_share` 下默认引用化或脱敏。
+- 关联实体在 `internal_risk_review` 下可按最小必要原值展示；小批量内部研判标题必须使用真实 user_id，便于策略同学复制回查，不要仅写 U1/U2、尾号或 `user_***`。在 `external_share` 下默认引用化或脱敏。
 - 若用户要求敏感明文，应拒绝并说明可提供脱敏摘要。
 - 若业务研判确需敏感字段参与判断，应仅在执行态读取，不在聊天输出和持久文档中落明文。
 
