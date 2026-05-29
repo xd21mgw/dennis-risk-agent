@@ -819,7 +819,7 @@ def build_archives_private_message_search_browser_backed_request(
     request = {
         "source_name": "archives_private_message_search",
         "action_name": "archives_private_message_search",
-        "priority": "P1-candidate",
+        "priority": "P2-conditional",
         "fixed_path": ARCHIVES_PRIVATE_MESSAGE_SEARCH_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
@@ -872,7 +872,7 @@ def build_archives_past_four_items_browser_backed_request(
     request = {
         "source_name": "archives_past_four_items",
         "action_name": "archives_past_four_items",
-        "priority": "P1-candidate",
+        "priority": "P2-conditional",
         "fixed_path": ARCHIVES_PAST_FOUR_ITEMS_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
@@ -1018,7 +1018,7 @@ def build_rcp_policy_detail_lookup_browser_backed_request(
     request = {
         "source_name": "rcp_policy_detail_lookup",
         "action_name": "rcp_policy_detail_lookup",
-        "priority": "strategy-governance",
+        "priority": "strategy_governance",
         "fixed_path": RCP_POLICY_DETAIL_LOOKUP_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
@@ -1066,7 +1066,7 @@ def build_rcp_policy_release_record_lookup_browser_backed_request(
     request = {
         "source_name": "rcp_policy_release_record_lookup",
         "action_name": "rcp_policy_release_record_lookup",
-        "priority": "strategy-governance",
+        "priority": "strategy_governance",
         "fixed_path": RCP_POLICY_RELEASE_LIST_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
@@ -1125,7 +1125,7 @@ def build_rcp_policy_tree_lookup_browser_backed_request(
     request = {
         "source_name": "rcp_policy_tree_lookup",
         "action_name": "rcp_policy_tree_lookup",
-        "priority": "strategy-governance",
+        "priority": "strategy_governance",
         "fixed_path": RCP_POLICY_TREE_LOOKUP_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
@@ -1249,7 +1249,7 @@ def build_rcp_node_bind_policy_attribution_browser_backed_request(
     request = {
         "source_name": "rcp_node_bind_policy_attribution",
         "action_name": "rcp_node_bind_policy_attribution",
-        "priority": "strategy-governance",
+        "priority": "strategy_governance",
         "fixed_path": RCP_NODE_BIND_POLICY_ATTRIBUTION_FIXED_PATH,
         "typed_params": typed_params,
         "body_builder_summary": {
