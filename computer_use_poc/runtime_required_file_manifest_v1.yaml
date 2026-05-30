@@ -7,6 +7,7 @@ full_runtime_required:
   files:
     - computer_use_poc/source_executability_inventory_v1.yaml
     - computer_use_poc/full_runtime_inference_contract_v1.md
+    - computer_use_poc/runtime_required_file_manifest_v1.yaml
     - computer_use_poc/runtime_semi_open_user_guide_v1.md
     - computer_use_poc/multi_entry_runtime_guard_v1.md
     - computer_use_poc/scene_to_capability_routing.md
@@ -16,7 +17,9 @@ full_runtime_required:
     - computer_use_poc/source_orchestration_check.py
     - computer_use_poc/platform_call_playbook_index.md
     - computer_use_poc/runtime_validation_cases_v1.yaml
+    - computer_use_poc/smoke_tests.md
     - computer_use_poc/runtime_integration_validation_checklist_v1.md
+    - computer_use_poc/multi_evidence_orchestration_contracts/04_multi_evidence_regression_cases_v1.yaml
     - computer_use_poc/observation_contract_v2_4_6.md
     - computer_use_poc/field_output_classification_policy_v1.md
     - computer_use_poc/security_preflight_policy.yaml
@@ -38,6 +41,7 @@ full_runtime_required:
     - computer_use_poc/browser_backed_fixed_actions_v1_integration_closure.md
     - computer_use_poc/browser_backed_fixed_actions_text_regression_cases_v1.yaml
     - computer_use_poc/browser_backed_fixed_actions_text_dryrun.py
+    - computer_use_poc/browser_backed_fixed_actions_text_demo_v1.md
     - computer_use_poc/platform_access/observation_schema_v0_1.yaml
     - bin/archives_profile_runner
     - computer_use_poc/archives_profile_runner.py
