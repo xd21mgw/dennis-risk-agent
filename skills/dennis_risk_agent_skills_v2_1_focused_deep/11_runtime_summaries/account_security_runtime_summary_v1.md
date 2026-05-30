@@ -131,8 +131,8 @@
 
 source 优先级：
 
-- P0：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
-- P1：档案中心画像、track-analysis stats-first。
+- P0：统一登录日志、档案中心 `archives_user_profile` / `archives_user_analysis`、Weapon graphData、用户明确问策略命中时的天师策略命中摘要。
+- P1：Weapon riskData（已解析出可疑 deviceId 后）、track-analysis stats-first、设备 SDK 深层补证。
 - P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
 
 Track-analysis low-cost补证：
@@ -155,6 +155,14 @@ Track-analysis low-cost补证：
 
 browser-backed fixed actions v1 已进入 Dennis 母体路由收口，但仍是显式 source plan，不是默认 runtime routing。
 
+裸问表达收敛：
+
+- ATO / 导流 / 扩散类裸问优先按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”组织回答。
+- 不把回答写成 action 说明书；action 名只作为 source_plan 锚点，正文先讲业务证据要解决什么问题。
+- ATO 先看登录 / token / 新设备 / 验证等控制权变化，再看改密、发布、关注、导流等后置行为闭环，最后才看同设备扩散、Track 活跃与数据可用性、策略命中等佐证。
+- 导流 / 异常发布先看内容动作与承接链路，再看账号状态和发布前后操作，不因单个 source no_data 排除风险。
+- 同设备 / 关联账号只放在扩散或佐证层，不直接写团伙结论。
+
 ATO / 登录异常推荐顺序：
 
 1. `login_logs_search`
@@ -162,22 +170,31 @@ ATO / 登录异常推荐顺序：
 3. `archives_user_analysis`
 4. `track_analysis_check_data_ready`
 
+档案中心规则：
+
+- 档案中心是 ATO / 登录异常 / 黑产详情分析的关键证据项，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等登录日志看不到的后置行为闭环。
+- 档案中心不是失败即阻塞的硬必跑项。`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 进入 `source_quality` 和 `missing_evidence`，输出 partial evidence。
+- 没有档案中心时，只能说“当前为登录侧或其他已完成 source 的部分观察”，不能只基于登录日志强判或排除 ATO。
+
 解释边界：
 
 - 登录日志 `no_data`、在线窗口不足、parse error、auth failed 都是 `source_quality`，不能排除 ATO。
 - `archives_user_profile` 是账号画像底座，不单独定性。
 - `archives_user_analysis` 是操作 / 风险日志时间线；大 pageSize 或大响应只能输出 `partial_observation_available` / `large_response_limited`，建议缩窗、降低 pageSize 或分页。
-- `track_analysis_check_data_ready` 是 readiness / provenance，不是风险结论，也不能替代前端活跃画像或登录链路证据。
+- 当前 v1 表达优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；它是 readiness / provenance，不是风险结论，也不能替代前端活跃画像或登录链路证据。
+- 若引用历史 `track_analysis_summary` / Track summary 能力，只写成泛化的 Track 活跃画像能力描述，不混成当前 v1 的 action 名。
 
 异常发布 / 色导 / 内容承接：
 
 - 使用 `archives_photo_search -> archives_user_profile -> archives_user_analysis`。
+- 这类场景中档案中心更接近必查 source，但仍不因为 `auth_failed` / `timeout` / `blocked` 中断输出；缺口进入 `missing_evidence`。
 - `archives_photo_search=no_data` 只表示当前 user/window/source 条件下没有返回记录，不能排除异常发布、内容承接或发布链路风险。
 
 账号扩散 / 同设备：
 
 - 使用 `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`。
 - 关联用户只是扩散线索，不能直接输出团伙结论；必须有登录、设备、行为、策略或发布链路交叉证据。
+- private message、资料四件套 / 过往四项、related_devices 等未稳定 live 的 source 不作为默认已验证 source；只能写“如已有稳定接口或用户补充线索，再进一步查看”。
 
 RCP 归因与策略治理：
 

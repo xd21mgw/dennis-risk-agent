@@ -103,7 +103,12 @@
   - 注册状态：Node service allowlist、Dennis Python client endpoint、README / ONLINE_SOURCE_SUMMARY / inventory 已对齐。
   - source 状态：`login_logs_search`、`track_analysis_check_data_ready`、`archives_user_profile`、`archives_user_analysis`、`archives_related_users`、`rcp_event_detail`、`rcp_policy_tree_lookup` 为 `live_smoke_verified`；`archives_photo_search` 为 live path `no_data`；`rcp_event_feature_list` 为 `partial_observation_available`。
   - 边界：所有 action 均 `default_runtime_routing=false`，必须由显式 source plan 选择；`no_data` 不是无风险反证，`partial_observation_available` 是可用部分观察，`large_response_limited` 进 source_quality，Archives 302 归为 `auth_flow_not_completed_in_bound_context`。
+  - 档案中心编排：ATO / 登录异常必须把 `archives_user_profile` + `archives_user_analysis` 纳入 source plan，用来补账号状态、改密 / 保护账号、发布、关注、资料变更等后置行为闭环；异常发布 / 色导 / 导流优先计划 `archives_photo_search` + profile + analysis；黑产扩散 / 同设备计划 `archives_related_users` + profile，并交叉登录日志和 Track 活跃与数据可用性。
+  - 档案中心是关键证据项但非硬阻塞项：`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 必须进入 `source_quality` / `missing_evidence` / partial evidence，不能中断回答，也不能作为低风险或无风险反证。
+  - 扩散边界：`archives_related_users` / 同设备关系只说明候选扩散链路，不能直接定性团伙；必须再看行为、策略、设备和时间线一致性。
   - 策略命中 / 策略树 / 事件详情 / feature list 不能混用：策略命中只是辅助线索，`rcp_policy_tree_lookup` 只解释策略资产，不证明单案命中路径。
+  - Track 表述：当前 v1 裸问优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；历史 `track_analysis_summary` 只作为 Track 活跃画像泛化能力描述，避免混成当前 action 名。
+  - 未稳定 source：private message、资料四件套 / 过往四项、related_devices 等不作为默认已验证 source；只有已有稳定接口、显式 source plan 或用户补充线索时，才写“可进一步查看”。
   - 风控实体字段 `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 可在内部研判和 source chaining 保留；cookie/token/session/header/password、手机号、身份证、姓名、地址严禁输出或保存。
 - `frontend_activity_read` 是早期 stats-first / frontend activity 抽象；当前优先使用 `track_analysis_activity_profile_api_direct` 作为低成本 realtime readonly platform source。
 - `track_analysis_activity_profile_api_direct` 支持：

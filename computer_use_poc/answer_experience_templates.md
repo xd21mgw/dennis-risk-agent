@@ -169,6 +169,13 @@ browser_backed_fixed_actions_v1_routing:
 - `auth_failed` / `blocked` / Archives 302: 归入 `auth_flow_not_completed_in_bound_context` 或相应 source gap，不得直接说用户无权限或平台不可用。
 - 策略命中、策略树、事件详情、feature list 分层输出；不得把 `rcp_policy_tree_lookup` 当作 event hit path。
 
+裸问表达保持原模板，但正文主线要收敛：
+
+- ATO / 登录异常：先讲控制权变化，再讲异常行为闭环，最后讲扩散 / 策略 / Track 活跃与数据可用性佐证。
+- 异常发布 / 导流：先讲内容动作与承接链路，再讲账号状态和发布前后操作。
+- 账号扩散 / 同设备：只写候选关联和交叉验证，不写团伙结论。
+- 避免把日常裸问写成接口说明书；action 名保留在 `source_plan` / `actions`，正文优先解释证据用途和边界。
+
 账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
 
 ```yaml
@@ -215,6 +222,10 @@ account_security_browser_backed_source_plan:
 ```
 
 `bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 输出标准 source card。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须归一成含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false` 的 browser-backed source result，不得输出未标准化 parse error。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
+
+Track 命名边界：v1 裸问中优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；如果引用历史 `track_analysis_summary`，应描述为 Track 活跃画像的泛化能力，不把它当作当前 v1 readiness action 名。
+
+未稳定 source 边界：`archives_private_message_search`、`archives_past_four_items`、资料四件套 / 过往四项、`archives_related_devices` 等不作为默认已验证 source；只在已有稳定接口、显式 source plan 或用户补充线索时写“可进一步查看”，不得声明已进入默认主链。
 
 ### ATO Source Priority / Access Method Output
 
@@ -2147,6 +2158,9 @@ D. 先不要执行，只优化计划
 - 风险研判必须显式说明 `data_freshness / data_window`：关键异常时间是否被当前在线日志可靠窗口覆盖。
 - 统一登录日志在线 API 按约 7 天可靠窗口处理；超窗时在线 API `no_data` / 无 LOGIN 事件只能作为数据缺口，不能作为“无登录”或“无异设备登录”的证据。
 - no_data 不仅不等于无风险，也不等于无登录；当异常时间超过在线窗口时，要标记 `login_log_window_incomplete`、`offline_hive_required`、`online_login_log_may_be_false_negative`。
+- 档案中心在 ATO / 登录异常 / 黑产详情 / 异常发布 / 扩散分析中是默认 source plan 的关键证据项：ATO 看 `archives_user_profile` + `archives_user_analysis` 补账号状态和后置行为闭环；异常发布 / 色导 / 导流看 `archives_photo_search` + profile + analysis；扩散 / 同设备看 `archives_related_users` + profile 后再交叉登录日志和 Track 活跃与数据可用性。
+- 档案中心不是失败即阻塞的硬必跑项。`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 必须进入 `source_quality` 和 `missing_evidence`，输出 partial evidence；不得把档案中心失败、photo no_data 或 profile 正常写成低风险 / 无风险反证。
+- private message、资料四件套、过往四项、`related_devices` 等未稳定 source 不写成默认已验证 source；只能写“如已有稳定接口、明确线索或用户补充信息，再进一步查看”。
 - Device SDK riskData 返回 Hook / root / frida / simulator / proxy / repack 等标签时，只能表达为设备环境异常证据；即使 Hook level=50 这类高严重度标签出现，也不能单独定性用户作弊或盗号。
 - 设备异常 + 账号异常 + 登录链路异常组合后，才可以提升风险支持等级。
 

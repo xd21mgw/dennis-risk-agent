@@ -121,6 +121,14 @@ Rules:
 | RCP 事件归因 / 为什么这个 event 被打 | `single_event_policy_attribution` | `rcp_event_detail` -> `rcp_event_feature_list` | partial feature list 只能做 feature-group 摘要，不声称完整 |
 | 策略资产治理 / 策略树解释 | `policy_tree_asset_lookup` | `rcp_policy_tree_lookup` | policy tree 是策略资产治理，不是 event hit path |
 
+档案中心编排规则：
+
+- ATO / 登录异常单案默认 source plan 必须包含 `archives_user_profile` 和 `archives_user_analysis`，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等后置行为闭环；`login_logs_search` 只覆盖登录侧，不能单源强判或排除 ATO。
+- 异常发布 / 色导 / 导流 / 内容承接默认优先计划 `archives_photo_search`、`archives_user_profile`、`archives_user_analysis`；`archives_photo_search no_data` 只代表当前查询条件下未见结果，不代表无异常发布。
+- 黑产账号 / 扩散 / 同设备分析默认计划 `archives_related_users` 和 `archives_user_profile`，再与 `login_logs_search`、`track_analysis_check_data_ready` 交叉；同设备只是一层扩散线索，不是团伙结论。
+- 档案中心是关键证据项，但不是失败即阻塞的硬必跑项。`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 必须进入 `source_quality` 和 `missing_evidence`，输出 partial evidence，不得当低风险 / 无风险反证。
+- private message、资料四件套、过往四项、`related_devices` 等未稳定 source 不默认写成已验证 source；只有已有稳定接口、明确线索或用户补充信息时，才作为 follow-up source。
+
 反向路由边界：
 
 - 只问“策略树 / 节点 / 这条策略挂在哪”时，不跳到 `rcp_event_detail`。

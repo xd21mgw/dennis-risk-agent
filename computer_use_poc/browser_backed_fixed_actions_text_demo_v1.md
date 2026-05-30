@@ -16,16 +16,16 @@ This is an offline text demo. It does not start the browser-backed service, acce
 - expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`
 - expected_orchestration: ATO multi-source plan, not login logs only.
 - actual_source_plan_or_template: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`
-- expected_boundary_flags: `single_source_not_enough_for_ato, no_data_not_risk_exclusion`
-- actual_boundary_flags: `login_no_data_or_window_gap_not_ato_exclusion, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
-- should_not_do: `do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality`
+- expected_boundary_flags: `single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking`
+- actual_boundary_flags: `login_no_data_or_window_gap_not_ato_exclusion, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
+- should_not_do: `do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality`
 - pass: `true`
 - issue_if_failed: none
 - fix_applied: none
 
 Dennis_answer_draft:
 
-我会先按显式 source_plan 做 ATO 研判，不自动执行平台查询：login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready。登录日志用于看可见窗口内的登录时间、IP、设备和方式；档案账号画像用于确认账号当前状态和注册/状态基线；档案用户分析用于补最近操作和风险日志；Track checkDataReady 只验证设备维度数据是否可读。即使某个 source no_data，也只写入 source_quality，不能直接排除 ATO；最终只能在证据齐备后给倾向，不做单源定性。
+我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready。先看登录链路是否有新设备、异地、验证或 token 变化；再用档案用户分析对齐改密、发布、关注等后置动作；最后只把 Track 活跃与数据可用性、策略命中当旁证。no_data 只进 source_quality，不能排除 ATO。档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。
 
 ## BBFA-DEMO-002
 
@@ -42,7 +42,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-不能。这里的 source_plan 是 login_logs_search，它只能回答在线窗口和查询条件下是否有可见登录记录。no_data 代表当前 source 没返回记录，不代表没有登录、没有异常设备，也不代表没有 ATO。如果投诉或异常时间超出在线窗口，需要把 window gap 写进 missing_evidence，并用档案操作、账号画像或后续离线授权来源补证。
+不能。source_plan：login_logs_search。它只能说明在线窗口和当前条件下没有可见登录记录。no_data 不是无风险反证；如果客诉时间超窗，必须写 window gap。后续要用账号操作、账号画像或经授权的离线来源补控制权变化链路。
 
 ## BBFA-DEMO-003
 
@@ -59,7 +59,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-我会把这个问题收敛到账号基线 source_plan：archives_user_profile。重点看账号状态、注册/资料状态、标签或风险信息摘要，用来判断当前账号画像是否有明显背景线索。但画像是静态/近实时基线，不等于行为链路；不能仅凭账号状态正常或异常就给最终风险结论。
+这个裸问只看账号基线，source_plan：archives_user_profile。重点是账号状态、注册/资料状态和风险摘要，用来判断背景线索。画像正常不等于本人操作，画像异常也不等于风险定性；行为链路要另补。
 
 ## BBFA-DEMO-004
 
@@ -76,7 +76,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-我会把 source_plan 收敛为档案中心用户分析：archives_user_analysis。它负责看最近操作和风险日志摘要，重点关注登录、改密、保护账号、冻结、直播/发布相关操作和时间分布。如果响应过大，只能输出 partial_observation_available：说明可以看到部分结构、计数或时间范围，但不能声称完整明细覆盖。下一步应缩短时间窗、降低 pageSize 或分页复查；raw records 不输出。
+这个问题收敛到操作时间线，source_plan：archives_user_analysis。重点看登录、改密、保护账号、冻结、直播/发布等动作是否能串成异常行为闭环。大响应只写 partial_observation_available，不能声称完整覆盖；raw records 不输出。
 
 ## BBFA-DEMO-005
 
@@ -84,16 +84,16 @@ Dennis_answer_draft:
 - expected_source_plan: `archives_photo_search -> archives_user_profile -> archives_user_analysis`
 - expected_orchestration: Publish/content branch with photo search, profile baseline, and user analysis.
 - actual_source_plan_or_template: `archives_photo_search -> archives_user_profile -> archives_user_analysis`
-- expected_boundary_flags: `photo_search_no_data_not_abnormal_publish_exclusion`
-- actual_boundary_flags: `photo_search_no_data_not_abnormal_publish_exclusion, publish_chain_missing_evidence_must_be_explicit, source_quality_required`
-- should_not_do: `do_not_output_no_abnormal_publish_from_photo_no_data, do_not_make_final_judgement`
+- expected_boundary_flags: `photo_search_no_data_not_abnormal_publish_exclusion, archives_failure_enters_partial_evidence`
+- actual_boundary_flags: `photo_search_no_data_not_abnormal_publish_exclusion, archives_failure_enters_partial_evidence, publish_chain_missing_evidence_must_be_explicit, source_quality_required`
+- should_not_do: `do_not_output_no_abnormal_publish_from_photo_no_data, do_not_use_archives_no_data_as_no_risk, do_not_make_final_judgement`
 - pass: `true`
 - issue_if_failed: none
 - fix_applied: none
 
 Dennis_answer_draft:
 
-这个问题走发布/内容承接 source_plan：archives_photo_search -> archives_user_profile -> archives_user_analysis。photo_search 看作品/举报/发布线索，账号画像看当前账号状态，用户分析补发布前后的登录、改密、风控操作时间线。photo_search no_data 不能写成没有异常发布，只能说明该 source 在当前条件下未返回线索；最终需要结合操作链路和其他证据。
+导流/异常发布按“内容动作 -> 账号状态 -> 发布前后操作”看，source_plan：archives_photo_search -> archives_user_profile -> archives_user_analysis。先找作品/举报/发布线索，再看账号基线，最后对齐发布前后的登录、改密和风控操作。photo_search no_data 或档案中心失败都不能排除异常发布，只能作为当前条件下的 source_quality。
 
 ## BBFA-DEMO-006
 
@@ -101,16 +101,16 @@ Dennis_answer_draft:
 - expected_source_plan: `archives_related_users -> archives_user_profile -> login_logs_search -> track_analysis_check_data_ready`
 - expected_orchestration: Same-device relation is an expansion clue with cross-source validation.
 - actual_source_plan_or_template: `archives_related_users -> archives_user_profile -> login_logs_search -> track_analysis_check_data_ready`
-- expected_boundary_flags: `related_users_not_gang_conclusion`
-- actual_boundary_flags: `related_users_not_gang_conclusion, same_device_relation_requires_cross_source_validation, source_quality_required`
-- should_not_do: `do_not_label_gang_from_same_device_only, do_not_bulk_expand_without_plan`
+- expected_boundary_flags: `related_users_not_gang_conclusion, archives_related_users_spread_clue_not_gang`
+- actual_boundary_flags: `related_users_not_gang_conclusion, archives_related_users_spread_clue_not_gang, archives_failure_enters_partial_evidence, same_device_relation_requires_cross_source_validation, source_quality_required`
+- should_not_do: `do_not_label_gang_from_same_device_only, do_not_claim_archives_related_users_gang, do_not_bulk_expand_without_plan`
 - pass: `true`
 - issue_if_failed: none
 - fix_applied: none
 
 Dennis_answer_draft:
 
-我会把同设备当扩散线索处理，source_plan 是 archives_related_users -> archives_user_profile -> login_logs_search -> track_analysis_check_data_ready。archives_related_users 只说明同设备关系或候选关联账号，后续要用账号画像、登录日志和 Track readiness 验证设备/时间/行为是否一致。不能因为同设备就直接写团伙，也不能无计划批量扩散。
+同设备只进入扩散/佐证层，source_plan：archives_related_users -> archives_user_profile -> login_logs_search -> track_analysis_check_data_ready。它能给候选关联账号，但不能直接写团伙。需要再用账号画像、登录日志和 Track 活跃与数据可用性验证设备、时间和行为是否一致；档案中心失败时输出 partial evidence。
 
 ## BBFA-DEMO-007
 
@@ -127,7 +127,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-这个是 RCP 事件归因，不是策略树资产查询，source_plan 是 rcp_event_detail -> rcp_event_feature_list。先用 event detail 确认事件时间、策略命中、反馈和关键实体；再用 feature list 看特征分组/可用部分观察。策略命中只能说明这个事件触发了某些策略条件，不能单独推导用户最终风险。
+这是事件归因，不是策略树资产查询，source_plan：rcp_event_detail -> rcp_event_feature_list。先用 event detail 锚定事件时间、反馈和关键实体，再用 feature list 做可用特征摘要。策略命中只能作为事件层证据，不能单独推导用户风险。
 
 ## BBFA-DEMO-008
 
@@ -144,7 +144,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-不能说明完整特征。source_plan 是 rcp_event_detail -> rcp_event_feature_list，partial_observation_available 只能作为部分观察。可以引用 feature group、估算计数、关键实体和 source_quality.large_response_limited，但要明确 raw feature values 和完整明细不可见。如果需要完整覆盖，需要更窄查询或专门的有界提取，不应把 partial 升级成强证据。
+不能说明完整特征。source_plan：rcp_event_detail -> rcp_event_feature_list。partial_observation_available 只能做部分观察。可引用 feature group、计数和关键实体摘要，但不能输出 raw feature values，也不能升级成强证据。
 
 ## BBFA-DEMO-009
 
@@ -161,7 +161,7 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-这个走策略资产治理，不是单案事件归因，source_plan 是 rcp_policy_tree_lookup。policyTree lookup 用来解释 policyCode 所在策略树、版本和节点上下文，帮助理解策略资产关系。它不能证明某个 user_id 或 eventId 实际命中过该策略；事件命中要回到 rcp_event_detail / feature list 或策略命中入口。
+这个只走策略资产治理，source_plan：rcp_policy_tree_lookup。policyTree lookup 解释策略树、版本和节点上下文。它不是 event hit path，不能证明某个用户或事件实际命中；命中证据要回到事件详情或策略命中入口。
 
 ## BBFA-DEMO-010
 
@@ -178,4 +178,4 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-不能直接定性。source_plan 是 rcp_event_detail -> rcp_event_feature_list，策略命中只是一类辅助证据。我会先看事件详情和 feature list 的可用观察，再把登录日志、账号画像、用户操作或发布链路作为交叉验证。如果只有策略命中，没有时间线、行为链和 source_quality 支撑，只能输出风险线索或待补证，不能给最终处置结论。
+不能直接定性。source_plan：rcp_event_detail -> rcp_event_feature_list，只解决事件层上下文；策略命中只是辅助证据。风险结论还要回到控制权变化、异常行为闭环和账号/设备/发布链路的交叉验证。没有 source_quality 支撑时，只能写线索和待补证。

@@ -228,3 +228,66 @@ cases:
     expected_boundary_flags: [credential_secret_forbidden, raw_dump_forbidden, pii_strict_forbidden]
     should_not_do: [do_not_output_cookie, do_not_output_raw_login_records, do_not_output_raw_labelInfo]
     expected_answer_contract: [final_answer_boundary, redaction_applied]
+  - id: BBFA-V1-032
+    user_query: "裸问帮我判断这个 user_id 是否 ATO，别写成接口说明书"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Use control-change -> abnormal-behavior-closure -> spread/strategy-support as the answer mainline."
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion]
+    should_not_do: [do_not_answer_like_interface_manual, do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-033
+    user_query: "Track summary 和 track_analysis_check_data_ready 命名怎么区分，当前 v1 怎么写"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Current v1 wording uses track_analysis_check_data_ready / Track 活跃与数据可用性; historical Track summary remains a generic capability description."
+    expected_boundary_flags: [track_v1_name_check_data_ready, track_summary_is_generic_capability_not_current_action_name, track_check_data_ready_not_risk_conclusion]
+    should_not_do: [do_not_mix_track_summary_with_check_data_ready, do_not_make_device_risk_judgement_from_readiness]
+    expected_answer_contract: [source_plan, source_quality_matrix, final_answer_boundary]
+  - id: BBFA-V1-034
+    user_query: "私信、资料四件套、过往四项和 related_devices 能不能默认当已验证 source"
+    expected_route_or_actions: []
+    expected_orchestration: "Unstable or not-default sources stay follow-up only; use only when a stable interface or user-provided clue exists."
+    expected_boundary_flags: [unstable_source_not_default_verified, default_runtime_routing_false]
+    should_not_do: [do_not_claim_private_message_live_verified, do_not_claim_past_four_items_live_verified, do_not_make_unstable_source_default]
+    expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-035
+    user_query: "ATO 单案不要只查 login_logs_search，必须纳入档案中心用户首页和用户分析"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "ATO source plan includes login logs plus Archives profile/analysis and Track readiness; login logs alone cannot strong-judge or exclude ATO."
+    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence]
+    should_not_do: [do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-036
+    user_query: "档案中心 auth_failed 时继续输出 partial evidence，不要中断回答"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Archives auth_failed is source_quality and missing_evidence; output partial evidence without auth repair."
+    expected_boundary_flags: [auth_flow_not_completed_in_bound_context, archives_failure_enters_partial_evidence, partial_evidence_required]
+    should_not_do: [do_not_stop_on_archives_auth_failed, do_not_auth_repair, do_not_say_no_permission_without_permission_response]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-037
+    user_query: "档案中心 no_data 能不能当作低风险或无异常反证"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Archives no_data only describes the current query condition; it is not a low-risk counter-evidence."
+    expected_boundary_flags: [archives_no_data_not_risk_exclusion, archives_failure_enters_partial_evidence, partial_evidence_required]
+    should_not_do: [do_not_use_archives_no_data_as_no_risk, do_not_output_low_risk_from_no_data]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-038
+    user_query: "异常发布/色导导流场景 source plan 必须优先看作品、账号状态和用户分析"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Abnormal publish/diversion plan starts with Archives photo search, profile, and user analysis."
+    expected_boundary_flags: [photo_search_no_data_not_abnormal_publish_exclusion, archives_failure_enters_partial_evidence]
+    should_not_do: [do_not_output_no_abnormal_publish_from_photo_no_data, do_not_use_archives_no_data_as_no_risk]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-039
+    user_query: "黑产账号扩散同设备分析，related_users 能不能直接定性团伙"
+    expected_route_or_actions: [archives_related_users, archives_user_profile, login_logs_search, track_analysis_check_data_ready]
+    expected_orchestration: "Archives related users is a spread clue; cross-check profile, login logs, Track readiness, behavior, strategy, and timeline."
+    expected_boundary_flags: [related_users_not_gang_conclusion, archives_related_users_spread_clue_not_gang, archives_failure_enters_partial_evidence]
+    should_not_do: [do_not_label_gang_from_same_device_only, do_not_claim_archives_related_users_gang]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-040
+    user_query: "private message、资料四件套、过往四项、related_devices 要不要默认声明成已验证必跑 source"
+    expected_route_or_actions: []
+    expected_orchestration: "Unstable Archives sources remain follow-up only unless a stable interface or explicit clue exists."
+    expected_boundary_flags: [unstable_source_not_default_verified, default_runtime_routing_false]
+    should_not_do: [do_not_claim_private_message_live_verified, do_not_claim_past_four_items_live_verified, do_not_default_unstable_archives_sources]
+    expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
