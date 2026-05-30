@@ -101,9 +101,9 @@ account_security_browser_backed_sequence:
       mode: account_security_user_device_graph_with_conditional_riskData
       riskData_trigger_device_prefix:
         - ANDROID_
-        - IOS_
+        - HARMONY_
     boundary:
-      - riskData 仅在 graphData 保留 raw ANDROID_/IOS_ device_id safe handle 后执行
+      - riskData 仅在 graphData 保留 raw Android/Harmony/UUID-like/long non-numeric device_id safe handle 后执行
       - raw device_id 缺失时标 missing_required_fields/not_checked，不伪装 completed
       - riskData 的标签摘要进入 evidence card，raw labelInfo / originalLog 不输出
   - source_name: user_login_unified_log

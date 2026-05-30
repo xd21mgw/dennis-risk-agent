@@ -73,7 +73,7 @@ ACTION_TO_SOURCE = {
 }
 
 ACCOUNT_SECURITY_TRACK_SUB_INTERFACES = ("profile", "getUseDuration", "getDeviceIds", "getLastestDateTime")
-ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "IOS_")
+ACCOUNT_SECURITY_RISKDATA_DEVICE_PREFIXES = ("ANDROID_", "HARMONY_")
 TRACK_ANALYSIS_BUNDLE_SOURCE_NAME = "track_analysis_account_security_bundle"
 TRACK_ANALYSIS_BUNDLE_MODE = "account_security_bundle"
 TRACK_ANALYSIS_CHECK_DATA_READY_FIXED_PATH = "/dp/platform/app/analytics/v2/sequence/checkDataReady"
@@ -1876,6 +1876,7 @@ def _parse_weapon_inventory_passthrough(
     device_ids, user_ids = _extract_weapon_graph_entities(point_info_map, relation_edges)
     risk = _extract_weapon_risk_container(body)
     risk_summary = _extract_weapon_risk_summary(risk if risk is not None else body)
+    chain_status = _extract_weapon_chain_status(body)
     graph_present = isinstance(graph, Mapping) and ("pointInfoMap" in graph or "relationEdgeList" in graph)
     point_count = len(point_info_map) if isinstance(point_info_map, Mapping) else 0
     edge_count = len(relation_edges)
@@ -1883,12 +1884,16 @@ def _parse_weapon_inventory_passthrough(
     has_graph_data = point_count > 0 or edge_count > 0
     has_risk_data = risk_summary["risk_item_count"] > 0 or risk_summary["risk_label_count"] > 0 or risk_summary["userLevel_observed"]
     source_status = "completed" if has_graph_data or has_risk_data else "no_data"
+    risk_data_status = _weapon_risk_data_status(chain_status, risk_present, has_risk_data)
 
     return {
         "source_name": source_name,
         "source_status": source_status,
         "entity": _extract_passthrough_entity(body),
         "graph_status": "completed" if has_graph_data else ("no_data" if graph_present else "not_present"),
+        "weapon_chain_graphData_status": chain_status.get("graphData_status"),
+        "weapon_chain_riskData_status": chain_status.get("riskData_status"),
+        "weapon_chain_selected_device_count": chain_status.get("selected_device_count"),
         "pointInfoMap_present": point_info_map_present,
         "pointInfoMap_count": point_count,
         "relationEdgeList_present": relation_edge_list_present,
@@ -1897,7 +1902,7 @@ def _parse_weapon_inventory_passthrough(
         "related_user_count": len(user_ids),
         "device_id_samples": [_safe_display_value("device_id", value, DEFAULT_OUTPUT_SCOPE) for value in device_ids[:5]],
         "user_id_samples": [_safe_display_value("user_id", value, DEFAULT_OUTPUT_SCOPE) for value in user_ids[:5]],
-        "riskData_status": "completed" if has_risk_data else ("no_data" if risk_present else "not_executed"),
+        "riskData_status": risk_data_status,
         "risk_item_count": risk_summary["risk_item_count"],
         "risk_label_count": risk_summary["risk_label_count"],
         "risk_group_names_observed": risk_summary["risk_group_names_observed"],
@@ -2291,6 +2296,10 @@ def _extract_weapon_graph_container(body: Any) -> Mapping[str, Any]:
         graph_data = candidate.get("graphData")
         if isinstance(graph_data, Mapping) and ("pointInfoMap" in graph_data or "relationEdgeList" in graph_data):
             return graph_data
+        if isinstance(graph_data, Mapping) and isinstance(graph_data.get("data"), Mapping):
+            data = graph_data["data"]
+            if "pointInfoMap" in data or "relationEdgeList" in data:
+                return data
     return {}
 
 
@@ -2304,7 +2313,11 @@ def _extract_weapon_relation_edges(graph: Any) -> list[Mapping[str, Any]]:
 
 
 def _extract_weapon_risk_container(body: Any) -> Optional[Any]:
+    if isinstance(body, Mapping) and "riskDataResults" in body:
+        return body.get("riskDataResults")
     for candidate in _candidate_mappings(body):
+        if "riskDataResults" in candidate:
+            return candidate.get("riskDataResults")
         risk_data = candidate.get("riskData")
         if risk_data is not None:
             return risk_data
@@ -2317,7 +2330,7 @@ def _candidate_mappings(body: Any) -> list[Mapping[str, Any]]:
     candidates: list[Mapping[str, Any]] = []
     if isinstance(body, Mapping):
         candidates.append(body)
-        for key in ("payload", "data", "result", "body"):
+        for key in ("payload", "data", "result", "body", "graphData", "riskData", "weapon_chain"):
             child = body.get(key)
             if isinstance(child, Mapping):
                 candidates.extend(_candidate_mappings(child))
@@ -2339,11 +2352,17 @@ def _extract_weapon_graph_entities(
             user_ids.append(value)
 
     for node_key, node_value in point_info_map.items():
-        add_entity("pointInfoMap.key", node_key)
+        node_type = _weapon_node_type(node_value)
+        add_entity(node_type or "pointInfoMap.key", node_key)
         if isinstance(node_value, Mapping):
             for nested_key, nested_value in node_value.items():
+                if str(nested_key) in {"entityType", "nodeType", "type", "groupKey", "dimKey"}:
+                    continue
+                if not _is_weapon_identifier_field(str(nested_key)):
+                    continue
                 if isinstance(nested_value, (str, int)):
-                    add_entity(str(nested_key), nested_value)
+                    key_hint = node_type if node_type and str(nested_key).lower() in {"id", "value", "key"} else str(nested_key)
+                    add_entity(key_hint, nested_value)
     for edge in relation_edges:
         for edge_key, edge_value in edge.items():
             if isinstance(edge_value, (str, int)):
@@ -2357,6 +2376,14 @@ def _classify_weapon_entity(key: str, value: Any) -> Optional[str]:
     lowered_key = key.lower()
     if not text:
         return None
+    if "device_id" in lowered_key or lowered_key in {"device", "deviceid", "did", "didlist"}:
+        return "device_id"
+    if lowered_key in {"device_id", "dim_device_id", "device_node", "type:device_id"}:
+        return "device_id"
+    if "user_id" in lowered_key or lowered_key in {"uid", "userid", "user"}:
+        return "user_id" if text.isdigit() else None
+    if lowered_key in {"type:user_id", "user_node"}:
+        return "user_id" if text.isdigit() else None
     if "user" in lowered_key or lowered_key in {"uid", "userid"}:
         return "user_id" if text.isdigit() else None
     if "device" in lowered_key or lowered_key in {"did", "didlist"}:
@@ -2368,15 +2395,86 @@ def _classify_weapon_entity(key: str, value: Any) -> Optional[str]:
     return None
 
 
+def _weapon_node_type(node_value: Any) -> Optional[str]:
+    if not isinstance(node_value, Mapping):
+        return None
+    for key in ("entityType", "nodeType", "type", "groupKey", "dimKey"):
+        value = node_value.get(key)
+        if not isinstance(value, str):
+            continue
+        normalized = value.strip().upper()
+        if normalized in {"DEVICE_ID", "DEVICE", "DID"}:
+            return "type:device_id"
+        if normalized in {"USER_ID", "USER", "UID"}:
+            return "type:user_id"
+    return None
+
+
+def _is_weapon_identifier_field(key: str) -> bool:
+    lowered = key.lower()
+    return lowered in {
+        "id",
+        "value",
+        "key",
+        "entityid",
+        "entity_id",
+        "userid",
+        "user_id",
+        "uid",
+        "deviceid",
+        "device_id",
+        "did",
+        "didlist",
+    }
+
+
 def _looks_like_weapon_device_id(value: str) -> bool:
     text = str(value)
-    if text.startswith(("ANDROID_", "IOS_", "web_")):
+    if text.isdigit():
+        return False
+    if text.startswith(("ANDROID_", "HARMONY_")):
+        return True
+    # Legacy compatibility only. Current Weapon docs/tests use Android/Harmony,
+    # raw UUID-like IDs, or long non-numeric IDs as the canonical device shapes.
+    if text.startswith(("IOS_", "web_")):
         return True
     if re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", text):
         return True
     if re.fullmatch(r"[0-9A-Fa-f]{16,64}", text):
         return True
+    if len(text) >= 16 and re.fullmatch(r"[A-Za-z0-9._:-]+", text) and re.search(r"[A-Za-z]", text):
+        return True
     return False
+
+
+def _extract_weapon_chain_status(body: Any) -> Dict[str, Any]:
+    chain = None
+    if isinstance(body, Mapping):
+        chain = body.get("weapon_chain")
+    if not isinstance(chain, Mapping):
+        return {}
+    return {
+        "graphData_status": _safe_display_value("status", chain.get("graphData_status"), DEFAULT_OUTPUT_SCOPE)
+        if chain.get("graphData_status") is not None
+        else None,
+        "riskData_status": _safe_display_value("status", chain.get("riskData_status"), DEFAULT_OUTPUT_SCOPE)
+        if chain.get("riskData_status") is not None
+        else None,
+        "selected_device_count": chain.get("selected_device_count") if isinstance(chain.get("selected_device_count"), int) else None,
+    }
+
+
+def _weapon_risk_data_status(chain_status: Mapping[str, Any], risk_present: bool, has_risk_data: bool) -> str:
+    if has_risk_data:
+        return "completed"
+    chain_value = chain_status.get("riskData_status") if isinstance(chain_status, Mapping) else None
+    if isinstance(chain_value, str) and chain_value:
+        if chain_value in {"completed", "no_data", "not_executed", "not_executed_no_result", "missing_device_reference"}:
+            return chain_value
+        return str(chain_value)
+    if risk_present:
+        return "no_data"
+    return "not_executed"
 
 
 def _extract_weapon_risk_summary(risk_body: Any) -> Dict[str, Any]:
@@ -3933,7 +4031,7 @@ def _mask_risk_entity(key: str, value: str) -> str:
     if "ip" in lowered or re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", text):
         parts = text.split(".")
         return f"{parts[0]}.{parts[1]}.*.*" if len(parts) == 4 else "[masked_ip]"
-    if "device" in lowered or "did" in lowered or text.startswith(("ANDROID_", "IOS_")):
+    if "device" in lowered or "did" in lowered or text.startswith(("ANDROID_", "HARMONY_", "IOS_")):
         return f"[masked_device_id:length={len(text)}]"
     if "user" in lowered or lowered == "uid":
         return f"[masked_user_id:length={len(text)}]"
@@ -6210,12 +6308,12 @@ def run_fixture_tests() -> Dict[str, Any]:
             "graphData": {
                 "pointInfoMap": {
                     "2871834924": {"id": "2871834924", "entityType": "USER_ID"},
-                    "ANDROID_weapon_device_001": {"id": "ANDROID_weapon_device_001", "entityType": "DEVICE_ID"},
-                    "IOS_weapon_device_002": {"id": "IOS_weapon_device_002", "entityType": "DEVICE_ID"},
+                    "ANDROID_c081c29a506f9db1": {"id": "ANDROID_c081c29a506f9db1", "entityType": "DEVICE_ID"},
+                    "HARMONY_weapon_device_002": {"id": "HARMONY_weapon_device_002", "entityType": "DEVICE_ID"},
                 },
                 "relationEdgeList": [
-                    {"source": "2871834924", "target": "ANDROID_weapon_device_001"},
-                    {"source": "2871834924", "target": "IOS_weapon_device_002"},
+                    {"source": "2871834924", "target": "ANDROID_c081c29a506f9db1"},
+                    {"source": "2871834924", "target": "HARMONY_weapon_device_002"},
                 ],
             }
         }
@@ -6229,8 +6327,86 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert weapon_graph_observation["relationEdgeList_count"] == 2
     assert weapon_graph_observation["related_device_count"] == 2
     assert weapon_graph_observation["related_user_count"] == 1
+    assert weapon_graph_observation["device_id_samples"] == [
+        "ANDROID_c081c29a506f9db1",
+        "HARMONY_weapon_device_002",
+    ]
+    assert weapon_graph_observation["user_id_samples"] == ["2871834924"]
     assert weapon_graph_observation["raw_body_suppressed"] is True
     results.append(("weapon_passthrough_graphData_normalized", "passed"))
+
+    weapon_live_wrapper_body = {
+        "graphData": {
+            "code": 1,
+            "msg": "ok",
+            "data": {
+                "pointInfoMap": {
+                    "2871834924": {"type": "USER_ID", "weight": 1},
+                    "0D215351-9A1D-681A-BF82-6DF9E639E126": {"type": "DEVICE_ID", "weight": 1},
+                },
+                "relationEdgeList": [
+                    {
+                        "source": "2871834924",
+                        "target": "0D215351-9A1D-681A-BF82-6DF9E639E126",
+                        "id": "edge_001",
+                    }
+                ],
+            },
+        },
+        "riskDataResults": [],
+        "weapon_chain": {
+            "graphData_status": "completed",
+            "riskData_status": "no_data",
+            "selected_device_count": 1,
+        },
+    }
+    weapon_live_wrapper_observation = parse_passthrough_response("weapon_inventory", weapon_live_wrapper_body)
+    assert weapon_live_wrapper_observation["source_status"] == "completed"
+    assert weapon_live_wrapper_observation["graph_status"] == "completed"
+    assert weapon_live_wrapper_observation["pointInfoMap_present"] is True
+    assert weapon_live_wrapper_observation["pointInfoMap_count"] == 2
+    assert weapon_live_wrapper_observation["relationEdgeList_present"] is True
+    assert weapon_live_wrapper_observation["relationEdgeList_count"] == 1
+    assert weapon_live_wrapper_observation["related_user_count"] == 1
+    assert weapon_live_wrapper_observation["related_device_count"] == 1
+    assert weapon_live_wrapper_observation["riskData_status"] == "no_data"
+    assert weapon_live_wrapper_observation["weapon_chain_selected_device_count"] == 1
+    assert weapon_live_wrapper_observation["device_id_samples"] == ["0D215351-9A1D-681A-BF82-6DF9E639E126"]
+    assert weapon_live_wrapper_observation["user_id_samples"] == ["2871834924"]
+    results.append(("weapon_passthrough_live_wrapper_graphData_normalized", "passed"))
+
+    weapon_data_wrapper_observation = parse_passthrough_response(
+        "weapon_inventory",
+        {
+            "data": {
+                "pointInfoMap": {
+                    "2871834924": {"entityType": "USER_ID"},
+                    "ANDROID_weapon_device_003": {"entityType": "DEVICE_ID"},
+                },
+                "relationEdgeList": [{"source": "2871834924", "target": "ANDROID_weapon_device_003"}],
+            }
+        },
+    )
+    assert weapon_data_wrapper_observation["graph_status"] == "completed"
+    assert weapon_data_wrapper_observation["pointInfoMap_count"] == 2
+    assert weapon_data_wrapper_observation["relationEdgeList_count"] == 1
+    results.append(("weapon_passthrough_data_wrapper_graphData_normalized", "passed"))
+
+    weapon_long_generic_device_observation = parse_passthrough_response(
+        "weapon_inventory",
+        {
+            "pointInfoMap": {
+                "2871834924": {"type": "USER_ID"},
+                "genericDeviceAlpha1234567890": {"type": "DEVICE_ID"},
+            },
+            "relationEdgeList": [{"source": "2871834924", "target": "genericDeviceAlpha1234567890"}],
+        },
+    )
+    assert weapon_long_generic_device_observation["related_user_count"] == 1
+    assert weapon_long_generic_device_observation["related_device_count"] == 1
+    assert weapon_long_generic_device_observation["device_id_samples"] == ["genericDeviceAlpha1234567890"]
+    assert weapon_long_generic_device_observation["user_id_samples"] == ["2871834924"]
+    results.append(("weapon_passthrough_long_non_numeric_device_id_normalized", "passed"))
 
     weapon_risk_body = {
         "data": {
@@ -7036,7 +7212,7 @@ def run_fixture_tests() -> Dict[str, Any]:
     rcp_plan = account_security_source_plan[1]
     assert rcp_plan["typed_params"]["mode"] == "account_security_strategy_event_entry"
     weapon_plan = account_security_source_plan[2]
-    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "IOS_"]
+    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "HARMONY_"]
     login_plan = account_security_source_plan[3]
     assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
     expanded_account_security_plan = build_account_security_browser_backed_requests("2871834924")

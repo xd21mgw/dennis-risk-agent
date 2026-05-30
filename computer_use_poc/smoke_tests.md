@@ -7163,7 +7163,7 @@
 ## 738. Weapon device id prefix preserved
 
 - test_id: WEAPON-DEVICE-ID-PREFIX-PRESERVED-001
-- input: `ANDROID_` / `IOS_` device id before riskData.
+- input: `ANDROID_` / `HARMONY_` / UUID-like / long non-numeric device id before riskData.
 - expected_runtime_behavior: preserve_mobile_device_prefix
 - expected_output_boundary: 不得默认去掉前缀；`prefix_removed=true` 或变更后的 device_id 必须 fail。
 
