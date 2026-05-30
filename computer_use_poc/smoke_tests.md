@@ -8224,6 +8224,13 @@
 - expected_runtime_behavior: fixture_only_display_layer_enhancement
 - expected_output_boundary: completed four-source fixture must produce `evidence_summary_by_source` with Track Analysis profile/use-duration/device-count fields, RCP event/chaining-key fields, Weapon graph/risk-label fields, and Login Logs no-data window caveat; `login_logs_search no_data` must enter `missing_evidence`; RCP must not be treated as final judgement; Weapon raw `labelInfo` / `originalLog` must not appear; deviceId display follows `output_scope`; `sensitive_output=true` must still be rejected; no live platform, browser profile, `.ks_sso`, DataAgent, Hive, or raw source body access.
 
+## 875P. Browser-backed passthrough parser framework
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-PASSTHROUGH-PARSER-FRAMEWORK-001
+- input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
+- expected_runtime_behavior: explicit_passthrough_parser_path_only
+- expected_output_boundary: `BrowserBackedServiceClient.call_action(..., response_mode="passthrough")` must send `response_mode=passthrough` and parse `upstream.body` into `normalized_observation` for `track_analysis_summary` and `login_logs_search`; passthrough must not require `source_card/source_quality`; unexpected summary fields are marked but not fatal; `safety.credential_material_output!=false` fails closed; missing `upstream.body` becomes `passthrough_body_missing`; raw upstream body is suppressed; `call_account_security_sources()` default requests must not include `response_mode` and must continue using summary/compat evidence card flow.
+
 ## 875A. Archives Center browser-backed user analysis action
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-USER-ANALYSIS-001

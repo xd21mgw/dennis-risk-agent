@@ -162,9 +162,40 @@ forbidden_input_keys:
   - secret
 ```
 
+## Response Modes
+
+`compat_summary` remains the Dennis default. In this mode the browser-backed service returns display-safe `source_card` and `source_quality`, and the existing evidence card builder continues to consume the summary/compat contract.
+
+`passthrough` is an explicit parser path, not the default runtime path. Dennis calls it only when the caller passes `response_mode=passthrough` to `BrowserBackedServiceClient.call_action()`. The request body is the fixed typed params plus `response_mode: passthrough`; Dennis still rejects caller-provided URL/path/header/cookie/token/session/auth material.
+
+Passthrough service responses are expected to contain:
+
+```yaml
+ok:
+action:
+response_mode: passthrough
+upstream:
+  status:
+  content_type:
+  body:
+meta:
+  latency_ms:
+safety:
+  credential_material_output: false
+```
+
+Passthrough does not require `source_card` or `source_quality`. If those fields appear, Dennis marks `unexpected_summary_fields` but does not fail. If `safety.credential_material_output` is anything other than `false`, Dennis fails closed with `credential_material_violation`. If `upstream.body` is missing, Dennis marks `passthrough_body_missing`. The raw upstream body is never displayed or persisted as user-facing evidence; it is passed only to the Dennis parser, which emits `normalized_observation`.
+
+Phase 1 parser coverage is intentionally narrow:
+
+- `track_analysis_summary`: recognizes `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime`-style body shapes and emits counts, observed fields, sanitized samples, and `raw_body_suppressed=true`.
+- `login_logs_search`: recognizes `data.logSearchModels`, emits `records_count`, observed fields, sanitized log samples, and `raw_records_suppressed=true`.
+
+Weapon and RCP remain on the summary/compat path in this phase. Passthrough parser output is not a replacement for the current evidence card builder until a later controlled dual-run proves parity.
+
 ## Normalized Output
 
-Every service action result entering Dennis should normalize to:
+Every summary/compat service action result entering Dennis should normalize to:
 
 ```yaml
 browser_backed_source_result:
@@ -186,7 +217,7 @@ browser_backed_source_result:
   source_provenance: browser_backed_service
 ```
 
-Required service fields:
+Required summary/compat service fields:
 
 - `source_card`
 - `source_quality`

@@ -23,6 +23,10 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8787"
 DEFAULT_TIMEOUT_SECONDS = 10
+RESPONSE_MODE_COMPAT_SUMMARY = "compat_summary"
+RESPONSE_MODE_PASSTHROUGH = "passthrough"
+RESPONSE_MODES = {RESPONSE_MODE_COMPAT_SUMMARY, RESPONSE_MODE_PASSTHROUGH}
+PASSTHROUGH_PARSER_REGISTRY: Dict[str, Any] = {}
 
 ACTION_ENDPOINTS = {
     "track_analysis_summary": "/actions/track_analysis_summary",
@@ -203,6 +207,7 @@ FORBIDDEN_INPUT_KEYS = {
     "raw_query",
     "raw_body",
 }
+CONTROL_INPUT_KEYS = {"response_mode"}
 
 COMPLETED_STATUSES = {"ok", "completed"}
 NO_DATA_STATUSES = {"no_data", "completed_no_data", "completed_no_hit_for_small_window"}
@@ -284,7 +289,13 @@ class BrowserBackedServiceClient:
         self.timeout_seconds = timeout_seconds
         self.opener = opener or urllib.request.build_opener()
 
-    def call_action(self, action_name: str, typed_params: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    def call_action(
+        self,
+        action_name: str,
+        typed_params: Optional[Mapping[str, Any]] = None,
+        *,
+        response_mode: str = RESPONSE_MODE_COMPAT_SUMMARY,
+    ) -> Dict[str, Any]:
         """Call one fixed browser-backed action and normalize the response.
 
         Transport failures are returned as source results instead of escaping as
@@ -292,8 +303,12 @@ class BrowserBackedServiceClient:
         """
 
         _validate_action_name(action_name)
+        if response_mode not in RESPONSE_MODES:
+            raise BrowserBackedServiceInputError(f"unsupported browser-backed response_mode: {response_mode}")
         params = dict(typed_params or {})
         _validate_typed_params(params)
+        if response_mode == RESPONSE_MODE_PASSTHROUGH:
+            params["response_mode"] = RESPONSE_MODE_PASSTHROUGH
 
         endpoint = ACTION_ENDPOINTS[action_name]
         service_url = f"{self.base_url}{endpoint}"
@@ -347,6 +362,8 @@ class BrowserBackedServiceClient:
                 http_status=http_status,
             )
 
+        if response_mode == RESPONSE_MODE_PASSTHROUGH:
+            return normalize_passthrough_service_response(action_name, service_payload, http_status=http_status)
         return normalize_service_response(action_name, service_payload, http_status=http_status)
 
     def call_account_security_sources(
@@ -1598,6 +1615,371 @@ def normalize_service_response(
         _attach_rcp_node_bind_policy_attribution_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
 
     return normalized
+
+
+def normalize_passthrough_service_response(
+    action_name: str,
+    service_payload: Mapping[str, Any],
+    http_status: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Normalize an explicit passthrough-mode response without exposing raw body."""
+
+    _validate_action_name(action_name)
+    source_name = ACTION_TO_SOURCE[action_name]
+    latency_ms = _extract_passthrough_latency_ms(service_payload)
+    unexpected_summary_fields = [key for key in ("source_card", "source_quality") if key in service_payload]
+    upstream = service_payload.get("upstream") if isinstance(service_payload.get("upstream"), Mapping) else {}
+    upstream_summary = {
+        "status": upstream.get("status") if isinstance(upstream, Mapping) else None,
+        "content_type": upstream.get("content_type") if isinstance(upstream, Mapping) else None,
+        "body_suppressed": True,
+    }
+    base: Dict[str, Any] = {
+        "source_name": source_name,
+        "action_name": action_name,
+        "service_ok": service_payload.get("ok"),
+        "response_mode": service_payload.get("response_mode") or RESPONSE_MODE_PASSTHROUGH,
+        "http_status": http_status,
+        "latency_ms": latency_ms,
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
+        "upstream": upstream_summary,
+        "raw_body_suppressed": True,
+        "source_provenance": "browser_backed_service",
+        "sensitive_output": False,
+        "unexpected_summary_fields": unexpected_summary_fields,
+    }
+
+    safety = service_payload.get("safety") if isinstance(service_payload.get("safety"), Mapping) else {}
+    credential_material_output = safety.get("credential_material_output") if isinstance(safety, Mapping) else None
+    if credential_material_output is not False:
+        base.update(
+            {
+                "source_status": "blocked",
+                "failure_layer": "sensitive_output_policy",
+                "error_type": "credential_material_violation",
+                "credential_material_violation": True,
+                "normalized_observation": {
+                    "source_name": source_name,
+                    "source_status": "blocked",
+                    "error_type": "credential_material_violation",
+                    "raw_body_suppressed": True,
+                },
+            }
+        )
+        return base
+
+    base["safety"] = {"credential_material_output": False}
+    if not isinstance(upstream, Mapping) or "body" not in upstream or upstream.get("body") is None:
+        base.update(
+            {
+                "source_status": "parse_error",
+                "failure_layer": "parser",
+                "error_type": "passthrough_body_missing",
+                "normalized_observation": {
+                    "source_name": source_name,
+                    "source_status": "parse_error",
+                    "error_type": "passthrough_body_missing",
+                    "raw_body_suppressed": True,
+                },
+            }
+        )
+        return base
+
+    normalized_observation = parse_passthrough_response(action_name, upstream.get("body"))
+    normalized_status, failure_layer = _normalize_status(
+        str(normalized_observation.get("source_status") or "completed"),
+        normalized_observation.get("error_type"),
+    )
+    base.update(
+        {
+            "source_status": normalized_status,
+            "failure_layer": failure_layer,
+            "error_type": normalized_observation.get("error_type"),
+            "normalized_observation": normalized_observation,
+            "no_data_not_risk_exclusion": bool(normalized_observation.get("no_data_not_risk_exclusion")),
+        }
+    )
+    return base
+
+
+def parse_passthrough_response(action_name: str, upstream_body: Any) -> Dict[str, Any]:
+    """Parse passthrough upstream.body into a Dennis normalized observation."""
+
+    _validate_action_name(action_name)
+    parser = PASSTHROUGH_PARSER_REGISTRY.get(action_name)
+    if parser is None:
+        return {
+            "source_name": ACTION_TO_SOURCE[action_name],
+            "source_status": "blocked",
+            "error_type": "unsupported_passthrough_parser",
+            "fields_observed": _observed_field_names(_coerce_json_body(upstream_body)),
+            "raw_body_suppressed": True,
+        }
+    return parser(upstream_body)
+
+
+def _parse_track_analysis_passthrough(upstream_body: Any) -> Dict[str, Any]:
+    body = _coerce_json_body(upstream_body)
+    source_name = "track_analysis_summary"
+    if not isinstance(body, (Mapping, list)):
+        return {
+            "source_name": source_name,
+            "source_status": "parse_error",
+            "error_type": "passthrough_body_not_structured_json",
+            "fields_observed": [],
+            "samples": [],
+            "raw_body_suppressed": True,
+        }
+
+    sub_interface = _detect_track_sub_interface(body)
+    rows = _extract_row_mappings(body)
+    device_ids = _extract_device_ids(body)
+    fields_observed = _observed_field_names(body)
+    samples = _track_analysis_samples(body, rows, device_ids, sub_interface)
+    record_count = _infer_record_count(body, rows, device_ids)
+    observation: Dict[str, Any] = {
+        "source_name": source_name,
+        "source_status": "completed" if record_count > 0 else "no_data",
+        "entity": _extract_passthrough_entity(body),
+        "sub_interface": sub_interface,
+        "fields_observed": fields_observed,
+        "records_count": record_count,
+        "samples": samples,
+        "raw_body_suppressed": True,
+        "no_data_not_risk_exclusion": True,
+    }
+    if rows:
+        observation["rows_count"] = len(rows)
+    if device_ids:
+        observation["device_ids_count"] = len(device_ids)
+    return observation
+
+
+def _parse_login_logs_passthrough(upstream_body: Any) -> Dict[str, Any]:
+    body = _coerce_json_body(upstream_body)
+    source_name = "login_logs_search"
+    if not isinstance(body, (Mapping, list)):
+        return {
+            "source_name": source_name,
+            "source_status": "parse_error",
+            "error_type": "passthrough_body_not_structured_json",
+            "records_count": 0,
+            "fields_observed": [],
+            "samples": [],
+            "raw_records_suppressed": True,
+            "no_data_not_risk_exclusion": True,
+        }
+
+    records = _extract_login_log_records(body)
+    return {
+        "source_name": source_name,
+        "source_status": "completed" if records else "no_data",
+        "records_count": len(records),
+        "fields_observed": _observed_field_names(records if records else body),
+        "samples": [_login_log_sample(record) for record in records[:3]],
+        "raw_records_suppressed": True,
+        "no_data_not_risk_exclusion": True,
+    }
+
+
+PASSTHROUGH_PARSER_REGISTRY.update(
+    {
+        "track_analysis_summary": _parse_track_analysis_passthrough,
+        "login_logs_search": _parse_login_logs_passthrough,
+    }
+)
+
+
+def _extract_passthrough_latency_ms(service_payload: Mapping[str, Any]) -> Optional[int]:
+    meta = service_payload.get("meta") if isinstance(service_payload.get("meta"), Mapping) else {}
+    value = meta.get("latency_ms") if isinstance(meta, Mapping) else None
+    if value is None:
+        value = service_payload.get("latency_ms")
+    return int(value) if isinstance(value, (int, float)) else None
+
+
+def _coerce_json_body(value: Any) -> Any:
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return ""
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            return value
+    return value
+
+
+def _observed_field_names(value: Any, max_fields: int = 64) -> list[str]:
+    fields: list[str] = []
+
+    def visit(node: Any, prefix: str = "") -> None:
+        if len(fields) >= max_fields:
+            return
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                key_text = str(key)
+                lowered = key_text.lower()
+                if lowered in FORBIDDEN_INPUT_KEYS or _is_credential_secret_key(key_text) or not _is_safe_display_key(key_text):
+                    continue
+                path = f"{prefix}.{key_text}" if prefix else key_text
+                if path not in fields:
+                    fields.append(path)
+                if isinstance(child, (Mapping, list)):
+                    visit(child, path)
+                if len(fields) >= max_fields:
+                    return
+        elif isinstance(node, list):
+            for item in node[:3]:
+                visit(item, prefix)
+                if len(fields) >= max_fields:
+                    return
+
+    visit(value)
+    return fields
+
+
+def _extract_passthrough_entity(body: Any) -> Dict[str, Any]:
+    entity: Dict[str, Any] = {}
+    for key in ("user_id", "userId", "uid", "device_id", "deviceId", "did", "appName", "product"):
+        value = _find_first(body, (key,))
+        if value is not None:
+            entity[key] = _safe_display_value(key, value, DEFAULT_OUTPUT_SCOPE)
+    return entity
+
+
+def _detect_track_sub_interface(body: Any) -> Optional[str]:
+    for key in ("sub_interface", "subInterface", "interface", "func", "function", "mode"):
+        value = _find_first(body, (key,))
+        if isinstance(value, str) and value in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES:
+            return value
+    if _extract_device_ids(body):
+        return "getDeviceIds"
+    if _find_first(body, ("latestDateTime", "latest_datetime", "lastestDateTime", "getLastestDateTime")) is not None:
+        return "getLastestDateTime"
+    if _find_first(body, ("useDuration", "duration", "totalDuration", "activeDuration", "getUseDuration")) is not None:
+        return "getUseDuration"
+    if _find_first(body, ("registerTime", "activeDays", "fanDistribution", "userProfile", "profile")) is not None:
+        return "profile"
+    return None
+
+
+def _extract_row_mappings(value: Any) -> list[Mapping[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, Mapping)]
+    if not isinstance(value, Mapping):
+        return []
+    for key in ("rows", "records", "dataList", "list", "items", "result"):
+        child = value.get(key)
+        if isinstance(child, list):
+            return [item for item in child if isinstance(item, Mapping)]
+    data = value.get("data")
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, Mapping)]
+    if isinstance(data, Mapping):
+        nested = _extract_row_mappings(data)
+        if nested:
+            return nested
+    return []
+
+
+def _extract_device_ids(value: Any) -> list[Any]:
+    candidates: list[Any] = []
+    found = _find_first(value, ("deviceIds", "device_ids", "deviceIdList", "didList"))
+    if isinstance(found, list):
+        candidates.extend(found)
+    elif isinstance(found, (str, int)):
+        candidates.append(found)
+    for row in _extract_row_mappings(value):
+        for key in ("device_id", "deviceId", "did", "DID"):
+            if key in row and row.get(key) is not None:
+                candidates.append(row.get(key))
+    unique: list[Any] = []
+    for item in candidates:
+        if isinstance(item, (str, int)) and item not in unique:
+            unique.append(item)
+    return unique
+
+
+def _track_analysis_samples(
+    body: Any,
+    rows: list[Mapping[str, Any]],
+    device_ids: list[Any],
+    sub_interface: Optional[str],
+) -> list[Dict[str, Any]]:
+    samples: list[Dict[str, Any]] = []
+    if device_ids:
+        samples.append({"device_id_sample": _safe_display_value("device_id", device_ids[0], DEFAULT_OUTPUT_SCOPE)})
+    if rows:
+        samples.extend(_safe_passthrough_sample(row, ("date", "duration", "totalDuration", "deviceId", "device_id")) for row in rows[:2])
+    if sub_interface in {"profile", None} and isinstance(body, Mapping):
+        profile_sample = _safe_passthrough_sample(
+            body,
+            ("user_id", "userId", "registerTime", "activeDays", "fanDistribution", "deviceIds"),
+        )
+        if profile_sample:
+            samples.append(profile_sample)
+    latest = _find_first(body, ("latestDateTime", "latest_datetime", "lastestDateTime"))
+    if latest is not None:
+        samples.append({"latest_datetime_sample": _safe_display_value("timestamp", latest, DEFAULT_OUTPUT_SCOPE)})
+    return [sample for sample in samples if sample]
+
+
+def _infer_record_count(body: Any, rows: list[Mapping[str, Any]], device_ids: list[Any]) -> int:
+    if rows:
+        return len(rows)
+    if device_ids:
+        return len(device_ids)
+    if isinstance(body, list):
+        return len(body)
+    if isinstance(body, Mapping):
+        data = body.get("data")
+        if isinstance(data, Mapping) and data:
+            return 1
+        if isinstance(data, list):
+            return len(data)
+        return 1 if body else 0
+    return 0
+
+
+def _extract_login_log_records(body: Any) -> list[Mapping[str, Any]]:
+    if isinstance(body, list):
+        return [item for item in body if isinstance(item, Mapping)]
+    if not isinstance(body, Mapping):
+        return []
+    data = body.get("data")
+    if isinstance(data, Mapping) and isinstance(data.get("logSearchModels"), list):
+        return [item for item in data["logSearchModels"] if isinstance(item, Mapping)]
+    if isinstance(body.get("logSearchModels"), list):
+        return [item for item in body["logSearchModels"] if isinstance(item, Mapping)]
+    return []
+
+
+def _login_log_sample(record: Mapping[str, Any]) -> Dict[str, Any]:
+    sample_fields = {
+        "logSource": ("logSource", "log_source"),
+        "method": ("method", "loginMethod", "login_method"),
+        "timestamp": ("timestamp", "time", "loginTime", "logTime", "createTime"),
+        "user_id": ("user_id", "userId", "uid"),
+        "device_id": ("device_id", "deviceId", "did", "DID"),
+        "IP": ("IP", "ip", "userIp", "userIpDesc", "clientIp", "remoteIp"),
+    }
+    sample: Dict[str, Any] = {}
+    for output_key, candidates in sample_fields.items():
+        value = _find_first(record, candidates)
+        if value is not None:
+            sample[output_key] = _safe_display_value(output_key, value, DEFAULT_OUTPUT_SCOPE)
+    return sample
+
+
+def _safe_passthrough_sample(value: Mapping[str, Any], candidate_keys: Iterable[str]) -> Dict[str, Any]:
+    sample: Dict[str, Any] = {}
+    for key in candidate_keys:
+        found = _find_first(value, (key,))
+        if found is not None:
+            sample[key] = _safe_display_value(key, found, DEFAULT_OUTPUT_SCOPE)
+    return sample
 
 
 def _attach_track_analysis_check_data_ready_contract_fields(
@@ -3872,6 +4254,8 @@ def _validate_typed_params(value: Any, path: str = "$") -> None:
             normalized_key = str(key).strip().lower()
             if normalized_key in FORBIDDEN_INPUT_KEYS:
                 raise BrowserBackedServiceInputError(f"forbidden browser-backed input key at {path}.{key}")
+            if normalized_key in CONTROL_INPUT_KEYS:
+                raise BrowserBackedServiceInputError(f"browser-backed control key must be passed as an explicit client option: {path}.{key}")
             _validate_typed_params(child, f"{path}.{key}")
     elif isinstance(value, list):
         for index, child in enumerate(value):
@@ -4092,6 +4476,33 @@ class _FakeOpener:
             raise self.exc
         payload = self.payload(request) if callable(self.payload) else self.payload
         return _FakeResponse(200, payload or {})
+
+
+def _passthrough_fixture_payload(
+    action_name: str,
+    upstream_body: Any = None,
+    *,
+    include_body: bool = True,
+    credential_material_output: bool = False,
+    include_summary_fields: bool = False,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "action": action_name,
+        "response_mode": RESPONSE_MODE_PASSTHROUGH,
+        "upstream": {
+            "status": 200,
+            "content_type": "application/json",
+        },
+        "meta": {"latency_ms": 42},
+        "safety": {"credential_material_output": credential_material_output},
+    }
+    if include_body:
+        payload["upstream"]["body"] = upstream_body if upstream_body is not None else {"data": {}}
+    if include_summary_fields:
+        payload["source_card"] = {"unexpected": True}
+        payload["source_quality"] = {"unexpected": True}
+    return payload
 
 
 def _fixture_payload(
@@ -4976,6 +5387,101 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert result["no_data_not_risk_exclusion"] is True
     results.append(("login_logs_search_no_data", "passed"))
 
+    passthrough_login_body = {
+        "data": {
+            "logSearchModels": [
+                {
+                    "logSource": "APP_LOGIN",
+                    "method": "PASSWORD",
+                    "timestamp": 1764288000000,
+                    "userId": "2871834924",
+                    "deviceId": "ANDROID_login_device_001",
+                    "userIpDesc": "10.20.30.40",
+                }
+            ]
+        }
+    }
+    passthrough_opener = _FakeOpener(_passthrough_fixture_payload("login_logs_search", passthrough_login_body))
+    passthrough_result = BrowserBackedServiceClient(opener=passthrough_opener).call_action(
+        "login_logs_search",
+        {"user_id": "fixture"},
+        response_mode=RESPONSE_MODE_PASSTHROUGH,
+    )
+    passthrough_request_body = json.loads((passthrough_opener.calls[0]["body"] or b"{}").decode("utf-8"))
+    assert passthrough_request_body["response_mode"] == RESPONSE_MODE_PASSTHROUGH
+    assert passthrough_result["response_mode"] == RESPONSE_MODE_PASSTHROUGH
+    assert passthrough_result["source_status"] == "completed"
+    assert passthrough_result["normalized_observation"]["records_count"] == 1
+    assert passthrough_result["normalized_observation"]["raw_records_suppressed"] is True
+    assert "source_card" not in passthrough_result
+    assert "source_quality" not in passthrough_result
+    results.append(("passthrough_client_parses_upstream_body", "passed"))
+
+    summary_field_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(
+            _passthrough_fixture_payload(
+                "login_logs_search",
+                passthrough_login_body,
+                include_summary_fields=True,
+            )
+        )
+    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    assert summary_field_result["source_status"] == "completed"
+    assert summary_field_result["unexpected_summary_fields"] == ["source_card", "source_quality"]
+    results.append(("passthrough_unexpected_summary_fields_marked", "passed"))
+
+    credential_violation = BrowserBackedServiceClient(
+        opener=_FakeOpener(
+            _passthrough_fixture_payload(
+                "login_logs_search",
+                passthrough_login_body,
+                credential_material_output=True,
+            )
+        )
+    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    assert credential_violation["source_status"] == "blocked"
+    assert credential_violation["error_type"] == "credential_material_violation"
+    assert credential_violation["sensitive_output"] is False
+    results.append(("passthrough_credential_material_fail_closed", "passed"))
+
+    missing_body_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload("login_logs_search", include_body=False))
+    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    assert missing_body_result["source_status"] == "parse_error"
+    assert missing_body_result["error_type"] == "passthrough_body_missing"
+    results.append(("passthrough_body_missing_marked", "passed"))
+
+    track_observation = parse_passthrough_response(
+        "track_analysis_summary",
+        {
+            "sub_interface": "getDeviceIds",
+            "userId": "2871834924",
+            "data": {
+                "deviceIds": ["ANDROID_track_device_001", "IOS_track_device_002"],
+            },
+        },
+    )
+    assert track_observation["source_status"] == "completed"
+    assert track_observation["sub_interface"] == "getDeviceIds"
+    assert track_observation["device_ids_count"] == 2
+    assert track_observation["raw_body_suppressed"] is True
+    results.append(("track_analysis_passthrough_parser_normalizes_observation", "passed"))
+
+    login_observation = parse_passthrough_response("login_logs_search", passthrough_login_body)
+    assert login_observation["source_status"] == "completed"
+    assert login_observation["records_count"] == 1
+    assert login_observation["samples"][0]["logSource"] == "APP_LOGIN"
+    assert login_observation["raw_records_suppressed"] is True
+    results.append(("login_logs_passthrough_parser_log_search_models", "passed"))
+
+    compat_opener = _FakeOpener(_fixture_payload("login_logs_search", "completed"))
+    compat_result = BrowserBackedServiceClient(opener=compat_opener).call_action("login_logs_search", {"user_id": "fixture"})
+    compat_request_body = json.loads((compat_opener.calls[0]["body"] or b"{}").decode("utf-8"))
+    assert "response_mode" not in compat_request_body
+    assert compat_result["source_card"] and compat_result["source_quality"]
+    assert compat_result["source_status"] == "completed"
+    results.append(("compat_summary_fixture_not_regressed", "passed"))
+
     readiness_plan = build_track_analysis_check_data_ready_browser_backed_request(
         "ANDROID_track_device_001",
         start_time_ms=1764201600000,
@@ -5707,6 +6213,9 @@ def run_fixture_tests() -> Dict[str, Any]:
     account_security_opener = _FakeOpener(account_security_payload)
     account_security_results = BrowserBackedServiceClient(opener=account_security_opener).call_account_security_sources("2871834924")
     assert len(account_security_opener.calls) == 7
+    for call in account_security_opener.calls:
+        account_security_call_body = json.loads((call["body"] or b"{}").decode("utf-8"))
+        assert "response_mode" not in account_security_call_body
     assert [result["source_name"] for result in account_security_results] == [
         "track_analysis_summary",
         "rcp_snapshot",
@@ -5725,6 +6234,7 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert track_summary["use_duration_summary"]["rows_count"] == 7
     assert track_summary["device_ids_summary"]["device_ids_count"] == 2
     assert track_summary["latest_timestamp_summary"]["latest_datetime_present"] is True
+    results.append(("call_account_security_sources_default_compat_summary", "passed"))
     results.append(("ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES", "passed"))
 
     raw_payload = _fixture_payload("login_logs_search", "completed")
