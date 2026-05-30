@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Track valuable HAR-derived platform interfaces and decide whether each should become a browser-backed fixed action, stay as inventory/candidate, or be skipped. This inventory is mock/contract-only; it does not perform live smoke, does not access real platforms, and does not change default runtime routing.
+Track valuable HAR-derived platform interfaces and decide whether each should become a browser-backed fixed action, stay as inventory/candidate, or be skipped. This inventory now records the browser-backed fixed actions v1 registration/live-smoke closure for the selected batch. It does not perform live smoke, does not access real platforms, and does not change default runtime routing.
 
 ## Global Boundary
 
 - `default_runtime_routing=false` for every interface in this inventory.
-- `live_verified=false` unless an earlier run log explicitly recorded live evidence; this inventory does not create new live evidence.
+- `live_verified=false` remains the registry default unless an explicit registry flag exists; live-smoke evidence is recorded in the action status fields and does not create default routing.
 - `needs_explicit_action_call=true` for every mock-only / candidate auxiliary action outside the default four-source account-security chain.
 - New mock-only actions require explicit action calls and are not added to the default account-security chain.
-- Adjacent `browser-backed-api-poc` currently exposes only the four base service actions (`rcp_snapshot`, `weapon_inventory`, `login_logs_search`, `track_analysis_summary`). Track Analysis readiness, Archives Center optional actions, and RCP drill-down actions in this inventory are Dennis-side mock-only contracts until the service action list is extended separately.
+- Adjacent `browser-backed-api-poc` now registers the v1 closure batch: `login_logs_search`, `track_analysis_check_data_ready`, `archives_user_profile`, `archives_user_analysis`, `archives_photo_search`, `archives_related_users`, `rcp_event_detail`, `rcp_event_feature_list`, and `rcp_policy_tree_lookup`. They remain explicit-action/source-plan only.
 - No DataAgent or Hive call is part of this inventory.
 - Caller-provided URL/path/header/cookie/token/session remains forbidden.
 - Raw HAR headers, cookies, tokens, sessions, full response bodies, full `requestParam`, and full `extraParam` are not stored.
@@ -23,35 +23,49 @@ tracked separately in `computer_use_poc/browser_backed_live_smoke_readiness_v1.m
 and rolls companion policy-tree rows into a single action contract where
 appropriate.
 
-| platform | implemented_mock_only | candidate_only | blocked_missing_har | blocked_unclear_semantics | not_supported |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Archives Center | 6 | 0 | 1 | 0 | 0 |
-| RCP / Tianshi | 12 | 5 | 0 | 0 | 2 |
-| Track Analysis | 2 | 1 | 0 | 0 | 0 |
-| Weapon | 1 | 1 | 0 | 0 | 1 |
-| Login Logs | 1 | 0 | 2 | 0 | 2 |
-| Grafana | 0 | 2 | 0 | 0 | 0 |
-| Product Studio / Kconf / Permission Config | 0 | 2 | 0 | 0 | 1 |
+| platform | live_smoke_verified | no_data_path_live | partial_observation_available | implemented_mock_only | candidate_only | blocked_missing_har | blocked_unclear_semantics | not_supported |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Archives Center | 3 | 1 | 0 | 2 | 0 | 1 | 0 | 0 |
+| RCP / Tianshi | 2 | 0 | 1 | 9 | 5 | 0 | 0 | 2 |
+| Track Analysis | 1 | 0 | 0 | 1 | 1 | 0 | 0 | 0 |
+| Weapon | 0 | 0 | 0 | 1 | 1 | 0 | 0 | 1 |
+| Login Logs | 1 | 0 | 0 | 0 | 0 | 2 | 0 | 2 |
+| Grafana | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 |
+| Product Studio / Kconf / Permission Config | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 1 |
 
 Noise families skipped and intentionally not inventoried as Dennis sources: `log-sdk`, miscellaneous frontend monitor/radar, `h5-fingerprint`, generic device-info collectors, performance beacons, telemetry, collection dependencies, and unrelated static asset/config fetches.
+
+## Browser-Backed Fixed Actions v1 Closure
+
+| action_name | platform | registry_status | live_smoke_status | routing_boundary |
+| --- | --- | --- | --- | --- |
+| `login_logs_search` | Login Logs | service_registered | `live_smoke_verified` | ATO/login source; no_data/window gap is not no-risk evidence. |
+| `track_analysis_check_data_ready` | Track Analysis | service_registered | `live_smoke_verified` | Readiness/provenance helper, not risk conclusion. |
+| `archives_user_profile` | Archives Center | service_registered | `live_smoke_verified` | Account baseline, not final judgement. |
+| `archives_user_analysis` | Archives Center | service_registered | `live_smoke_verified`; large response can be `partial_observation_available` | Operation/risk timeline; large response enters source_quality. |
+| `archives_photo_search` | Archives Center | service_registered | `no_data`; path live | Abnormal-publish clue; no_data does not exclude content risk. |
+| `archives_related_users` | Archives Center | service_registered | `live_smoke_verified` | Same-device spread clue, not gang conclusion. |
+| `rcp_event_detail` | RCP / Tianshi | service_registered | `live_smoke_verified` | Event attribution detail, not tree governance. |
+| `rcp_event_feature_list` | RCP / Tianshi | service_registered | `partial_observation_available` | Partial feature-group summary only. |
+| `rcp_policy_tree_lookup` | RCP / Tianshi | service_registered | `live_smoke_verified` | Policy-tree asset governance, not event hit path. |
 
 ## Interface Inventory
 
 | platform | endpoint_family | representative_path | method | action_name | status | priority | purpose | evidence_domain_mapping | typed_params_summary | request_body_status | response_shape_status | default_runtime_routing | live_verified | next_probe_needed |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Archives Center | account_action_log | `/v3/user/log/coreLogs/fetch` | POST | `archives_user_analysis` | implemented_mock_only | P0 | core account operation timeline | account security / ATO / login-risk timeline | `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, operation filters | confirmed body builder, service-owned | summary fixture covers counts/time/device/IP/status | false | false | no |
-| Archives Center | report_signal | `/v4/archives/report/photo/search` | POST | `archives_photo_search` | implemented_mock_only | P0-conditional | abnormal publish/content/report anchoring | content abuse / ATO publish chain | `user_id`, `begin`, `end`, `page`, `count`, `matchType`, `sort` | corrected payload confirmed: `reportedIds=user_id` | summary fixture covers count/time/status/report context | false | false | no |
-| Archives Center | account_profile | `/archives/user/home/info` | GET | `archives_user_profile` | implemented_mock_only | P0/P1-high | current account baseline/profile status | account baseline / profile context | `user_id` | path clear; optional bundle service-owned | summary fixture covers current-state profile fields | false | false | no |
-| Archives Center | relation_graph | `/archives/user/search/device` | POST | `archives_related_users` | implemented_mock_only | P1 | same-device related-user expansion | account relation / cluster clue | `user_id`, `relation_type`, `inputType=0`, `type=0/1` | corrected payload confirmed | summary fixture covers related user counts/types | false | false | no |
+| Archives Center | account_action_log | `/v3/user/log/coreLogs/fetch` | POST | `archives_user_analysis` | live_smoke_verified | P0 | core account operation timeline | account security / ATO / login-risk timeline | `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, operation filters | confirmed body builder, service-owned | summary covers counts/time/device/IP/status; large response can be `partial_observation_available` | false | false | no |
+| Archives Center | report_signal | `/v4/archives/report/photo/search` | POST | `archives_photo_search` | no_data_path_live | P0-conditional | abnormal publish/content/report anchoring | content abuse / ATO publish chain | `user_id`, `begin`, `end`, `page`, `count`, `matchType`, `sort` | corrected payload confirmed: `reportedIds=user_id` | live path returned `no_data` for tested window; no_data is not risk exclusion | false | false | no |
+| Archives Center | account_profile | `/archives/user/home/info` | GET | `archives_user_profile` | live_smoke_verified | P0/P1-high | current account baseline/profile status | account baseline / profile context | `user_id` | path clear; optional bundle service-owned | current-state profile summary, raw body suppressed | false | false | no |
+| Archives Center | relation_graph | `/archives/user/search/device` | POST | `archives_related_users` | live_smoke_verified | P1 | same-device related-user expansion | account relation / cluster clue | `user_id`, `relation_type`, `inputType=0`, `type=0/1` | corrected payload confirmed | related user counts/types; relation is clue not judgement | false | false | no |
 | Archives Center | relation_graph | derived from profile/user-analysis/device summaries | TBD | `archives_related_devices` | blocked_missing_har | P1 | related-device expansion and Weapon cross-check | device relation clue | expected `user_id` or `device_id` | no standalone fixed path/body confirmed | standalone response shape not confirmed | false | false | confirm whether source is profile, user analysis, or same-device endpoint |
 | Archives Center | social_interaction | `/archives/user/message/search` | POST | `archives_private_message_search` | implemented_mock_only | P2-conditional | private-message metadata count/status/time summary | social interaction clue; not default ATO source | `user_id`, `direction=sent/received`, page/count/status/sort | direction maps to `fromUserId` or `toUserId`; field semantics need live confirmation | fixture covers count/time/status/counterpart summary; plaintext suppressed | false | false | confirm direction/status semantics in controlled live smoke before production use |
 | Archives Center | account_change_trace | `/v4/audit/user/fourinfo/log/search` | POST | `archives_past_four_items` | implemented_mock_only | P2-conditional | four-info metadata change-log summary | profile change clue; not default ATO source | `user_id`, `info_type=all/username/avatar/profile_description/background`, page/count/filters | validated `keyword=<user_id>` and `infoType=0..4`; field semantics need live confirmation | fixture covers count/time/type/status summary; old/new content and media URLs suppressed | false | false | confirm infoType/status semantics in controlled live smoke before production use |
 | RCP / Tianshi | event_list | `/v2/rest/event/eventList` | POST | `rcp_snapshot` | implemented_mock_only | P0-explicit | strategy hit/event entry summary | policy-hit evidence entry | existing typed event/entity params; body service-owned | HAR body shape documented; dynamic query builder | fixture covers event count/dynamic columns | false | false | no |
-| RCP / Tianshi | event_detail | `/v2/rest/event/rcpEventDetail` | GET | `rcp_event_detail` | implemented_mock_only | P0-explicit | single-event detail and exact `_occurTime` | event-level policy evidence | `eventType`, `eventId`, `queryTime` | path/params clear from run logs | fixture covers feedback/error/effective policy/entities | false | false | no |
-| RCP / Tianshi | feature_snapshot | `/v2/rest/event/rcpEventFeatureList` | GET | `rcp_event_feature_list` | implemented_mock_only | P1-explicit | event feature snapshot summary | policy attribution context | `eventType`, `eventId`, `queryTime`, fixed `featureGroup=""` | path/params clear; non-empty `featureGroup` rejected | fixture covers count/group/key summaries, raw values suppressed | false | false | no |
+| RCP / Tianshi | event_detail | `/v2/rest/event/rcpEventDetail` | GET | `rcp_event_detail` | live_smoke_verified | P0-explicit | single-event detail and exact `_occurTime` | event-level policy evidence | `eventType`, `eventId`, `queryTime` | path/params clear from run logs | feedback/error/effective policy/entities summary | false | false | no |
+| RCP / Tianshi | feature_snapshot | `/v2/rest/event/rcpEventFeatureList` | GET | `rcp_event_feature_list` | partial_observation_available | P1-explicit | event feature snapshot summary | policy attribution context | `eventType`, `eventId`, `queryTime`, fixed `featureGroup=""` | path/params clear; non-empty `featureGroup` rejected | capped feature-count/group observation; raw values suppressed | false | false | no |
 | RCP / Tianshi | policy_version | `/v2/rest/pc/policy/getPolicyVersionListByEvent` | GET | `rcp_policy_version_lookup` | implemented_mock_only | P1-explicit | policy version context | strategy attribution provenance | `eventType`, `eventId`, `policyCode`, `policyVersion`, `queryTime` | path/params documented; service-owned query builder | fixture covers version-found summary and policy metadata | false | false | no |
 | RCP / Tianshi | policy_detail | `/v2/rest/pro/policy/getPolicyDetailByVersion` | GET | `rcp_policy_detail_lookup` | implemented_mock_only | strategy_governance | policy definition, version history, and binding-tree summary | strategy governance / policy explanation | `policyCode`, `policyVersion` | path/params documented; companion version-history and relation-tree reads service-owned | fixture covers condition/version/tree counts; raw detail and raw condition expressions suppressed | false | false | no |
-| RCP / Tianshi | policy_tree_precise | `/v2/rest/pro/policyTree/queryProPolicyTree` | GET | `rcp_policy_tree_lookup` | implemented_mock_only | strategy_governance | precise policy tree node resolution | strategy governance / asset lookup, not event hit path | `policyTreeCode`, `policyTreeVersion`, optional `targetPolicyCode`; service maps `treeSnapshot` | HAR-confirmed query keys; recursive node resolution service-owned | fixture covers resolved `policyTreeNodeCode` and raw tree suppression | false | false | no |
+| RCP / Tianshi | policy_tree_precise | `/v2/rest/pro/policyTree/queryProPolicyTree` | GET | `rcp_policy_tree_lookup` | live_smoke_verified | strategy_governance | precise policy tree node resolution | strategy governance / asset lookup, not event hit path | `policyTreeCode`, `policyTreeVersion`, optional `targetPolicyCode`; service maps `treeSnapshot` | HAR-confirmed query keys; recursive node resolution service-owned | resolved tree/node summary; raw tree suppressed | false | false | no |
 | RCP / Tianshi | policy_tree_list | `/v2/rest/pro/policyTree/policyTreeList` | GET | `rcp_policy_tree_lookup` companion | implemented_mock_only | strategy_governance | coarse policy tree list / prefilter | strategy governance / asset discovery, not event hit path | `policyTreeCode`, optional `policyCode`, `eventTypeAssociator`, `page`, `size`, display filters | HAR-confirmed query keys; coarse list only | response shape `data.pagination` + `data.records`; raw records/operator identities suppressed | false | false | no |
 | RCP / Tianshi | policy_tree_node_binding | `/v2/rest/pro/policyTree/queryBindingByNodeCode` | GET | `rcp_policy_tree_lookup` companion | implemented_mock_only | strategy_governance | node-level bound policy list | strategy governance / node binding context, not event hit path | resolved `policyTreeNodeCode`, `policyTreeCode`, `policyTreeVersion`, optional `policyCode`, page/size/order flags | HAR-confirmed query keys; node code must come from `queryProPolicyTree` parser | response shape `data.pagination` + `data.records`; raw binding list and raw policy bodies suppressed | false | false | no |
 | RCP / Tianshi | policy_tree_policy_codes | `/v2/rest/pro/policyTree/getAllPolicyCodeByPage` | GET | `rcp_policy_tree_lookup` companion | implemented_mock_only | strategy_governance | full-tree policy code list | strategy governance / policy coverage context, not event hit path | `policyTreeCode`, `policyTreeVersion`, optional `code`, `page`, `size` | HAR-confirmed query keys; service-owned paging | response shape `data.pagination` + `data.records[].label/value`; raw full code list suppressed | false | false | no |
@@ -66,12 +80,12 @@ Noise families skipped and intentionally not inventoried as Dennis sources: `log
 | RCP / Tianshi | expression_dependency | `/v2/rest/basicInfo/resolveExpressionDependencyIncludesAlias` | POST | none | not_supported | denied | raw policy expression dependency resolution | config/debug helper | `expression` | requires raw policy expression body | policy expression/config dump risk | false | false | keep out of runtime source actions |
 | RCP / Tianshi | test_case_config | `/v2/rest/testCase/run` and related config paths | POST | none | not_supported | low | test execution/config | config/test domain, not runtime evidence | not exposed | write/test-like execution boundary | not runtime evidence | false | false | keep out of browser-backed source actions |
 | Track Analysis | account_security_bundle | existing profile/use-duration/device/latest paths | POST/GET | `track_analysis_summary` | implemented_mock_only | P0 | activity/profile/device bundle | account-security evidence | `user_id`, `appName`, `mode`, `sub_interface` | existing service-owned sub-interface calls | fixture covers four sub-interface summaries | false | false | no |
-| Track Analysis | readiness | `/dp/platform/app/analytics/v2/sequence/checkDataReady` | POST | `track_analysis_check_data_ready` | implemented_mock_only | P2-helper | data readiness precheck | quality/provenance only | `device_id`, `appName`, `product`, `startTime`, `endTime`, `category`, `event`, `appPlatform`, `metric`, fixed `type=deviceId` | HAR-confirmed body keys; service generates `batchQueryId` and `_t` | response shape `code/message/data.dateStatus/traceId`; fixture suppresses raw body and traceId value | false | false | no |
+| Track Analysis | readiness | `/dp/platform/app/analytics/v2/sequence/checkDataReady` | POST | `track_analysis_check_data_ready` | live_smoke_verified | P2-helper | data readiness precheck | quality/provenance only | `device_id`, `appName`, `product`, `startTime`, `endTime`, `category`, `event`, `appPlatform`, `metric`, fixed `type=deviceId` | HAR-confirmed body keys; service generates `batchQueryId` and `_t` | response shape `code/message/data.dateStatus/traceId`; raw body and traceId value suppressed | false | false | no |
 | Track Analysis | config | `/dp/platform/app/analytics/v2/sequence/config`, `/dp/platform/app/analytics/v2/kconf/get`, `/v3/dp/track/sys/proxy/kconf` | GET | `track_analysis_config_lookup` | candidate_only | P3-config | option/config lookup | helper only | `appName`, `funcType`, `product`, `type`, `key` | HAR-confirmed config/query keys | config response not evidence | false | false | inventory only unless required by a source action |
 | Weapon | graph_risk_bundle | `/apiv2/graphData`, `/apiv2/riskData` | GET | `weapon_inventory` | implemented_mock_only | P0/P0-conditional | user-device graph plus conditional device risk | entity resolution / device risk | `user_id`, mode, riskData trigger prefixes | fixed paths service-owned | fixture covers graph/risk labels and safe handles | false | false | no |
 | Weapon | graph_or_risk_aux | other graph/risk helper paths TBD | GET | `weapon_graph_aux_lookup` | candidate_only | P2-helper | graph/risk metadata if needed | relation provenance | none finalized | no clear additional endpoint needed | response shape unknown | false | false | only implement if related to device graph/risk |
 | Weapon | config_or_page | Weapon UI/config/static endpoints | GET | none | not_supported | low | page/config only | not evidence | not exposed | not action-worthy | not evidence | false | false | do not implement |
-| Login Logs | unified_search | `/rest/unified/log/search` | GET | `login_logs_search` | implemented_mock_only | P0 | online login log window | account security / ATO | `user_id`, `window`, `recallSource` | service-owned query builder | fixture covers count/window/IP/device/method | false | false | no |
+| Login Logs | unified_search | `/rest/unified/log/search` | GET | `login_logs_search` | live_smoke_verified | P0 | online login log window | account security / ATO | `user_id`, `window`, `recallSource` | service-owned query builder | count/window/IP/device/method summary; large 7-day response can fallback to 24h | false | false | no |
 | Login Logs | detail | detail modal/special event detail paths | UI modal / path TBD | `login_log_detail_lookup` | blocked_missing_har | P1-explicit | detail for selected login row | login chain supplement | `user_id`, row identifier / modal key if confirmed | run logs validate UI modal key extraction, but no fixed API path/body | JSON key shape observed; fixed response envelope not confirmed | false | false | capture safe HAR request for detail modal if one exists; otherwise keep detail as UI-only observation, not fixed browser-backed action |
 | Login Logs | filter_options | filter/config option path TBD | GET/POST | `login_log_filter_options` | blocked_missing_har | P2-config | recallSource / method / logSource option discovery | config/lookup only | none finalized beyond `recallSource=2,0,1,3` | no fixed HAR path/body for filter options | response shape not confirmed | false | false | capture safe HAR path and option response shape if a separate config request exists |
 | Login Logs | pagination_filter | `/rest/unified/log/search` frontend pagination | GET | none | not_supported | P1-helper | paginated visible-window search | source completeness | covered by `login_logs_search` current-window full result | evidence shows `totalCount == logSearchModels.length` and UI page changes do not trigger search request | frontend pagination only; no standalone runtime source | false | false | only revisit if future API response has `logSearchModels.length < totalCount` and exposes page/offset/cursor |
@@ -86,21 +100,26 @@ Noise families skipped and intentionally not inventoried as Dennis sources: `log
 
 ### Browser-backed service parity
 
-Local inspection of the adjacent `browser-backed-api-poc` action allowlist shows
-only four service actions are currently exposed:
+Local inspection of the adjacent `browser-backed-api-poc` action allowlist and
+the Dennis Python client now shows parity for the fixed actions v1 closure
+batch:
 
-- `rcp_snapshot`
-- `weapon_inventory`
 - `login_logs_search`
-- `track_analysis_summary`
+- `track_analysis_check_data_ready`
+- `archives_user_profile`
+- `archives_user_analysis`
+- `archives_photo_search`
+- `archives_related_users`
+- `rcp_event_detail`
+- `rcp_event_feature_list`
+- `rcp_policy_tree_lookup`
 
-Therefore Track Analysis readiness, Archives Center optional actions, and
-RCP/Tianshi drill-down actions remain Dennis-side `implemented_mock_only`
-contracts, not service-live actions.
-They require explicit action calls in Dennis-side tests and must not enter the
-default account-security runtime chain. Future service implementation should
-extend the browser-backed service allowlist with the same fixed action names and
-typed-param contracts before any live smoke.
+The service continues to expose the original base actions
+`rcp_snapshot`, `weapon_inventory`, and `track_analysis_summary` as well. This
+parity only means the action names, typed-param contracts, and fixed
+service-side paths are registered consistently. It does not promote any action
+to default runtime routing, and callers still cannot pass arbitrary URL, path,
+header, cookie, token, or session fields.
 
 ### RCP / Tianshi config and helper candidates
 
@@ -136,8 +155,9 @@ cards:
 
 ### Track Analysis auxiliary readiness/config
 
-`track_analysis_check_data_ready` is implemented as a Dennis-side mock-only
-contract after safe HAR shape inspection confirmed `POST
+`track_analysis_check_data_ready` is now a registered browser-backed fixed
+action with `live_smoke_verified` status. The original safe HAR shape
+inspection confirmed `POST
 /dp/platform/app/analytics/v2/sequence/checkDataReady`, body keys
 `appName/startTime/endTime/include/pageSize/deviceId/batchQueryId/appPlatform/category/event/metric/product/type/funcType/_t`,
 and response shape `code/message/data.dateStatus/traceId`. It is

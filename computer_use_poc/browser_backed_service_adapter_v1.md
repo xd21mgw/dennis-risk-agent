@@ -34,22 +34,36 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
 | RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
 
-For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) are the primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. Archives Center remains a separate optional source; if `archives_profile_runner` is still a stub, it is recorded as `source_gap` and does not block the browser-backed chain.
+For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) remain the existing primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. The browser-backed fixed actions v1 closure adds explicit, source-plan-selected actions for Archives Center, RCP/Tianshi drill-down, and Track Analysis readiness. These additions do not change default runtime routing.
 
-`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, `archives_related_users`, `archives_private_message_search`, and `archives_past_four_items` are available as optional Archives Center sources. They are not added to the default four-source account-security main chain by this adapter patch.
+`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, `archives_related_users`, `archives_private_message_search`, and `archives_past_four_items` are available as explicit Archives Center sources. `archives_user_profile` and bounded `archives_user_analysis` are account-security baseline evidence when selected by source plan; `archives_photo_search` is publish/content-chain evidence and its `no_data` result is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. The private-message and past-four-items actions remain conditional follow-up sources and are not part of this v1 routing closure.
 
-`rcp_event_detail`, `rcp_event_feature_list`, `rcp_policy_version_lookup`, `rcp_policy_detail_lookup`, `rcp_policy_release_record_lookup`, `rcp_policy_tree_lookup`, `rcp_node_policy_attribution`, and `rcp_node_bind_policy_attribution` are explicit RCP/Tianshi drill-down sources. They require upstream event, policy, or policy-tree identifiers; they are not part of the default four-source account-security main chain.
+`rcp_event_detail`, `rcp_event_feature_list`, `rcp_policy_version_lookup`, `rcp_policy_detail_lookup`, `rcp_policy_release_record_lookup`, `rcp_policy_tree_lookup`, `rcp_node_policy_attribution`, and `rcp_node_bind_policy_attribution` are explicit RCP/Tianshi drill-down sources. They require upstream event, policy, or policy-tree identifiers; they are not part of the default four-source account-security main chain. `rcp_event_detail -> rcp_event_feature_list` is the v1 event-attribution chain. `rcp_policy_tree_lookup` is strategy asset governance only and must not be used as a single-case event-hit path.
 
 The HAR inventory also tracks auxiliary candidates that are intentionally not in the default four-source runtime chain:
 
-- `track_analysis_check_data_ready`: mock-only readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`, not account-security evidence by itself.
+- `track_analysis_check_data_ready`: live-smoke verified readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`, not account-security evidence by itself.
 - `track_analysis_config_lookup`: config helper only; not evidence and not default runtime.
 - `rcp_event_type_list` / `rcp_realtime_op_list` / `rcp_event_feature_key_lookup` / `rcp_event_tree_or_decision_lookup`: RCP helper candidates only; not default runtime and not implemented in this adapter pass.
 - `login_log_detail_lookup`: UI modal key extraction has validation evidence, but no fixed API path/body or row identifier contract has been confirmed.
 - `login_log_filter_options`: blocked until a safe HAR confirms a separate filter/config option path and response shape; current default remains `recallSource=2,0,1,3`.
 - `login_logs_search_page`: not a standalone action for the current `/rest/unified/log/search` contract because validated API responses can return the full current-window result and UI pagination is frontend-only.
 
-Current `browser-backed-api-poc` parity note: the adjacent service implementation still exposes only the four base actions (`rcp_snapshot`, `weapon_inventory`, `login_logs_search`, `track_analysis_summary`). The Track Analysis readiness helper, Archives Center optional actions, and RCP/Tianshi drill-down actions below are Dennis-side mock-only contracts until the service action allowlist is extended separately. They require explicit action calls and must not be treated as live service actions or default runtime sources.
+Current `browser-backed-api-poc` parity note: the adjacent service action registry now registers the v1 routing-closure batch with fixed action names: `login_logs_search`, `track_analysis_check_data_ready`, `archives_user_profile`, `archives_user_analysis`, `archives_photo_search`, `archives_related_users`, `rcp_event_detail`, `rcp_event_feature_list`, and `rcp_policy_tree_lookup`. The Dennis Python client exposes the same action endpoints. Registration parity does not imply default routing: every action still requires an explicit source plan, and no caller-provided URL/path/header/cookie/token/session input is accepted.
+
+## Browser-Backed Fixed Actions v1 Closure Status
+
+| action_name | routing status | source-quality boundary |
+| --- | --- | --- |
+| `login_logs_search` | `live_smoke_verified` | Online login-window no_data/window gap cannot exclude ATO. |
+| `track_analysis_check_data_ready` | `live_smoke_verified` | Readiness/provenance only; not a risk conclusion. |
+| `archives_user_profile` | `live_smoke_verified` | Account baseline/profile context; not final judgement. |
+| `archives_user_analysis` | `live_smoke_verified` | Large page size may be `partial_observation_available` / `large_response_limited`; shrink window, page size, or paginate. |
+| `archives_photo_search` | `no_data` with live path verified | `no_data_not_risk_exclusion`; does not exclude abnormal publish/content handoff. |
+| `archives_related_users` | `live_smoke_verified` | Same-device relation is spread clue, not gang conclusion. |
+| `rcp_event_detail` | `live_smoke_verified` | Event detail is event-level strategy evidence, not policy-tree asset lookup. |
+| `rcp_event_feature_list` | `partial_observation_available` | Partial feature output supports feature-group summary only. |
+| `rcp_policy_tree_lookup` | `live_smoke_verified` | Strategy asset governance only; not event-hit path and not single-case risk judgement. |
 
 ## Account-Security Bundle Typed Params
 

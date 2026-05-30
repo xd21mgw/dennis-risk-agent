@@ -76,7 +76,7 @@ Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`
 ```yaml
 browser_backed_source_result:
   source_name:
-  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_summary
+  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_summary | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
   typed_params_summary:
     mode:
     sub_interfaces: []
@@ -104,6 +104,70 @@ browser_backed_source_result:
 小批量 evidence 输出的用户标题同样受 `output_scope` 控制。`internal_risk_review` 必须直接展示可复制回查的真实 user_id，例如 `用户 772671837`、`用户 3481089791`；不得写成 `U1` / `U2`、尾号、`user_***1837`。`external_share` 才允许写 `用户 U1（user_***1837）`、`用户 U2（user_***9791）` 或用户 A/B。deviceId / DID、IP、eventId、sourceId、hitFusePolicyCode、logSource、method、timestamp 在 `internal_risk_review` 下可按最小必要原值展示；在 `external_share` 下必须 masked。
 
 手机号属于 `pii_strict`：内部研判只可输出 `1381234****`，分享版只可输出 `138********`，任何模式都不得输出完整手机号。身份证号和真实姓名任何模式都不得输出原文；只能输出 `id_card_present=true`、必要时 `birth_year_present=true`，以及 `name_present=true`。
+
+### Browser-Backed Fixed Actions v1 Source Plans
+
+这些 action 已完成母体注册一致性和 live-smoke 状态收口，但仍必须由显式 `source_plan` 选择；不得把任何 action 改成 `default_runtime_routing=true`。
+
+```yaml
+browser_backed_fixed_actions_v1_routing:
+  ato_or_login_anomaly:
+    actions:
+      - login_logs_search
+      - archives_user_profile
+      - archives_user_analysis
+      - track_analysis_check_data_ready
+    output_required:
+      - source_plan
+      - actions
+      - source_quality_matrix
+      - missing_evidence
+      - evidence_strength
+      - final_answer_boundary
+    boundaries:
+      - login_no_data_or_window_gap_not_ato_exclusion
+      - track_check_data_ready_not_risk_conclusion
+      - archives_user_analysis_large_response_limited_enters_source_quality
+  abnormal_publish_or_content_handoff:
+    actions:
+      - archives_photo_search
+      - archives_user_profile
+      - archives_user_analysis
+    boundaries:
+      - photo_search_no_data_not_abnormal_publish_exclusion
+      - publish_or_content_chain_missing_evidence_must_be_explicit
+  account_spread_or_same_device:
+    actions:
+      - archives_related_users
+      - archives_user_profile
+      - login_logs_search
+      - track_analysis_check_data_ready
+    boundaries:
+      - related_users_are_spread_clue_not_gang_conclusion
+      - same_device_relation_requires_cross_source_validation
+  rcp_event_attribution:
+    actions:
+      - rcp_event_detail
+      - rcp_event_feature_list
+    boundaries:
+      - event_detail_not_policy_tree_asset_lookup
+      - feature_list_partial_only_supports_feature_group_summary
+      - strategy_hit_not_final_judgement
+  policy_asset_governance:
+    actions:
+      - rcp_policy_tree_lookup
+    boundaries:
+      - policy_tree_asset_not_event_hit_path
+      - policy_tree_lookup_not_single_case_risk_evidence
+```
+
+展示层必须保留 source-quality 语义：
+
+- `no_data` / `completed_no_data`: 当前 source 条件下无记录，不是低风险或无风险反证。
+- `partial_observation_available`: 可作为部分观察使用，但要声明缺口，不得声称 complete。
+- `large_response_limited`: 进入 `source_quality`，建议缩小窗口、降低 pageSize 或分页。
+- `auth_failed` / `blocked` / Archives 302: 归入 `auth_flow_not_completed_in_bound_context` 或相应 source gap，不得直接说用户无权限或平台不可用。
+- 策略命中、策略树、事件详情、feature list 分层输出；不得把 `rcp_policy_tree_lookup` 当作 event hit path。
 
 账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
 

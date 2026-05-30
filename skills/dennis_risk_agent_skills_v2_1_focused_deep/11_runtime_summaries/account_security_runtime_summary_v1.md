@@ -151,6 +151,46 @@ Track-analysis low-cost补证：
 - P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。
 - execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation。
 
+### 5.1A Browser-Backed Fixed Actions v1 账号安全编排
+
+browser-backed fixed actions v1 已进入 Dennis 母体路由收口，但仍是显式 source plan，不是默认 runtime routing。
+
+ATO / 登录异常推荐顺序：
+
+1. `login_logs_search`
+2. `archives_user_profile`
+3. `archives_user_analysis`
+4. `track_analysis_check_data_ready`
+
+解释边界：
+
+- 登录日志 `no_data`、在线窗口不足、parse error、auth failed 都是 `source_quality`，不能排除 ATO。
+- `archives_user_profile` 是账号画像底座，不单独定性。
+- `archives_user_analysis` 是操作 / 风险日志时间线；大 pageSize 或大响应只能输出 `partial_observation_available` / `large_response_limited`，建议缩窗、降低 pageSize 或分页。
+- `track_analysis_check_data_ready` 是 readiness / provenance，不是风险结论，也不能替代前端活跃画像或登录链路证据。
+
+异常发布 / 色导 / 内容承接：
+
+- 使用 `archives_photo_search -> archives_user_profile -> archives_user_analysis`。
+- `archives_photo_search=no_data` 只表示当前 user/window/source 条件下没有返回记录，不能排除异常发布、内容承接或发布链路风险。
+
+账号扩散 / 同设备：
+
+- 使用 `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`。
+- 关联用户只是扩散线索，不能直接输出团伙结论；必须有登录、设备、行为、策略或发布链路交叉证据。
+
+RCP 归因与策略治理：
+
+- 事件归因使用 `rcp_event_detail -> rcp_event_feature_list`。
+- `rcp_event_feature_list=partial_observation_available` 时只允许做 feature-group 摘要。
+- 策略资产 / 策略树解释使用 `rcp_policy_tree_lookup`；它不是 event hit path，不证明单案命中。
+- 策略命中、策略树、事件详情、feature list 和最终风险判断必须分层，策略命中不能单独定性 ATO / 作弊。
+
+字段分层：
+
+- `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 是风控实体，可在内部研判和 source chaining 保留。
+- cookie/token/session/header/password、完整手机号、身份证、姓名、详细地址严禁输出或保存。
+
 ## 5.2 ATO 小批量客诉执行与登录日志边界
 
 2-9 个 `user_id` 的 ATO 客诉小批量默认进入 `small_batch_execution_with_checkpoint`，不是纯 plan-only，也不是 10+ 的 batch clustering。

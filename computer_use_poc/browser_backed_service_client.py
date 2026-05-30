@@ -4927,17 +4927,17 @@ def parse_typed_params_json(raw_json: str) -> Dict[str, Any]:
     return typed_params
 
 
-def run_mock_action_invocation(action_name: str, typed_params: Mapping[str, Any]) -> Dict[str, Any]:
-    """Invoke a fixed action against local fixtures without service/platform access."""
+def run_action_invocation(action_name: str, typed_params: Mapping[str, Any], *, live_service: bool = False) -> Dict[str, Any]:
+    """Invoke a fixed action in mock mode or against the local service."""
 
     _validate_action_name(action_name)
     params = dict(typed_params)
     _validate_typed_params(params)
-    client = BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload(action_name, "completed")))
+    client = BrowserBackedServiceClient() if live_service else BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload(action_name, "completed")))
     result = client.call_action(action_name, params)
-    result["invocation_mode"] = "mock"
-    result["live_service_called"] = False
-    result["platform_called"] = False
+    result["invocation_mode"] = "live_service" if live_service else "mock"
+    result["live_service_called"] = bool(live_service)
+    result["platform_called"] = False if not live_service else result.get("source_status") == "completed"
     result["dataagent_called"] = False
     result["default_runtime_routing"] = False
     result["live_verified"] = False
@@ -4949,8 +4949,15 @@ def run_mock_action_invocation(action_name: str, typed_params: Mapping[str, Any]
         "caller_url_path_header_cookie_token_session_allowed": False,
         "default_runtime_routing": False,
         "live_verified": False,
+        "live_service_explicitly_requested": bool(live_service),
     }
     return result
+
+
+def run_mock_action_invocation(action_name: str, typed_params: Mapping[str, Any]) -> Dict[str, Any]:
+    """Invoke a fixed action against local fixtures without service/platform access."""
+
+    return run_action_invocation(action_name, typed_params, live_service=False)
 
 
 def run_fixture_tests() -> Dict[str, Any]:
@@ -5965,6 +5972,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         default="{}",
         help="JSON object with typed params for --action; URL/path/header/cookie/token/session keys are rejected",
     )
+    parser.add_argument(
+        "--live-service",
+        action="store_true",
+        help="call the fixed action on the local browser-backed service instead of local mock fixtures",
+    )
     args = parser.parse_args(argv)
 
     if args.self_test:
@@ -5974,7 +5986,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.action:
         try:
             typed_params = parse_typed_params_json(args.typed_params_json)
-            result = run_mock_action_invocation(args.action, typed_params)
+            result = run_action_invocation(args.action, typed_params, live_service=args.live_service)
         except BrowserBackedServiceInputError as exc:
             parser.error(str(exc))
         print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False))

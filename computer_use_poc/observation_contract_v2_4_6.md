@@ -144,6 +144,45 @@ source_entry_resolutions:
     next_action:
 ```
 
+browser-backed fixed actions v1 source observation can also be represented as:
+
+```yaml
+browser_backed_fixed_action_observation:
+  action_name:
+  source_status: completed | no_data | auth_failed | blocked | timeout | parse_error | partial_observation_available | invalid_parameter
+  source_card:
+  source_quality:
+    no_data_not_risk_exclusion:
+    partial_observation_available:
+    large_response_limited:
+    auth_flow_not_completed_in_bound_context:
+    strategy_hit_not_final_judgement:
+    policy_tree_asset_not_event_hit_path:
+  key_entities:
+    user_id:
+    device_id:
+    ip:
+    event_id:
+    strategy_id:
+    photo_id:
+    policyCode:
+    policyTreeCode:
+  raw_response_suppressed: true
+  credential_secret_output: false
+```
+
+Required browser-backed v1 orchestration observations:
+
+- ATO / login anomaly: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- Abnormal publish / content handoff: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
+- Account spread: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
+- RCP event attribution: `rcp_event_detail -> rcp_event_feature_list`.
+- Policy-tree governance: `rcp_policy_tree_lookup` only.
+
+`no_data`, `partial_observation_available`, `large_response_limited`,
+`auth_failed`, and `blocked` must stay in source quality and missing evidence;
+they must not be converted into low-risk / no-risk conclusions.
+
 单例 case 研判可增加一张 evidence card，字段口径与 ATO batch evidence source schema 对齐：
 
 ```yaml

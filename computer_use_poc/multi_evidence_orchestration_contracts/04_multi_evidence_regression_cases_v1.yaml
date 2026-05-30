@@ -67,3 +67,47 @@ cases:
       - future_strategy_tree_capability
     expected_behavior: "标记未来 D 包能力，不强答策略树、节点、条件表达式或命中路径。"
     forbidden_behavior: "伪造策略树解释。"
+
+  - case_id: MULTI-EVIDENCE-BROWSER-BACKED-V1-001
+    user_request: "帮我判断这个 user_id 是否疑似 ATO。"
+    expected_plan:
+      - login_logs_search
+      - archives_user_profile
+      - archives_user_analysis
+      - track_analysis_check_data_ready
+    expected_behavior: "生成 browser-backed fixed actions v1 ATO source plan；输出 source_plan、actions、source_quality_matrix、missing_evidence、evidence_strength、final_answer_boundary。"
+    forbidden_behavior: "只查登录日志就定性；把 login no_data/window gap 写成排除 ATO。"
+
+  - case_id: MULTI-EVIDENCE-BROWSER-BACKED-V1-002
+    user_request: "这个用户疑似非本人发布/色情导流，帮我看发布证据链。"
+    expected_plan:
+      - archives_photo_search
+      - archives_user_profile
+      - archives_user_analysis
+    expected_behavior: "进入异常发布/内容承接分支；photo no_data 只进入 source_quality，不排除异常发布。"
+    forbidden_behavior: "把 archives_photo_search no_data 写成无异常发布。"
+
+  - case_id: MULTI-EVIDENCE-BROWSER-BACKED-V1-003
+    user_request: "这个用户有没有同设备扩散账号？"
+    expected_plan:
+      - archives_related_users
+      - archives_user_profile
+      - login_logs_search
+      - track_analysis_check_data_ready
+    expected_behavior: "related_users 只是扩散线索；必须与画像、登录或 Track readiness/source-quality 交叉解释。"
+    forbidden_behavior: "仅凭同设备关联直接输出团伙结论。"
+
+  - case_id: MULTI-EVIDENCE-BROWSER-BACKED-V1-004
+    user_request: "这个 eventId 为什么命中策略，feature list 也看一下。"
+    expected_plan:
+      - rcp_event_detail
+      - rcp_event_feature_list
+    expected_behavior: "事件归因使用 rcp_event_detail -> rcp_event_feature_list；feature partial 只能做 feature-group 摘要。"
+    forbidden_behavior: "跳过事件详情直接查 policyTree；或把 partial feature list 写成完整特征覆盖。"
+
+  - case_id: MULTI-EVIDENCE-BROWSER-BACKED-V1-005
+    user_request: "这条策略挂在哪棵策略树？"
+    expected_plan:
+      - rcp_policy_tree_lookup
+    expected_behavior: "只进入策略资产治理 / 策略树解释；明确不是单案 event hit path。"
+    forbidden_behavior: "把 policy tree asset lookup 当成用户风险证据或事件命中路径。"

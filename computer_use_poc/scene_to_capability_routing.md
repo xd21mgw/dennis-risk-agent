@@ -109,6 +109,27 @@ Rules:
 - DataAgent / Hive 只在需要离线聚合、长周期统计或在线窗口缺失时作为补证路径，不是默认万能底座。
 - `login_log_read` 的 online URL 必须包含 `recallSource=2,0,1,3`；在依赖登录链路的场景中，在线统一登录日志仍需先做 `reliable_window_precheck`。缺失 `recallSource` 属于 wrapper URL 映射缺口，不应误判成历史无登录。
 
+### 0.2A Browser-Backed Fixed Actions v1 Routing Closure
+
+这些 browser-backed fixed actions 已在相邻 service registry 和 Dennis Python client 对齐，但仍是 explicit source plan，不是默认 runtime routing。
+
+| user scene | route / capability | explicit action sequence | must preserve |
+| --- | --- | --- | --- |
+| ATO / 登录异常 / 账号安全单案 | `multi_evidence_orchestration_contracts` / `single_entity_execution_mode` | `login_logs_search` -> `archives_user_profile` -> `archives_user_analysis` -> `track_analysis_check_data_ready` | `source_plan`、`actions`、`source_quality_matrix`、`missing_evidence`、`evidence_strength`、`final_answer_boundary` |
+| 异常发布 / 色导 / 内容承接 | `multi_evidence_orchestration_contracts` with publish/content branch | `archives_photo_search` -> `archives_user_profile` -> `archives_user_analysis` | photo `no_data` 不得排除异常发布，必须保留发布链路缺口 |
+| 账号扩散 / 同设备 / 关联账号 | `multi_evidence_orchestration_contracts` relation branch | `archives_related_users` -> `archives_user_profile` / `login_logs_search` / `track_analysis_check_data_ready` | related_users 是扩散线索，不是团伙定性 |
+| RCP 事件归因 / 为什么这个 event 被打 | `single_event_policy_attribution` | `rcp_event_detail` -> `rcp_event_feature_list` | partial feature list 只能做 feature-group 摘要，不声称完整 |
+| 策略资产治理 / 策略树解释 | `policy_tree_asset_lookup` | `rcp_policy_tree_lookup` | policy tree 是策略资产治理，不是 event hit path |
+
+反向路由边界：
+
+- 只问“策略树 / 节点 / 这条策略挂在哪”时，不跳到 `rcp_event_detail`。
+- 只问“eventId 为什么命中 / 事件详情 / feature list”时，不跳 `rcp_policy_tree_lookup` 代替事件归因。
+- 只问“用户是否有风险”时，策略命中和 Track readiness 都只能作为辅助 / source-quality，不单独定性。
+- 未 live verified、未启用平台或不在 source plan 中的 action 不默认调用。
+- `no_data`、`auth_failed`、`blocked`、`timeout`、`parse_error`、`partial_observation_available` 和 `large_response_limited` 必须写入 source_quality；不得输出低风险 / 无风险 / 权限无关结论。
+- Archives 302 / login redirect 是 `auth_flow_not_completed_in_bound_context`，不是直接“无权限”。
+
 Multi-entry runtime guard：
 
 - 适用入口包括 KIM、APP、Web 和未来其他入口。

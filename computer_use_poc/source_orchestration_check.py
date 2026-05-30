@@ -27,6 +27,20 @@ TRACK_ANALYSIS_REQUIRED_PATHS = {
     "track_analysis_profile": TRACK_ANALYSIS_BASE_PATH + "profile",
 }
 TRACK_ANALYSIS_FORBIDDEN_PATHS = {"/api/profile", "/rest/profile", "/api/user/profile"}
+FIXED_BROWSER_BACKED_ACTIONS = {
+    "track_analysis_summary",
+    "track_analysis_check_data_ready",
+    "rcp_snapshot",
+    "weapon_inventory",
+    "login_logs_search",
+    "archives_user_profile",
+    "archives_user_analysis",
+    "archives_photo_search",
+    "archives_related_users",
+    "rcp_event_detail",
+    "rcp_event_feature_list",
+    "rcp_policy_tree_lookup",
+}
 FORBIDDEN_ACCESS_METHODS = {"curl_cookie", "manual_cookie", "main_agent_direct_exec", "arbitrary_url"}
 NO_DATA_STATUSES = {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "tool_gap", "auth_bridge_gap"}
 NON_ENDPOINT_STATUSES = {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"}
@@ -147,7 +161,7 @@ def is_browser_backed_item(item: dict[str, Any]) -> bool:
     return (
         item.get("access_method") == "browser_backed_service"
         or item.get("source_provenance") == "browser_backed_service"
-        or action_name in {"track_analysis_summary", "rcp_snapshot", "weapon_inventory", "login_logs_search"}
+        or action_name in FIXED_BROWSER_BACKED_ACTIONS
     )
 
 
@@ -175,6 +189,14 @@ def is_registered_endpoint(endpoint: str) -> bool:
         "/actions/weapon_inventory",
         "/actions/track_analysis_summary",
         "/actions/rcp_snapshot",
+        "/actions/track_analysis_check_data_ready",
+        "/actions/archives_user_profile",
+        "/actions/archives_user_analysis",
+        "/actions/archives_photo_search",
+        "/actions/archives_related_users",
+        "/actions/rcp_event_detail",
+        "/actions/rcp_event_feature_list",
+        "/actions/rcp_policy_tree_lookup",
     }
     return any(fragment in endpoint for fragment in registered_fragments)
 

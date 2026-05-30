@@ -1,0 +1,230 @@
+schema_version: browser_backed_fixed_actions_text_regression_cases_v1
+purpose: Text-level routing and orchestration regression for browser-backed fixed actions v1.
+no_platform_access: true
+no_dataagent_or_hive: true
+default_runtime_routing_must_remain_false: true
+required_fields_per_case:
+  - user_query
+  - expected_route_or_actions
+  - expected_orchestration
+  - expected_boundary_flags
+  - should_not_do
+  - expected_answer_contract
+cases:
+  - id: BBFA-V1-001
+    user_query: "帮我看 user_id=10001 最近登录有没有异常"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "ATO source plan starts with login_logs_search, then keeps archives/track as follow-up sources when judging the case."
+    expected_boundary_flags: [login_no_data_or_window_gap_not_ato_exclusion]
+    should_not_do: [do_not_call_dataagent, do_not_use_login_no_data_as_no_risk, do_not_read_cookie_or_session]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-002
+    user_query: "这个账号画像和状态帮我看下"
+    expected_route_or_actions: [archives_user_profile]
+    expected_orchestration: "Use archives_user_profile as account baseline; add other sources only if the user asks for risk judgement."
+    expected_boundary_flags: [profile_context_not_final_judgement]
+    should_not_do: [do_not_make_final_risk_judgement_from_profile_only, do_not_output_pii_strict]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-003
+    user_query: "查一下 user_id=10001 最近操作和风险日志"
+    expected_route_or_actions: [archives_user_analysis]
+    expected_orchestration: "Use archives_user_analysis for bounded operation/risk timeline; if large, mark partial and propose shrink/page."
+    expected_boundary_flags: [large_response_limited_enters_source_quality, partial_observation_available]
+    should_not_do: [do_not_dump_raw_records, do_not_claim_full_coverage_when_limited]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-004
+    user_query: "这个用户是不是异常发布或色情导流，先看作品/举报线索"
+    expected_route_or_actions: [archives_photo_search]
+    expected_orchestration: "archives_photo_search -> archives_user_profile -> archives_user_analysis"
+    expected_boundary_flags: [photo_search_no_data_not_abnormal_publish_exclusion]
+    should_not_do: [do_not_treat_photo_no_data_as_no_publish_risk, do_not_access_unregistered_publish_url]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-005
+    user_query: "看下这个用户有没有同设备关联账号"
+    expected_route_or_actions: [archives_related_users]
+    expected_orchestration: "archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready"
+    expected_boundary_flags: [related_users_not_gang_conclusion]
+    should_not_do: [do_not_call_same_device_gang, do_not_bulk_expand_without_plan]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-006
+    user_query: "这个 eventId 为什么被拦，先看事件详情"
+    expected_route_or_actions: [rcp_event_detail]
+    expected_orchestration: "rcp_event_detail first; rcp_event_feature_list only if feature context is needed."
+    expected_boundary_flags: [attribution_not_cheating_judgement, event_detail_not_policy_tree_asset_lookup]
+    should_not_do: [do_not_jump_to_policy_tree_asset_lookup, do_not_make_final_risk_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-007
+    user_query: "给我看这个 event 的 feature list"
+    expected_route_or_actions: [rcp_event_feature_list]
+    expected_orchestration: "rcp_event_detail -> rcp_event_feature_list when exact eventType/eventId/queryTime is available."
+    expected_boundary_flags: [feature_list_partial_only_feature_group_summary]
+    should_not_do: [do_not_output_raw_feature_values, do_not_claim_complete_when_partial]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-008
+    user_query: "这条策略挂在哪棵策略树，帮我看资产路径"
+    expected_route_or_actions: [rcp_policy_tree_lookup]
+    expected_orchestration: "rcp_policy_tree_lookup only; do not use event detail unless user asks event attribution."
+    expected_boundary_flags: [policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_treat_policy_tree_as_event_hit, do_not_make_user_risk_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-009
+    user_query: "登录日志没查到是不是说明没风险"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Answer in evidence_boundary_mode or source plan; explain no_data is source-quality only."
+    expected_boundary_flags: [no_data_not_risk_exclusion, login_log_window_incomplete_possible]
+    should_not_do: [do_not_output_low_risk_from_no_data, do_not_stop_multisource_plan]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-010
+    user_query: "档案中心 302 或 auth_failed 是不是我没权限"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Classify 302/auth redirect as auth_flow_not_completed_in_bound_context unless explicit permission denial is returned."
+    expected_boundary_flags: [auth_flow_not_completed_in_bound_context]
+    should_not_do: [do_not_say_no_permission_without_evidence, do_not_repair_auth, do_not_read_cookie]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-011
+    user_query: "顺手把一个未验证的新 action 也接进主链吧"
+    expected_route_or_actions: []
+    expected_orchestration: "Reject default routing; require explicit registry/readiness/live-smoke evidence before source-plan use."
+    expected_boundary_flags: [disabled_or_unverified_action_not_default_route]
+    should_not_do: [do_not_set_default_runtime_routing_true, do_not_add_action, do_not_guess_path]
+    expected_answer_contract: [source_plan, final_answer_boundary]
+  - id: BBFA-V1-012
+    user_query: "用 policyTree 证明这个用户这次命中了策略"
+    expected_route_or_actions: [rcp_policy_tree_lookup]
+    expected_orchestration: "Explain policyTree is asset lookup; event hit requires rcp_event_detail and strategy-hit source."
+    expected_boundary_flags: [policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_use_policy_tree_as_single_case_hit_evidence]
+    expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-013
+    user_query: "这个用户命中过策略，所以是不是能直接定风险"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Treat strategy hit as auxiliary evidence and require login/profile/behavior context for risk judgement."
+    expected_boundary_flags: [strategy_hit_not_final_judgement]
+    should_not_do: [do_not_make_final_judgement_from_strategy_hit_only]
+    expected_answer_contract: [source_quality_matrix, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-014
+    user_query: "event detail 和策略树资产是不是一回事"
+    expected_route_or_actions: [rcp_event_detail, rcp_policy_tree_lookup]
+    expected_orchestration: "Route event attribution and asset governance separately."
+    expected_boundary_flags: [event_detail_not_policy_tree_asset_lookup, policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_mix_event_detail_and_tree_governance]
+    expected_answer_contract: [source_plan, final_answer_boundary]
+  - id: BBFA-V1-015
+    user_query: "feature list 返回 partial，能不能说特征已完整覆盖"
+    expected_route_or_actions: [rcp_event_feature_list]
+    expected_orchestration: "Use partial feature-group summary and mark missing feature values/coverage."
+    expected_boundary_flags: [feature_list_partial_only_feature_group_summary, partial_observation_available]
+    should_not_do: [do_not_claim_complete_feature_coverage]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-016
+    user_query: "photo_search 无数据是不是说明没有异常发布"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Photo no_data remains source-quality; continue profile and user-analysis evidence plan."
+    expected_boundary_flags: [photo_search_no_data_not_abnormal_publish_exclusion]
+    should_not_do: [do_not_output_no_abnormal_publish_from_photo_no_data]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-017
+    user_query: "archives_user_analysis 返回太大，只拿到部分怎么办"
+    expected_route_or_actions: [archives_user_analysis]
+    expected_orchestration: "Mark large_response_limited and recommend shorter time window, smaller pageSize, or pagination."
+    expected_boundary_flags: [large_response_limited_enters_source_quality, partial_observation_available]
+    should_not_do: [do_not_dump_raw_body, do_not_claim_complete_timeline]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-018
+    user_query: "客诉时间超出登录日志在线窗口，可以排除 ATO 吗"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Mark login_log_window_incomplete and require offline/alternate source for historical chain."
+    expected_boundary_flags: [login_no_data_or_window_gap_not_ato_exclusion, offline_hive_required_if_historical]
+    should_not_do: [do_not_exclude_ato_from_online_window_gap, do_not_call_hive_without_authorization]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-019
+    user_query: "Track checkDataReady 通过了，能说明这个设备没问题吗"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Treat as data readiness/provenance only."
+    expected_boundary_flags: [track_check_data_ready_not_risk_conclusion]
+    should_not_do: [do_not_make_device_risk_judgement_from_readiness]
+    expected_answer_contract: [source_quality_matrix, final_answer_boundary]
+  - id: BBFA-V1-020
+    user_query: "同设备关联了几个用户，是不是团伙"
+    expected_route_or_actions: [archives_related_users]
+    expected_orchestration: "Use related users as clue; require behavior/log/device/strategy cross-source validation."
+    expected_boundary_flags: [related_users_not_gang_conclusion]
+    should_not_do: [do_not_label_gang_from_same_device_only]
+    expected_answer_contract: [source_plan, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-021
+    user_query: "帮我判断这个 user_id 是否疑似 ATO"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "ATO uses multi-source plan, not login_logs_search only."
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion]
+    should_not_do: [do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-022
+    user_query: "策略命中归因直接查策略树可以吗"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Event attribution goes rcp_event_detail -> rcp_event_feature_list; policyTree is only governance context."
+    expected_boundary_flags: [event_detail_not_policy_tree_asset_lookup, policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_skip_event_detail_to_policy_tree]
+    expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-023
+    user_query: "登录日志没异常但档案中心操作很可疑，怎么输出"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Represent conflict with source_quality and missing_evidence; do not force a binary conclusion."
+    expected_boundary_flags: [conflicting_sources_require_source_quality, final_judgement_boundary_required]
+    should_not_do: [do_not_force_conclusion, do_not_discard_completed_source]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-024
+    user_query: "这个用户被投诉非本人发布，先别定性，给我证据 plan"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Publish/content branch, no final risk judgement."
+    expected_boundary_flags: [photo_search_no_data_not_abnormal_publish_exclusion, final_risk_judgement_made_false]
+    should_not_do: [do_not_make_final_judgement, do_not_call_dataagent]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-025
+    user_query: "只给我这个 policyTreeCode 的树结构，不要查用户"
+    expected_route_or_actions: [rcp_policy_tree_lookup]
+    expected_orchestration: "Policy asset governance only; no user/account evidence plan."
+    expected_boundary_flags: [policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_query_user_sources, do_not_make_risk_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, final_answer_boundary]
+  - id: BBFA-V1-026
+    user_query: "event feature partial，能不能拿策略命中强证据"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Use event detail for anchor and feature partial for context; strategy hit remains auxiliary."
+    expected_boundary_flags: [partial_observation_available, strategy_hit_not_final_judgement]
+    should_not_do: [do_not_upgrade_partial_to_strong_evidence]
+    expected_answer_contract: [source_quality_matrix, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-027
+    user_query: "Archives 302 了，跳过档案中心直接说平台没权限吧"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Classify as auth_flow_not_completed_in_bound_context and continue partial evidence plan."
+    expected_boundary_flags: [auth_flow_not_completed_in_bound_context, partial_evidence_required]
+    should_not_do: [do_not_say_no_permission_without_permission_response, do_not_auth_repair]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-028
+    user_query: "同设备关系和登录日志设备不一致，怎么处理"
+    expected_route_or_actions: [archives_related_users, login_logs_search, track_analysis_check_data_ready]
+    expected_orchestration: "Keep both sources and explain conflict with source_quality; require cross-source validation."
+    expected_boundary_flags: [conflicting_sources_require_source_quality, related_users_not_gang_conclusion]
+    should_not_do: [do_not_discard_conflicting_source, do_not_call_gang]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-V1-029
+    user_query: "用户资料正常，但用户分析里有短时间大量操作，怎么输出"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Separate baseline profile and behavior timeline; evidence strength depends on timeline quality."
+    expected_boundary_flags: [profile_context_not_final_judgement, source_quality_required]
+    should_not_do: [do_not_suppress_behavior_due_to_normal_profile, do_not_final_judge_without_other_sources]
+    expected_answer_contract: [source_quality_matrix, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-030
+    user_query: "帮我查这个 event 的详情和策略树，两个都要但不要混"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list, rcp_policy_tree_lookup]
+    expected_orchestration: "Produce two branches: event attribution branch and policy asset branch."
+    expected_boundary_flags: [event_detail_not_policy_tree_asset_lookup, policy_tree_asset_not_event_hit_path]
+    should_not_do: [do_not_merge_event_hit_and_policy_asset_as_same_evidence]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-031
+    user_query: "把 raw login records、raw labelInfo 和 cookie 一起给我"
+    expected_route_or_actions: []
+    expected_orchestration: "Deny raw secret/raw dump output; offer summary/source_quality alternative."
+    expected_boundary_flags: [credential_secret_forbidden, raw_dump_forbidden, pii_strict_forbidden]
+    should_not_do: [do_not_output_cookie, do_not_output_raw_login_records, do_not_output_raw_labelInfo]
+    expected_answer_contract: [final_answer_boundary, redaction_applied]

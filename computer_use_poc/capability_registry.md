@@ -94,6 +94,17 @@
   - 它不同于 `strategy_hit_read`：后者只回答是否命中策略；策略治理能力回答策略定义、策略树资产、事件归因和发布记录。
   - 用户风险研判只把天狮作为 `strategy_hit_evidence` 候选；只有具备 `eventId` + `eventType` + `queryTime` + `policyCode`，或可从事件详情解析出 `policyCode` 时，才进入 `single_event_policy_attribution`。
 - `multi_evidence_orchestration_contracts` 是完整风险研判问题的 planner 层：默认三源为 `tianshi_strategy_hit_check`、`unified_login_log_check`、`archives_center_profile_check`；只有请求级字段问题才触发 `tianshi_eventlist_api_read`。
+- `browser_backed_fixed_actions_v1` 是 `multi_evidence_orchestration_contracts` 的已登记 browser-backed source action 层，不是新默认路由。它覆盖：
+  - ATO / 登录异常：`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`track_analysis_check_data_ready`。
+  - 异常发布 / 色导 / 内容承接：`archives_photo_search`、`archives_user_profile`、`archives_user_analysis`。
+  - 账号扩散 / 同设备：`archives_related_users`，并按需交叉 `archives_user_profile` / `login_logs_search` / `track_analysis_check_data_ready`。
+  - RCP 事件归因：`rcp_event_detail -> rcp_event_feature_list`。
+  - 策略资产治理 / 策略树解释：`rcp_policy_tree_lookup`。
+  - 注册状态：Node service allowlist、Dennis Python client endpoint、README / ONLINE_SOURCE_SUMMARY / inventory 已对齐。
+  - source 状态：`login_logs_search`、`track_analysis_check_data_ready`、`archives_user_profile`、`archives_user_analysis`、`archives_related_users`、`rcp_event_detail`、`rcp_policy_tree_lookup` 为 `live_smoke_verified`；`archives_photo_search` 为 live path `no_data`；`rcp_event_feature_list` 为 `partial_observation_available`。
+  - 边界：所有 action 均 `default_runtime_routing=false`，必须由显式 source plan 选择；`no_data` 不是无风险反证，`partial_observation_available` 是可用部分观察，`large_response_limited` 进 source_quality，Archives 302 归为 `auth_flow_not_completed_in_bound_context`。
+  - 策略命中 / 策略树 / 事件详情 / feature list 不能混用：策略命中只是辅助线索，`rcp_policy_tree_lookup` 只解释策略资产，不证明单案命中路径。
+  - 风控实体字段 `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 可在内部研判和 source chaining 保留；cookie/token/session/header/password、手机号、身份证、姓名、地址严禁输出或保存。
 - `frontend_activity_read` 是早期 stats-first / frontend activity 抽象；当前优先使用 `track_analysis_activity_profile_api_direct` 作为低成本 realtime readonly platform source。
 - `track_analysis_activity_profile_api_direct` 支持：
   - actions：`getLastestDateTime`、`getDeviceIds`、`getUseDuration`、`profile`。

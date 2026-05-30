@@ -2,14 +2,18 @@
 
 ## Purpose
 
-Classify HAR-derived browser-backed fixed actions before any live smoke. This
-document is a readiness matrix only: it does not run live smoke, does not access
-real platforms, and does not change default runtime routing.
+Classify HAR-derived browser-backed fixed actions and record the Dennis mother
+runtime v1 closure status after interface registration and live smoke. This
+document is now both a readiness matrix and a status handoff: it does not run
+live smoke, does not access real platforms, and does not change default runtime
+routing.
 
 ## Global Boundary
 
 - `default_runtime_routing=false` for every action below.
-- `live_verified=false` for every action below.
+- Registry-level `live_verified` remains false unless the service registry has a
+  separate runtime flag; v1 live-smoke evidence is recorded as source status in
+  the tables below.
 - `needs_explicit_action_call=true` for every action outside an explicitly
   selected source plan.
 - Caller-provided URL/path/header/cookie/token/session is forbidden.
@@ -20,6 +24,24 @@ real platforms, and does not change default runtime routing.
   review/source chaining and are not PII by default.
 - Cookie/token/session/header/password, full phone number, ID card, real name,
   and detailed address remain forbidden output.
+
+## Browser-Backed Fixed Actions v1 Final Status
+
+These nine actions are the Dennis mother-runtime routing-closure batch. They are
+registered in the adjacent Node service, exposed by the Dennis Python client,
+and remain explicit-action/source-plan only.
+
+| action_name | platform | final source status | routing use | boundary |
+| --- | --- | --- | --- | --- |
+| `login_logs_search` | Login Logs | `live_smoke_verified` | ATO / login anomaly source plan | Login no_data/window gap cannot exclude ATO. |
+| `track_analysis_check_data_ready` | Track Analysis | `live_smoke_verified` | ATO support source-quality/provenance | Readiness is not risk conclusion or completed account-security evidence. |
+| `archives_user_profile` | Archives Center | `live_smoke_verified` | Account profile baseline | Profile context is not final judgement. |
+| `archives_user_analysis` | Archives Center | `live_smoke_verified`; large `pageSize` can be `partial_observation_available` | Account operation/risk timeline | Large response becomes `large_response_limited`; shrink window/page size or paginate. |
+| `archives_photo_search` | Archives Center | `no_data`; path live | Abnormal publish / content handoff source plan | Photo no_data does not exclude abnormal publish. |
+| `archives_related_users` | Archives Center | `live_smoke_verified` | Account spread / same-device clue | Related users are clues, not gang conclusion. |
+| `rcp_event_detail` | RCP / Tianshi | `live_smoke_verified` | RCP event attribution first step | Event detail is not policy tree governance. |
+| `rcp_event_feature_list` | RCP / Tianshi | `partial_observation_available` | RCP event attribution second step | Partial feature output only supports feature-group summary. |
+| `rcp_policy_tree_lookup` | RCP / Tianshi | `live_smoke_verified` | Policy tree / strategy asset governance | Not event-hit path and not single-case risk judgement. |
 
 ## Readiness Tier Definitions
 
@@ -46,12 +68,11 @@ are rolled into `rcp_policy_tree_lookup`.
 | Grafana | 0 | 0 | 2 | 0 | 0 |
 | Product Studio / Kconf / Permission Config | 0 | 0 | 2 | 0 | 1 |
 
-## Recommended First Live Smoke Batch
+## V1 Live-Smoke Batch Parameters
 
-This is the first batch for newly HAR-derived optional contracts. The four base
-actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`,
-`login_logs_search`) remain separately live-smoke-ready but are not included in
-this optional-action batch.
+This was the first batch for newly HAR-derived optional contracts. It is kept
+as the minimum parameter reference for reruns and future regression. The status
+closure for the nine selected actions is recorded above.
 
 | order | action_name | platform | minimum live params | reason |
 | ---: | --- | --- | --- | --- |
@@ -68,10 +89,10 @@ this optional-action batch.
 
 | action_name | platform | current_status | priority | evidence_value | live_smoke_readiness | readiness_reason | required_live_params | expected_response_shape | normalizer_risk | field_semantics_risk | safe_to_smoke_test | default_runtime_routing | live_verified | next_step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `archives_user_analysis` | Archives Center | implemented_mock_only | P0 | Core account operation timeline. | live_smoke_ready | Fixed POST path/body, typed params, fixture, source_card/source_quality, and raw-body suppression are in place. | `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, optional operation filters. | Summary counts/time/device/IP/status from `/v3/user/log/coreLogs/fetch`. | low | low | true | false | false | First-batch smoke candidate. |
-| `archives_photo_search` | Archives Center | implemented_mock_only | P0-conditional | Abnormal publish/content/report anchoring. | live_smoke_ready | `reportedIds=user_id` body mapping is fixed and fixture covers summary-only output. | `user_id`, `begin`, `end`, `page`, `count`, `matchType`, `sort`. | Count/time/status/report context from `/v4/archives/report/photo/search`. | low | low-medium | true | false | false | First-batch smoke candidate when publish/report evidence matters. |
-| `archives_user_profile` | Archives Center | implemented_mock_only | P0/P1-high | Current account baseline/profile status. | live_smoke_ready | Single typed `user_id` GET path; profile summary suppresses raw body. | `user_id`. | Current-state profile fields from `/archives/user/home/info`. | low | low | true | false | false | First-batch smoke candidate. |
-| `archives_related_users` | Archives Center | implemented_mock_only | P1 | Same-device related-user expansion. | live_smoke_ready | Fixed POST path/body and enum mapping `type=0/1` are covered by fixture. | `user_id`, `relation_type=same_device_registered|same_device_login`. | Related-user counts/types from `/archives/user/search/device`. | low | medium | true | false | false | First-batch smoke candidate; relation is candidate evidence, not judgement. |
+| `archives_user_analysis` | Archives Center | live_smoke_verified | P0 | Core account operation timeline. | live_smoke_ready | Fixed POST path/body, typed params, fixture, source_card/source_quality, and raw-body suppression are in place; large page size can return `partial_observation_available`. | `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, optional operation filters. | Summary counts/time/device/IP/status from `/v3/user/log/coreLogs/fetch`. | low | low | true | false | false | Use in explicit ATO/login-anomaly source plan; large response enters source_quality. |
+| `archives_photo_search` | Archives Center | no_data_path_live | P0-conditional | Abnormal publish/content/report anchoring. | live_smoke_ready | `reportedIds=user_id` body mapping is fixed and fixture covers summary-only output; latest smoke returned source `no_data`. | `user_id`, `begin`, `end`, `page`, `count`, `matchType`, `sort`. | Count/time/status/report context from `/v4/archives/report/photo/search`. | low | low-medium | true | false | false | Use only in explicit abnormal-publish/content source plan; no_data is not risk exclusion. |
+| `archives_user_profile` | Archives Center | live_smoke_verified | P0/P1-high | Current account baseline/profile status. | live_smoke_ready | Single typed `user_id` GET path; profile summary suppresses raw body. | `user_id`. | Current-state profile fields from `/archives/user/home/info`. | low | low | true | false | false | Use in explicit ATO/profile/publish support source plan. |
+| `archives_related_users` | Archives Center | live_smoke_verified | P1 | Same-device related-user expansion. | live_smoke_ready | Fixed POST path/body and enum mapping `type=0/1` are covered by fixture. | `user_id`, `relation_type=same_device_registered|same_device_login`. | Related-user counts/types from `/archives/user/search/device`. | low | medium | true | false | false | Use as account-spread clue; not gang judgement. |
 | `archives_private_message_search` | Archives Center | implemented_mock_only | P2-conditional | Private-message metadata count/status/time clue. | conditional_ready | Path/body are fixed, but direction/status semantics should be confirmed live before use. | `user_id`, `direction=sent|received`, `page`, `count`, `status`, `sort`. | Count/time/status/counterpart metadata from `/archives/user/message/search`; plaintext suppressed. | medium | high | true | false | false | Keep optional; smoke only after P0 Archives actions pass. |
 | `archives_past_four_items` | Archives Center | implemented_mock_only | P2-conditional | Profile-change metadata clue. | conditional_ready | Path/body are fixed, but `infoType`, mark/punish status semantics should be confirmed live. | `user_id`, `info_type`, `page`, `count`, `markResult`, `punishResult`. | Count/time/type/status summary from `/v4/audit/user/fourinfo/log/search`; old/new content suppressed. | medium | high | true | false | false | Keep optional; smoke only after profile baseline passes. |
 
@@ -80,9 +101,9 @@ this optional-action batch.
 | action_name | platform | current_status | priority | evidence_value | live_smoke_readiness | readiness_reason | required_live_params | expected_response_shape | normalizer_risk | field_semantics_risk | safe_to_smoke_test | default_runtime_routing | live_verified | next_step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `rcp_snapshot` | RCP / Tianshi | implemented_mock_only | P0-explicit | Strategy hit/event entry summary. | live_smoke_ready | Existing base browser-backed action with fixture and standard source_card. | Existing typed event/entity params and service-owned body. | Event count/dynamic-column summary from `/v2/rest/event/eventList`. | low | medium | true | false | false | Base action smoke candidate outside optional batch. |
-| `rcp_event_detail` | RCP / Tianshi | implemented_mock_only | P0-explicit | Single-event detail and exact `_occurTime`. | live_smoke_ready | Fixed GET path/params and fixture cover event detail summary. | `eventType`, `eventId`, exact `queryTime`. | Feedback/error/effective-policy/entities from `/v2/rest/event/rcpEventDetail`. | low | medium | true | false | false | First-batch smoke candidate. |
-| `rcp_event_feature_list` | RCP / Tianshi | implemented_mock_only | P1-explicit | Event feature snapshot summary. | live_smoke_ready | Fixed `featureGroup=""`; non-empty group rejected; raw values suppressed. | `eventType`, `eventId`, exact `queryTime`, fixed `featureGroup=""`. | Feature count/group/key summary from `/v2/rest/event/rcpEventFeatureList`. | medium | medium | true | false | false | First-batch smoke candidate after event detail. |
-| `rcp_policy_tree_lookup` | RCP / Tianshi | implemented_mock_only | strategy_governance | Policy-tree asset/node resolution, not event hit path. | live_smoke_ready | HAR confirms precise tree path and companion asset paths; node code resolution is service-owned. | `policyTreeCode`, `policyTreeVersion`, optional `targetPolicyCode`. | Tree node summary plus optional binding/code-list counts from `queryProPolicyTree`, `policyTreeList`, `queryBindingByNodeCode`, `getAllPolicyCodeByPage`. | medium | medium | true | false | false | First-batch smoke candidate for strategy asset governance only. |
+| `rcp_event_detail` | RCP / Tianshi | live_smoke_verified | P0-explicit | Single-event detail and exact `_occurTime`. | live_smoke_ready | Fixed GET path/params and fixture cover event detail summary. | `eventType`, `eventId`, exact `queryTime`. | Feedback/error/effective-policy/entities from `/v2/rest/event/rcpEventDetail`. | low | medium | true | false | false | First step for explicit event attribution. |
+| `rcp_event_feature_list` | RCP / Tianshi | partial_observation_available | P1-explicit | Event feature snapshot summary. | live_smoke_ready | Fixed `featureGroup=""`; non-empty group rejected; raw values suppressed; live body cap can return partial feature-group summary. | `eventType`, `eventId`, exact `queryTime`, fixed `featureGroup=""`. | Feature count/group/key summary from `/v2/rest/event/rcpEventFeatureList`. | medium | medium | true | false | false | Use after event detail; partial output cannot claim complete feature evidence. |
+| `rcp_policy_tree_lookup` | RCP / Tianshi | live_smoke_verified | strategy_governance | Policy-tree asset/node resolution, not event hit path. | live_smoke_ready | HAR confirms precise tree path and companion asset paths; node code resolution is service-owned. | `policyTreeCode`, `policyTreeVersion`, optional `targetPolicyCode`. | Tree node summary plus optional binding/code-list counts from `queryProPolicyTree`, `policyTreeList`, `queryBindingByNodeCode`, `getAllPolicyCodeByPage`. | medium | medium | true | false | false | Use only for strategy asset governance / policy-tree explanation. |
 | `rcp_policy_version_lookup` | RCP / Tianshi | implemented_mock_only | P1-explicit | Policy version provenance for event attribution. | conditional_ready | Path/params are fixed, but policy-version semantics should be confirmed against real event snapshots. | `eventType`, `eventId`, `policyCode`, `policyVersion`, exact `queryTime`. | Version-found summary and policy metadata from `/v2/rest/pc/policy/getPolicyVersionListByEvent`. | medium | high | true | false | false | Smoke after `rcp_event_detail` provides a valid event/policy tuple. |
 | `rcp_node_policy_attribution` | RCP / Tianshi | implemented_mock_only | P1-explicit | Condition-level attribution, not final judgement. | conditional_ready | Fixed POST body and raw-condition suppression exist; condition semantics require live confirmation. | `eventType`, `eventId`, `policyCode`, `policyVersion`, exact `queryTime`, `region`, fixed `type=""`. | True/false condition counts and error-feature summary from `/v2/rest/pc/policy/nodePolicyAttribution`. | medium | high | true | false | false | Smoke only with a known representative event/policy tuple. |
 | `rcp_node_bind_policy_attribution` | RCP / Tianshi | implemented_mock_only | strategy_governance | Node-level binding attribution/context. | conditional_ready | Fixed path is clear but requires a node code resolved by `queryProPolicyTree`. | `eventType`, `eventId`, exact `queryTime`, `policyTreeCode`, `policyTreeVersion`, resolved `policyTreeNodeCode`. | Node binding summary and target policy status from `/v2/rest/pc/policy/nodeBindPolicyAttribution`. | medium | high | true | false | false | Smoke only after `rcp_policy_tree_lookup` resolves node code. |
@@ -94,7 +115,7 @@ this optional-action batch.
 | action_name | platform | current_status | priority | evidence_value | live_smoke_readiness | readiness_reason | required_live_params | expected_response_shape | normalizer_risk | field_semantics_risk | safe_to_smoke_test | default_runtime_routing | live_verified | next_step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `track_analysis_summary` | Track Analysis | implemented_mock_only | P0 | Activity/profile/device bundle. | live_smoke_ready | Existing base action expands four subinterfaces and fixture covers source summary. | `user_id`, `appName`, `mode`, optional sub-interface controls. | Four-subinterface summary for profile/use-duration/device/latest. | low | medium | true | false | false | Base action smoke candidate outside optional batch. |
-| `track_analysis_check_data_ready` | Track Analysis | implemented_mock_only | P2-helper | Data readiness/source-quality provenance only. | live_smoke_ready | Fixed POST body keys from HAR; service generates `batchQueryId` and `_t`; trace value suppressed. | `device_id`, `appName`, `product`, `startTime`, `endTime`, `category`, `event`, `appPlatform`, `metric`, fixed `type=deviceId`. | `code/message/data.dateStatus/traceId` presence from `/dp/platform/app/analytics/v2/sequence/checkDataReady`. | low | medium | true | false | false | First-batch optional smoke candidate; never count as completed account-security evidence. |
+| `track_analysis_check_data_ready` | Track Analysis | live_smoke_verified | P2-helper | Data readiness/source-quality provenance only. | live_smoke_ready | Fixed POST body keys from HAR; service generates `batchQueryId` and `_t`; trace value suppressed. | `device_id`, `appName`, `product`, `startTime`, `endTime`, `category`, `event`, `appPlatform`, `metric`, fixed `type=deviceId`. | `code/message/data.dateStatus/traceId` presence from `/dp/platform/app/analytics/v2/sequence/checkDataReady`. | low | medium | true | false | false | Use as provenance/readiness only; never count as completed account-security evidence. |
 
 ## Weapon
 
@@ -106,7 +127,7 @@ this optional-action batch.
 
 | action_name | platform | current_status | priority | evidence_value | live_smoke_readiness | readiness_reason | required_live_params | expected_response_shape | normalizer_risk | field_semantics_risk | safe_to_smoke_test | default_runtime_routing | live_verified | next_step |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `login_logs_search` | Login Logs | implemented_mock_only | P0 | Online login-log reliable window. | live_smoke_ready | Existing base action with fixed `/rest/unified/log/search` and `recallSource=2,0,1,3`. | `user_id`, reliable online window, `recallSource=2,0,1,3`. | Count/window/IP/device/method summary from `/rest/unified/log/search`. | low | medium | true | false | false | Base action smoke candidate outside optional batch. |
+| `login_logs_search` | Login Logs | live_smoke_verified | P0 | Online login-log reliable window. | live_smoke_ready | Existing base action with fixed `/rest/unified/log/search` and `recallSource=2,0,1,3`; latest smoke handled large 7-day response with 24-hour fallback. | `user_id`, reliable online window, `recallSource=2,0,1,3`. | Count/window/IP/device/method summary from `/rest/unified/log/search`. | low | medium | true | false | false | Use in ATO/login-anomaly source plan; no_data/window gap is not no-risk evidence. |
 
 ## Contract-Only And Not-Ready Closures
 

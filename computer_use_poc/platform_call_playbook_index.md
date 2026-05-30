@@ -74,6 +74,70 @@ Boundary rules:
 - When sources conflict, prefer the source with longer time window, fuller behavior chain, and closer raw behavior evidence. Strategy hits, model scores, and rule names remain cross-validation leads only.
 - If API `no_data` conflicts with Hive abnormal evidence, do not keep the API-first initial judgement; explain that the online API window was shorter and Hive historical coverage is more complete.
 
+## Browser-Backed Fixed Actions v1 Playbook
+
+Reference:
+
+- `computer_use_poc/browser_backed_service_adapter_v1.md`
+- `computer_use_poc/browser_backed_fixed_actions_v1_integration_closure.md`
+- `computer_use_poc/browser_backed_live_smoke_readiness_v1.md`
+- adjacent `browser-backed-api-poc` README / ONLINE_SOURCE_SUMMARY / action registry
+
+Preflight:
+
+```yaml
+platform_call_preflight:
+  playbook_read: true
+  selected_platform: browser_backed_service
+  access_method: browser_backed_service
+  fixed_action_only: true
+  caller_url_path_header_cookie_token_session_allowed: false
+  default_runtime_routing: false
+  source_plan_required: true
+```
+
+Registered v1 action set:
+
+| action_name | use | source status | fixed endpoint family |
+| --- | --- | --- | --- |
+| `login_logs_search` | ATO / login anomaly online window | `live_smoke_verified` | `/rest/unified/log/search` |
+| `track_analysis_check_data_ready` | Track readiness/provenance | `live_smoke_verified` | `/dp/platform/app/analytics/v2/sequence/checkDataReady` |
+| `archives_user_profile` | Account baseline | `live_smoke_verified` | `/archives/user/home/info` |
+| `archives_user_analysis` | Account operation/risk timeline | `live_smoke_verified`; large response can be `partial_observation_available` | `/v3/user/log/coreLogs/fetch` |
+| `archives_photo_search` | Abnormal publish/content clue | path live with `no_data` case | `/v4/archives/report/photo/search` |
+| `archives_related_users` | Same-device/account-spread clue | `live_smoke_verified` | `/archives/user/search/device` |
+| `rcp_event_detail` | Event attribution detail | `live_smoke_verified` | `/v2/rest/event/rcpEventDetail` |
+| `rcp_event_feature_list` | Event feature-group summary | `partial_observation_available` | `/v2/rest/event/rcpEventFeatureList` |
+| `rcp_policy_tree_lookup` | Policy tree / asset governance | `live_smoke_verified` | `/v2/rest/pro/policyTree/queryProPolicyTree` plus service-owned companion reads |
+
+Scenario source plans:
+
+- ATO / login anomaly: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- Abnormal publish / content handoff: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
+- Account spread / same device: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
+- RCP attribution: `rcp_event_detail -> rcp_event_feature_list`.
+- Policy governance: `rcp_policy_tree_lookup` only.
+
+Mandatory output:
+
+- `source_plan`
+- `actions`
+- `source_quality_matrix`
+- `missing_evidence`
+- `evidence_strength`
+- `final_answer_boundary`
+
+Boundary:
+
+- `no_data` is not risk exclusion.
+- `partial_observation_available` is usable partial observation with gaps.
+- `large_response_limited` enters `source_quality`; recommend smaller window/pageSize or pagination.
+- Archives 302 is `auth_flow_not_completed_in_bound_context`, not generic no permission.
+- Track `checkDataReady` is readiness/provenance, not risk judgement.
+- `rcp_policy_tree_lookup` is strategy asset governance, not event hit path.
+- Strategy hit, event detail, feature list, and policy tree are separate evidence layers.
+- User/device/IP/event/strategy/photo/policy identifiers are risk entities for internal review; credential secrets and strict PII are forbidden output/storage.
+
 ## General Source Quality Semantics
 
 These source states affect evidence quality only. They cannot directly become risk conclusions:

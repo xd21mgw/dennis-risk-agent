@@ -69,6 +69,22 @@ Forbidden output:
 - model inference treated as raw evidence.
 - device relation treated as final cheating conclusion.
 
+Browser-backed fixed actions v1 output boundary:
+
+- ATO / login anomaly evidence uses explicit source plan:
+  `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- Abnormal publish / content handoff uses:
+  `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
+- Account spread uses:
+  `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
+- RCP event attribution uses:
+  `rcp_event_detail -> rcp_event_feature_list`.
+- Policy-tree explanation uses:
+  `rcp_policy_tree_lookup` only.
+- Every such answer must preserve `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
+- `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk conclusions.
+- Risk entity identifiers can appear in internal risk review when necessary; credential secrets and strict PII remain forbidden.
+
 ## 6. Entry-specific Guidance
 
 KIM:

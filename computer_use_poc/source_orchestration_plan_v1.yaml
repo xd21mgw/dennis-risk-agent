@@ -1,6 +1,206 @@
 {
   "schema_version": "source_orchestration_plan_v1",
   "plans": {
+    "browser_backed_fixed_actions_v1": {
+      "applies_to": [
+        "ATO",
+        "login_anomaly",
+        "abnormal_publish",
+        "content_handoff",
+        "account_spread",
+        "same_device_relation",
+        "rcp_event_attribution",
+        "policy_tree_asset_lookup"
+      ],
+      "primary_access_method": "browser_backed_service",
+      "default_runtime_routing": false,
+      "source_plan_required": true,
+      "caller_provided_transport_forbidden": [
+        "url",
+        "path",
+        "header",
+        "cookie",
+        "token",
+        "session",
+        "authorization",
+        "secret",
+        "raw_body",
+        "raw_query"
+      ],
+      "registered_actions": {
+        "login_logs_search": {
+          "platform": "login_logs",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/login_logs_search",
+          "source_status": "live_smoke_verified",
+          "default_runtime_routing": false
+        },
+        "track_analysis_check_data_ready": {
+          "platform": "track_analysis",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/track_analysis_check_data_ready",
+          "source_status": "live_smoke_verified",
+          "source_role": "readiness_provenance_only",
+          "default_runtime_routing": false
+        },
+        "archives_user_profile": {
+          "platform": "archives_center",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/archives_user_profile",
+          "source_status": "live_smoke_verified",
+          "default_runtime_routing": false
+        },
+        "archives_user_analysis": {
+          "platform": "archives_center",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/archives_user_analysis",
+          "source_status": "live_smoke_verified",
+          "large_pageSize_status": "partial_observation_available",
+          "default_runtime_routing": false
+        },
+        "archives_photo_search": {
+          "platform": "archives_center",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/archives_photo_search",
+          "source_status": "no_data_path_live",
+          "no_data_not_risk_exclusion": true,
+          "default_runtime_routing": false
+        },
+        "archives_related_users": {
+          "platform": "archives_center",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/archives_related_users",
+          "source_status": "live_smoke_verified",
+          "default_runtime_routing": false
+        },
+        "rcp_event_detail": {
+          "platform": "rcp_tianshi",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/rcp_event_detail",
+          "source_status": "live_smoke_verified",
+          "default_runtime_routing": false
+        },
+        "rcp_event_feature_list": {
+          "platform": "rcp_tianshi",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/rcp_event_feature_list",
+          "source_status": "partial_observation_available",
+          "default_runtime_routing": false
+        },
+        "rcp_policy_tree_lookup": {
+          "platform": "rcp_tianshi",
+          "service_registered": true,
+          "python_client_endpoint": "/actions/rcp_policy_tree_lookup",
+          "source_status": "live_smoke_verified",
+          "source_role": "policy_tree_asset_governance_only",
+          "default_runtime_routing": false
+        }
+      },
+      "scenario_source_plans": {
+        "ato_login_anomaly": {
+          "actions": [
+            "login_logs_search",
+            "archives_user_profile",
+            "archives_user_analysis",
+            "track_analysis_check_data_ready"
+          ],
+          "orchestration": "login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready",
+          "boundary_flags": [
+            "login_no_data_or_window_gap_not_ato_exclusion",
+            "track_check_data_ready_not_risk_conclusion",
+            "large_response_limited_enters_source_quality"
+          ]
+        },
+        "abnormal_publish_content_handoff": {
+          "actions": [
+            "archives_photo_search",
+            "archives_user_profile",
+            "archives_user_analysis"
+          ],
+          "orchestration": "archives_photo_search -> archives_user_profile -> archives_user_analysis",
+          "boundary_flags": [
+            "photo_search_no_data_not_abnormal_publish_exclusion",
+            "publish_chain_missing_evidence_must_be_explicit"
+          ]
+        },
+        "account_spread_same_device": {
+          "actions": [
+            "archives_related_users",
+            "archives_user_profile",
+            "login_logs_search",
+            "track_analysis_check_data_ready"
+          ],
+          "orchestration": "archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready",
+          "boundary_flags": [
+            "related_users_not_gang_conclusion",
+            "same_device_relation_requires_cross_source_validation"
+          ]
+        },
+        "rcp_event_attribution": {
+          "actions": [
+            "rcp_event_detail",
+            "rcp_event_feature_list"
+          ],
+          "orchestration": "rcp_event_detail -> rcp_event_feature_list",
+          "boundary_flags": [
+            "event_detail_not_policy_tree_asset_lookup",
+            "feature_list_partial_only_feature_group_summary",
+            "strategy_hit_not_final_judgement"
+          ]
+        },
+        "policy_asset_governance": {
+          "actions": [
+            "rcp_policy_tree_lookup"
+          ],
+          "orchestration": "rcp_policy_tree_lookup",
+          "boundary_flags": [
+            "policy_tree_asset_not_event_hit_path",
+            "policy_tree_lookup_not_single_case_risk_evidence"
+          ]
+        }
+      },
+      "required_output_contract": [
+        "source_plan",
+        "actions",
+        "source_quality_matrix",
+        "missing_evidence",
+        "evidence_strength",
+        "final_answer_boundary"
+      ],
+      "source_quality_boundaries": {
+        "no_data_not_risk_exclusion": true,
+        "partial_observation_available_is_usable_partial": true,
+        "large_response_limited_enters_source_quality": true,
+        "archives_302_status": "auth_flow_not_completed_in_bound_context",
+        "strategy_hit_not_final_judgement": true,
+        "policy_tree_asset_not_event_hit_path": true,
+        "track_check_data_ready_not_risk_conclusion": true
+      },
+      "field_boundary": {
+        "risk_entity_identifier_allowed_internal": [
+          "user_id",
+          "device_id",
+          "ip",
+          "event_id",
+          "strategy_id",
+          "photo_id",
+          "policyCode",
+          "policyTreeCode"
+        ],
+        "forbidden_output_or_storage": [
+          "cookie",
+          "token",
+          "session",
+          "header",
+          "authorization",
+          "password",
+          "full_phone",
+          "id_card",
+          "real_name",
+          "detailed_address"
+        ]
+      }
+    },
     "single_user_account_security": {
       "applies_to": [
         "single_user_account_security",

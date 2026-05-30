@@ -118,6 +118,23 @@ Platform call preflight:
 - Track-analysis `no_data`, `blocked`, or `timeout` must enter `source_quality`; it cannot exclude risk.
 - If backend login / scan / device switch / strategy hit exists on a day but track-analysis userId/deviceId duration is `0` or no frontend activity, mark `front_backend_activity_mismatch`. This is a medium/high-value lead for protocol login, token/session use, or non-real-client behavior, but it is not standalone final judgement.
 
+Browser-backed fixed actions v1 guard:
+
+- The v1 fixed action batch is registered for explicit source plans only; `default_runtime_routing=false` remains mandatory.
+- Before any browser-backed action call, the source plan must name the exact action and typed params. Caller-provided URL, path, header, cookie, token, session, secret, raw body, or raw query is forbidden.
+- ATO / login anomaly source plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- Abnormal publish / content handoff source plan: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
+- Account spread source plan: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
+- RCP event attribution source plan: `rcp_event_detail -> rcp_event_feature_list`.
+- Policy asset governance source plan: `rcp_policy_tree_lookup` only.
+- Source output must include `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
+- `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk evidence.
+- Archives 302 / redirect is `auth_flow_not_completed_in_bound_context`; do not label it as generic no permission unless the source explicitly returns permission denial.
+- `track_analysis_check_data_ready` is readiness/provenance only, not completed risk evidence.
+- `rcp_policy_tree_lookup` is policy-tree asset governance, not single-event hit path. Do not replace `rcp_event_detail -> rcp_event_feature_list` with policy-tree lookup for event attribution.
+- Strategy hit, event detail, feature list, policy tree, and final risk judgement must remain separate layers.
+- Risk entity identifiers (`user_id`, `device_id`, `ip`, `event_id`, `strategy_id`, `photo_id`, `policyCode`, `policyTreeCode`) may be retained for internal risk review/source chaining. Credential secrets and strict PII remain forbidden output and storage.
+
 Dennis source execution guard:
 
 - In real case / source observation / evidence card execution, `dennis-risk-agent` must treat SSO / cookie / runner troubleshooting details in AGENTS.md, TOOLS.md, SOUL.md, USER.md, IDENTITY.md, or session-memory as `main_agent_config_ops_only`, `deprecated_for_dennis_subagent`, and `not_for_case_execution`.

@@ -33,6 +33,36 @@
     "requestParam",
     "extraParam"
   ],
+  "risk_entity_identifier_policy": {
+    "internal_risk_review_raw_allowed_when_minimum_necessary": [
+      "user_id",
+      "uid",
+      "device_id",
+      "did",
+      "ip",
+      "event_id",
+      "source_id",
+      "strategy_id",
+      "photo_id",
+      "policyCode",
+      "policyTreeCode"
+    ],
+    "external_share_requires_masking": true,
+    "credential_secret_always_forbidden": [
+      "cookie",
+      "token",
+      "session",
+      "header",
+      "authorization",
+      "password"
+    ],
+    "strict_pii_always_forbidden_raw": [
+      "full_phone",
+      "id_card",
+      "real_name",
+      "detailed_address"
+    ]
+  },
   "dangerous_scopes": [
     "batch",
     "expansion",

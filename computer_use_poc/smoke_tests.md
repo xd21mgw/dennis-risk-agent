@@ -259,6 +259,45 @@
 - 场景：execution_mode=focused_login_risk，执行 risk_event_scan。
 - 预期：156 秒内输出操作类型分布、成功失败分布、关键事件序列、一致性派生判断和覆盖限制；状态为 `partial_validated_with_selector_noise`，不得写 full validated。
 
+## 42. browser-backed fixed actions v1 text regression
+
+- 输入：自然语言 ATO / 登录异常 / 异常发布 / 同设备扩散 / RCP 事件归因 / 策略树资产问题。
+- 回归文件：`computer_use_poc/browser_backed_fixed_actions_text_regression_cases_v1.yaml`。
+- 预期：只做 text-level routing/orchestration 校验，不访问平台、不调用 DataAgent/Hive、不启动 browser-backed service。
+- 必须覆盖 action：
+  - `login_logs_search`
+  - `track_analysis_check_data_ready`
+  - `archives_user_profile`
+  - `archives_user_analysis`
+  - `archives_photo_search`
+  - `archives_related_users`
+  - `rcp_event_detail`
+  - `rcp_event_feature_list`
+  - `rcp_policy_tree_lookup`
+- 必须输出或验证：
+  - `source_plan`
+  - `actions`
+  - `source_quality_matrix`
+  - `missing_evidence`
+  - `evidence_strength`
+  - `final_answer_boundary`
+- 必须保持：
+  - `default_runtime_routing=false`
+  - `no_data_not_risk_exclusion`
+  - `partial_observation_available` 不等于 complete
+  - `large_response_limited` 进入 `source_quality`
+  - Archives 302 归为 `auth_flow_not_completed_in_bound_context`
+  - `track_analysis_check_data_ready` 不是风险结论
+  - `rcp_policy_tree_lookup` 是策略资产治理，不是 event hit path
+  - 策略命中、事件详情、feature list、策略树和最终风险判断分层
+- 禁止：
+  - 因 `no_data` 输出低风险 / 无风险
+  - 因 `auth_failed` 直接说无权限
+  - 未 live verified / 未启用 action 默认路由
+  - 输出 raw body / raw login records / raw labelInfo / raw originalLog
+  - 输出 cookie / token / session / header / authorization / password
+  - 输出完整手机号 / 身份证 / 姓名 / 详细地址
+
 ## 42. asset policy 文件存在性
 
 - 输入：本地文档检查。
