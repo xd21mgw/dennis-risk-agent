@@ -14,6 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from dataagent_sql_quality_gate import evaluate_dataagent_sql_quality
+
 
 SOURCE_NAME = "dataagent_hive"
 MODEL_ANSWER = "MODEL_ANSWER"
@@ -214,13 +216,20 @@ def redact_sensitive_text(text: str) -> tuple[str, int]:
     return SENSITIVE_FIELD_RE.sub("redacted_sensitive_field", text), count
 
 
-def extract_sql(answer: str) -> tuple[str | None, int]:
+def find_sql_text(answer: str) -> str | None:
     match = SQL_FENCE_RE.search(answer)
     if match:
-        return redact_sensitive_text(match.group(1).strip())
+        return match.group(1).strip()
     match = SQL_SELECT_RE.search(answer)
     if match:
-        return redact_sensitive_text(match.group(1).strip())
+        return match.group(1).strip()
+    return None
+
+
+def extract_sql(answer: str) -> tuple[str | None, int]:
+    raw_sql = find_sql_text(answer)
+    if raw_sql:
+        return redact_sensitive_text(raw_sql)
     return None, 0
 
 
@@ -307,7 +316,10 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     answer, raw_step_types, model_answer_source = extract_model_answer(payload, steps)
     tool_call_provenance, tool_sensitive_count = extract_tool_call_provenance(steps, payload)
     safe_answer, answer_sensitive_count = redact_sensitive_text(answer)
-    generated_sql, sql_sensitive_count = extract_sql(safe_answer)
+    raw_model_answer_sql = find_sql_text(answer)
+    generated_sql, sql_sensitive_count = (
+        redact_sensitive_text(raw_model_answer_sql) if raw_model_answer_sql else (None, 0)
+    )
     generated_sql_source = "MODEL_ANSWER" if generated_sql else None
     if not generated_sql and tool_call_provenance.get("generated_sql"):
         generated_sql = str(tool_call_provenance["generated_sql"])
@@ -323,6 +335,10 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     source_tables = extract_source_tables(generated_sql or safe_answer)
     if tool_call_provenance.get("source_tables"):
         source_tables = sorted(set(source_tables + list(tool_call_provenance["source_tables"])))
+    sql_quality_gate = evaluate_dataagent_sql_quality(
+        raw_model_answer_sql or generated_sql,
+        model_answer_text=answer,
+    )
     sensitive_blocked_count = answer_sensitive_count + sql_sensitive_count + table_sensitive_count + tool_sensitive_count
 
     permission_status = "permission_denied" if status == "permission_denied" else "ok"
@@ -342,6 +358,10 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         warnings.append("content_fallback_used_as_model_answer_source")
     if status == "sql_generated":
         warnings.append("sql_generated_not_executed_evidence")
+    if sql_quality_gate.get("gate_status") == "block":
+        warnings.append("sql_quality_gate_blocked_dry_run_false")
+    elif sql_quality_gate.get("gate_status") == "pass":
+        warnings.append("sql_quality_gate_passed_but_dry_run_false_still_requires_authorization")
     if status in {"no_data", "permission_denied", "failed", "timeout", "parse_error", "source_schema_drift"}:
         warnings.append(f"{status}_not_no_risk_evidence")
 
@@ -381,6 +401,9 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "hive_called": False,
         "dry_run": dry_run,
         "sql_submitted": False,
+        "sql_quality_gate_status": sql_quality_gate.get("gate_status"),
+        "dry_run_false_eligible": sql_quality_gate.get("dry_run_false_eligible") is True,
+        "dry_run_false_execution_allowed": False,
         "normalized_from_mock": True,
     }
     source_card = {
@@ -414,6 +437,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         "warnings": warnings,
         "no_data_reason": no_data_reason,
         "trace_id": trace_id,
+        "sql_quality_gate": sql_quality_gate,
         "source_quality": source_quality,
         "tool_call_provenance": tool_call_provenance,
         "source_card": source_card,

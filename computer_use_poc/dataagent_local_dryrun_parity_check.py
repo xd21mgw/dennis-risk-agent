@@ -183,6 +183,9 @@ def run_mock() -> dict[str, Any]:
             "real_dataagent_api_called": False,
             "sql_submitted": False,
             "completed_evidence": False,
+            "sql_quality_gate_status": (normalized.get("sql_quality_gate") or {}).get("gate_status"),
+            "dry_run_false_eligible": (normalized.get("sql_quality_gate") or {}).get("dry_run_false_eligible") is True,
+            "dry_run_false_execution_allowed": False,
             "dry_run_completed_like_response_downgraded": dry_run_completed_like_response_downgraded,
         }
     )
@@ -201,6 +204,7 @@ def run_mock() -> dict[str, Any]:
         "completed_evidence": False,
         "dry_run_completed_like_response_downgraded": dry_run_completed_like_response_downgraded,
         "tool_call_provenance_only": bool(tool_provenance.get("provenance_only_not_business_conclusion")),
+        "sql_quality_gate": normalized.get("sql_quality_gate"),
         "source_quality": source_quality,
     }
 
@@ -475,6 +479,11 @@ def apply_live_dry_run_boundary(normalized: dict[str, Any], *, http_status: int)
         observation["row_count"] = 0
     if observation.get("status") == "sql_generated":
         warnings.append("dry_run_sql_generated_not_completed_evidence")
+    sql_quality_gate = observation.get("sql_quality_gate") or {}
+    if sql_quality_gate.get("gate_status") == "block":
+        warnings.append("sql_quality_gate_blocked_dry_run_false")
+    elif sql_quality_gate.get("gate_status") == "pass":
+        warnings.append("sql_quality_gate_passed_but_dry_run_false_still_requires_authorization")
     warnings.append("dry_run_no_hive_sql_submitted")
     observation["warnings"] = sorted(set(warnings))
 
@@ -496,6 +505,9 @@ def apply_live_dry_run_boundary(normalized: dict[str, Any], *, http_status: int)
             "dry_run": True,
             "sql_submitted": False,
             "auth_debug_attempted": False,
+            "sql_quality_gate_status": sql_quality_gate.get("gate_status"),
+            "dry_run_false_eligible": sql_quality_gate.get("dry_run_false_eligible") is True,
+            "dry_run_false_execution_allowed": False,
             "normalized_from_mock": False,
             "local_live_verified": False,
             "local_live_dryrun_verified": observation.get("status") == "sql_generated",

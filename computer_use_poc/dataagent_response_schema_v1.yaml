@@ -57,12 +57,61 @@ normalized_response:
     type: string
     required: false
     sensitive_field_policy: redact_sensitive_columns
+    execution_boundary: dry_run_output_only_not_executed
   generated_sql_source:
     type: string
     required: false
     allowed:
       - MODEL_ANSWER
       - TOOL_CALL_PROVENANCE_ONLY
+  sql_quality_gate:
+    type: object
+    required: false
+    schema_version: dataagent_sql_quality_gate_v1
+    purpose: Validate generated_sql before any future dry_run=false request.
+    execution_boundary:
+      sql_executed: false
+      hive_called: false
+      dry_run_false_execution_allowed: false
+      dry_run_false_requires_per_call_authorization: true
+    status:
+      gate_status:
+        allowed:
+          - pass
+          - block
+          - not_applicable
+      dry_run_false_eligible:
+        meaning: true only when local SQL quality checks pass; execution still requires per-call authorization.
+      dry_run_false_execution_allowed:
+        expected_for_dry_run: false
+    checks:
+      - table_whitelist_pass
+      - partition_filter_pass
+      - field_whitelist_pass
+      - sensitive_field_pass
+      - scan_scope_pass
+      - dataagent_caveat_pass
+    blocking_caveat_examples:
+      - Table not found in metadata catalog; verify table name & partition column before execution
+    field_classification_boundary:
+      note: IP / device_id / DID are risk_entity_identifier, not pii_strict, not credential_secret.
+      risk_entity_identifier_examples:
+        - user_id
+        - device_id
+        - DID
+        - source_ip
+        - IP
+        - eventId
+        - sourceId
+      blocked_sensitive_examples:
+        - cookie
+        - token_secret
+        - session
+        - header
+        - authorization
+        - password
+        - phone
+        - id_card
   result_rows:
     type: list[object]
     required: true
@@ -168,6 +217,10 @@ normalized_response:
       dry_run:
       sql_submitted:
         expected_for_dry_run: false
+      sql_quality_gate_status:
+      dry_run_false_eligible:
+      dry_run_false_execution_allowed:
+        expected_for_dry_run: false
 
 source_observation_compatibility:
   source_card:
@@ -201,6 +254,14 @@ sensitive_field_policy:
     - password
     - email
     - id_card
+  risk_entity_identifier_not_privacy_by_default:
+    - IP
+    - source_ip
+    - device_id
+    - DID
+    - user_id
+    - eventId
+    - sourceId
   behavior:
     generated_sql: redact_identifier_or_literal
     result_rows: drop_column_or_mask_value
@@ -211,6 +272,7 @@ status_boundary:
   sql_generated:
     meaning: SQL or query plan exists but no DataAgent/Hive result has been executed.
     evidence_allowed: false
+    requires_sql_quality_gate_before_dry_run_false: true
   no_data:
     meaning: DataAgent/Hive returned no rows for the bounded query.
     no_risk_evidence: false

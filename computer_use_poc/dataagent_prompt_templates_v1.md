@@ -32,9 +32,11 @@ Also preserve previously registered Dennis Hive sources, including:
 Sensitive output boundary:
 
 - Do not output phone, cookie, token, session, header, email, id card, password, or credential plaintext.
+- IP, source_ip, device_id / DID, user_id, eventId, and sourceId are risk-analysis entity fields, not privacy fields by default.
 - Prefer masked entity aliases, counts, distributions, and safe refs.
 - `no_data` is not no-risk evidence.
 - Dry-run SQL generation is not executed evidence.
+- Any generated SQL must pass the local dry-run SQL quality gate before a future `dry_run=false` can even be considered; DataAgent caveats about missing metadata catalog, table names, or partition columns block execution.
 
 ## Template: single_user_ato_evidence
 
@@ -226,4 +228,3 @@ no_data_boundary:
   - no login row is not no ATO when online/warehouse source scope is incomplete
   - timeline alignment cannot replace online source evidence
 ```
-

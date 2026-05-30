@@ -45,7 +45,7 @@ def render_env(config: dict[str, str]) -> str:
         "# Do not store cookie/token/session/header/password/state in this file.",
     ]
     for key in REQUIRED_KEYS:
-        lines.append(f"{key}={shell_quote(config[key])}")
+        lines.append(f"export {key}={shell_quote(config[key])}")
     return "\n".join(lines) + "\n"
 
 
@@ -66,6 +66,8 @@ def parse_env_keys(path: Path) -> tuple[set[str], list[str]]:
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+        if line.startswith("export "):
+            line = line[len("export ") :].strip()
         key = line.split("=", 1)[0].strip()
         keys.add(key)
         lowered = key.lower()

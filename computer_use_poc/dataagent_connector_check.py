@@ -31,6 +31,7 @@ REQUIRED_FILES = [
     "dataagent_response_schema_v1.yaml",
     "dataagent_prompt_templates_v1.md",
     "dataagent_response_normalizer.py",
+    "dataagent_sql_quality_gate.py",
 ]
 PARITY_FIXTURE = COMPUTER_USE_POC / "test_fixtures" / "dataagent_cloud_skill_response_mock.json"
 
@@ -219,6 +220,50 @@ ENVELOPE_MOCKS: dict[str, dict[str, Any]] = {
     },
 }
 
+SQL_QUALITY_GATE_MOCKS: dict[str, dict[str, Any]] = {
+    "risk_entity_fields_pass": make_step_answer(
+        """```sql
+SELECT user_id, device_id, source_ip, event_id, source_id, op_time
+FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info
+WHERE p_date='20260528' AND user_id=544963630
+LIMIT 100;
+```"""
+    ),
+    "metadata_catalog_caveat_blocks": make_step_answer(
+        """```sql
+SELECT user_id, device_id, source_ip, op_time
+FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info
+WHERE p_date='20260528' AND user_id=544963630
+LIMIT 100;
+```
+
+Table not found in metadata catalog; verify table name & partition column before execution.
+"""
+    ),
+    "sensitive_fields_block": make_step_answer(
+        """```sql
+SELECT user_id, phone, cookie, device_id
+FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info
+WHERE p_date='20260528' AND user_id=544963630
+LIMIT 100;
+```"""
+    ),
+    "unbounded_scan_blocks": make_step_answer(
+        """```sql
+SELECT user_id, device_id, source_ip
+FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info;
+```"""
+    ),
+    "unknown_table_blocks": make_step_answer(
+        """```sql
+SELECT user_id, device_id
+FROM ks_dw_fact.dw_fact_user_login_di
+WHERE p_date='20260528' AND user_id=544963630
+LIMIT 100;
+```"""
+    ),
+}
+
 
 def check_required_files() -> list[str]:
     errors: list[str] = []
@@ -258,6 +303,14 @@ def check_contract_text() -> list[str]:
         errors.append("response_schema_schema_drift_status_missing")
     if "response_shape_probe" not in response_schema:
         errors.append("response_schema_probe_contract_missing")
+    for term in (
+        "sql_quality_gate",
+        "dry_run_false_eligible",
+        "Table not found in metadata catalog",
+        "IP / device_id / DID are risk_entity_identifier",
+    ):
+        if term not in response_schema:
+            errors.append(f"response_schema_sql_quality_gate_missing:{term}")
     for template_id in (
         "single_user_ato_evidence",
         "batch_user_ato_clustering",
@@ -350,6 +403,8 @@ def check_normalizer() -> tuple[list[dict[str, Any]], list[str]]:
             errors.append(f"sensitive_output_not_false:{name}")
         if normalized["redaction_applied"] is not True:
             errors.append(f"redaction_not_applied:{name}")
+        if "sql_quality_gate" not in normalized:
+            errors.append(f"sql_quality_gate_missing:{name}")
         if name == "sql_generated" and not normalized["source_quality"]["pending_execution_not_evidence"]:
             errors.append("sql_generated_missing_pending_boundary")
         if name == "no_data" and not normalized["source_quality"]["no_data_not_risk_exclusion"]:
@@ -368,6 +423,67 @@ def check_normalizer() -> tuple[list[dict[str, Any]], list[str]]:
                 errors.append("sensitive_terms_not_intercepted")
             if normalized["redaction"]["blocked_sensitive_fields_count"] <= 0:
                 errors.append("sensitive_block_count_missing")
+    return results, errors
+
+
+def check_sql_quality_gate() -> tuple[list[dict[str, Any]], list[str]]:
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    expected_status = {
+        "risk_entity_fields_pass": "pass",
+        "metadata_catalog_caveat_blocks": "block",
+        "sensitive_fields_block": "block",
+        "unbounded_scan_blocks": "block",
+        "unknown_table_blocks": "block",
+    }
+    for name, payload in SQL_QUALITY_GATE_MOCKS.items():
+        normalized = normalize_dataagent_response(payload)
+        gate = normalized.get("sql_quality_gate") or {}
+        field_policy = gate.get("field_policy") or {}
+        result = {
+            "mock": name,
+            "normalizer_status": normalized.get("status"),
+            "gate_status": gate.get("gate_status"),
+            "dry_run_false_eligible": gate.get("dry_run_false_eligible"),
+            "dry_run_false_execution_allowed": gate.get("dry_run_false_execution_allowed"),
+            "failure_reasons": gate.get("failure_reasons", []),
+            "risk_entity_identifier_fields_present": field_policy.get("risk_entity_identifier_fields_present", []),
+            "credential_secret_fields_present": field_policy.get("credential_secret_fields_present", []),
+            "pii_strict_fields_present": field_policy.get("pii_strict_fields_present", []),
+        }
+        results.append(result)
+        if gate.get("gate_status") != expected_status[name]:
+            errors.append(f"sql_quality_gate_status_mismatch:{name}:{gate.get('gate_status')}")
+        if gate.get("sql_executed") is not False or gate.get("hive_called") is not False:
+            errors.append(f"sql_quality_gate_execution_boundary_failed:{name}")
+        if gate.get("dry_run_false_execution_allowed") is not False:
+            errors.append(f"sql_quality_gate_dry_run_false_allowed:{name}")
+        if name == "risk_entity_fields_pass":
+            risk_fields = set(field_policy.get("risk_entity_identifier_fields_present", []))
+            for field in ("source_ip", "device_id"):
+                if field not in risk_fields:
+                    errors.append(f"risk_entity_field_not_classified:{field}")
+            if field_policy.get("credential_secret_fields_present") or field_policy.get("pii_strict_fields_present"):
+                errors.append("risk_entity_fields_misclassified_sensitive")
+            if gate.get("dry_run_false_eligible") is not True:
+                errors.append("risk_entity_fields_pass_not_eligible_after_gate")
+        if name == "metadata_catalog_caveat_blocks":
+            reasons = set(gate.get("failure_reasons", []))
+            if "dataagent_blocking_caveat" not in reasons:
+                errors.append("metadata_catalog_caveat_not_blocking")
+            if gate.get("dry_run_false_eligible") is not False:
+                errors.append("metadata_catalog_caveat_marked_eligible")
+        if name == "sensitive_fields_block":
+            if not (field_policy.get("credential_secret_fields_present") or field_policy.get("pii_strict_fields_present")):
+                errors.append("sensitive_fields_not_detected")
+        if name == "unbounded_scan_blocks":
+            reasons = set(gate.get("failure_reasons", []))
+            for reason in ("missing_partition_filter", "missing_limit", "missing_bounded_entity_filter"):
+                if reason not in reasons:
+                    errors.append(f"unbounded_scan_missing_reason:{reason}")
+        if name == "unknown_table_blocks":
+            if not any(str(reason).startswith("unknown_table:") for reason in gate.get("failure_reasons", [])):
+                errors.append("unknown_table_not_blocked")
     return results, errors
 
 
@@ -442,6 +558,8 @@ def main(argv: list[str] | None = None) -> int:
     errors.extend(normalizer_errors)
     envelope_results, envelope_errors = check_envelope_compatibility()
     errors.extend(envelope_errors)
+    sql_quality_gate_results, sql_quality_gate_errors = check_sql_quality_gate()
+    errors.extend(sql_quality_gate_errors)
     cloud_skill_parity, parity_errors = check_cloud_skill_parity()
     errors.extend(parity_errors)
 
@@ -459,6 +577,7 @@ def main(argv: list[str] | None = None) -> int:
         "cloud_skill_parity": cloud_skill_parity,
         "normalizer_results": normalizer_results,
         "envelope_compatibility_results": envelope_results,
+        "sql_quality_gate_results": sql_quality_gate_results,
         "errors": errors,
     }
     if args.json:

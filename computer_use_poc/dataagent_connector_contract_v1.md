@@ -187,6 +187,33 @@ source_quality:
   pending_execution_not_evidence: true
 ```
 
+Before any future `dry_run=false` request, Dennis must run the local SQL
+quality gate against `generated_sql`. The gate does not execute SQL. It checks:
+
+- table names are in the Dennis recommended / registered source set;
+- required partition filters such as `p_date` are present;
+- referenced fields are whitelisted for the requested account-security scope;
+- credential secrets and strict PII fields are absent;
+- scan scope is bounded by partition, entity filter, and `LIMIT`;
+- DataAgent caveats do not require manual table / partition verification.
+
+If DataAgent returns a caveat such as:
+
+```text
+Table not found in metadata catalog; verify table name & partition column before execution
+```
+
+then `dry_run_false_eligible=false` and Dennis must not proceed to
+`dry_run=false`.
+
+Field classification boundary:
+
+- IP / device_id / DID / user_id / eventId / sourceId are
+  `risk_entity_identifier` fields for risk analysis, not privacy fields by
+  default.
+- cookie / token secret / session / header / authorization / password, full
+  phone, ID card, email, and raw real-name fields remain blocked.
+
 If DataAgent returns a no-data result:
 
 ```yaml
