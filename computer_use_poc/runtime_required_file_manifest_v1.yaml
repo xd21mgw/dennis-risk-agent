@@ -37,6 +37,7 @@ full_runtime_required:
     - computer_use_poc/browser_backed_live_smoke_readiness_v1.md
     - computer_use_poc/browser_backed_fixed_actions_v1_integration_closure.md
     - computer_use_poc/browser_backed_fixed_actions_text_regression_cases_v1.yaml
+    - computer_use_poc/browser_backed_fixed_actions_text_dryrun.py
     - computer_use_poc/platform_access/observation_schema_v0_1.yaml
     - bin/archives_profile_runner
     - computer_use_poc/archives_profile_runner.py
