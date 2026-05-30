@@ -12,3 +12,24 @@ outputs/full_runtime/
 
 # Local upload packages
 outputs/dist/
+
+# Dennis generated artifacts
+outputs/
+
+# Local run logs / process logs
+computer_use_poc/run_logs/
+
+# Local env / auth / state
+.env
+.env.local
+*.env
+.dennis-agent/
+*.state
+*.cookie
+*.token
+*.session
+
+# macOS / cache
+.DS_Store
+__pycache__/
+*.pyc
