@@ -291,3 +291,61 @@ cases:
     expected_boundary_flags: [unstable_source_not_default_verified, default_runtime_routing_false]
     should_not_do: [do_not_claim_private_message_live_verified, do_not_claim_past_four_items_live_verified, do_not_default_unstable_archives_sources]
     expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
+  - id: BBFA-V1-041
+    user_query: "普通裸问帮我判断这个 user_id 是否 ATO，默认不要输出完整 routing_metadata"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Default user-visible answer shows natural execution status, not full routing_metadata YAML."
+    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking]
+    should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_show_full_metadata_without_debug_request]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_internal_metadata_retained: true
+    expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive, 默认不展示完整 routing_metadata YAML]
+    expected_user_visible_absent: [routing_metadata:]
+  - id: BBFA-V1-042
+    user_query: "先给 plan_mode，不要执行平台，说明是否查平台和 DataAgent"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Plan-mode answer translates platform_called=false and dataagent_called=false into natural language."
+    expected_boundary_flags: [plan_mode_no_platform_execution, default_runtime_routing_false]
+    should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_dump_boundary_flags_yaml_by_default]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_internal_metadata_retained: true
+    expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive]
+    expected_user_visible_absent: [routing_metadata:]
+  - id: BBFA-V1-043
+    user_query: "登录日志 no_data 和 feature partial 怎么给用户解释，不要 dump boundary_flags YAML"
+    expected_route_or_actions: [login_logs_search, rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Boundary flags are translated into readable source-quality caveats."
+    expected_boundary_flags: [no_data_not_risk_exclusion, partial_observation_available]
+    should_not_do: [do_not_dump_boundary_flags_yaml_by_default, do_not_output_low_risk_from_no_data]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_user_visible_contains: [no_data 只代表当前条件下无结果, partial 观察可用于部分判断]
+    expected_user_visible_absent: [boundary_flags:, routing_metadata:]
+  - id: BBFA-V1-044
+    user_query: "给我 routing_metadata debug run log YAML"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Explicit debug/run-log/YAML request allows full routing_metadata."
+    expected_boundary_flags: [missing_explicit_source_plan]
+    should_not_do: [do_not_hide_internal_run_log_metadata]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "full_routing_metadata"
+    expected_full_metadata_allowed: true
+    expected_internal_metadata_retained: true
+    expected_user_visible_contains: [routing_metadata:, platform_called: false, dataagent_called: false]
+  - id: BBFA-V1-045
+    user_query: "内部 regression/run log 还能保留完整 metadata 吗，用户可见不要默认展示"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Internal run log retains structured metadata while user-visible default stays concise."
+    expected_boundary_flags: [missing_explicit_source_plan]
+    should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_hide_internal_run_log_metadata]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_internal_metadata_retained: true
+    expected_user_visible_contains: [默认不展示完整 routing_metadata YAML]
+    expected_user_visible_absent: [routing_metadata:]

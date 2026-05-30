@@ -18,7 +18,7 @@ Rules:
 - Strategy recommendation / gray rollout / false-positive control routes to `strategy_recommendation_plan_mode`; future mention of possible user IDs does not trigger execution.
 - DataAgent/Hive always requires per-call authorization; query plans are allowed without execution.
 - Browser is not a P0 default source when controlled API runner / API direct can answer.
-- plan-only responses still require `routing_metadata` with `execution_mode=plan_mode_only`, `platform_called=false`, `dataagent_called=false`, and `reason_not_executed`.
+- plan-only responses default to a natural-language execution-status summary with `execution_mode` meaning, platform/DataAgent status, and `reason_not_executed`; full `routing_metadata` is shown only for debug / run log / explicit metadata request / regression.
 
 本文是体验优先的能力路由说明。用户仍按业务问题提问，系统内部再按 capability routing 选择只读手脚、实体解析或回答模板。
 
@@ -680,11 +680,21 @@ ATO / 登录日志类 Plan 和执行结果都必须提示：在线统一登录�
 
 Plan 输出后，如果用户选择 A/B/C/D，再进入对应执行路径。不要在 Plan 阶段调用真实平台接口。
 
-## 0F. routing_metadata Output Contract
+## 0F. routing_metadata Output Visibility Contract
 
-dennis-risk-agent 的所有正式回答末尾必须追加 `routing_metadata` block，供 main agent、观测日志和验收测试直接解析子 agent 的最终路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
+dennis-risk-agent 的正式用户可见回答默认不追加完整 `routing_metadata` block。默认展示简短执行状态摘要，供用户理解是否查平台、是否调用 DataAgent/Hive、关键 source_quality 边界和缺失字段。完整 `routing_metadata` 仍保留给 main agent、观测日志、runtime validation、regression，以及用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据的场景。该 block 不依赖跨 session history，不改变业务判断逻辑。
 
-最小字段：
+默认用户可见摘要字段：
+
+```text
+执行状态：
+- 是否查平台：
+- 是否调用 DataAgent/Hive：
+- 关键边界：
+- 缺失字段/下一步：
+```
+
+完整 debug / run log 最小字段：
 
 ```yaml
 routing_metadata:
@@ -722,7 +732,7 @@ routing_metadata:
 - `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
-- `routing_metadata` 必须是 YAML block，不得输出 JSON 或自定义字段名替代标准字段。
+- 完整 `routing_metadata` 必须是 YAML block，不得输出 JSON 或自定义字段名替代标准字段。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - `single_event_policy_attribution`：capability=`tianshi_strategy_governance_readonly`，boundary 包含 `attribution_not_cheating_judgement`；缺 `eventId` / `eventType` / `queryTime` 时 `final_status=needs_input`。
 - `policy_detail_lookup`：capability=`tianshi_strategy_governance_readonly`，sub_capability=`policy_detail_lookup`。

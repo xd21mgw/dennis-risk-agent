@@ -13,8 +13,8 @@ Plan 合格后进入 execution 前必须同时满足：
 - DataAgent/Hive 未默认执行，仍为逐次授权。
 - Browser / DOM / SPA 未作为 P0 默认 source；P0 优先受控 API runner / API direct。
 - `no_data_not_risk_exclusion` 和 `strategy_hit_not_final_judgement` 边界明确。
-- output contract 明确：execution 必须有 `evidence_card` / `source_quality` / `routing_metadata`。
-- plan-only 也必须有 `routing_metadata`，至少包含 `execution_mode=plan_mode_only`、`platform_called=false`、`dataagent_called=false`、`reason_not_executed`。
+- output contract 明确：execution 必须有 `evidence_card` / `source_quality` / 用户可读执行状态摘要。
+- plan-only 默认必须有自然语言执行状态摘要，说明未查平台、未调用 DataAgent/Hive 和 `reason_not_executed`；完整 `routing_metadata` 只在 debug / run log / explicit metadata request / regression 中展示。
 
 ATO source priority and access method must be separated:
 
@@ -78,7 +78,7 @@ General evidence reasoning hard gate:
 
 - Applies to account security, protocol attack, group control, anti-crawler, activity anti-cheating, traffic diversion, traffic anti-cheating, strategy attribution, and batch risk clustering.
 - If an answer judges whether a user, device, interface, batch, campaign, channel, strategy hit, or event is risky, route to evidence mode unless the user explicitly asks for pure methodology.
-- Evidence mode output must include `evidence_card`, `source_quality`, and `routing_metadata`.
+- Evidence mode output must include `evidence_card`, `source_quality`, and a user-visible execution-status summary; full `routing_metadata` is debug/run-log/regression only unless explicitly requested.
 - If any required block is missing, self-correct before final output.
 - Do not output natural-language judgement only.
 - `no_data`, `timeout`, `blocked`, `auth_failed`, stale source, and partial source are quality states, not no-risk counter evidence.

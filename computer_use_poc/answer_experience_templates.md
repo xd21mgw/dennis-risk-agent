@@ -4,7 +4,7 @@
 
 ## 0.0A Plan-only Diagnostic / Failure Triage Output
 
-Plan-only diagnostic responses must still end with `routing_metadata`. When no platform is called, do not emit detailed source_quality arrays as if data was fetched; instead state `platform_called=false`, `dataagent_called=false`, and `reason_not_executed`.
+Plan-only diagnostic responses default to a short user-visible execution-status summary, not a full `routing_metadata` YAML block. When no platform is called, translate the status into natural language: whether a platform was called, whether DataAgent/Hive was called, why execution did not happen, and which source-quality boundaries matter. Full `routing_metadata` is reserved for debug / run log / explicit metadata requests and internal regression.
 
 ```yaml
 plan_only_diagnostic_summary:
@@ -29,8 +29,9 @@ plan_only_diagnostic_summary:
 
 Hard gate:
 
-- plan-only 输出必须有 `routing_metadata`。
-- execution 输出必须有 `evidence_card` / `source_quality` / `routing_metadata`。
+- plan-only 默认必须有自然语言执行状态摘要，不默认展示完整 `routing_metadata`。
+- execution 输出必须有 `evidence_card` / `source_quality` / 用户可读执行状态摘要。
+- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或内部 run log / regression 场景，才输出完整 `routing_metadata` YAML。
 - blocked / no_data / timeout / auth_failed 不得写成 low risk / no risk。
 - 策略命中不能写成 final judgement。
 - source_quality 缺失时判定为 `output_contract` failure。
@@ -380,7 +381,7 @@ source_readiness_summary:
 - `conclusion_recompute_after_new_evidence`：新证据到达后必须重算结论，不保留过时初判。
 - `source_window_boundary`：任何 source 都必须说明时间窗口和覆盖边界，窗口外标 `missing_evidence` / `required_offline_check`。
 - `partial_not_final`：source 不完整时只能输出 `partial_support` / `insufficient_support` / `needs_more_evidence`。
-- `template_hard_gate`：进入 evidence mode 的回答必须包含 `evidence_card` / `source_quality` / `routing_metadata`。
+- `template_hard_gate`：进入 evidence mode 的回答必须包含 `evidence_card` / `source_quality` / 用户可读执行状态摘要；完整 `routing_metadata` 只在 debug / run log / explicit metadata request / regression 中展示。
 
 ### 通用单案 evidence card
 
@@ -415,7 +416,7 @@ evidence_card:
     previous_conclusion:
     changed_by:
   next_action:
-routing_metadata:
+user_visible_execution_status:
 ```
 
 ### 通用批量 pattern evidence card
@@ -437,7 +438,7 @@ batch_evidence_card:
   source_quality:
   conclusion_boundary:
   next_action:
-routing_metadata:
+user_visible_execution_status:
 ```
 
 ### 策略命中归因 evidence card
@@ -458,7 +459,7 @@ strategy_attribution_evidence_card:
     - strategy_hit_not_final_judgement
     - attribution_not_cheating_judgement
   next_action:
-routing_metadata:
+user_visible_execution_status:
 ```
 
 方法论 / plan mode 可不输出完整 evidence card；但只要引用真实证据，也必须标注 `source` 和 `evidence_type`。
@@ -713,30 +714,62 @@ Routing Summary:
 - 不在 KIM 中输出长报告、全量日志表或大段 raw observation。
 - Web 可以承载长报告，但仍必须遵守字段分层、DataAgent 边界和敏感字段脱敏。
 
-## 0A-1. routing_metadata 输出契约
+## 0A-1. routing_metadata 输出分级契约
 
 适用范围：
 
-- dennis-risk-agent 的所有正式回答。
-- main agent / 观测日志 / runtime validation 需要从子 agent 最终回答中读取内部路由结果的场景。
+- dennis-risk-agent 的正式用户可见回答、半开放内部模式、debug / run log / regression。
+- main agent / 观测日志 / runtime validation 需要读取内部路由结果的场景。
 - 不依赖跨 session history，不要求额外平台调用。
 
 输出规则：
 
 - 自然语言回答可以照常先输出。
-- 回答末尾必须追加一个机器可读 YAML block，顶层 key 固定为 `routing_metadata`。
-- metadata 只描述本轮路由、能力、执行边界和敏感输出状态，不替代业务结论。
+- 默认用户回答不展示完整 `routing_metadata` YAML。
+- 默认只输出短的执行状态和证据边界：本次是否查平台、是否调用 DataAgent/Hive、关键 source_quality 边界、缺失字段和下一步。
+- 半开放内部模式可输出简版 metadata：`execution_mode`、`platform_called`、`dataagent_called`、boundary flag 的自然语言解释、`missing_required_fields`。
+- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或内部 run log / regression 场景，才输出完整 `routing_metadata` YAML block，顶层 key 固定为 `routing_metadata`。
+- metadata 只描述本轮路由、能力、执行边界和敏感输出状态，不替代业务结论；默认不要把它暴露给普通用户。
 - `route` 必须使用 `scene_to_capability_routing.md` 中的正式 route 名，禁止写成 `dennis-risk-agent` 等 agent 名。
 - `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
-- metadata 必须使用 YAML block，不得输出 JSON routing metadata。
+- 完整 metadata 必须使用 YAML block，不得输出 JSON routing metadata。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - 如果本轮未调用平台，`platform_called=false` 且 `platform_call_summary: []`。
 - 如果本轮未调用 DataAgent，`dataagent_called=false`。
 - 正常情况下 `sensitive_output=false`；如发生安全拒绝，仍应保持 `sensitive_output=false` 并标 `execution_mode=denied`。
 
-标准 schema：
+默认用户可见摘要模板：
+
+```text
+执行状态：
+- 本轮是否查平台：否 / 是（列出已完成 source 摘要）
+- DataAgent/Hive：未调用 / 已按授权调用
+
+证据边界：
+- no_data 只代表当前条件下无结果，不能作为无风险反证。
+- partial 可用作部分观察，但不能声称完整覆盖。
+- auth_failed / 302 是认证态或会话状态，不等于无权限或无风险。
+- 同设备 / related_users 是扩散线索，不是团伙结论。
+
+缺失字段 / 下一步：
+- 缺少：
+- 下一步：
+```
+
+半开放内部简版 metadata 模板：
+
+```text
+内部执行摘要：
+- execution_mode:
+- platform_called:
+- dataagent_called:
+- boundary:
+- missing_required_fields:
+```
+
+完整 debug / run log / regression schema：
 
 ```yaml
 routing_metadata:
@@ -814,7 +847,7 @@ routing_metadata:
 - `real_name_not_standalone_evidence`
 - `province_match_not_ato_exclusion`
 
-示例：缺参数的单事件策略归因。
+完整 debug / run log 示例：缺参数的单事件策略归因。
 
 ```yaml
 routing_metadata:
@@ -849,7 +882,7 @@ routing_metadata:
   final_status: needs_input
 ```
 
-示例：泛风险问题不默认触发专用能力。
+完整 debug / run log 示例：泛风险问题不默认触发专用能力。
 
 ```yaml
 routing_metadata:
@@ -1072,7 +1105,7 @@ next_action:
 - “无数据”统一改成 `source_gap` / `login_log_window_incomplete`。
 - 用户反馈只能作为 `user_claim`，不得作为 strong evidence。
 
-partial 状态 routing_metadata 示例：
+partial 状态完整 routing_metadata 示例（仅 debug / run log / regression 默认保留；普通用户回答只展示上面的执行状态摘要）：
 
 ```yaml
 routing_metadata:

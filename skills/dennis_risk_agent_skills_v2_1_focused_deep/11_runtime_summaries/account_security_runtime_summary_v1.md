@@ -208,6 +208,13 @@ RCP 归因与策略治理：
 - `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 是风控实体，可在内部研判和 source chaining 保留。
 - cookie/token/session/header/password、完整手机号、身份证、姓名、详细地址严禁输出或保存。
 
+输出元数据分级：
+
+- 默认用户回答不展示完整 `routing_metadata` YAML，只给自然语言执行状态摘要。
+- 执行状态摘要必须说明：本轮是否查平台、是否调用 DataAgent/Hive、关键 source_quality 边界、缺失字段和下一步。
+- boundary flag 默认翻译成用户可读边界，例如 no_data 不反证、partial 可用但不完整、auth_failed 是认证状态、同设备不是团伙结论。
+- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或内部 run log / regression 场景，才输出完整 `routing_metadata`。
+
 ## 5.2 ATO 小批量客诉执行与登录日志边界
 
 2-9 个 `user_id` 的 ATO 客诉小批量默认进入 `small_batch_execution_with_checkpoint`，不是纯 plan-only，也不是 10+ 的 batch clustering。

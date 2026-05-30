@@ -2172,23 +2172,23 @@
 - 预期：README 说明 `real_name_feature_service_partial_contract` 已轻量接入 registry / routing / template，仍不执行真实查询、不注册 identity runtime。
 - 状态：guardrail added。
 
-## 191-CB. routing_metadata required in formal answers
+## 191-CB. routing_metadata not default in formal user answers
 
 - 输入：任意正式回答模板。
 - 场景：main agent / 观测日志 / 验收测试读取子 agent 内部路由。
-- 预期：回答末尾包含 `routing_metadata` block，不依赖跨 session history。
+- 预期：普通用户可见回答末尾不默认展示完整 `routing_metadata` YAML；只展示自然语言执行状态摘要，说明是否查平台、是否调用 DataAgent/Hive、关键边界和下一步。
 - 状态：guardrail added。
 
-## 191-CC. routing_metadata required fields
+## 191-CC. full routing_metadata required fields when debug/run-log requested
 
 - 输入：`routing_metadata` block。
-- 场景：metadata schema。
+- 场景：用户明确要求 debug / routing_metadata / run log / YAML，或内部 run log / regression。
 - 预期：必须包含 `route`、`capability`、`sub_capability`、`intent_type`、`execution_mode`、`evidence_mode`、`query_plan_only`、`platform_called`、`platform_call_summary`、`dataagent_called`、`direct_tool_bypass`、`sensitive_output`、`redaction_applied`、`boundary_flags`、`source_quality`、`missing_required_fields`、`partial_reason`、`final_status`。
 - 状态：guardrail added。
 
-## 191-CC-1. routing_metadata must be YAML schema
+## 191-CC-1. full routing_metadata must be YAML schema when emitted
 
-- 输入：任意正式回答。
+- 输入：debug / run log / regression 回答。
 - 场景：metadata serialization。
 - 预期：`routing_metadata` 必须是 YAML block，不得输出 JSON routing metadata；不得使用 `agent` / `mode` / `custom_route` 等自定义字段替代 `route` / `capability` / `execution_mode`。
 - 状态：guardrail added。
@@ -2275,6 +2275,27 @@
 - 输入：任意 metadata block。
 - 场景：boundary flag 命名稳定性。
 - 预期：`boundary_flags` 必须使用标准 flag 名，不得只用语义近似名；例如必须使用 `strategy_hit_not_final_risk_judgement`，不得改写成 `strategy_hit_is_not_final_risk`。
+- 状态：guardrail added。
+
+## 191-CO. boundary flags translated in default answers
+
+- 输入：普通用户问“登录日志 no_data / feature partial 怎么解释？”
+- 场景：默认用户可见回答。
+- 预期：不 dump `boundary_flags` YAML；应翻译为“no_data 不能反证无风险”“partial 可用但不完整”“auth_failed 是认证状态”“同设备不是团伙结论”等自然语言。
+- 状态：guardrail added。
+
+## 191-CP. full routing_metadata only on explicit debug request
+
+- 输入：“给我 routing_metadata / debug / run log / YAML / 原始执行元数据”。
+- 场景：debug / internal troubleshooting。
+- 预期：允许输出完整 `routing_metadata` YAML；同时 `platform_called=false`、`dataagent_called=false` 仍准确表达。
+- 状态：guardrail added。
+
+## 191-CQ. internal regression keeps full metadata
+
+- 输入：text regression / run log 输出。
+- 场景：内部审计和回归。
+- 预期：内部结果对象可保留完整 metadata 字段；用户可见默认回答仍不展示完整 YAML。
 - 状态：guardrail added。
 
 ## 192. archives user_analysis API direct POST succeeds
@@ -7305,7 +7326,7 @@
 - test_id: PLAN-DIAG-SINGLE-ATO-POLICY-HIT-001
 - input: `544963630 这个 case 有没有策略命中能辅助判断？如果是被盗号，应该重点看哪些证据？`
 - expected_runtime_behavior: single_entity_execution_or_plan_diagnostic
-- expected_output_boundary: 策略命中是显式目标 source；最小 source 包含天师策略命中、login_log、档案中心用户分析；Weapon graphData 作交叉补证，riskData 依赖 deviceId；不默认 DataAgent/Hive；browser 不是通用 P0 替代，受控 browser cookie activation 可作为特定 P0 source 的 access_method；策略命中不最终定性，no_data 不排除风险；execution 需 evidence_card/source_quality/routing_metadata，plan-only diagnostic 也需 routing_metadata。
+- expected_output_boundary: 策略命中是显式目标 source；最小 source 包含天师策略命中、login_log、档案中心用户分析；Weapon graphData 作交叉补证，riskData 依赖 deviceId；不默认 DataAgent/Hive；browser 不是通用 P0 替代，受控 browser cookie activation 可作为特定 P0 source 的 access_method；策略命中不最终定性，no_data 不排除风险；execution 需 evidence_card/source_quality/用户可读执行状态摘要；完整 routing_metadata 仅 debug / run log / regression 或显式要求时输出。
 
 ## 762. Plan diagnostic small batch mixed ATO
 
@@ -7319,7 +7340,7 @@
 - test_id: PLAN-DIAG-STRATEGY-RECOMMENDATION-OAUTH-001
 - input: 扫码/OAuth ATO 灰度验证和误伤控制，提到后续可能给 user_id。
 - expected_runtime_behavior: strategy_recommendation_plan_mode
-- expected_output_boundary: 当前不查平台，`platform_called=false`、`dataagent_called=false`；输出灰度设计、误伤控制、监控指标、样本分组、回滚机制；后续明确给 IDs 并要求查时再拆 execution slice；plan-only 仍必须 routing_metadata。
+- expected_output_boundary: 当前不查平台、不调用 DataAgent/Hive；输出灰度设计、误伤控制、监控指标、样本分组、回滚机制；后续明确给 IDs 并要求查时再拆 execution slice；plan-only 默认把执行状态翻译成自然语言，不展示完整 routing_metadata。
 
 ## 764. Failure triage card template exists
 

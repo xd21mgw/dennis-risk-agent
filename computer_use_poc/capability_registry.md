@@ -10,7 +10,7 @@
 
 | capability | purpose | mode | status | key_boundary |
 |---|---|---|---|---|
-| `plan_only_diagnostic` | 对 plan-only 输出做 Codex 评分，区分 intent/routing、source plan、orchestration、evidence reasoning、output contract | diagnostic / no platform call | documented | 只能证明脑子 / 路由 / 编排设计是否合理，不能证明 runtime config、auth、safeBins 或 source wrapper 可用；必须输出 routing_metadata |
+| `plan_only_diagnostic` | 对 plan-only 输出做 Codex 评分，区分 intent/routing、source plan、orchestration、evidence reasoning、output contract | diagnostic / no platform call | documented | 只能证明脑子 / 路由 / 编排设计是否合理，不能证明 runtime config、auth、safeBins 或 source wrapper 可用；默认输出自然语言执行状态摘要，完整 `routing_metadata` 仅在 debug / run log / regression 或用户明确要求时展示 |
 | `failure_triage_card` | 对失败 case 做分层归因：config/runtime、intent/routing、source_orchestration、evidence_reasoning、output_contract、no_issue | post-failure diagnostic | documented | 不调用平台，不调用 DataAgent；用于决定 fix owner 和 regression |
 
 全局输出字段分层：

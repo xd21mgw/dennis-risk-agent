@@ -106,7 +106,58 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_use_archives_no_data_as_no_risk",
     "do_not_claim_archives_related_users_gang",
     "do_not_default_unstable_archives_sources",
+    "do_not_emit_full_routing_metadata_by_default",
+    "do_not_dump_boundary_flags_yaml_by_default",
+    "do_not_show_full_metadata_without_debug_request",
+    "do_not_hide_internal_run_log_metadata",
 ]
+
+FULL_METADATA_REQUEST_PATTERNS = [
+    "routing_metadata",
+    "routing metadata",
+    "debug",
+    "run log",
+    "runlog",
+    "yaml",
+    "原始执行元数据",
+    "完整元数据",
+    "完整 metadata",
+    "调试信息",
+    "路由元数据",
+]
+
+FULL_METADATA_NEGATION_PATTERNS = [
+    "不要输出完整 routing_metadata",
+    "不输出完整 routing_metadata",
+    "不得输出完整 routing_metadata",
+    "默认不输出完整 routing_metadata",
+    "不要默认输出 routing_metadata",
+    "不得默认输出 routing_metadata",
+    "不要 dump boundary_flags yaml",
+    "不要 dump",
+    "不要输出 yaml",
+    "用户可见不要默认展示",
+    "不要默认展示",
+]
+
+BOUNDARY_FLAG_EXPLANATIONS = {
+    "no_data_not_risk_exclusion": "no_data 只代表当前条件下无结果，不能作为无风险反证",
+    "login_no_data_or_window_gap_not_ato_exclusion": "登录日志 no_data 或窗口不足不能排除 ATO",
+    "login_log_window_incomplete_possible": "登录日志在线窗口可能不完整",
+    "partial_observation_available": "partial 观察可用于部分判断，但不能声称完整覆盖",
+    "large_response_limited_enters_source_quality": "大响应截断进入 source_quality",
+    "auth_flow_not_completed_in_bound_context": "auth_failed/302 是认证状态，不直接等于无权限或无数据",
+    "archives_failure_enters_partial_evidence": "档案中心失败进入 partial evidence，不中断回答",
+    "archives_no_data_not_risk_exclusion": "档案中心 no_data 不能作为低风险反证",
+    "related_users_not_gang_conclusion": "同设备/关联用户只是扩散线索，不是团伙结论",
+    "archives_related_users_spread_clue_not_gang": "archives_related_users 只提供扩散候选，需要交叉验证",
+    "strategy_hit_not_final_judgement": "策略命中只是辅助证据，不能单独定性风险",
+    "policy_tree_asset_not_event_hit_path": "policyTree 是资产治理，不是单案命中证据",
+    "track_check_data_ready_not_risk_conclusion": "Track 数据可用性只说明 readiness/provenance，不是风险结论",
+    "feature_list_partial_only_feature_group_summary": "feature list partial 只能做特征组摘要",
+    "unstable_source_not_default_verified": "未稳定 source 只能作为 follow-up，不默认必跑",
+    "default_runtime_routing_false": "browser-backed source 仍需显式 source plan，不自动默认路由",
+}
 
 DEMO_CASES = [
     {
@@ -241,6 +292,36 @@ DEMO_CASES = [
         "expected_answer_contract": ["source_quality_matrix", "evidence_strength", "missing_evidence", "final_answer_boundary"],
         "answer_focus": "strategy_hit_boundary",
     },
+    {
+        "id": "BBFA-DEMO-011",
+        "user_query": "先给 plan_mode，不要执行平台，说明是否查平台和 DataAgent",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Plan-mode answer translates execution status into natural language.",
+        "expected_boundary_flags": ["plan_mode_no_platform_execution", "default_runtime_routing_false"],
+        "should_not_do": [
+            "do_not_emit_full_routing_metadata_by_default",
+            "do_not_dump_boundary_flags_yaml_by_default",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "expected_metadata_visibility": "user_visible_summary",
+        "expected_full_metadata_allowed": False,
+        "expected_user_visible_contains": ["本轮未访问真实平台", "未调用 DataAgent/Hive"],
+        "expected_user_visible_absent": ["routing_metadata:"],
+        "answer_focus": "plan_mode_summary",
+    },
+    {
+        "id": "BBFA-DEMO-012",
+        "user_query": "给我 routing_metadata debug run log YAML",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Explicit debug request may show full routing_metadata.",
+        "expected_boundary_flags": ["missing_explicit_source_plan"],
+        "should_not_do": ["do_not_hide_internal_run_log_metadata"],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "expected_metadata_visibility": "full_routing_metadata",
+        "expected_full_metadata_allowed": True,
+        "expected_user_visible_contains": ["routing_metadata:", "platform_called: false", "dataagent_called: false"],
+        "answer_focus": "debug_metadata",
+    },
 ]
 
 
@@ -322,6 +403,10 @@ def has_any(text: str, patterns: list[str]) -> bool:
     return any(pattern.lower() in text for pattern in patterns)
 
 
+def wants_full_routing_metadata(text: str) -> bool:
+    return has_any(text, FULL_METADATA_REQUEST_PATTERNS) and not has_any(text, FULL_METADATA_NEGATION_PATTERNS)
+
+
 def unique(items: list[str]) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
@@ -352,6 +437,36 @@ def scenario_flags(plan: dict[str, Any], scenario: str) -> list[str]:
     return list(fixed.get("scenario_source_plans", {}).get(scenario, {}).get("boundary_flags", []))
 
 
+def explain_boundary_flags(flags: list[str]) -> list[str]:
+    explanations = [BOUNDARY_FLAG_EXPLANATIONS[flag] for flag in flags if flag in BOUNDARY_FLAG_EXPLANATIONS]
+    return unique(explanations)
+
+
+def user_visible_status_summary(flags: list[str], full_metadata_allowed: bool) -> str:
+    explanations = explain_boundary_flags(flags)
+    if not explanations:
+        explanations = ["本轮只生成 source plan 和回答边界，不把未执行 source 写成已完成证据"]
+    boundary_text = "；".join(explanations[:4])
+    metadata_text = "已按请求附完整 routing_metadata" if full_metadata_allowed else "默认不展示完整 routing_metadata YAML"
+    return (
+        "执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。"
+        f"证据边界：{boundary_text}。"
+        "缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。"
+        f"{metadata_text}。"
+    )
+
+
+def apply_output_metadata_policy(text: str, routed: dict[str, Any]) -> dict[str, Any]:
+    full_metadata_allowed = wants_full_routing_metadata(text)
+    flags = list(routed.get("boundary_flags", []))
+    routed["metadata_visibility"] = "full_routing_metadata" if full_metadata_allowed else "user_visible_summary"
+    routed["routing_metadata_yaml_visible"] = full_metadata_allowed
+    routed["full_routing_metadata_allowed"] = full_metadata_allowed
+    routed["internal_run_log_metadata_retained"] = True
+    routed["user_visible_status_summary"] = user_visible_status_summary(flags, full_metadata_allowed)
+    return routed
+
+
 def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     text = normalize_text(user_query)
     actions: list[str] = []
@@ -359,7 +474,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     orchestration = "explicit_source_plan_only"
 
     if has_any(text, ["cookie", "token", "session", "header", "password", "raw login records", "raw labelinfo", "raw body"]):
-        return {
+        return apply_output_metadata_policy(text, {
             "actions": [],
             "orchestration": "deny raw secret/raw dump request; offer sanitized source summary only",
             "boundary_flags": [
@@ -373,10 +488,10 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_output_raw_labelInfo",
                 "do_not_output_raw_full_body",
             ]),
-        }
+        })
 
     if has_any(text, ["未验证的新 action", "新 action", "接进主链"]):
-        return {
+        return apply_output_metadata_policy(text, {
             "actions": [],
             "orchestration": "reject default routing; require registry/readiness/live-smoke evidence first",
             "boundary_flags": ["disabled_or_unverified_action_not_default_route"],
@@ -386,10 +501,10 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_add_action",
                 "do_not_guess_path",
             ]),
-        }
+        })
 
     if has_any(text, ["私信", "private message", "资料四件套", "四件套", "过往四项", "past four", "related_devices", "关联设备"]):
-        return {
+        return apply_output_metadata_policy(text, {
             "actions": [],
             "orchestration": "unstable or not-default source stays follow-up only; use only when a stable interface or user-provided clue exists",
             "boundary_flags": [
@@ -402,7 +517,11 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_claim_past_four_items_live_verified",
                 "do_not_make_unstable_source_default",
             ]),
-        }
+        })
+
+    if has_any(text, ["先给计划", "先给 plan", "plan_mode", "plan mode", "不要执行", "不查平台"]):
+        flags += ["plan_mode_no_platform_execution", "default_runtime_routing_false"]
+        orchestration = "plan mode only; translate platform_called=false and dataagent_called=false into natural language"
 
     if has_any(text, ["302", "auth_failed", "登录态", "账号域"]):
         actions += ["archives_user_profile", "archives_user_analysis"]
@@ -518,13 +637,13 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         actions = ["source_plan_only_no_action_selected"]
         flags += ["missing_explicit_source_plan"]
 
-    return {
+    return apply_output_metadata_policy(text, {
         "actions": unique(actions),
         "orchestration": orchestration,
         "boundary_flags": unique(flags),
         "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
         "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS),
-    }
+    })
 
 
 def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
@@ -533,6 +652,11 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     expected_flags = list(case.get("expected_boundary_flags", []))
     expected_contract = list(case.get("expected_answer_contract", []))
     should_not_do = list(case.get("should_not_do", []))
+    expected_metadata_visibility = case.get("expected_metadata_visibility")
+    expected_full_metadata_allowed = case.get("expected_full_metadata_allowed")
+    expected_internal_metadata_retained = case.get("expected_internal_metadata_retained")
+    expected_user_visible_contains = list(case.get("expected_user_visible_contains", []))
+    expected_user_visible_absent = list(case.get("expected_user_visible_absent", []))
 
     actual_actions = actual["actions"]
     if expected_actions:
@@ -544,6 +668,23 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     contract_ok = all(field in actual["answer_contract"] for field in expected_contract)
     safety_ok = all(flag in actual["safety_flags"] for flag in should_not_do)
     default_routing_ok = default_runtime_routing_ok(plan)
+    metadata_visibility_ok = (
+        expected_metadata_visibility is None
+        or actual.get("metadata_visibility") == expected_metadata_visibility
+    )
+    full_metadata_ok = (
+        expected_full_metadata_allowed is None
+        or actual.get("full_routing_metadata_allowed") is expected_full_metadata_allowed
+    )
+    internal_metadata_ok = (
+        expected_internal_metadata_retained is None
+        or actual.get("internal_run_log_metadata_retained") is expected_internal_metadata_retained
+    )
+    visible_output = actual.get("user_visible_status_summary", "")
+    if actual.get("routing_metadata_yaml_visible"):
+        visible_output += "\n" + full_routing_metadata_preview(actual)
+    visible_contains_ok = all(text in visible_output for text in expected_user_visible_contains)
+    visible_absent_ok = all(text not in visible_output for text in expected_user_visible_absent)
 
     issues: list[str] = []
     if not actions_ok:
@@ -557,6 +698,27 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     if not safety_ok:
         missing = [flag for flag in should_not_do if flag not in actual["safety_flags"]]
         issues.append(f"should_not_do not enforced: {missing}")
+    if not metadata_visibility_ok:
+        issues.append(
+            "metadata visibility mismatch: "
+            f"expected={expected_metadata_visibility}; actual={actual.get('metadata_visibility')}"
+        )
+    if not full_metadata_ok:
+        issues.append(
+            "full metadata policy mismatch: "
+            f"expected={expected_full_metadata_allowed}; actual={actual.get('full_routing_metadata_allowed')}"
+        )
+    if not internal_metadata_ok:
+        issues.append(
+            "internal metadata retention mismatch: "
+            f"expected={expected_internal_metadata_retained}; actual={actual.get('internal_run_log_metadata_retained')}"
+        )
+    if not visible_contains_ok:
+        missing = [text for text in expected_user_visible_contains if text not in visible_output]
+        issues.append(f"user-visible summary missing expected text: {missing}")
+    if not visible_absent_ok:
+        present = [text for text in expected_user_visible_absent if text in visible_output]
+        issues.append(f"user-visible summary contains forbidden text: {present}")
     if not default_routing_ok:
         issues.append("default_runtime_routing drifted from false")
 
@@ -574,16 +736,65 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
         },
         "expected_boundary_flags": expected_flags,
         "actual_boundary_flags": actual["boundary_flags"],
+        "actual_output_metadata": {
+            "metadata_visibility": actual.get("metadata_visibility"),
+            "routing_metadata_yaml_visible": actual.get("routing_metadata_yaml_visible"),
+            "full_routing_metadata_allowed": actual.get("full_routing_metadata_allowed"),
+            "internal_run_log_metadata_retained": actual.get("internal_run_log_metadata_retained"),
+            "user_visible_status_summary": actual.get("user_visible_status_summary"),
+        },
         "pass": not issues,
         "issue_if_failed": "; ".join(issues) if issues else "",
         "fix_applied": "none" if not issues else "pending",
     }
 
 
+def full_routing_metadata_preview(actual: dict[str, Any]) -> str:
+    flags = actual.get("boundary_flags", [])
+    flags_block = "\n".join(f"    - {flag}" for flag in flags[:6]) or "    []"
+    return (
+        "routing_metadata:\n"
+        "  route: multi_evidence_orchestration\n"
+        "  capability: multi_evidence_orchestration_contracts\n"
+        "  sub_capability: null\n"
+        "  intent_type: browser_backed_fixed_actions_text_debug\n"
+        "  execution_mode: plan_mode\n"
+        "  evidence_mode: expert_reasoning\n"
+        "  query_plan_only: true\n"
+        "  platform_called: false\n"
+        "  platform_call_summary: []\n"
+        "  dataagent_called: false\n"
+        "  direct_tool_bypass: false\n"
+        "  sensitive_output: false\n"
+        "  redaction_applied: true\n"
+        "  boundary_flags:\n"
+        f"{flags_block}\n"
+        "  source_quality:\n"
+        "    completed_sources: []\n"
+        "    no_data_sources: []\n"
+        "    blocked_sources: []\n"
+        "    auth_failed_sources: []\n"
+        "    timeout_sources: []\n"
+        "    parse_error_sources: []\n"
+        "    missing_sources: []\n"
+        "  missing_required_fields: []\n"
+        "  partial_reason: null\n"
+        "  final_status: answered"
+    )
+
+
 def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
     actions = actual["actions"]
-    plan_label = " -> ".join(actions)
+    if actions == ["source_plan_only_no_action_selected"]:
+        plan_label = "plan-only（本轮不选择具体 source）"
+    else:
+        plan_label = " -> ".join(actions)
     focus = str(case.get("answer_focus", ""))
+    if actual.get("routing_metadata_yaml_visible"):
+        return (
+            "已按 debug / run log 请求输出完整 routing_metadata；本轮仍未访问真实平台，未调用 DataAgent/Hive。\n\n"
+            f"{full_routing_metadata_preview(actual)}"
+        )
     drafts = {
         "ato": (
             f"我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：{plan_label}。"
@@ -636,18 +847,26 @@ def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
             "没有 source_quality 支撑时，只能写线索和待补证。"
         ),
     }
-    return drafts.get(focus, f"按显式 source_plan 处理：{plan_label}。保留 source_quality、missing_evidence 和 final_answer_boundary，不自动执行平台查询。")
+    draft = drafts.get(
+        focus,
+        f"按显式 source_plan 处理：{plan_label}。保留 source_quality、missing_evidence 和 final_answer_boundary，不自动执行平台查询。",
+    )
+    return f"{draft}\n\n{actual['user_visible_status_summary']}"
 
 
 def evaluate_demo_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     evaluated = evaluate_case(plan, case)
     actual = route_query(plan, str(case.get("user_query", "")))
     answer_draft = answer_draft_for(case, actual)
-    answer_is_natural = (
-        len(answer_draft) >= 80
-        and "source_plan" in answer_draft
-        and "action" not in answer_draft.lower()
-    )
+    if actual.get("routing_metadata_yaml_visible"):
+        answer_is_natural = "routing_metadata:" in answer_draft and "platform_called: false" in answer_draft
+    else:
+        answer_is_natural = (
+            len(answer_draft) >= 80
+            and "source_plan" in answer_draft
+            and "routing_metadata:" not in answer_draft
+            and "action" not in answer_draft.lower()
+        )
     issues = []
     if not evaluated["pass"]:
         issues.append(evaluated["issue_if_failed"])
@@ -656,6 +875,9 @@ def evaluate_demo_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, 
     return {
         **evaluated,
         "Dennis_answer_draft": answer_draft,
+        "user_visible_status_summary": actual.get("user_visible_status_summary"),
+        "metadata_visibility": actual.get("metadata_visibility"),
+        "routing_metadata_yaml_visible": actual.get("routing_metadata_yaml_visible"),
         "should_not_do": list(case.get("should_not_do", [])),
         "pass": not issues,
         "issue_if_failed": "; ".join(issue for issue in issues if issue),
@@ -707,6 +929,9 @@ def render_demo_markdown(result: dict[str, Any]) -> str:
                 f"- actual_source_plan_or_template: `{actual_plan}`",
                 f"- expected_boundary_flags: `{', '.join(case['expected_boundary_flags'])}`",
                 f"- actual_boundary_flags: `{', '.join(case['actual_boundary_flags'])}`",
+                f"- metadata_visibility: `{case['metadata_visibility']}`",
+                f"- routing_metadata_yaml_visible: `{str(case['routing_metadata_yaml_visible']).lower()}`",
+                f"- user_visible_status_summary: {case['user_visible_status_summary']}",
                 f"- should_not_do: `{', '.join(case['should_not_do'])}`",
                 f"- pass: `{str(case['pass']).lower()}`",
                 f"- issue_if_failed: {case['issue_if_failed'] or 'none'}",
