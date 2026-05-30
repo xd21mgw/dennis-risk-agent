@@ -307,6 +307,7 @@ class BrowserBackedServiceClient:
             raise BrowserBackedServiceInputError(f"unsupported browser-backed response_mode: {response_mode}")
         params = dict(typed_params or {})
         _validate_typed_params(params)
+        request_params = dict(params)
         if response_mode == RESPONSE_MODE_PASSTHROUGH:
             params["response_mode"] = RESPONSE_MODE_PASSTHROUGH
 
@@ -363,7 +364,12 @@ class BrowserBackedServiceClient:
             )
 
         if response_mode == RESPONSE_MODE_PASSTHROUGH:
-            return normalize_passthrough_service_response(action_name, service_payload, http_status=http_status)
+            return normalize_passthrough_service_response(
+                action_name,
+                service_payload,
+                http_status=http_status,
+                request_params=request_params,
+            )
         return normalize_service_response(action_name, service_payload, http_status=http_status)
 
     def call_account_security_sources(
@@ -1621,6 +1627,7 @@ def normalize_passthrough_service_response(
     action_name: str,
     service_payload: Mapping[str, Any],
     http_status: Optional[int] = None,
+    request_params: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Normalize an explicit passthrough-mode response without exposing raw body."""
 
@@ -1722,7 +1729,7 @@ def normalize_passthrough_service_response(
         )
         return base
 
-    normalized_observation = parse_passthrough_response(action_name, upstream.get("body"))
+    normalized_observation = parse_passthrough_response(action_name, upstream.get("body"), request_params=request_params)
     normalized_status, failure_layer = _normalize_status(
         str(normalized_observation.get("source_status") or "completed"),
         normalized_observation.get("error_type"),
@@ -1750,7 +1757,11 @@ def _normalize_passthrough_service_failure(error_type: Any) -> tuple[str, str]:
     return "blocked", "source_or_service"
 
 
-def parse_passthrough_response(action_name: str, upstream_body: Any) -> Dict[str, Any]:
+def parse_passthrough_response(
+    action_name: str,
+    upstream_body: Any,
+    request_params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     """Parse passthrough upstream.body into a Dennis normalized observation."""
 
     _validate_action_name(action_name)
@@ -1763,10 +1774,13 @@ def parse_passthrough_response(action_name: str, upstream_body: Any) -> Dict[str
             "fields_observed": _observed_field_names(_coerce_json_body(upstream_body)),
             "raw_body_suppressed": True,
         }
-    return parser(upstream_body)
+    return parser(upstream_body, request_params=request_params)
 
 
-def _parse_track_analysis_passthrough(upstream_body: Any) -> Dict[str, Any]:
+def _parse_track_analysis_passthrough(
+    upstream_body: Any,
+    request_params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     body = _coerce_json_body(upstream_body)
     source_name = "track_analysis_summary"
     if not isinstance(body, (Mapping, list)):
@@ -1779,12 +1793,12 @@ def _parse_track_analysis_passthrough(upstream_body: Any) -> Dict[str, Any]:
             "raw_body_suppressed": True,
         }
 
-    sub_interface = _detect_track_sub_interface(body)
+    sub_interface = _detect_track_sub_interface(body, request_params=request_params)
     rows = _extract_row_mappings(body)
     device_ids = _extract_device_ids(body)
     fields_observed = _observed_field_names(body)
     samples = _track_analysis_samples(body, rows, device_ids, sub_interface)
-    record_count = _infer_record_count(body, rows, device_ids)
+    record_count = _infer_record_count(body, rows, device_ids, sub_interface)
     observation: Dict[str, Any] = {
         "source_name": source_name,
         "source_status": "completed" if record_count > 0 else "no_data",
@@ -1800,10 +1814,16 @@ def _parse_track_analysis_passthrough(upstream_body: Any) -> Dict[str, Any]:
         observation["rows_count"] = len(rows)
     if device_ids:
         observation["device_ids_count"] = len(device_ids)
+    if sub_interface == "profile":
+        observation["profile_fields_observed"] = _track_profile_fields_observed(body)
+        observation["profile_sections_observed"] = _track_profile_sections_observed(body)
     return observation
 
 
-def _parse_login_logs_passthrough(upstream_body: Any) -> Dict[str, Any]:
+def _parse_login_logs_passthrough(
+    upstream_body: Any,
+    request_params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     body = _coerce_json_body(upstream_body)
     source_name = "login_logs_search"
     if not isinstance(body, (Mapping, list)):
@@ -1896,20 +1916,112 @@ def _extract_passthrough_entity(body: Any) -> Dict[str, Any]:
     return entity
 
 
-def _detect_track_sub_interface(body: Any) -> Optional[str]:
+def _detect_track_sub_interface(body: Any, request_params: Optional[Mapping[str, Any]] = None) -> Optional[str]:
+    request_hint = _track_sub_interface_hint(request_params)
+    if request_hint and _track_body_supports_sub_interface(body, request_hint):
+        return request_hint
     for key in ("sub_interface", "subInterface", "interface", "func", "function", "mode"):
         value = _find_first(body, (key,))
-        if isinstance(value, str) and value in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES:
+        if (
+            isinstance(value, str)
+            and value in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES
+            and _track_body_supports_sub_interface(body, value)
+        ):
             return value
-    if _extract_device_ids(body):
+    if _track_profile_payload(body) is not None:
+        return "profile"
+    if _track_use_duration_rows(body):
+        return "getUseDuration"
+    if _track_device_payload(body):
         return "getDeviceIds"
     if _find_first(body, ("latestDateTime", "latest_datetime", "lastestDateTime", "getLastestDateTime")) is not None:
+        return "getLastestDateTime"
+    if _find_first(body, ("uidDidRelLatestDateTime", "uid_did_rel_latest_datetime")) is not None:
         return "getLastestDateTime"
     if _find_first(body, ("useDuration", "duration", "totalDuration", "activeDuration", "getUseDuration")) is not None:
         return "getUseDuration"
     if _find_first(body, ("registerTime", "activeDays", "fanDistribution", "userProfile", "profile")) is not None:
         return "profile"
+    if request_hint:
+        return request_hint
     return None
+
+
+def _track_sub_interface_hint(request_params: Optional[Mapping[str, Any]]) -> Optional[str]:
+    if not isinstance(request_params, Mapping):
+        return None
+    value = request_params.get("sub_interface") or request_params.get("subInterface")
+    if isinstance(value, str) and value in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES:
+        return value
+    return None
+
+
+def _track_body_supports_sub_interface(body: Any, sub_interface: str) -> bool:
+    if sub_interface == "profile":
+        return _track_profile_payload(body) is not None
+    if sub_interface == "getUseDuration":
+        return bool(_track_use_duration_rows(body)) or _find_first(
+            body,
+            ("useDuration", "duration", "totalDuration", "activeDuration", "getUseDuration"),
+        ) is not None
+    if sub_interface == "getDeviceIds":
+        return bool(_track_device_payload(body) or _extract_device_ids(body))
+    if sub_interface == "getLastestDateTime":
+        return _find_first(
+            body,
+            ("latestDateTime", "latest_datetime", "lastestDateTime", "getLastestDateTime", "uidDidRelLatestDateTime"),
+        ) is not None
+    return False
+
+
+def _track_profile_payload(body: Any) -> Optional[Mapping[str, Any]]:
+    if isinstance(body, Mapping):
+        data = body.get("data")
+        if isinstance(data, Mapping) and isinstance(data.get("profile"), Mapping):
+            return data["profile"]
+        if isinstance(body.get("profile"), Mapping):
+            return body["profile"]
+        user_profile = body.get("userProfile")
+        if isinstance(user_profile, Mapping):
+            return user_profile
+    return None
+
+
+def _track_use_duration_rows(body: Any) -> list[Mapping[str, Any]]:
+    rows = _extract_row_mappings(body)
+    result: list[Mapping[str, Any]] = []
+    for row in rows:
+        has_date = any(key in row for key in ("date", "dt", "day", "statDate"))
+        has_duration = any(key in row for key in ("duration", "totalDuration", "activeDuration", "useDuration"))
+        if has_date and has_duration:
+            result.append(row)
+    return result
+
+
+def _track_device_payload(body: Any) -> list[Any]:
+    if isinstance(body, list) and _is_track_device_array(body):
+        return list(body)
+    if isinstance(body, Mapping):
+        data = body.get("data")
+        if isinstance(data, list) and _is_track_device_array(data):
+            return list(data)
+        if _track_profile_payload(body) is None:
+            device_ids = _find_first(body, ("deviceIds", "device_ids", "deviceIdList", "didList"))
+            if isinstance(device_ids, list):
+                return list(device_ids)
+    return []
+
+
+def _is_track_device_array(value: list[Any]) -> bool:
+    if not value:
+        return False
+    for item in value[:5]:
+        if isinstance(item, (str, int)):
+            continue
+        if isinstance(item, Mapping) and any(key in item for key in ("device_id", "deviceId", "did", "DID")):
+            continue
+        return False
+    return True
 
 
 def _extract_row_mappings(value: Any) -> list[Mapping[str, Any]]:
@@ -1956,6 +2068,10 @@ def _track_analysis_samples(
     sub_interface: Optional[str],
 ) -> list[Dict[str, Any]]:
     samples: list[Dict[str, Any]] = []
+    if sub_interface == "profile":
+        profile_sample = _track_profile_sample(body)
+        if profile_sample:
+            samples.append(profile_sample)
     if device_ids:
         samples.append({"device_id_sample": _safe_display_value("device_id", device_ids[0], DEFAULT_OUTPUT_SCOPE)})
     if rows:
@@ -1973,7 +2089,48 @@ def _track_analysis_samples(
     return [sample for sample in samples if sample]
 
 
-def _infer_record_count(body: Any, rows: list[Mapping[str, Any]], device_ids: list[Any]) -> int:
+def _track_profile_fields_observed(body: Any) -> list[str]:
+    profile = _track_profile_payload(body)
+    return _observed_field_names(profile) if isinstance(profile, Mapping) else []
+
+
+def _track_profile_sections_observed(body: Any) -> list[str]:
+    profile = _track_profile_payload(body)
+    if not isinstance(profile, Mapping):
+        return []
+    return [str(key) for key, value in profile.items() if isinstance(value, (Mapping, list)) and _is_safe_display_key(str(key))]
+
+
+def _track_profile_sample(body: Any) -> Dict[str, Any]:
+    profile = _track_profile_payload(body)
+    if not isinstance(profile, Mapping):
+        return {}
+    sample: Dict[str, Any] = {}
+    sample_fields = {
+        "register_time": ("registerTime", "register_time", "registrationTime", "createTime"),
+        "fan_distribution": ("fanDistribution", "fan_distribution", "fansDistribution"),
+        "active_days_bucket": ("activeDaysBucket", "active_days_bucket", "activeDays", "active_days"),
+        "country": ("country",),
+        "province": ("province",),
+        "city": ("city",),
+        "user_type_30d": ("userType30d", "user_type_30d"),
+        "channel_type": ("channelType", "channel_type"),
+    }
+    for output_key, candidates in sample_fields.items():
+        value = _find_first(profile, candidates)
+        if value is not None:
+            sample[output_key] = _safe_display_value(output_key, value, DEFAULT_OUTPUT_SCOPE)
+    return sample
+
+
+def _infer_record_count(
+    body: Any,
+    rows: list[Mapping[str, Any]],
+    device_ids: list[Any],
+    sub_interface: Optional[str] = None,
+) -> int:
+    if sub_interface == "profile" and _track_profile_payload(body) is not None:
+        return 1
     if rows:
         return len(rows)
     if device_ids:
@@ -5533,6 +5690,53 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert missing_body_result["error_type"] == "passthrough_body_missing"
     results.append(("passthrough_body_missing_marked", "passed"))
 
+    track_profile_body = {
+        "data": {
+            "deviceIds": ["ANDROID_track_device_001", "IOS_track_device_002"],
+            "profile": {
+                "firstLevelProfile": {
+                    "userId": "2871834924",
+                    "province": "Guangdong",
+                    "city": "Shenzhen",
+                    "activeDaysBucket": "active_30d",
+                    "registerTime": "2020-01-01",
+                },
+                "secondLevelProfile": [
+                    {"label": "fanDistribution", "value": "bucketed"},
+                ],
+            },
+            "latestDateTime": "数据更新时间:2026-05-28",
+        }
+    }
+    track_profile_observation = parse_passthrough_response(
+        "track_analysis_summary",
+        track_profile_body,
+        request_params={"sub_interface": "profile"},
+    )
+    assert track_profile_observation["source_status"] == "completed"
+    assert track_profile_observation["sub_interface"] == "profile"
+    assert track_profile_observation["entity"]["userId"] == "2871834924"
+    assert track_profile_observation["records_count"] == 1
+    assert track_profile_observation["device_ids_count"] == 2
+    assert "firstLevelProfile.userId" in track_profile_observation["profile_fields_observed"]
+    assert "firstLevelProfile" in track_profile_observation["profile_sections_observed"]
+    assert track_profile_observation["samples"][0]["city"] == "Shenzhen"
+    assert track_profile_observation["raw_body_suppressed"] is True
+    results.append(("track_analysis_profile_body_with_deviceids_detected_as_profile", "passed"))
+
+    track_profile_hint_opener = _FakeOpener(_passthrough_fixture_payload("track_analysis_summary", track_profile_body))
+    track_profile_hint_result = BrowserBackedServiceClient(opener=track_profile_hint_opener).call_action(
+        "track_analysis_summary",
+        {"user_id": "2871834924", "appName": "KUAISHOU", "sub_interface": "profile"},
+        response_mode=RESPONSE_MODE_PASSTHROUGH,
+    )
+    assert track_profile_hint_result["normalized_observation"]["sub_interface"] == "profile"
+    assert track_profile_hint_result["normalized_observation"]["profile_sections_observed"] == [
+        "firstLevelProfile",
+        "secondLevelProfile",
+    ]
+    results.append(("track_analysis_request_sub_interface_profile_hint_used", "passed"))
+
     track_observation = parse_passthrough_response(
         "track_analysis_summary",
         {
@@ -5548,6 +5752,48 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert track_observation["device_ids_count"] == 2
     assert track_observation["raw_body_suppressed"] is True
     results.append(("track_analysis_passthrough_parser_normalizes_observation", "passed"))
+
+    track_device_array_observation = parse_passthrough_response(
+        "track_analysis_summary",
+        {
+            "data": [
+                {"deviceId": "ANDROID_track_device_001"},
+                {"deviceId": "IOS_track_device_002"},
+            ]
+        },
+    )
+    assert track_device_array_observation["sub_interface"] == "getDeviceIds"
+    assert track_device_array_observation["device_ids_count"] == 2
+    results.append(("track_analysis_device_array_detected_as_getDeviceIds", "passed"))
+
+    track_duration_observation = parse_passthrough_response(
+        "track_analysis_summary",
+        {
+            "data": {
+                "rows": [
+                    {"date": "2026-05-28", "duration": 3600},
+                    {"date": "2026-05-29", "duration": 7200},
+                ]
+            }
+        },
+    )
+    assert track_duration_observation["sub_interface"] == "getUseDuration"
+    assert track_duration_observation["rows_count"] == 2
+    assert track_duration_observation["records_count"] == 2
+    results.append(("track_analysis_use_duration_rows_detected", "passed"))
+
+    track_latest_observation = parse_passthrough_response(
+        "track_analysis_summary",
+        {
+            "data": {
+                "latestDateTime": "数据更新时间:2026-05-28",
+                "uidDidRelLatestDateTime": "2026-05-28 10:00:00",
+            }
+        },
+    )
+    assert track_latest_observation["sub_interface"] == "getLastestDateTime"
+    assert track_latest_observation["raw_body_suppressed"] is True
+    results.append(("track_analysis_latest_datetime_detected", "passed"))
 
     login_observation = parse_passthrough_response("login_logs_search", passthrough_login_body)
     assert login_observation["source_status"] == "completed"
