@@ -1670,7 +1670,43 @@ def normalize_passthrough_service_response(
         return base
 
     base["safety"] = {"credential_material_output": False}
+    service_error_type = service_payload.get("error_type")
+    if service_error_type is None and isinstance(upstream, Mapping):
+        service_error_type = upstream.get("error_type")
+    if service_payload.get("ok") is False and service_error_type:
+        source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type)
+        base.update(
+            {
+                "source_status": source_status,
+                "failure_layer": failure_layer,
+                "error_type": service_error_type,
+                "normalized_observation": {
+                    "source_name": source_name,
+                    "source_status": source_status,
+                    "error_type": service_error_type,
+                    "raw_body_suppressed": True,
+                },
+            }
+        )
+        return base
+
     if not isinstance(upstream, Mapping) or "body" not in upstream or upstream.get("body") is None:
+        if service_payload.get("ok") is not True:
+            source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type or "passthrough_failed")
+            base.update(
+                {
+                    "source_status": source_status,
+                    "failure_layer": failure_layer,
+                    "error_type": service_error_type or "passthrough_failed",
+                    "normalized_observation": {
+                        "source_name": source_name,
+                        "source_status": source_status,
+                        "error_type": service_error_type or "passthrough_failed",
+                        "raw_body_suppressed": True,
+                    },
+                }
+            )
+            return base
         base.update(
             {
                 "source_status": "parse_error",
@@ -1701,6 +1737,17 @@ def normalize_passthrough_service_response(
         }
     )
     return base
+
+
+def _normalize_passthrough_service_failure(error_type: Any) -> tuple[str, str]:
+    error = str(error_type or "").strip().lower()
+    if error in {"auth_failed", "auth_redirect", "auth_required", "login_page", "landing_flow_blocked"}:
+        return "auth_failed", "auth_session"
+    if error in {"timeout", "service_timeout", "navigation_timeout"}:
+        return "timeout", "service_transport"
+    if error in {"invalid_parameter", "parameter_error"}:
+        return "invalid_parameter", "parameter_contract"
+    return "blocked", "source_or_service"
 
 
 def parse_passthrough_response(action_name: str, upstream_body: Any) -> Dict[str, Any]:
@@ -4482,12 +4529,14 @@ def _passthrough_fixture_payload(
     action_name: str,
     upstream_body: Any = None,
     *,
+    ok: bool = True,
+    error_type: Optional[str] = None,
     include_body: bool = True,
     credential_material_output: bool = False,
     include_summary_fields: bool = False,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
-        "ok": True,
+        "ok": ok,
         "action": action_name,
         "response_mode": RESPONSE_MODE_PASSTHROUGH,
         "upstream": {
@@ -4497,6 +4546,8 @@ def _passthrough_fixture_payload(
         "meta": {"latency_ms": 42},
         "safety": {"credential_material_output": credential_material_output},
     }
+    if error_type:
+        payload["error_type"] = error_type
     if include_body:
         payload["upstream"]["body"] = upstream_body if upstream_body is not None else {"data": {}}
     if include_summary_fields:
@@ -5443,6 +5494,37 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert credential_violation["error_type"] == "credential_material_violation"
     assert credential_violation["sensitive_output"] is False
     results.append(("passthrough_credential_material_fail_closed", "passed"))
+
+    landing_flow_blocked = BrowserBackedServiceClient(
+        opener=_FakeOpener(
+            _passthrough_fixture_payload(
+                "login_logs_search",
+                include_body=False,
+                ok=False,
+                error_type="landing_flow_blocked",
+            )
+        )
+    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    assert landing_flow_blocked["source_status"] == "auth_failed"
+    assert landing_flow_blocked["failure_layer"] == "auth_session"
+    assert landing_flow_blocked["error_type"] == "landing_flow_blocked"
+    assert landing_flow_blocked["normalized_observation"]["error_type"] == "landing_flow_blocked"
+    results.append(("passthrough_landing_flow_blocked_preserves_service_error", "passed"))
+
+    auth_failed = BrowserBackedServiceClient(
+        opener=_FakeOpener(
+            _passthrough_fixture_payload(
+                "login_logs_search",
+                include_body=False,
+                ok=False,
+                error_type="auth_failed",
+            )
+        )
+    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    assert auth_failed["source_status"] == "auth_failed"
+    assert auth_failed["failure_layer"] == "auth_session"
+    assert auth_failed["error_type"] == "auth_failed"
+    results.append(("passthrough_auth_failed_preserves_service_error", "passed"))
 
     missing_body_result = BrowserBackedServiceClient(
         opener=_FakeOpener(_passthrough_fixture_payload("login_logs_search", include_body=False))
