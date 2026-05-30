@@ -186,12 +186,14 @@ safety:
 
 Passthrough does not require `source_card` or `source_quality`. If those fields appear, Dennis marks `unexpected_summary_fields` but does not fail. If `safety.credential_material_output` is anything other than `false`, Dennis fails closed with `credential_material_violation`. If `upstream.body` is missing, Dennis marks `passthrough_body_missing`. The raw upstream body is never displayed or persisted as user-facing evidence; it is passed only to the Dennis parser, which emits `normalized_observation`.
 
-Phase 1 parser coverage is intentionally narrow:
+Current passthrough parser coverage is still a parallel validation path:
 
 - `track_analysis_summary`: recognizes `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime`-style body shapes and emits counts, observed fields, sanitized samples, and `raw_body_suppressed=true`.
 - `login_logs_search`: recognizes `data.logSearchModels`, emits `records_count`, observed fields, sanitized log samples, and `raw_records_suppressed=true`.
+- `weapon_inventory`: recognizes graphData-style `pointInfoMap` / `relationEdgeList` and riskData-style label summaries; emits graph counts, related user/device counts, risk label counts, risk group names, readable label samples, `userLevel_observed`, and suppresses raw `labelInfo` / `originalLog`.
+- `rcp_snapshot`: recognizes `data.eventList` with optional pagination and table headers; emits event count, observed columns, first event shape keys, event/source/device/policy/time samples, and suppresses full raw eventList dumps.
 
-Weapon and RCP remain on the summary/compat path in this phase. Passthrough parser output is not a replacement for the current evidence card builder until a later controlled dual-run proves parity.
+Passthrough parser output is not a replacement for the current evidence card builder until a later controlled dual-run proves parity for each source. The default chain remains `compat_summary`.
 
 ## Normalized Output
 

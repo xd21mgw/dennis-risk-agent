@@ -1850,10 +1850,117 @@ def _parse_login_logs_passthrough(
     }
 
 
+def _parse_weapon_inventory_passthrough(
+    upstream_body: Any,
+    request_params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    body = _coerce_json_body(upstream_body)
+    source_name = "weapon_inventory"
+    if not isinstance(body, (Mapping, list)):
+        return {
+            "source_name": source_name,
+            "source_status": "parse_error",
+            "error_type": "passthrough_body_not_structured_json",
+            "fields_observed": [],
+            "raw_body_suppressed": True,
+            "raw_labelInfo_suppressed": True,
+            "raw_originalLog_suppressed": True,
+            "no_data_not_risk_exclusion": True,
+        }
+
+    graph = _extract_weapon_graph_container(body)
+    point_info_map_present = isinstance(graph, Mapping) and isinstance(graph.get("pointInfoMap"), Mapping)
+    relation_edge_list_present = isinstance(graph, Mapping) and isinstance(graph.get("relationEdgeList"), list)
+    point_info_map = graph.get("pointInfoMap") if point_info_map_present else {}
+    relation_edges = _extract_weapon_relation_edges(graph)
+    device_ids, user_ids = _extract_weapon_graph_entities(point_info_map, relation_edges)
+    risk = _extract_weapon_risk_container(body)
+    risk_summary = _extract_weapon_risk_summary(risk if risk is not None else body)
+    graph_present = isinstance(graph, Mapping) and ("pointInfoMap" in graph or "relationEdgeList" in graph)
+    point_count = len(point_info_map) if isinstance(point_info_map, Mapping) else 0
+    edge_count = len(relation_edges)
+    risk_present = risk is not None
+    has_graph_data = point_count > 0 or edge_count > 0
+    has_risk_data = risk_summary["risk_item_count"] > 0 or risk_summary["risk_label_count"] > 0 or risk_summary["userLevel_observed"]
+    source_status = "completed" if has_graph_data or has_risk_data else "no_data"
+
+    return {
+        "source_name": source_name,
+        "source_status": source_status,
+        "entity": _extract_passthrough_entity(body),
+        "graph_status": "completed" if has_graph_data else ("no_data" if graph_present else "not_present"),
+        "pointInfoMap_present": point_info_map_present,
+        "pointInfoMap_count": point_count,
+        "relationEdgeList_present": relation_edge_list_present,
+        "relationEdgeList_count": edge_count,
+        "related_device_count": len(device_ids),
+        "related_user_count": len(user_ids),
+        "device_id_samples": [_safe_display_value("device_id", value, DEFAULT_OUTPUT_SCOPE) for value in device_ids[:5]],
+        "user_id_samples": [_safe_display_value("user_id", value, DEFAULT_OUTPUT_SCOPE) for value in user_ids[:5]],
+        "riskData_status": "completed" if has_risk_data else ("no_data" if risk_present else "not_executed"),
+        "risk_item_count": risk_summary["risk_item_count"],
+        "risk_label_count": risk_summary["risk_label_count"],
+        "risk_group_names_observed": risk_summary["risk_group_names_observed"],
+        "readable_label_sample": risk_summary["readable_label_sample"],
+        "userLevel_observed": risk_summary["userLevel_observed"],
+        "raw_body_suppressed": True,
+        "raw_labelInfo_suppressed": True,
+        "raw_originalLog_suppressed": True,
+        "no_data_not_risk_exclusion": True,
+        "graphData_empty_not_risk_exclusion": True,
+        "riskData_not_final_judgement": True,
+    }
+
+
+def _parse_rcp_snapshot_passthrough(
+    upstream_body: Any,
+    request_params: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    body = _coerce_json_body(upstream_body)
+    source_name = "rcp_snapshot"
+    if not isinstance(body, (Mapping, list)):
+        return {
+            "source_name": source_name,
+            "source_status": "parse_error",
+            "error_type": "passthrough_body_not_structured_json",
+            "event_count": 0,
+            "fields_observed": [],
+            "raw_body_suppressed": True,
+            "raw_eventList_full_dump_suppressed": True,
+            "no_data_not_risk_exclusion": True,
+        }
+
+    event_list = _extract_rcp_event_list(body)
+    table_headers = _extract_rcp_table_header_columns(body)
+    returned_columns = _observed_event_columns(event_list)
+    first_event_shape_keys = _safe_shape_keys(event_list[0]) if event_list else []
+    source_status = "completed" if event_list else "no_data"
+    return {
+        "source_name": source_name,
+        "source_status": source_status,
+        "event_count": len(event_list),
+        "pagination_summary": _extract_rcp_pagination_summary(body),
+        "table_header_columns": table_headers,
+        "returned_columns_observed": returned_columns,
+        "first_event_shape_keys": first_event_shape_keys,
+        "eventId_samples": _sample_event_values(event_list, ("eventId", "event_id")),
+        "sourceId_samples": _sample_event_values(event_list, ("sourceId", "source_id")),
+        "deviceId_samples": _sample_event_values(event_list, ("deviceId", "device_id", "did")),
+        "hitFusePolicyCode_samples": _sample_event_values(event_list, ("hitFusePolicyCode", "policyCode", "policy_code")),
+        "occurTime_samples": _sample_event_values(event_list, ("_occurTime", "occurTime", "occur_time", "hitTimestamp")),
+        "raw_body_suppressed": True,
+        "raw_eventList_full_dump_suppressed": True,
+        "no_data_not_risk_exclusion": True,
+        "eventList_not_final_judgement": True,
+    }
+
+
 PASSTHROUGH_PARSER_REGISTRY.update(
     {
         "track_analysis_summary": _parse_track_analysis_passthrough,
         "login_logs_search": _parse_login_logs_passthrough,
+        "weapon_inventory": _parse_weapon_inventory_passthrough,
+        "rcp_snapshot": _parse_rcp_snapshot_passthrough,
     }
 )
 
@@ -2175,6 +2282,302 @@ def _login_log_sample(record: Mapping[str, Any]) -> Dict[str, Any]:
         if value is not None:
             sample[output_key] = _safe_display_value(output_key, value, DEFAULT_OUTPUT_SCOPE)
     return sample
+
+
+def _extract_weapon_graph_container(body: Any) -> Mapping[str, Any]:
+    for candidate in _candidate_mappings(body):
+        if "pointInfoMap" in candidate or "relationEdgeList" in candidate:
+            return candidate
+        graph_data = candidate.get("graphData")
+        if isinstance(graph_data, Mapping) and ("pointInfoMap" in graph_data or "relationEdgeList" in graph_data):
+            return graph_data
+    return {}
+
+
+def _extract_weapon_relation_edges(graph: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(graph, Mapping):
+        return []
+    edges = graph.get("relationEdgeList")
+    if not isinstance(edges, list):
+        return []
+    return [edge for edge in edges if isinstance(edge, Mapping)]
+
+
+def _extract_weapon_risk_container(body: Any) -> Optional[Any]:
+    for candidate in _candidate_mappings(body):
+        risk_data = candidate.get("riskData")
+        if risk_data is not None:
+            return risk_data
+        if any(key in candidate for key in ("labelInfo", "riskItems", "riskLabels", "userLevel", "riskGroupName")):
+            return candidate
+    return None
+
+
+def _candidate_mappings(body: Any) -> list[Mapping[str, Any]]:
+    candidates: list[Mapping[str, Any]] = []
+    if isinstance(body, Mapping):
+        candidates.append(body)
+        for key in ("payload", "data", "result", "body"):
+            child = body.get(key)
+            if isinstance(child, Mapping):
+                candidates.extend(_candidate_mappings(child))
+    return candidates
+
+
+def _extract_weapon_graph_entities(
+    point_info_map: Mapping[str, Any],
+    relation_edges: list[Mapping[str, Any]],
+) -> tuple[list[Any], list[Any]]:
+    device_ids: list[Any] = []
+    user_ids: list[Any] = []
+
+    def add_entity(key: str, value: Any) -> None:
+        entity_type = _classify_weapon_entity(key, value)
+        if entity_type == "device_id" and value not in device_ids:
+            device_ids.append(value)
+        elif entity_type == "user_id" and value not in user_ids:
+            user_ids.append(value)
+
+    for node_key, node_value in point_info_map.items():
+        add_entity("pointInfoMap.key", node_key)
+        if isinstance(node_value, Mapping):
+            for nested_key, nested_value in node_value.items():
+                if isinstance(nested_value, (str, int)):
+                    add_entity(str(nested_key), nested_value)
+    for edge in relation_edges:
+        for edge_key, edge_value in edge.items():
+            if isinstance(edge_value, (str, int)):
+                add_entity(str(edge_key), edge_value)
+
+    return device_ids, user_ids
+
+
+def _classify_weapon_entity(key: str, value: Any) -> Optional[str]:
+    text = str(value)
+    lowered_key = key.lower()
+    if not text:
+        return None
+    if "user" in lowered_key or lowered_key in {"uid", "userid"}:
+        return "user_id" if text.isdigit() else None
+    if "device" in lowered_key or lowered_key in {"did", "didlist"}:
+        return "device_id"
+    if text.isdigit():
+        return "user_id"
+    if _looks_like_weapon_device_id(text):
+        return "device_id"
+    return None
+
+
+def _looks_like_weapon_device_id(value: str) -> bool:
+    text = str(value)
+    if text.startswith(("ANDROID_", "IOS_", "web_")):
+        return True
+    if re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}", text):
+        return True
+    if re.fullmatch(r"[0-9A-Fa-f]{16,64}", text):
+        return True
+    return False
+
+
+def _extract_weapon_risk_summary(risk_body: Any) -> Dict[str, Any]:
+    risk_items = _extract_weapon_risk_items(risk_body)
+    label_items = _extract_weapon_label_items(risk_body)
+    risk_group_names = _unique_safe_values(_collect_values_for_keys(risk_body, ("riskGroupName", "groupName", "risk_group_name")))
+    readable_labels = _unique_safe_values(
+        _collect_values_for_keys(risk_body, ("readableLabel", "readable_label", "labelName", "label_name", "riskLabelName"))
+    )
+    if not readable_labels:
+        readable_labels = _unique_safe_values(_label_item_names(label_items))
+    return {
+        "risk_item_count": len(risk_items),
+        "risk_label_count": len(label_items),
+        "risk_group_names_observed": risk_group_names[:8],
+        "readable_label_sample": readable_labels[:8],
+        "userLevel_observed": _contains_key_recursive(risk_body, ("userLevel", "user_level")),
+    }
+
+
+def _extract_weapon_risk_items(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if not isinstance(value, Mapping):
+        return []
+    for key in ("riskItems", "riskList", "riskData", "data", "result"):
+        child = value.get(key)
+        if isinstance(child, list):
+            return child
+        if isinstance(child, Mapping):
+            nested = _extract_weapon_risk_items(child)
+            if nested:
+                return nested
+    return [value] if any(key in value for key in ("labelInfo", "riskLabels", "userLevel", "riskGroupName")) else []
+
+
+def _extract_weapon_label_items(value: Any) -> list[Any]:
+    labels: list[Any] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                if str(key) in {"labelInfo", "riskLabels", "labels", "riskLabelList"}:
+                    if isinstance(child, list):
+                        labels.extend(child)
+                    elif isinstance(child, Mapping):
+                        labels.extend(child.values())
+                    elif child:
+                        labels.append(child)
+                    continue
+                if str(key) in {"originalLog", "rawOriginalLog"}:
+                    continue
+                if isinstance(child, (Mapping, list)):
+                    visit(child)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(value)
+    return labels
+
+
+def _label_item_names(items: list[Any]) -> list[Any]:
+    names: list[Any] = []
+    for item in items:
+        if isinstance(item, Mapping):
+            for key in ("readableLabel", "readable_label", "labelName", "label_name", "name", "label"):
+                value = item.get(key)
+                if isinstance(value, (str, int, float)):
+                    names.append(value)
+                    break
+        elif isinstance(item, (str, int, float)):
+            names.append(item)
+    return names
+
+
+def _collect_values_for_keys(value: Any, keys: Iterable[str]) -> list[Any]:
+    wanted = set(keys)
+    values: list[Any] = []
+
+    def visit(node: Any) -> None:
+        if isinstance(node, Mapping):
+            for key, child in node.items():
+                if str(key) in {"labelInfo", "originalLog", "rawOriginalLog"}:
+                    if str(key) == "labelInfo":
+                        visit(child)
+                    continue
+                if str(key) in wanted and isinstance(child, (str, int, float)):
+                    values.append(child)
+                elif isinstance(child, (Mapping, list)):
+                    visit(child)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(value)
+    return values
+
+
+def _unique_safe_values(values: Iterable[Any]) -> list[Any]:
+    result: list[Any] = []
+    for value in values:
+        if not isinstance(value, (str, int, float)):
+            continue
+        safe_value = _safe_display_value("risk_label", value, DEFAULT_OUTPUT_SCOPE)
+        if safe_value not in result:
+            result.append(safe_value)
+    return result
+
+
+def _contains_key_recursive(value: Any, keys: Iterable[str]) -> bool:
+    wanted = set(keys)
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if str(key) in wanted:
+                return True
+            if isinstance(child, (Mapping, list)) and _contains_key_recursive(child, wanted):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_key_recursive(item, wanted) for item in value)
+    return False
+
+
+def _extract_rcp_event_list(body: Any) -> list[Mapping[str, Any]]:
+    if isinstance(body, list):
+        return [item for item in body if isinstance(item, Mapping)]
+    if not isinstance(body, Mapping):
+        return []
+    data = body.get("data")
+    if isinstance(data, Mapping) and isinstance(data.get("eventList"), list):
+        return [item for item in data["eventList"] if isinstance(item, Mapping)]
+    if isinstance(body.get("eventList"), list):
+        return [item for item in body["eventList"] if isinstance(item, Mapping)]
+    return []
+
+
+def _extract_rcp_pagination_summary(body: Any) -> Dict[str, Any]:
+    pagination = None
+    if isinstance(body, Mapping):
+        data = body.get("data")
+        if isinstance(data, Mapping):
+            pagination = data.get("pagination") or data.get("pageInfo") or data.get("page")
+        if pagination is None:
+            pagination = body.get("pagination") or body.get("pageInfo") or body.get("page")
+    if not isinstance(pagination, Mapping):
+        return {}
+    return _safe_passthrough_sample(
+        pagination,
+        ("page", "pageIndex", "pageSize", "size", "total", "totalCount", "hasMore"),
+    )
+
+
+def _extract_rcp_table_header_columns(body: Any) -> list[str]:
+    headers = None
+    if isinstance(body, Mapping):
+        data = body.get("data")
+        if isinstance(data, Mapping):
+            headers = data.get("tableHeaderList") or data.get("tableHeaders")
+        if headers is None:
+            headers = body.get("tableHeaderList") or body.get("tableHeaders")
+    if not isinstance(headers, list):
+        return []
+    columns: list[str] = []
+    for header in headers:
+        column = None
+        if isinstance(header, str):
+            column = header
+        elif isinstance(header, Mapping):
+            for key in ("dataIndex", "key", "prop", "field", "columnName", "name", "title"):
+                value = header.get(key)
+                if isinstance(value, str) and value:
+                    column = value
+                    break
+        if column and _is_safe_display_key(column) and column not in columns:
+            columns.append(column)
+    return columns
+
+
+def _observed_event_columns(event_list: list[Mapping[str, Any]]) -> list[str]:
+    columns: list[str] = []
+    for event in event_list[:5]:
+        for key in event.keys():
+            key_text = str(key)
+            if _is_safe_display_key(key_text) and key_text not in columns:
+                columns.append(key_text)
+    return columns
+
+
+def _sample_event_values(event_list: list[Mapping[str, Any]], keys: Iterable[str]) -> list[Any]:
+    samples: list[Any] = []
+    for event in event_list:
+        value = _find_first(event, keys)
+        if value is None:
+            continue
+        key_for_display = next(iter(keys), "value")
+        safe_value = _safe_display_value(key_for_display, value, DEFAULT_OUTPUT_SCOPE)
+        if safe_value not in samples:
+            samples.append(safe_value)
+        if len(samples) >= 5:
+            break
+    return samples
 
 
 def _safe_passthrough_sample(value: Mapping[str, Any], candidate_keys: Iterable[str]) -> Dict[str, Any]:
@@ -5801,6 +6204,131 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert login_observation["samples"][0]["logSource"] == "APP_LOGIN"
     assert login_observation["raw_records_suppressed"] is True
     results.append(("login_logs_passthrough_parser_log_search_models", "passed"))
+
+    weapon_graph_body = {
+        "data": {
+            "graphData": {
+                "pointInfoMap": {
+                    "2871834924": {"id": "2871834924", "entityType": "USER_ID"},
+                    "ANDROID_weapon_device_001": {"id": "ANDROID_weapon_device_001", "entityType": "DEVICE_ID"},
+                    "IOS_weapon_device_002": {"id": "IOS_weapon_device_002", "entityType": "DEVICE_ID"},
+                },
+                "relationEdgeList": [
+                    {"source": "2871834924", "target": "ANDROID_weapon_device_001"},
+                    {"source": "2871834924", "target": "IOS_weapon_device_002"},
+                ],
+            }
+        }
+    }
+    weapon_graph_observation = parse_passthrough_response("weapon_inventory", weapon_graph_body)
+    assert weapon_graph_observation["source_status"] == "completed"
+    assert weapon_graph_observation["graph_status"] == "completed"
+    assert weapon_graph_observation["pointInfoMap_present"] is True
+    assert weapon_graph_observation["pointInfoMap_count"] == 3
+    assert weapon_graph_observation["relationEdgeList_present"] is True
+    assert weapon_graph_observation["relationEdgeList_count"] == 2
+    assert weapon_graph_observation["related_device_count"] == 2
+    assert weapon_graph_observation["related_user_count"] == 1
+    assert weapon_graph_observation["raw_body_suppressed"] is True
+    results.append(("weapon_passthrough_graphData_normalized", "passed"))
+
+    weapon_risk_body = {
+        "data": {
+            "riskData": {
+                "userLevel": 3,
+                "riskItems": [
+                    {
+                        "riskGroupName": "device_risk",
+                        "labelInfo": [
+                            {
+                                "readableLabel": "simulator",
+                                "labelName": "emulator",
+                                "originalLog": {"raw": "raw_original_log_should_not_render"},
+                            },
+                            {
+                                "readableLabel": "no_sim",
+                                "originalLog": "raw_original_log_string_should_not_render",
+                            },
+                        ],
+                    }
+                ],
+            }
+        }
+    }
+    weapon_risk_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload("weapon_inventory", weapon_risk_body))
+    ).call_action("weapon_inventory", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    weapon_risk_observation = weapon_risk_result["normalized_observation"]
+    assert weapon_risk_result["source_status"] == "completed"
+    assert weapon_risk_observation["riskData_status"] == "completed"
+    assert weapon_risk_observation["risk_item_count"] == 1
+    assert weapon_risk_observation["risk_label_count"] == 2
+    assert "device_risk" in weapon_risk_observation["risk_group_names_observed"]
+    assert "simulator" in weapon_risk_observation["readable_label_sample"]
+    assert weapon_risk_observation["userLevel_observed"] is True
+    serialized_weapon_risk = json.dumps(weapon_risk_result, ensure_ascii=True)
+    assert "raw_original_log_should_not_render" not in serialized_weapon_risk
+    assert "raw_original_log_string_should_not_render" not in serialized_weapon_risk
+    assert '"labelInfo":' not in serialized_weapon_risk
+    results.append(("weapon_passthrough_riskData_suppresses_raw_labelinfo_originalLog", "passed"))
+
+    weapon_empty_graph_observation = parse_passthrough_response(
+        "weapon_inventory",
+        {"data": {"graphData": {"pointInfoMap": {}, "relationEdgeList": []}}},
+    )
+    assert weapon_empty_graph_observation["source_status"] == "no_data"
+    assert weapon_empty_graph_observation["graph_status"] == "no_data"
+    assert weapon_empty_graph_observation["no_data_not_risk_exclusion"] is True
+    results.append(("weapon_passthrough_empty_graph_not_risk_exclusion", "passed"))
+
+    rcp_event_body = {
+        "data": {
+            "pagination": {"page": 1, "pageSize": 10, "total": 2},
+            "tableHeaderList": [
+                {"dataIndex": "eventId"},
+                {"dataIndex": "sourceId"},
+                {"dataIndex": "deviceId"},
+                {"dataIndex": "hitFusePolicyCode"},
+                {"dataIndex": "_occurTime"},
+            ],
+            "eventList": [
+                {
+                    "eventId": "evt_rcp_001",
+                    "sourceId": "src_rcp_001",
+                    "deviceId": "ANDROID_rcp_device_001",
+                    "hitFusePolicyCode": "BS_fake_account_register",
+                    "_occurTime": "2026-05-29 10:00:00",
+                    "rawEventBody": "raw_event_body_should_not_render",
+                },
+                {
+                    "eventId": "evt_rcp_002",
+                    "sourceId": "src_rcp_002",
+                    "deviceId": "IOS_rcp_device_002",
+                    "hitFusePolicyCode": "BS_fake_account_register_v2",
+                    "_occurTime": "2026-05-29 10:01:00",
+                },
+            ],
+        }
+    }
+    rcp_event_observation = parse_passthrough_response("rcp_snapshot", rcp_event_body)
+    assert rcp_event_observation["source_status"] == "completed"
+    assert rcp_event_observation["event_count"] == 2
+    assert rcp_event_observation["eventId_samples"] == ["evt_rcp_001", "evt_rcp_002"]
+    assert rcp_event_observation["sourceId_samples"] == ["src_rcp_001", "src_rcp_002"]
+    assert rcp_event_observation["deviceId_samples"] == ["ANDROID_rcp_device_001", "IOS_rcp_device_002"]
+    assert rcp_event_observation["hitFusePolicyCode_samples"][0] == "BS_fake_account_register"
+    assert rcp_event_observation["occurTime_samples"][0] == "2026-05-29 10:00:00"
+    assert rcp_event_observation["raw_eventList_full_dump_suppressed"] is True
+    serialized_rcp_event = json.dumps(rcp_event_observation, ensure_ascii=True)
+    assert "raw_event_body_should_not_render" not in serialized_rcp_event
+    results.append(("rcp_passthrough_eventList_normalized", "passed"))
+
+    rcp_empty_observation = parse_passthrough_response("rcp_snapshot", {"data": {"eventList": [], "pagination": {"total": 0}}})
+    assert rcp_empty_observation["source_status"] == "no_data"
+    assert rcp_empty_observation["event_count"] == 0
+    assert rcp_empty_observation["no_data_not_risk_exclusion"] is True
+    assert rcp_empty_observation["eventList_not_final_judgement"] is True
+    results.append(("rcp_passthrough_empty_eventList_not_risk_exclusion", "passed"))
 
     compat_opener = _FakeOpener(_fixture_payload("login_logs_search", "completed"))
     compat_result = BrowserBackedServiceClient(opener=compat_opener).call_action("login_logs_search", {"user_id": "fixture"})
