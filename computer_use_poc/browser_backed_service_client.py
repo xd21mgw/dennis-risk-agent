@@ -1398,6 +1398,11 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
     latest_timestamp_summary: Dict[str, Any] = {}
     use_duration_summary: Dict[str, Any] = {}
     device_ids_summary: Dict[str, Any] = {}
+    normalized_fields_observed: list[Any] = []
+    normalized_samples: list[Any] = []
+    profile_fields_observed: list[Any] = []
+    profile_sections_observed: list[Any] = []
+    normalized_records_count = 0
     total_latency = 0
 
     for result in materialized:
@@ -1420,6 +1425,18 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         latest_timestamp_summary.update(summary.get("latest_timestamp_summary") or {})
         use_duration_summary.update(summary.get("use_duration_summary") or {})
         device_ids_summary.update(summary.get("device_ids_summary") or {})
+        observation = result.get("normalized_observation") if isinstance(result.get("normalized_observation"), Mapping) else {}
+        for field in observation.get("fields_observed", []) if isinstance(observation.get("fields_observed"), list) else []:
+            if field not in normalized_fields_observed:
+                normalized_fields_observed.append(field)
+        for sample in observation.get("samples", []) if isinstance(observation.get("samples"), list) else []:
+            if sample not in normalized_samples:
+                normalized_samples.append(sample)
+        if requested == "profile":
+            profile_fields_observed = list(observation.get("profile_fields_observed", [])) if isinstance(observation.get("profile_fields_observed"), list) else []
+            profile_sections_observed = list(observation.get("profile_sections_observed", [])) if isinstance(observation.get("profile_sections_observed"), list) else []
+        if isinstance(observation.get("records_count"), int):
+            normalized_records_count += int(observation["records_count"])
 
     completed = [
         sub_interface
@@ -1452,11 +1469,33 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         if any(result.get("response_mode") == RESPONSE_MODE_PASSTHROUGH for result in materialized)
         else RESPONSE_MODE_COMPAT_SUMMARY,
     }
+    normalized_observation: Dict[str, Any] = {
+        "source_name": "track_analysis_summary",
+        "source_status": source_status,
+        "sub_interface": TRACK_ANALYSIS_BUNDLE_MODE,
+        "sub_interfaces_completed": completed,
+        "sub_interfaces_missing": missing,
+        "records_count": normalized_records_count,
+        "fields_observed": normalized_fields_observed[:64],
+        "samples": normalized_samples[:8],
+        "raw_body_suppressed": True,
+        "no_data_not_risk_exclusion": True,
+        "activity_signal_not_final_judgement": True,
+    }
+    if profile_fields_observed:
+        normalized_observation["profile_fields_observed"] = profile_fields_observed
+    if profile_sections_observed:
+        normalized_observation["profile_sections_observed"] = profile_sections_observed
+    if isinstance(device_ids_summary.get("device_ids_count"), int):
+        normalized_observation["device_ids_count"] = device_ids_summary["device_ids_count"]
+    if isinstance(use_duration_summary.get("rows_count"), int):
+        normalized_observation["rows_count"] = use_duration_summary["rows_count"]
     return {
         "source_name": "track_analysis_summary",
         "planned_source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
         "action_name": "track_analysis_summary",
         "response_mode": source_quality["response_mode"],
+        "account_security_response_mode": source_quality["response_mode"],
         "source_status": source_status,
         "failure_layer": "no_failure" if source_status == "completed" else "source_observation",
         "error_type": None,
@@ -1489,6 +1528,7 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
             },
         },
         "source_quality": source_quality,
+        "normalized_observation": normalized_observation,
         "source_checkpoint_private": {"raw_references": [], "downstream_source_chaining": []},
         "redaction": {
             "redaction_applied": True,
@@ -7518,6 +7558,8 @@ def run_fixture_tests() -> Dict[str, Any]:
     account_security_card = build_partial_evidence_card(account_security_results)
     track_summary = account_security_card["evidence_summary_by_source"]["track_analysis_summary"]
     assert account_security_results[0]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
+    assert account_security_results[0]["normalized_observation"]["sub_interface"] == TRACK_ANALYSIS_BUNDLE_MODE
+    assert account_security_results[0]["normalized_observation"]["raw_body_suppressed"] is True
     assert track_summary["bundle_summary"]["sub_interfaces_completed"] == [
         "profile",
         "getUseDuration",
