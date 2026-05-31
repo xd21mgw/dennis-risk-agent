@@ -34,7 +34,7 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
 | RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
 
-For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) remain the existing primary source path. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. The browser-backed fixed actions v1 closure adds explicit, source-plan-selected actions for Archives Center, RCP/Tianshi drill-down, and Track Analysis readiness. These additions do not change default runtime routing.
+For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) are the existing primary source path. Dennis now requests this path with explicit `response_mode=passthrough`, then parses service upstream bodies into Dennis-owned `normalized_observation` and evidence summaries. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. The browser-backed fixed actions v1 closure adds explicit, source-plan-selected actions for Archives Center, RCP/Tianshi drill-down, and Track Analysis readiness. These additions do not change default runtime routing.
 
 `archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. In browser-backed fixed actions v1 source plans, Archives Center is key evidence but not a hard blocker: ATO / login anomaly includes `archives_user_profile` and `archives_user_analysis`; abnormal publish / traffic diversion includes `archives_photo_search`, profile, and analysis; black-market spread / same-device analysis includes `archives_related_users` and profile. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, and `parse_error` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
 
@@ -127,7 +127,7 @@ account_security_browser_backed_sequence:
       - 不能把失败或空结果解释为无风险反证
 ```
 
-All four browser-backed sources must be represented in `source_completion_matrix` by default. A 7-day `login_logs_search` `parse_error` may trigger the 24-hour fallback, but both the 7-day primary result and 24-hour fallback must be normalized as standard browser-backed source results with `source_card`, `source_quality`, `latency_ms`, and `sensitive_output=false`. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
+All four browser-backed sources must be represented in `source_completion_matrix` by default. In the passthrough default path, Dennis records passthrough parser failures directly in `source_quality` and `missing_evidence`; it must not silently fall back to summary mode. A 7-day `login_logs_search` `parse_error` may trigger the legacy 24-hour summary fallback only when the caller explicitly runs the legacy `compat_summary` path. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
 
 For `track_analysis_account_security_bundle`, a single `sub_interfaces` list is only the source plan shape. The executable helper expands it into four `track_analysis_summary` calls with `sub_interface=profile|getUseDuration|getDeviceIds|getLastestDateTime`, then merges those standard action results into one Track Analysis source card. If the service returns a different observed sub-interface than requested, that requested sub-interface stays missing in `source_quality` instead of being treated as completed.
 
@@ -164,9 +164,9 @@ forbidden_input_keys:
 
 ## Response Modes
 
-`compat_summary` remains the Dennis default. In this mode the browser-backed service returns display-safe `source_card` and `source_quality`, and the existing evidence card builder continues to consume the summary/compat contract.
+`passthrough` is the Dennis target main chain and the default account-security browser-backed path. Dennis sends fixed typed params plus `response_mode: passthrough`, receives `upstream.body`, and owns parser / `normalized_observation` / evidence card construction.
 
-`passthrough` is an explicit parser path, not the default runtime path. Dennis calls it only when the caller passes `response_mode=passthrough` to `BrowserBackedServiceClient.call_action()`. The request body is the fixed typed params plus `response_mode: passthrough`; Dennis still rejects caller-provided URL/path/header/cookie/token/session/auth material.
+`compat_summary` is a legacy migration fallback. It remains available only when a caller explicitly uses `response_mode=compat_summary` or `allow_compat_fallback=true` in the account-security helper. It is not the long-term parallel architecture.
 
 Passthrough service responses are expected to contain:
 
@@ -186,18 +186,46 @@ safety:
 
 Passthrough does not require `source_card` or `source_quality`. If those fields appear, Dennis marks `unexpected_summary_fields` but does not fail. If `safety.credential_material_output` is anything other than `false`, Dennis fails closed with `credential_material_violation`. If `upstream.body` is missing, Dennis marks `passthrough_body_missing`. The raw upstream body is never displayed or persisted as user-facing evidence; it is passed only to the Dennis parser, which emits `normalized_observation`.
 
-Current passthrough parser coverage is still a parallel validation path:
+Current passthrough parser coverage is the first-batch Dennis main-chain parser path:
 
 - `track_analysis_summary`: recognizes `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime`-style body shapes and emits counts, observed fields, sanitized samples, and `raw_body_suppressed=true`.
 - `login_logs_search`: recognizes `data.logSearchModels`, emits `records_count`, observed fields, sanitized log samples, and `raw_records_suppressed=true`.
 - `weapon_inventory`: recognizes graphData-style `pointInfoMap` / `relationEdgeList` and riskData-style label summaries; emits graph counts, related user/device counts, risk label counts, risk group names, readable label samples, `userLevel_observed`, and suppresses raw `labelInfo` / `originalLog`.
 - `rcp_snapshot`: recognizes `data.eventList` with optional pagination and table headers; emits event count, observed columns, first event shape keys, event/source/device/policy/time samples, and suppresses full raw eventList dumps.
 
-Passthrough parser output is not a replacement for the current evidence card builder until a later controlled dual-run proves parity for each source. The default chain remains `compat_summary`.
+The short-term migration keeps legacy summary/compat logic as an explicit fallback to avoid breaking controlled pilot. The long-term target is passthrough-only: new actions should be passthrough-only, browser-backed service-side summary / `source_card` / `source_quality` / evidence summary logic should be removed after the deletion gates pass.
+
+Legacy deletion gates:
+
+1. Four-source passthrough dual-run has passed.
+2. `full_runtime` controlled pilot has passed.
+3. Dennis evidence card is fully usable from `normalized_observation`.
+4. Reference checks confirm no main-chain dependency remains on service summary logic.
 
 ## Normalized Output
 
-Every summary/compat service action result entering Dennis should normalize to:
+Every passthrough service action result entering Dennis normalizes to:
+
+```yaml
+browser_backed_passthrough_source_result:
+  source_name:
+  action_name:
+  response_mode: passthrough
+  source_status:
+  failure_layer:
+  error_type:
+  latency_ms:
+  normalized_observation:
+  source_quality:
+    response_mode: passthrough
+    normalized_observation_present:
+    no_data_not_risk_exclusion:
+  raw_body_suppressed: true
+  sensitive_output: false
+  source_provenance: browser_backed_service
+```
+
+Legacy summary/compat service action result:
 
 ```yaml
 browser_backed_source_result:

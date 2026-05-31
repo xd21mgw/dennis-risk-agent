@@ -2780,14 +2780,17 @@ platform_access_execution_v0_1_regression:
     input: "single_user_account_security evidence card 使用 browser-backed source template。"
     expected_output_boundary:
       - default_four_sources_track_rcp_weapon_login
+      - default_response_mode_passthrough
+      - normalized_observation_present_for_passthrough
       - track_analysis_summary_first
       - rcp_snapshot_included_by_default
       - weapon_inventory_included_by_default
       - login_logs_search_included_by_default
       - archives_profile_readonly_not_in_default_four_source_main_chain_when_stub
-      - source_card_source_quality_latency_sensitive_output_required_for_each_source
+      - dennis_source_quality_latency_sensitive_output_required_for_each_source
+      - compat_summary_only_legacy_explicit_fallback
       - final_risk_judgement_made_false
-    pass_fail_criteria: "默认 source_completion_matrix 必须包含四个 browser-backed source；不得退回旧 login/weapon/track 条件 rcp 计划；Archives stub 只能作为 optional source gap。"
+    pass_fail_criteria: "默认 source_completion_matrix 必须包含四个 browser-backed source，且 Dennis 默认显式请求 passthrough 并消费 normalized_observation；不得 silent fallback 到 compat_summary；Archives stub 只能作为 optional source gap。"
   - case_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
     input: "track_analysis_summary 被用于账号安全单用户 evidence card。"
     expected_output_boundary:
@@ -2805,6 +2808,7 @@ platform_access_execution_v0_1_regression:
     input: "browser_backed_service_client account-security helper 执行 Track Analysis bundle。"
     expected_output_boundary:
       - call_account_security_sources_expands_track_analysis_summary
+      - each_track_action_request_has_response_mode_passthrough
       - sub_interface_profile_called
       - sub_interface_getUseDuration_called
       - sub_interface_getDeviceIds_called
@@ -2812,7 +2816,7 @@ platform_access_execution_v0_1_regression:
       - four_sub_interface_results_merged_into_one_track_source
       - profile_useDuration_deviceIds_latest_summaries_visible_in_evidence_card
       - wrong_sub_interface_result_stays_missing_not_completed
-    pass_fail_criteria: "默认执行 helper 必须把 Track Analysis account_security_bundle 展开为四个固定 action 子调用，合并后 evidence card 显示 profile/useDuration/deviceIds/latest 四类摘要；不能只显示 latest timestamp。"
+    pass_fail_criteria: "默认执行 helper 必须把 Track Analysis account_security_bundle 展开为四个固定 action 子调用，每个子调用显式 passthrough，合并后 evidence card 显示 profile/useDuration/deviceIds/latest 四类摘要；不能只显示 latest timestamp。"
   - case_id: WEAPON-RISKDATA-CHAINING-IN-EVIDENCE-CARD-001
     input: "weapon_inventory 用于账号安全单用户 evidence card，graphData 返回可链路 device_id。"
     expected_output_boundary:
@@ -2846,12 +2850,12 @@ platform_access_execution_v0_1_regression:
     input: "login_logs_search 7d 或 24h fallback 返回 no_data / parse_error / blocked。"
     expected_output_boundary:
       - standard_browser_backed_source_result
-      - source_card_present
+      - normalized_observation_present_when_passthrough
       - source_quality_present
       - latency_ms_present
       - sensitive_output_false
       - parse_error_or_no_data_not_no_risk
-    pass_fail_criteria: "登录日志失败或空结果必须归一化为标准 browser-backed source result，不得裸输出未标准化 parse_error。"
+    pass_fail_criteria: "登录日志失败或空结果必须归一化为标准 browser-backed source result；passthrough 主链不得裸输出未标准化 parse_error，也不得 silent fallback。"
   - case_id: LOGIN-LOGS-STANDARD-SOURCE-RESULT-IN-EVIDENCE-CARD
     input: "login_logs_search 返回 network_error / no_data / parse_error 任一标准 action result。"
     expected_output_boundary:

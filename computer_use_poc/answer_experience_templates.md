@@ -72,7 +72,7 @@ Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`
 
 ### Browser-Backed Service Result Output
 
-`browser_backed_service` 是 Dennis 的允许访问方式之一，但浏览器和登录态只属于本地 browser-backed API service。Dennis 只调用固定 action endpoint，接收标准 source result，并把失败写入 source completion matrix。
+`browser_backed_service` 是 Dennis 的允许访问方式之一，但浏览器和登录态只属于本地 browser-backed API service。Dennis 只调用固定 action endpoint。账号安全四源主链默认显式请求 `response_mode=passthrough`，由 Dennis parser 生成 `normalized_observation`，再生成 evidence card；`compat_summary` 只作为 legacy migration fallback，在显式 `allow_compat_fallback=true` 或明确 legacy 调用时使用。
 
 ```yaml
 browser_backed_source_result:
@@ -96,6 +96,19 @@ browser_backed_source_result:
     source_summary_metric: []
   sensitive_output: false
   source_provenance: browser_backed_service
+```
+
+Passthrough 主链输出必须包含：
+
+```yaml
+browser_backed_passthrough_observation:
+  response_mode: passthrough
+  normalized_observation:
+  source_quality:
+    normalized_observation_present:
+    no_data_not_risk_exclusion:
+  raw_body_suppressed: true
+  sensitive_output: false
 ```
 
 `blocked` / `auth_failed` / `network_error` / `platform_error` 是 source_quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
@@ -177,7 +190,7 @@ browser_backed_fixed_actions_v1_routing:
 - 账号扩散 / 同设备：只写候选关联和交叉验证，不写团伙结论。
 - 避免把日常裸问写成接口说明书；action 名保留在 `source_plan` / `actions`，正文优先解释证据用途和边界。
 
-账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action：
+账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action，默认请求 `response_mode=passthrough`。短期保留 `compat_summary` 作为显式 legacy fallback；长期只保留 passthrough 单模式，新 action 一律 passthrough-only。
 
 ```yaml
 account_security_browser_backed_source_plan:
@@ -189,6 +202,8 @@ account_security_browser_backed_source_plan:
       appName: KUAISHOU
       mode: account_security_bundle
       sub_interfaces: [profile, getUseDuration, getDeviceIds, getLastestDateTime]
+    request_options:
+      response_mode: passthrough
     fallback: sub_interface_failures_enter_source_completion_matrix
   - source_name: rcp_strategy_hit_entry
     access_method: browser_backed_service
@@ -197,6 +212,8 @@ account_security_browser_backed_source_plan:
       entity_type: user_id
       entity_id: "{user_id}"
       mode: account_security_strategy_event_entry
+    request_options:
+      response_mode: passthrough
     boundary: strategy_event_entry_not_final_risk_judgement
   - source_name: weapon_user_to_device_graph
     access_method: browser_backed_service
@@ -204,7 +221,9 @@ account_security_browser_backed_source_plan:
     typed_params:
       user_id: "{user_id}"
       mode: account_security_user_device_graph_with_conditional_riskData
-      riskData_trigger_device_prefix: [ANDROID_, IOS_]
+      riskData_trigger_device_prefix: [ANDROID_, HARMONY_]
+    request_options:
+      response_mode: passthrough
     fallback: raw_device_id_checkpoint_missing_means_riskData_not_checked
     chaining: graphData_to_riskData_when_raw_device_id_safe_handle_exists
   - source_name: user_login_unified_log
@@ -214,6 +233,8 @@ account_security_browser_backed_source_plan:
       user_id: "{user_id}"
       window: last_7d
       recallSource: "2,0,1,3"
+    request_options:
+      response_mode: passthrough
     fallback: 7d_parse_error_auto_add_24h_fallback_and_preserve_primary_source_quality_as_standard_source_result
   - source_name: archives_profile_readonly
     access_method: optional_controlled_runner_only_when_live_connected
@@ -222,7 +243,14 @@ account_security_browser_backed_source_plan:
     fallback: stub_source_gap_does_not_block_or_enter_default_four_source_matrix
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 输出标准 source card。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须归一成含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false` 的 browser-backed source result，不得输出未标准化 parse error。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
+`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 输出 Dennis-owned normalized source result。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须归一成含 `normalized_observation`、Dennis-owned `source_quality`、`latency_ms`、`sensitive_output=false` 的 browser-backed source result，不得输出未标准化 parse error。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
+
+迁移边界：
+
+- 并行双跑只是迁移期策略，不是最终架构。
+- browser-backed service 最终只保留受控透传，不保留 summary / `source_card` / `source_quality` / evidence summary 加工。
+- Dennis 负责 parser、`normalized_observation`、evidence card 和业务研判。
+- 删除 legacy summary 前必须完成四源 passthrough dual-run、`full_runtime` controlled pilot、normalized evidence card 可用性验证和引用检查。
 
 Track 命名边界：v1 裸问中优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；如果引用历史 `track_analysis_summary`，应描述为 Track 活跃画像的泛化能力，不把它当作当前 v1 readiness action 名。
 

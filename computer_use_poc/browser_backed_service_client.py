@@ -26,6 +26,8 @@ DEFAULT_TIMEOUT_SECONDS = 10
 RESPONSE_MODE_COMPAT_SUMMARY = "compat_summary"
 RESPONSE_MODE_PASSTHROUGH = "passthrough"
 RESPONSE_MODES = {RESPONSE_MODE_COMPAT_SUMMARY, RESPONSE_MODE_PASSTHROUGH}
+ACCOUNT_SECURITY_DEFAULT_RESPONSE_MODE = RESPONSE_MODE_PASSTHROUGH
+PASSTHROUGH_FALLBACK_TRIGGER_STATUSES = {"blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"}
 PASSTHROUGH_PARSER_REGISTRY: Dict[str, Any] = {}
 
 ACTION_ENDPOINTS = {
@@ -377,6 +379,8 @@ class BrowserBackedServiceClient:
         user_id: str,
         app_name: str = "KUAISHOU",
         include_rcp_snapshot: bool = True,
+        response_mode: str = ACCOUNT_SECURITY_DEFAULT_RESPONSE_MODE,
+        allow_compat_fallback: bool = False,
     ) -> list[Dict[str, Any]]:
         """Call the default single-user account-security browser-backed sources.
 
@@ -385,6 +389,8 @@ class BrowserBackedServiceClient:
         being merged into one display-safe source result.
         """
 
+        if response_mode not in RESPONSE_MODES:
+            raise BrowserBackedServiceInputError(f"unsupported browser-backed response_mode: {response_mode}")
         results: list[Dict[str, Any]] = []
         track_results: list[Dict[str, Any]] = []
         for request_plan in build_account_security_browser_backed_requests(
@@ -394,9 +400,30 @@ class BrowserBackedServiceClient:
             expand_track_analysis_bundle=True,
         ):
             action_name = str(request_plan["action_name"])
-            result = self.call_action(action_name, request_plan.get("typed_params", {}))
+            result = self.call_action(
+                action_name,
+                request_plan.get("typed_params", {}),
+                response_mode=response_mode,
+            )
             result["planned_source_name"] = request_plan.get("source_name")
             result["typed_params_summary"] = _typed_params_summary(request_plan.get("typed_params", {}))
+            result["account_security_response_mode"] = response_mode
+            if response_mode == RESPONSE_MODE_PASSTHROUGH:
+                result["compat_fallback_allowed"] = allow_compat_fallback
+                if allow_compat_fallback and result.get("source_status") in PASSTHROUGH_FALLBACK_TRIGGER_STATUSES:
+                    fallback_result = self.call_action(
+                        action_name,
+                        request_plan.get("typed_params", {}),
+                        response_mode=RESPONSE_MODE_COMPAT_SUMMARY,
+                    )
+                    fallback_result["planned_source_name"] = request_plan.get("source_name")
+                    fallback_result["typed_params_summary"] = _typed_params_summary(request_plan.get("typed_params", {}))
+                    fallback_result["account_security_response_mode"] = RESPONSE_MODE_COMPAT_SUMMARY
+                    fallback_result["compat_fallback_used"] = True
+                    fallback_result["compat_fallback_for_response_mode"] = RESPONSE_MODE_PASSTHROUGH
+                    fallback_result["passthrough_primary_status"] = result.get("source_status")
+                    fallback_result["passthrough_primary_error_type"] = result.get("error_type")
+                    result = fallback_result
             if request_plan.get("bundle_source_name") == TRACK_ANALYSIS_BUNDLE_SOURCE_NAME:
                 result["requested_track_sub_interface"] = request_plan.get("track_sub_interface")
                 track_results.append(result)
@@ -404,12 +431,13 @@ class BrowserBackedServiceClient:
 
             results.append(result)
             fallback = request_plan.get("fallback_on")
-            if result.get("source_status") == "parse_error" and isinstance(fallback, Mapping):
+            if response_mode == RESPONSE_MODE_COMPAT_SUMMARY and result.get("source_status") == "parse_error" and isinstance(fallback, Mapping):
                 fallback_plan = fallback.get("parse_error")
                 if isinstance(fallback_plan, Mapping):
                     fallback_result = self.call_action(
                         str(fallback_plan["action_name"]),
                         fallback_plan.get("typed_params", {}),
+                        response_mode=RESPONSE_MODE_COMPAT_SUMMARY,
                     )
                     fallback_result["planned_source_name"] = fallback_plan.get("source_name")
                     fallback_result["typed_params_summary"] = _typed_params_summary(fallback_plan.get("typed_params", {}))
@@ -1420,11 +1448,15 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         "redaction_applied": True,
         "raw_reference_retained_for_followup": False,
         "sensitive_output": False,
+        "response_mode": RESPONSE_MODE_PASSTHROUGH
+        if any(result.get("response_mode") == RESPONSE_MODE_PASSTHROUGH for result in materialized)
+        else RESPONSE_MODE_COMPAT_SUMMARY,
     }
     return {
         "source_name": "track_analysis_summary",
         "planned_source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
         "action_name": "track_analysis_summary",
+        "response_mode": source_quality["response_mode"],
         "source_status": source_status,
         "failure_layer": "no_failure" if source_status == "completed" else "source_observation",
         "error_type": None,
@@ -1471,6 +1503,7 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
 
 def _observed_track_sub_interface(result: Mapping[str, Any]) -> str | None:
     for container in (
+        result.get("normalized_observation"),
         result.get("response_shape_summary"),
         result.get("source_card"),
         result.get("source_quality"),
@@ -1660,18 +1693,20 @@ def normalize_passthrough_service_response(
     safety = service_payload.get("safety") if isinstance(service_payload.get("safety"), Mapping) else {}
     credential_material_output = safety.get("credential_material_output") if isinstance(safety, Mapping) else None
     if credential_material_output is not False:
+        normalized_observation = {
+            "source_name": source_name,
+            "source_status": "blocked",
+            "error_type": "credential_material_violation",
+            "raw_body_suppressed": True,
+        }
         base.update(
             {
                 "source_status": "blocked",
                 "failure_layer": "sensitive_output_policy",
                 "error_type": "credential_material_violation",
                 "credential_material_violation": True,
-                "normalized_observation": {
-                    "source_name": source_name,
-                    "source_status": "blocked",
-                    "error_type": "credential_material_violation",
-                    "raw_body_suppressed": True,
-                },
+                "normalized_observation": normalized_observation,
+                "source_quality": _passthrough_source_quality("blocked", "credential_material_violation", normalized_observation),
             }
         )
         return base
@@ -1682,17 +1717,19 @@ def normalize_passthrough_service_response(
         service_error_type = upstream.get("error_type")
     if service_payload.get("ok") is False and service_error_type:
         source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type)
+        normalized_observation = {
+            "source_name": source_name,
+            "source_status": source_status,
+            "error_type": service_error_type,
+            "raw_body_suppressed": True,
+        }
         base.update(
             {
                 "source_status": source_status,
                 "failure_layer": failure_layer,
                 "error_type": service_error_type,
-                "normalized_observation": {
-                    "source_name": source_name,
-                    "source_status": source_status,
-                    "error_type": service_error_type,
-                    "raw_body_suppressed": True,
-                },
+                "normalized_observation": normalized_observation,
+                "source_quality": _passthrough_source_quality(source_status, service_error_type, normalized_observation),
             }
         )
         return base
@@ -1700,31 +1737,39 @@ def normalize_passthrough_service_response(
     if not isinstance(upstream, Mapping) or "body" not in upstream or upstream.get("body") is None:
         if service_payload.get("ok") is not True:
             source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type or "passthrough_failed")
+            normalized_observation = {
+                "source_name": source_name,
+                "source_status": source_status,
+                "error_type": service_error_type or "passthrough_failed",
+                "raw_body_suppressed": True,
+            }
             base.update(
                 {
                     "source_status": source_status,
                     "failure_layer": failure_layer,
                     "error_type": service_error_type or "passthrough_failed",
-                    "normalized_observation": {
-                        "source_name": source_name,
-                        "source_status": source_status,
-                        "error_type": service_error_type or "passthrough_failed",
-                        "raw_body_suppressed": True,
-                    },
+                    "normalized_observation": normalized_observation,
+                    "source_quality": _passthrough_source_quality(
+                        source_status,
+                        service_error_type or "passthrough_failed",
+                        normalized_observation,
+                    ),
                 }
             )
             return base
+        normalized_observation = {
+            "source_name": source_name,
+            "source_status": "parse_error",
+            "error_type": "passthrough_body_missing",
+            "raw_body_suppressed": True,
+        }
         base.update(
             {
                 "source_status": "parse_error",
                 "failure_layer": "parser",
                 "error_type": "passthrough_body_missing",
-                "normalized_observation": {
-                    "source_name": source_name,
-                    "source_status": "parse_error",
-                    "error_type": "passthrough_body_missing",
-                    "raw_body_suppressed": True,
-                },
+                "normalized_observation": normalized_observation,
+                "source_quality": _passthrough_source_quality("parse_error", "passthrough_body_missing", normalized_observation),
             }
         )
         return base
@@ -1740,10 +1785,49 @@ def normalize_passthrough_service_response(
             "failure_layer": failure_layer,
             "error_type": normalized_observation.get("error_type"),
             "normalized_observation": normalized_observation,
+            "source_quality": _passthrough_source_quality(
+                normalized_status,
+                normalized_observation.get("error_type"),
+                normalized_observation,
+            ),
             "no_data_not_risk_exclusion": bool(normalized_observation.get("no_data_not_risk_exclusion")),
         }
     )
     return base
+
+
+def _passthrough_source_quality(
+    source_status: str,
+    error_type: Optional[Any],
+    normalized_observation: Mapping[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "source_status": source_status,
+        "error_type": error_type,
+        "quality_status": "available" if source_status == "completed" else source_status,
+        "response_mode": RESPONSE_MODE_PASSTHROUGH,
+        "normalized_observation_present": bool(normalized_observation),
+        "no_data_not_risk_exclusion": bool(normalized_observation.get("no_data_not_risk_exclusion")),
+        "source_status_not_risk_exclusion": source_status in {
+            "no_data",
+            "blocked",
+            "auth_failed",
+            "timeout",
+            "parse_error",
+            "invalid_parameter",
+        },
+        "passthrough_default_path": True,
+        "legacy_compat_summary_fallback": "disabled_unless_allow_compat_fallback_true",
+        "raw_body_suppressed": True,
+        "raw_records_suppressed": bool(normalized_observation.get("raw_records_suppressed", True)),
+        "raw_labelInfo_suppressed": bool(normalized_observation.get("raw_labelInfo_suppressed", True)),
+        "raw_originalLog_suppressed": bool(normalized_observation.get("raw_originalLog_suppressed", True)),
+        "redaction_applied": True,
+        "raw_reference_retained_for_followup": False,
+        "sensitive_output": False,
+        "output_scope": DEFAULT_OUTPUT_SCOPE,
+        "field_classification": _field_classification_summary(),
+    }
 
 
 def _normalize_passthrough_service_failure(error_type: Any) -> tuple[str, str]:
@@ -1812,11 +1896,39 @@ def _parse_track_analysis_passthrough(
     }
     if rows:
         observation["rows_count"] = len(rows)
+        numeric_durations = [
+            row.get("duration") or row.get("totalDuration") or row.get("activeDuration") or row.get("useDuration")
+            for row in rows
+        ]
+        numeric_durations = [value for value in numeric_durations if isinstance(value, (int, float))]
+        if numeric_durations:
+            observation["total_duration"] = sum(numeric_durations)
     if device_ids:
         observation["device_ids_count"] = len(device_ids)
+        observation["device_id_sample"] = _safe_display_value("device_id", device_ids[0], DEFAULT_OUTPUT_SCOPE)
+    latest_datetime = _find_first(body, ("latestDateTime", "latest_datetime", "lastestDateTime"))
+    if latest_datetime is not None:
+        observation["latest_datetime_present"] = True
+    uid_did_latest = _find_first(body, ("uidDidRelLatestDateTime", "uid_did_rel_latest_datetime"))
+    if uid_did_latest is not None:
+        observation["uid_did_relation_latest_datetime_present"] = True
     if sub_interface == "profile":
+        profile = _track_profile_payload(body)
         observation["profile_fields_observed"] = _track_profile_fields_observed(body)
         observation["profile_sections_observed"] = _track_profile_sections_observed(body)
+        if isinstance(profile, Mapping):
+            observation["register_time_present"] = _find_first(
+                profile,
+                ("registerTime", "register_time", "registrationTime", "createTime"),
+            ) is not None
+            observation["fan_distribution_present"] = _find_first(
+                profile,
+                ("fanDistribution", "fan_distribution", "fansDistribution"),
+            ) is not None
+            observation["active_days_bucket_present"] = _find_first(
+                profile,
+                ("activeDaysBucket", "active_days_bucket", "activeDays", "active_days"),
+            ) is not None
     return observation
 
 
@@ -3712,7 +3824,13 @@ def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[st
                     "caveat": "account-security track bundle is partial until this sub-interface is collected",
                 }
             )
-        if source_name == "weapon_inventory" and _find_first(source_card, ("riskData_status",)) == "not_executed_missing_device_id":
+        normalized_observation = (
+            result.get("normalized_observation")
+            if isinstance(result.get("normalized_observation"), Mapping)
+            else {}
+        )
+        weapon_material = source_card if source_card else normalized_observation
+        if source_name == "weapon_inventory" and _find_first(weapon_material, ("riskData_status",)) == "not_executed_missing_device_id":
             missing.append(
                 {
                     "source_name": source_name,
@@ -3760,7 +3878,7 @@ def _source_to_action(source_name: str) -> str:
 
 def _summary_material(result: Mapping[str, Any], output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Dict[str, Any]:
     merged: Dict[str, Any] = {}
-    for key in ("source_card", "source_quality", "response_shape_summary"):
+    for key in ("source_card", "source_quality", "response_shape_summary", "normalized_observation"):
         value = result.get(key)
         if isinstance(value, Mapping):
             merged[key] = _sanitize_display_material(value, output_scope)
@@ -4065,6 +4183,8 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str, output_s
         "field_classification": _field_classification_summary(),
         "source_card_exists": result.get("source_card") is not None,
         "source_quality_exists": result.get("source_quality") is not None,
+        "normalized_observation_exists": isinstance(result.get("normalized_observation"), Mapping),
+        "response_mode": result.get("response_mode"),
         "sensitive_output": False,
         "raw_body_suppressed": True,
         "raw_records_full_dump_suppressed": True,
@@ -4075,6 +4195,7 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str, output_s
 
 def _track_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
+    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
     summary = _base_source_summary(result, "track_analysis", output_scope)
     summary["bundle_summary"] = _pick_fields(
         material,
@@ -4116,6 +4237,22 @@ def _track_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dic
         ("device_ids_count", "device_id_sample", "device_id_sample_masked", "device_model_fields_present", "last_active_fields_present"),
         output_scope,
     )
+    if observation:
+        summary["normalized_observation_summary"] = _pick_fields(
+            observation,
+            (
+                "sub_interface",
+                "records_count",
+                "rows_count",
+                "device_ids_count",
+                "profile_fields_observed",
+                "profile_sections_observed",
+                "fields_observed",
+                "samples",
+                "raw_body_suppressed",
+            ),
+            output_scope,
+        )
     return summary
 
 
@@ -4163,6 +4300,7 @@ def _track_analysis_check_data_ready_summary(result: Mapping[str, Any], output_s
 
 def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
+    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
     summary = _base_source_summary(result, "rcp_snapshot", output_scope)
     summary["event_summary"] = _pick_fields(
         material,
@@ -4180,16 +4318,36 @@ def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]
         {},
     )
     summary["chaining_keys_present"] = {
-        "hitFusePolicyCode": _find_first(material, ("hitFusePolicyCode_present", "hitFusePolicyCode"), output_scope) is not None,
-        "eventId": _find_first(material, ("eventId_present", "eventId"), output_scope) is not None,
-        "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime"), output_scope) is not None,
+        "hitFusePolicyCode": _find_first(material, ("hitFusePolicyCode_present", "hitFusePolicyCode", "hitFusePolicyCode_samples"), output_scope) is not None,
+        "eventId": _find_first(material, ("eventId_present", "eventId", "eventId_samples"), output_scope) is not None,
+        "sourceId": _find_first(material, ("sourceId_present", "sourceId", "sourceId_samples"), output_scope) is not None,
+        "deviceId": _find_first(material, ("deviceId_present", "deviceId", "deviceId_samples"), output_scope) is not None,
+        "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime", "occurTime_samples"), output_scope) is not None,
     }
+    if observation:
+        summary["normalized_observation_summary"] = _pick_fields(
+            observation,
+            (
+                "event_count",
+                "pagination_summary",
+                "returned_columns_observed",
+                "eventId_samples",
+                "sourceId_samples",
+                "deviceId_samples",
+                "hitFusePolicyCode_samples",
+                "occurTime_samples",
+                "raw_body_suppressed",
+                "raw_eventList_full_dump_suppressed",
+            ),
+            output_scope,
+        )
     summary["boundary"] = "RCP is a strategy event entry source, not a final risk judgement."
     return summary
 
 
 def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
+    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
     summary = _base_source_summary(result, "weapon_inventory", output_scope)
     summary["graph_summary"] = _pick_fields(
         material,
@@ -4218,11 +4376,34 @@ def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, A
         "riskData_chaining_uses_safe_handle_only": True,
         "raw_device_id_suppressed_from_display": True,
     }
+    if observation:
+        summary["normalized_observation_summary"] = _pick_fields(
+            observation,
+            (
+                "graph_status",
+                "pointInfoMap_count",
+                "relationEdgeList_count",
+                "related_device_count",
+                "related_user_count",
+                "device_id_samples",
+                "user_id_samples",
+                "riskData_status",
+                "risk_item_count",
+                "risk_label_count",
+                "risk_group_names_observed",
+                "readable_label_sample",
+                "raw_body_suppressed",
+                "raw_labelInfo_suppressed",
+                "raw_originalLog_suppressed",
+            ),
+            output_scope,
+        )
     return summary
 
 
 def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
+    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
     summary = _base_source_summary(result, "login_logs", output_scope)
     summary["login_window_summary"] = _pick_fields(
         material,
@@ -4243,11 +4424,17 @@ def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[st
     summary["login_window_summary"]["source_status"] = result.get("source_status")
     summary["login_window_summary"]["error_type"] = result.get("error_type")
     summary["login_window_summary"]["standard_browser_backed_source_result"] = (
-        result.get("source_card") is not None
+        (result.get("source_card") is not None or isinstance(result.get("normalized_observation"), Mapping))
         and result.get("source_quality") is not None
         and result.get("latency_ms") is not None
         and result.get("sensitive_output") is False
     )
+    if observation:
+        summary["normalized_observation_summary"] = _pick_fields(
+            observation,
+            ("records_count", "fields_observed", "samples", "raw_records_suppressed"),
+            output_scope,
+        )
     summary["pii_strict_summary"] = _pick_fields(
         material,
         ("phone_number_sample", "id_card", "id_card_present", "birth_year_present", "real_name", "name_present"),
@@ -6123,7 +6310,8 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert passthrough_result["normalized_observation"]["records_count"] == 1
     assert passthrough_result["normalized_observation"]["raw_records_suppressed"] is True
     assert "source_card" not in passthrough_result
-    assert "source_quality" not in passthrough_result
+    assert passthrough_result["source_quality"]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
+    assert passthrough_result["source_quality"]["normalized_observation_present"] is True
     results.append(("passthrough_client_parses_upstream_body", "passed"))
 
     summary_field_result = BrowserBackedServiceClient(
@@ -7232,6 +7420,79 @@ def run_fixture_tests() -> Dict[str, Any]:
 
     def account_security_payload(request: urllib.request.Request) -> Dict[str, Any]:
         body = json.loads((request.data or b"{}").decode("utf-8"))
+        if body.get("response_mode") == RESPONSE_MODE_PASSTHROUGH:
+            if request.full_url.endswith(ACTION_ENDPOINTS["track_analysis_summary"]):
+                sub_interface = body.get("sub_interface")
+                if sub_interface == "profile":
+                    return _passthrough_fixture_payload(
+                        "track_analysis_summary",
+                        {
+                            "data": {
+                                "profile": {
+                                    "registerTime": "2026-05-20",
+                                    "fanDistribution": "low",
+                                    "activeDays": 3,
+                                },
+                                "deviceIds": ["ANDROID_track_device_001", "HARMONY_track_device_002"],
+                            }
+                        },
+                    )
+                if sub_interface == "getUseDuration":
+                    return _passthrough_fixture_payload(
+                        "track_analysis_summary",
+                        {"data": {"rows": [{"date": "2026-05-28", "duration": 3600}]}},
+                    )
+                if sub_interface == "getDeviceIds":
+                    return _passthrough_fixture_payload(
+                        "track_analysis_summary",
+                        {"data": ["ANDROID_track_device_001", "HARMONY_track_device_002"]},
+                    )
+                return _passthrough_fixture_payload(
+                    "track_analysis_summary",
+                    {"data": {"latestDateTime": "数据更新时间:2026-05-28"}},
+                )
+            if request.full_url.endswith(ACTION_ENDPOINTS["rcp_snapshot"]):
+                return _passthrough_fixture_payload(
+                    "rcp_snapshot",
+                    {
+                        "data": {
+                            "eventList": [
+                                {
+                                    "eventId": "event_001",
+                                    "sourceId": "2871834924",
+                                    "deviceId": "ANDROID_rcp_device_001",
+                                    "hitFusePolicyCode": "POLICY_001",
+                                    "_occurTime": "1779774526479",
+                                }
+                            ]
+                        }
+                    },
+                )
+            if request.full_url.endswith(ACTION_ENDPOINTS["weapon_inventory"]):
+                return _passthrough_fixture_payload(
+                    "weapon_inventory",
+                    {
+                        "graphData": {
+                            "data": {
+                                "pointInfoMap": {
+                                    "2871834924": {"type": "USER_ID"},
+                                    "ANDROID_weapon_device_001": {"type": "DEVICE_ID"},
+                                },
+                                "relationEdgeList": [
+                                    {"source": "2871834924", "target": "ANDROID_weapon_device_001"}
+                                ],
+                            }
+                        },
+                        "riskDataResults": [],
+                        "weapon_chain": {
+                            "graphData_status": "completed",
+                            "riskData_status": "not_executed_missing_device_id",
+                            "selected_device_count": 0,
+                        },
+                    },
+                )
+            if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
+                return _passthrough_fixture_payload("login_logs_search", passthrough_login_body)
         if request.full_url.endswith(ACTION_ENDPOINTS["track_analysis_summary"]):
             return _fixture_payload("track_analysis_summary", "completed", track_sub_interface=body.get("sub_interface"))
         if request.full_url.endswith(ACTION_ENDPOINTS["rcp_snapshot"]):
@@ -7247,7 +7508,7 @@ def run_fixture_tests() -> Dict[str, Any]:
     assert len(account_security_opener.calls) == 7
     for call in account_security_opener.calls:
         account_security_call_body = json.loads((call["body"] or b"{}").decode("utf-8"))
-        assert "response_mode" not in account_security_call_body
+        assert account_security_call_body["response_mode"] == RESPONSE_MODE_PASSTHROUGH
     assert [result["source_name"] for result in account_security_results] == [
         "track_analysis_summary",
         "rcp_snapshot",
@@ -7256,6 +7517,7 @@ def run_fixture_tests() -> Dict[str, Any]:
     ]
     account_security_card = build_partial_evidence_card(account_security_results)
     track_summary = account_security_card["evidence_summary_by_source"]["track_analysis_summary"]
+    assert account_security_results[0]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
     assert track_summary["bundle_summary"]["sub_interfaces_completed"] == [
         "profile",
         "getUseDuration",
@@ -7263,11 +7525,42 @@ def run_fixture_tests() -> Dict[str, Any]:
         "getLastestDateTime",
     ]
     assert track_summary["profile_summary"]["register_time_present"] is True
-    assert track_summary["use_duration_summary"]["rows_count"] == 7
+    assert track_summary["use_duration_summary"]["rows_count"] == 1
     assert track_summary["device_ids_summary"]["device_ids_count"] == 2
     assert track_summary["latest_timestamp_summary"]["latest_datetime_present"] is True
-    results.append(("call_account_security_sources_default_compat_summary", "passed"))
+    assert account_security_card["evidence_summary_by_source"]["login_logs_search"]["normalized_observation_summary"]["records_count"] == 1
+    results.append(("call_account_security_sources_default_passthrough", "passed"))
     results.append(("ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES", "passed"))
+
+    compat_fallback_calls = {"count": 0}
+
+    def account_security_fallback_payload(request: urllib.request.Request) -> Dict[str, Any]:
+        body = json.loads((request.data or b"{}").decode("utf-8"))
+        if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
+            compat_fallback_calls["count"] += 1
+            if body.get("response_mode") == RESPONSE_MODE_PASSTHROUGH:
+                return _passthrough_fixture_payload("login_logs_search", include_body=False)
+            return _fixture_payload("login_logs_search", "completed")
+        return _passthrough_fixture_payload("track_analysis_summary", {"data": {"latestDateTime": "数据更新时间:2026-05-28"}})
+
+    fallback_opener = _FakeOpener(account_security_fallback_payload)
+    fallback_client = BrowserBackedServiceClient(opener=fallback_opener)
+    no_fallback_result = fallback_client.call_action(
+        "login_logs_search",
+        {"user_id": "fixture"},
+        response_mode=RESPONSE_MODE_PASSTHROUGH,
+    )
+    assert no_fallback_result["source_status"] == "parse_error"
+    assert no_fallback_result["error_type"] == "passthrough_body_missing"
+    fallback_result = fallback_client.call_account_security_sources(
+        "2871834924",
+        include_rcp_snapshot=False,
+        allow_compat_fallback=True,
+    )[-1]
+    assert fallback_result["compat_fallback_used"] is True
+    assert fallback_result["source_status"] == "completed"
+    assert compat_fallback_calls["count"] >= 3
+    results.append(("compat_summary_fallback_requires_explicit_allow_flag", "passed"))
 
     raw_payload = _fixture_payload("login_logs_search", "completed")
     raw_payload["data"]["login_records"] = [{"ip": "203.0.113.10", "deviceId": "ANDROID_raw"}]

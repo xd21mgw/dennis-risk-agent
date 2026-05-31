@@ -8005,7 +8005,7 @@
 - test_id: BROWSER-BACKED-ACTION-BLOCKED-IS-SOURCE-QUALITY-001
 - input: browser-backed action 返回 `blocked` / `auth_failed` / `network_error` / `platform_error` 标准结构。
 - expected_runtime_behavior: standard_action_failure_enters_source_completion_matrix
-- expected_output_boundary: `source_card`、`source_quality`、`latency_ms` 和 `sensitive_output=false` 保留；失败不是 Dennis runtime failure。
+- expected_output_boundary: passthrough 主链保留 Dennis-owned `source_quality`、`normalized_observation`、`latency_ms` 和 `sensitive_output=false`；legacy `compat_summary` 可保留 `source_card`；失败不是 Dennis runtime failure。
 
 ## 851. No browser debug when service is available
 
@@ -8228,8 +8228,15 @@
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PASSTHROUGH-PARSER-FRAMEWORK-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
-- expected_runtime_behavior: explicit_passthrough_parser_path_only
-- expected_output_boundary: `BrowserBackedServiceClient.call_action(..., response_mode="passthrough")` must send `response_mode=passthrough` and parse `upstream.body` into `normalized_observation` for `track_analysis_summary`, `login_logs_search`, `weapon_inventory`, and `rcp_snapshot` eventList; passthrough must not require `source_card/source_quality`; Weapon graph/riskData parser must suppress raw `labelInfo` / `originalLog`; RCP eventList parser must suppress full raw eventList dumps and not treat eventList as final judgement; unexpected summary fields are marked but not fatal; `safety.credential_material_output!=false` fails closed; missing `upstream.body` becomes `passthrough_body_missing`; raw upstream body is suppressed; `call_account_security_sources()` default requests must not include `response_mode` and must continue using summary/compat evidence card flow.
+- expected_runtime_behavior: dennis_passthrough_default_path_with_legacy_compat_fallback
+- expected_output_boundary: `BrowserBackedServiceClient.call_action(..., response_mode="passthrough")` must send `response_mode=passthrough` and parse `upstream.body` into `normalized_observation` for `track_analysis_summary`, `login_logs_search`, `weapon_inventory`, and `rcp_snapshot` eventList; account-security `call_account_security_sources()` default requests must explicitly include `response_mode=passthrough`; passthrough must not require service-side `source_card/source_quality`, but Dennis must generate source_quality from normalized_observation; Weapon graph/riskData parser must suppress raw `labelInfo` / `originalLog`; RCP eventList parser must suppress full raw eventList dumps and not treat eventList as final judgement; unexpected summary fields are marked but not fatal; `safety.credential_material_output!=false` fails closed; missing `upstream.body` becomes `passthrough_body_missing`; raw upstream body is suppressed; compat_summary fallback only occurs when `allow_compat_fallback=true`; no silent fallback.
+
+## 875P-2. Browser-backed passthrough is target main chain
+
+- test_id: FULL-RUNTIME-BROWSER-BACKED-PASSTHROUGH-TARGET-MAIN-CHAIN-001
+- input: Dennis account-security four-source browser-backed path.
+- expected_runtime_behavior: passthrough_target_main_chain_compat_summary_legacy_fallback
+- expected_output_boundary: 短期 `compat_summary` 只作为 legacy migration fallback；长期只保留 passthrough 单模式。新 action 一律 passthrough-only；service 侧 summary/source_card/source_quality/evidence summary 逻辑删除前必须完成四源 dual-run、full_runtime controlled pilot、Dennis normalized evidence card 可用性验证和引用检查。
 
 ## 875A. Archives Center browser-backed user analysis action
 
