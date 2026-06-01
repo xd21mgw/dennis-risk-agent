@@ -63,6 +63,36 @@
 
 输出必须包含“撞库 ATO vs 一键登录 ATO”的替代解释对比。
 
+### 3.1 Batch ATO cluster lens overlay
+
+批量 ATO 不是“没有分簇”，也不是把每个用户逐个跑单案链路。当前批量框架已有内容相似、设备共性、策略命中、时间聚集、账号画像和行为模式分簇；ATO 需要在这些已有簇上叠加 `ato_cluster_lens`。
+
+标准流程：
+
+1. `existing_cluster_signal_collection`：保留已有分簇依据。
+2. `ato_cluster_lens_overlay`：检查 WEB 非可信登录、登录方式异常、`login_to_action_delta`、内容动作闭环、设备身份一致性、共享基础设施和历史行为突变。
+3. `compromised_account_cluster_detection`：登录 / 控制链异常 + 后置内容动作异常 + 设备身份异常或历史行为突变同时成立时，标 `compromised_account_cluster` 或 `high_suspected_ato_cluster`。
+4. `representative_case_selection`：每个疑似 ATO 簇抽高疑似、中疑似、边界和反例样本。
+5. `representative_ato_single_case_deep_dive`：代表样本走单案链路，证明该簇攻击机制。
+6. `cluster_level_backfill`：把单案发现回填到簇级 coverage / similarity / confidence / source gap。
+7. `batch_conclusion`：只输出簇级结论，不默认全批账号都被盗。
+
+ATO lens 必看：
+
+- `web_untrusted_login_cluster`：WEB / H5 / PC 登录从历史 APP 偏移，或 WEB 登录设备 / IP / UA / browser fingerprint 非历史常用。
+- `login_to_action_delta`：WEB / 控制链登录后短时间发布视频、评论、直播、私信或资料修改。
+- `device_identity_inconsistency_cluster`：常用 `device_id` 下机型、系统、UA、IP、登录端、登录方式等变量漂移。
+- `content_action_deep_dive`：代表样本必须尽量提取 `photo_id` / `live_id` / `comment_id`、发布时间、发布来源、发布设备、IP / UA、四项信息和审核 / 策略 / 导流原因。
+- `existing_cluster_plus_ato_lens`：内容导流簇、策略命中簇或设备共性簇可叠加 ATO 盗号投放嫌疑，不互斥。
+
+批量 ATO 边界：
+
+- Track 活跃不能证明本人。
+- 常用 `device_id` 不能降低 ATO 置信度，除非 `device_identity_consistency` 完整一致。
+- login no_data、`response_too_large`、wrapper mismatch、timeout 只能进入 source gap / Hive required，不得当低风险反证。
+- 代表样本单案支持 ATO，只能证明对应簇存在 ATO 模式，不能默认全批账号都被盗。
+- 长周期登录补证只生成基于 `account_security_hive_source_registry_v1.md` 的 registry-first query plan，不自由猜表，不实际调用 DataAgent/Hive。
+
 ## 4. 禁止结论跳跃
 
 禁止：
@@ -274,11 +304,13 @@ RCP 归因与策略治理：
 统一登录日志 source boundary：
 
 - 在线 API 约 7 天可靠窗口。
-- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为，不能覆盖完整 WEB / H5 / PC / token / OAuth / 扫码控制链。
 - 客诉时间不在在线窗口内时，必须标 `login_log_window_incomplete` 与 `source_time_range_gap`。
 - APP 登录日志 no_data、单 DID、IP 稳定，只能写“登录日志侧可见窗口内未见强异常，ATO 证据不足”。
 - 不得仅凭 APP 登录日志输出“低风险 / 无风险 / 排除 ATO”。
 - 扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉，必须标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+- 当风险动作是 WEB 登录后发导流视频、评论、直播、私信或资料修改，但实时登录源只覆盖 APP 或窗口不完整，必须标 `admin_app_log_only_gap`、`web_control_chain_missing`、`offline_hive_required`，并在用户正文证据缺口 / 下一步补证中强提醒 Hive 长周期补证。
+- 不允许输出“实时源无异常，所以倾向不是盗号”，除非登录链路、内容动作链路、设备身份一致性和历史基线均已闭合。
 
 ## 6. ATO 离线 Hive 数据源运行态规则
 
@@ -287,8 +319,25 @@ RCP 归因与策略治理：
 必须标记：
 
 - `login_log_window_incomplete`
+- `admin_app_log_only_gap`
+- `web_control_chain_missing`
 - `offline_hive_required`
+- `hive_required_hint`
 - `online_login_log_may_be_false_negative`
+
+ATO 实时源不完整时，Hive 不是“可选增强”，而是定性闭环所需的关键补证；但调用 Hive 必须用户逐次明确授权。用户正文推荐表达：
+
+```text
+当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。
+```
+
+触发强提醒的典型条件：
+
+- 统一登录日志超过在线可靠窗口，或异常时间不在当前可见窗口内。
+- admin 侧仅有 APP 日志，而风险动作来自 WEB / H5 / PC 或 token / OAuth / 扫码控制链。
+- 风险动作是 WEB 登录后发导流视频、评论、直播、私信或资料修改。
+- 在线登录日志 no_data、`response_too_large`、wrapper mismatch、`source_contract_gap`。
+- 批量 ATO 中部分账号存在 WEB 非可信登录，但实时登录 / 控制源覆盖不足。
 
 ### 6.1 选表规则
 

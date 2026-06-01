@@ -46,6 +46,95 @@ risk_hypothesis:
 cannot_conclude:
 ```
 
+## 3B. Batch ATO Cluster Lens
+
+Use this block when the batch is ATO / stolen-account posting / compromised-account suspected. It is an overlay on top of existing clusters, not a replacement for existing clustering.
+
+```text
+批量结论:
+- 是否存在 compromised_account_cluster / ATO 盗号投放嫌疑:
+- 是否更像内容导流 / 垃圾注册 / 养号矩阵 / 真人灰产 / mixed cluster / 证据不足:
+- 当前置信度:
+- 不默认全批账号都被盗:
+
+已有分簇依据:
+- 内容相似:
+- 设备 / IP / 账号关系:
+- 策略命中:
+- 时间聚集:
+- 账号画像:
+- 行为模式:
+
+ATO lens 命中情况:
+- ato_cluster_lens:
+- existing_cluster_plus_ato_lens:
+- web_untrusted_login_cluster:
+- 登录端 / 登录方式异常:
+- login_to_action_delta:
+- device_identity_inconsistency_cluster:
+- historical_behavior_shift:
+- shared infrastructure:
+
+风险分簇:
+- cluster_id:
+- cluster_size:
+- existing_cluster_basis:
+- ATO lens 命中项:
+- cluster_label:
+- representative_cases:
+- confidence:
+- mixed_cluster:
+
+代表样本单案摘要:
+- representative_ato_single_case_deep_dive:
+- why_selected:
+- 单案是否支持该簇 ATO 假设:
+- 反例或边界:
+
+批量回填特征:
+- cluster_level_backfill:
+- login_to_action_delta distribution:
+- device_identity_inconsistency coverage:
+- possible_device_id_spoofing coverage:
+- shared IP / UA / ASN / browser fingerprint coverage:
+- content similarity coverage:
+- landing page / contact info coverage:
+- strategy hit combination coverage:
+- coverage / similarity / confidence:
+
+证据缺口:
+- 登录日志在线窗口不足:
+- Hive 长周期缺失:
+- 发布审计缺失:
+- 四项信息缺失:
+- source contract gap:
+- representative sample not verified:
+- realtime control-chain incomplete:
+- admin APP-only source gap:
+- WEB/H5/PC/token/OAuth/scan chain missing:
+
+建议动作:
+- Hive registry-first query plan:
+- 发布审计 / 四项信息补证:
+- 人工复核:
+- 保护性验证:
+- 灰度拦截:
+- 策略扩散:
+- 不建议动作:
+```
+
+Boundary:
+
+- Existing cluster signals and ATO lens are additive.
+- Batch commonality cannot prove every account is stolen.
+- Representative deep dive supports the represented cluster only after coverage / similarity / source-quality backfill.
+- Track activity is not owner proof.
+- Common `device_id` is not ATO exclusion unless device identity consistency is complete.
+- Online login no_data / `response_too_large` / wrapper mismatch is source gap, not low-risk proof.
+- Admin APP-only logs do not close WEB/H5/PC/token/OAuth/scan control-chain evidence.
+- When realtime login/control evidence is incomplete, output a Hive-required hint and an account-security registry-first query plan; do not execute DataAgent/Hive without per-call authorization.
+- User-facing text must not output internal runtime YAML, debug fields, or validation fields by default.
+
 ## 3A. L1 宽表 / 画像浅查摘要
 
 ```text

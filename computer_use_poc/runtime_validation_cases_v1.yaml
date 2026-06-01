@@ -3060,3 +3060,157 @@ platform_access_execution_v0_1_regression:
       - historical_baseline_comparison
       - not_flat_track_rcp_weapon_login_archive_summary
     pass_fail_criteria: "不能只按 Track/RCP/Weapon/Login/Archive 平铺 source 状态，必须围绕 anchor/control-chain/action-chain/baseline 输出。"
+  - case_id: BATCH-ATO-CLUSTER-LENS-REQUIRED-001
+    input: "已有内容相似 / 策略命中分簇的一批账号。"
+    expected_output_boundary:
+      - existing_cluster_signal_collection
+      - ato_cluster_lens
+      - existing_cluster_plus_ato_lens
+      - not_content_or_strategy_cluster_only
+    pass_fail_criteria: "必须额外检查 ATO cluster lens，不能只停留在内容或策略簇解释。"
+  - case_id: BATCH-ATO-WEB-UNTRUSTED-LOGIN-CLUSTER-001
+    input: "多个账号都存在 WEB 非可信登录，并在短时间内发布导流视频。"
+    expected_output_boundary:
+      - web_untrusted_login_cluster
+      - login_to_action_delta
+      - compromised_account_cluster
+      - high_suspected_ato_cluster
+    pass_fail_criteria: "识别 compromised_account_cluster / high_suspected_ato_cluster，而不是只归到内容导流簇或策略命中簇。"
+  - case_id: BATCH-ATO-EXISTING-CLUSTER-PLUS-ATO-LENS-001
+    input: "已有内容相似分簇，同时存在 WEB 非可信登录共性。"
+    expected_output_boundary:
+      - content_similarity_cluster_preserved
+      - existing_cluster_plus_ato_lens
+      - content_diversion_cluster_plus_ato_suspicion
+    pass_fail_criteria: "保留内容相似簇解释，同时叠加 ATO lens，输出内容导流簇 + ATO 盗号投放嫌疑。"
+  - case_id: BATCH-ATO-DEVICE-ID-SPOOFING-CLUSTER-LENS-001
+    input: "多账号 device_id 看似常用，但 UA / 机型 / IP / 登录端异常。"
+    expected_output_boundary:
+      - device_identity_inconsistency_cluster
+      - possible_device_id_spoofing
+      - common_device_id_not_sufficient_to_exclude_ato
+    pass_fail_criteria: "识别 possible_device_id_spoofing cluster，不得用常用 device_id 降低 ATO 置信度。"
+  - case_id: BATCH-ATO-LOGIN-TO-ACTION-DELTA-001
+    input: "多个账号 WEB 登录后 0-30 分钟内发视频 / 评论 / 直播。"
+    expected_output_boundary:
+      - login_to_action_delta
+      - login_to_action_cluster
+      - downstream_action_time_alignment
+    pass_fail_criteria: "提取 login_to_action_delta，并作为 ATO lens 核心特征。"
+  - case_id: BATCH-ATO-CONTENT-ACTION-DEEP-DIVE-001
+    input: "批量账号存在发视频、直播、评论、私信导流。"
+    expected_output_boundary:
+      - content_action_deep_dive
+      - extract_photo_id_live_id_comment_id
+      - extract_publish_source_device_ip_ua
+      - extract_four_items_if_available
+    pass_fail_criteria: "必须进入 content_action_deep_dive，提取内容 ID、发布时间、发布来源、发布设备、IP/UA、四项信息。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-CASE-SELECTION-001
+    input: "批量中存在多个疑似 ATO 簇。"
+    expected_output_boundary:
+      - representative_case_selection
+      - high_suspicion_samples
+      - boundary_sample
+      - counter_example_sample
+      - no_full_per_user_for_loop
+    pass_fail_criteria: "每簇抽代表样本做单案深挖，不全量逐个深挖，也不跳过单案机制证明。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-DEEP-DIVE-BACKFILL-001
+    input: "代表样本证明 device_identity_inconsistency。"
+    expected_output_boundary:
+      - representative_ato_single_case_deep_dive
+      - cluster_level_backfill
+      - coverage_similarity_confidence
+      - source_quality_missing_evidence_coverage
+    pass_fail_criteria: "把该特征回填到簇级 coverage / similarity / confidence，而不是停留在单案结论。"
+  - case_id: BATCH-ATO-MIXED-CLUSTER-001
+    input: "同一批里既有盗号投放，也有垃圾注册投放。"
+    expected_output_boundary:
+      - mixed_cluster
+      - compromised_account_cluster
+      - content_abuse_only_cluster
+      - separate_subcluster_explanations
+    pass_fail_criteria: "输出 mixed_cluster，分别解释不同子簇，不做单一归因。"
+  - case_id: BATCH-ATO-COMMON-DEVICE-NOT-EXCLUSION-001
+    input: "多账号候选 device_id 是历史常用，但登录端 / UA / IP / 机型异常。"
+    expected_output_boundary:
+      - common_device_id_not_sufficient_to_exclude_ato
+      - device_identity_consistency_required
+      - device_identity_inconsistency_cluster
+    pass_fail_criteria: "常用 device_id 不作为排除 ATO 的强反证。"
+  - case_id: BATCH-ATO-TRACK-NOT-OWNER-PROOF-001
+    input: "批量账号 Track 有活跃。"
+    expected_output_boundary:
+      - track_activity_not_owner_proof
+      - track_auxiliary_only
+      - no_batch_low_risk_from_track
+    pass_fail_criteria: "Track 只能作为辅助，不能证明本人，也不能作为批量低风险反证。"
+  - case_id: BATCH-ATO-LOGIN-NODATA-NOT-LOW-RISK-001
+    input: "在线登录日志 no_data / response_too_large / wrapper mismatch。"
+    expected_output_boundary:
+      - source_gap
+      - hive_required_if_long_window
+      - response_too_large_not_login_evidence
+      - no_low_risk_from_login_gap
+    pass_fail_criteria: "标记 source gap / Hive required，不得输出低风险。"
+  - case_id: BATCH-ATO-HIVE-REGISTRY-FIRST-001
+    input: "批量在线登录日志不足。"
+    expected_output_boundary:
+      - account_security_hive_source_registry_read_first
+      - hive_registry_first_query_plan
+      - no_free_table_guessing
+      - no_actual_dataagent_hive_call
+    pass_fail_criteria: "生成基于已有账号安全 Hive registry 的 query plan，不自由猜表，不实际调用 Hive。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-NOT-GLOBAL-PROOF-001
+    input: "代表样本支持 ATO。"
+    expected_output_boundary:
+      - representative_sample_not_global_proof
+      - coverage_similarity_required
+      - counter_examples_required
+      - cluster_level_confidence_not_global_truth
+    pass_fail_criteria: "只能证明该簇存在 ATO 模式，不能默认全批账号都被盗；需要按相似度、覆盖率和反例回填。"
+  - case_id: BATCH-USER-FACING-NO-ROUTING-METADATA-001
+    input: "批量 ATO partial conclusion。"
+    expected_output_boundary:
+      - no_routing_metadata_in_user_body
+      - no_source_quality_yaml_in_user_body
+      - no_boundary_flags_in_user_body
+      - no_debug_or_validator_fields
+      - batch_ato_business_template
+    pass_fail_criteria: "批量 ATO 用户正文不得输出 routing metadata/source quality YAML/boundary flags/debug fields。"
+  - case_id: ATO-REALTIME-SOURCE-INCOMPLETE-HIVE-REQUIRED-001
+    input: "ATO 单案，统一登录日志 7 天外不可见。"
+    expected_output_boundary:
+      - login_log_window_incomplete
+      - hive_required_hint
+      - offline_hive_required
+      - account_security_hive_source_registry_read_first
+      - no_ato_exclusion_from_realtime_gap
+    pass_fail_criteria: "实时源无法覆盖完整控制链时，必须在用户正文证据缺口 / 下一步补证中强提醒 Hive 长周期补证，不得排除 ATO。"
+  - case_id: ATO-ADMIN-APP-LOG-ONLY-GAP-001
+    input: "admin 只有 APP 日志，但风险动作是 WEB 发视频。"
+    expected_output_boundary:
+      - admin_app_log_only_gap
+      - web_control_chain_missing
+      - offline_hive_required
+      - content_action_chain_required
+      - no_low_risk_from_app_log_only
+    pass_fail_criteria: "admin APP 日志不能覆盖 WEB/H5/PC/token/OAuth/扫码控制链；WEB 发视频风险动作必须提示 Hive 和发布动作链路补证。"
+  - case_id: ATO-LOGIN-NODATA-NOT-EXCLUSION-HIVE-001
+    input: "在线登录日志 no_data。"
+    expected_output_boundary:
+      - no_data_not_risk_exclusion
+      - login_log_window_incomplete_if_window_gap
+      - offline_hive_required_if_window_incomplete
+      - no_low_risk_from_online_login_nodata
+    pass_fail_criteria: "在线登录日志 no_data 不得输出低风险；若窗口不完整，必须提示 Hive 长周期补证。"
+  - case_id: BATCH-ATO-HIVE-REQUIRED-WHEN-REALTIME-INCOMPLETE-001
+    input: "批量导流视频 + 部分 WEB 非可信登录，但实时登录源不完整。"
+    expected_output_boundary:
+      - ato_cluster_lens
+      - login_log_window_incomplete
+      - admin_app_log_only_gap
+      - web_control_chain_missing
+      - offline_hive_required
+      - hive_registry_first_query_plan
+      - no_global_batch_ato_conclusion
+    pass_fail_criteria: "批量 ATO 实时登录源不完整时，输出 Hive registry-first 补证计划，不默认定性全批。"

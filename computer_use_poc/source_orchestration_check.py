@@ -61,6 +61,37 @@ ATO_DEVICE_IDENTITY_FIELDS = {
     "login_source",
     "login_type",
 }
+ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS = {
+    "hive_required_hint",
+    "login_log_window_incomplete",
+    "admin_app_log_only_gap",
+    "web_control_chain_missing",
+    "offline_hive_required",
+}
+BATCH_ATO_REQUIRED_PLAN_STEPS = {
+    "existing_cluster_signal_collection",
+    "ato_cluster_lens_overlay",
+    "compromised_account_cluster_detection",
+    "representative_case_selection",
+    "representative_ato_single_case_deep_dive",
+    "cluster_level_backfill",
+    "batch_conclusion",
+}
+BATCH_ATO_REQUIRED_LABELS = {
+    "ato_cluster_lens",
+    "existing_cluster_plus_ato_lens",
+    "web_untrusted_login_cluster",
+    "login_to_action_cluster",
+    "device_identity_inconsistency_cluster",
+    "compromised_account_cluster",
+    "mixed_cluster",
+}
+BATCH_ATO_REQUIRED_ANSWER_MARKERS = {
+    "ato_cluster_lens",
+    "existing_cluster_plus_ato_lens",
+    "representative_ato_single_case_deep_dive",
+    "cluster_level_backfill",
+}
 USER_FACING_RUNTIME_YAML_MARKERS = {
     "routing_metadata:",
     "source_quality:",
@@ -75,6 +106,7 @@ USER_FACING_RUNTIME_YAML_MARKERS = {
 }
 USER_FACING_CONTEXTS = {
     "ato_single_case_business_answer",
+    "batch_ato_cluster_answer",
     "partial_evidence_card",
     "local_patch_completion_report",
     "codex_final_summary",
@@ -152,6 +184,7 @@ def select_plan(plan: dict[str, Any], task_type: str, entity_count: int) -> dict
 def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
     failures: list[dict[str, str]] = []
     fixed = plan.get("plans", {}).get("browser_backed_fixed_actions_v1", {})
+    batch_ato = plan.get("plans", {}).get("batch_ato_cluster_lens_alignment_v1", {})
     batch_contract = fixed.get("controlled_parallel_batch_contract", {})
     required_fields = batch_contract.get("source_plan_item_required_fields", [])
 
@@ -292,6 +325,95 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                         "reason": "ATO Hive/DataAgent plan must reference account_security_hive_source_registry_v1.md before execution",
                     }
                 )
+            realtime_incomplete = scenario.get("realtime_source_incomplete_hive_required_contract", {})
+            if realtime_incomplete.get("offline_hive_required_when_realtime_incomplete") is not True or realtime_incomplete.get("hive_required_hint") is not True:
+                failures.append(
+                    {
+                        "rule": "ato_realtime_incomplete_hive_required_contract",
+                        "reason": "ATO single-case plan must strongly require Hive hint when realtime sources are incomplete",
+                    }
+                )
+            required_gap_flags = set(realtime_incomplete.get("required_gap_flags", []))
+            if not ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS.issubset(required_gap_flags):
+                failures.append(
+                    {
+                        "rule": "ato_realtime_incomplete_gap_flags_required",
+                        "reason": "ATO realtime incomplete contract must require login window, admin APP-only, WEB control-chain and offline Hive flags",
+                    }
+                )
+
+    if not batch_ato:
+        failures.append(
+            {
+                "rule": "batch_ato_cluster_lens_plan_required",
+                "reason": "source plan must include batch_ato_cluster_lens_alignment_v1",
+            }
+        )
+    else:
+        if batch_ato.get("default_runtime_routing") is not False:
+            failures.append(
+                {
+                    "rule": "batch_ato_default_runtime_routing_false_required",
+                    "reason": "batch ATO lens must keep default_runtime_routing=false",
+                }
+            )
+        if batch_ato.get("real_platform_access") is not False or batch_ato.get("dataagent_hive_execution") is not False:
+            failures.append(
+                {
+                    "rule": "batch_ato_plan_only_boundary_required",
+                    "reason": "batch ATO lens is local planning/validation only and must not execute platforms or DataAgent/Hive",
+                }
+            )
+        workflow = set(batch_ato.get("workflow", []))
+        missing_steps = sorted(BATCH_ATO_REQUIRED_PLAN_STEPS - workflow)
+        if missing_steps:
+            failures.append(
+                {
+                    "rule": "batch_ato_workflow_steps_required",
+                    "reason": f"batch ATO lens workflow missing {missing_steps}",
+                }
+            )
+        labels = set(batch_ato.get("lens_output_labels", []))
+        missing_labels = sorted(BATCH_ATO_REQUIRED_LABELS - labels)
+        if missing_labels:
+            failures.append(
+                {
+                    "rule": "batch_ato_lens_labels_required",
+                    "reason": f"batch ATO lens output labels missing {missing_labels}",
+                }
+            )
+        hive_preflight = batch_ato.get("hive_registry_preflight", {})
+        if hive_preflight.get("required_before_dataagent_or_hive") is not True or "account_security_hive_source_registry_v1.md" not in str(hive_preflight.get("registry", "")):
+            failures.append(
+                {
+                    "rule": "batch_ato_hive_registry_first_required",
+                    "reason": "batch ATO long-window login query plan must reference account-security Hive registry first",
+                }
+            )
+        realtime_incomplete = batch_ato.get("realtime_source_incomplete_hive_required_contract", {})
+        if realtime_incomplete.get("offline_hive_required_when_realtime_incomplete") is not True or realtime_incomplete.get("hive_required_hint") is not True:
+            failures.append(
+                {
+                    "rule": "batch_ato_realtime_incomplete_hive_required_contract",
+                    "reason": "batch ATO plan must strongly require Hive hint when realtime sources are incomplete",
+                }
+            )
+        required_gap_flags = set(realtime_incomplete.get("required_gap_flags", []))
+        if not ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS.issubset(required_gap_flags):
+            failures.append(
+                {
+                    "rule": "batch_ato_realtime_incomplete_gap_flags_required",
+                    "reason": "batch ATO realtime incomplete contract must require login window, admin APP-only, WEB control-chain and offline Hive flags",
+                }
+            )
+        stop_conditions = batch_ato.get("stop_conditions", {})
+        if stop_conditions.get("allow_per_user_online_loop_by_default") is not False or stop_conditions.get("allow_global_ato_conclusion_from_representative_only") is not False:
+            failures.append(
+                {
+                    "rule": "batch_ato_no_for_loop_or_global_proof_required",
+                    "reason": "batch ATO lens must forbid default per-user online loop and representative-as-global-proof drift",
+                }
+            )
 
     return failures
 
@@ -1034,6 +1156,217 @@ def validate_ato_user_facing_answer(answer_text: str) -> list[dict[str, str]]:
             }
         )
 
+    realtime_incomplete_markers = [
+        "7 天外",
+        "7天外",
+        "在线窗口",
+        "窗口不足",
+        "admin",
+        "app 日志",
+        "APP 日志",
+        "WEB",
+        "H5",
+        "PC",
+        "token",
+        "OAuth",
+        "扫码",
+        "no_data",
+        "response_too_large",
+        "wrapper_response_mismatch",
+        "source_contract_gap",
+    ]
+    risky_web_action_markers = ["发视频", "导流视频", "评论", "直播", "私信", "资料修改"]
+    realtime_incomplete = any(marker in raw_text or marker.lower() in text for marker in realtime_incomplete_markers)
+    web_action_gap = any(marker in raw_text for marker in risky_web_action_markers) and any(marker in raw_text for marker in ["WEB", "H5", "PC"])
+    if realtime_incomplete or web_action_gap:
+        missing_flags = [
+            flag for flag in ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS
+            if flag not in text and flag not in raw_text
+        ]
+        if missing_flags:
+            failures.append(
+                {
+                    "rule": "ato_realtime_source_incomplete_hive_required",
+                    "case_id": "ATO-REALTIME-SOURCE-INCOMPLETE-HIVE-REQUIRED-001",
+                    "reason": f"ATO realtime incomplete answer must mark Hive-required gap flags {missing_flags}",
+                }
+            )
+        if "account_security_hive_source_registry" not in text and "registry-first" not in text and "registry first" not in text:
+            failures.append(
+                {
+                    "rule": "ato_hive_registry_first_required_in_answer",
+                    "case_id": "ATO-LOGIN-HIVE-REGISTRY-FIRST-001",
+                    "reason": "ATO Hive query plan must be registry-first and must not freely guess tables",
+                }
+            )
+
+    realtime_no_anomaly_phrases = ["实时源无异常", "实时源没异常", "app 日志无异常", "APP 日志无异常", "在线登录无异常"]
+    not_ato_phrases = ["倾向不是盗号", "不像盗号", "不是 ATO", "排除 ATO", "排除被盗", "低风险", "无风险"]
+    if any(phrase in raw_text for phrase in realtime_no_anomaly_phrases) and any(phrase in raw_text for phrase in not_ato_phrases):
+        closed_markers = [
+            "login_control_chain_closed",
+            "content_action_chain_closed",
+            "device_identity_consistency_closed",
+            "historical_baseline_closed",
+        ]
+        if not all(marker in text for marker in closed_markers):
+            failures.append(
+                {
+                    "rule": "realtime_no_anomaly_not_ato_exclusion",
+                    "case_id": "ATO-REALTIME-SOURCE-INCOMPLETE-HIVE-REQUIRED-001",
+                    "reason": "realtime no anomaly cannot support non-ATO/low-risk conclusion unless all four chains are closed",
+                }
+            )
+
+    return failures
+
+
+def validate_batch_ato_user_facing_answer(answer_text: str) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = validate_user_facing_answer(
+        answer_text,
+        output_context="batch_ato_cluster_answer",
+    )
+    text = answer_text.lower()
+    raw_text = answer_text
+
+    missing_markers = sorted(
+        marker for marker in BATCH_ATO_REQUIRED_ANSWER_MARKERS
+        if marker not in text and marker not in raw_text
+    )
+    if missing_markers:
+        failures.append(
+            {
+                "rule": "batch_ato_cluster_lens_required",
+                "case_id": "BATCH-ATO-CLUSTER-LENS-REQUIRED-001",
+                "reason": f"batch ATO answer must include ATO lens overlay markers {missing_markers}",
+            }
+        )
+
+    existing_cluster_markers = ["内容相似", "策略命中", "设备共性", "时间聚集", "账号画像", "行为模式", "existing_cluster"]
+    if any(marker.lower() in text for marker in existing_cluster_markers) and "ato_cluster_lens" not in text and "ATO lens" not in raw_text:
+        failures.append(
+            {
+                "rule": "existing_cluster_plus_ato_lens_required",
+                "case_id": "BATCH-ATO-EXISTING-CLUSTER-PLUS-ATO-LENS-001",
+                "reason": "existing content/strategy/device clusters must explicitly receive ATO lens overlay",
+            }
+        )
+
+    web_login = any(marker in raw_text for marker in ["WEB", "H5", "PC"]) or any(marker in text for marker in ["web", "h5", "pc"])
+    downstream_action = any(marker in raw_text for marker in ["导流", "发视频", "发布", "评论", "直播", "私信", "资料修改"])
+    if web_login and downstream_action and not any(marker in text for marker in ["compromised_account_cluster", "high_suspected_ato_cluster", "web_untrusted_login_cluster"]):
+        failures.append(
+            {
+                "rule": "batch_ato_web_untrusted_login_cluster_required",
+                "case_id": "BATCH-ATO-WEB-UNTRUSTED-LOGIN-CLUSTER-001",
+                "reason": "WEB non-trusted login plus downstream diversion action must identify compromised/high-suspected ATO cluster",
+            }
+        )
+
+    if "login_to_action_delta" not in text and web_login and downstream_action:
+        failures.append(
+            {
+                "rule": "batch_ato_login_to_action_delta_required",
+                "case_id": "BATCH-ATO-LOGIN-TO-ACTION-DELTA-001",
+                "reason": "batch ATO answer must extract login_to_action_delta for WEB/control-chain followed by downstream action",
+            }
+        )
+
+    if "常用" in raw_text and "device_id" in text and any(phrase in raw_text for phrase in ["风险较低", "降低 ATO 置信度", "排除 ATO", "排除被盗", "无风险"]):
+        if "common_device_id_not_sufficient_to_exclude_ato" not in text and "device_identity_inconsistency" not in text:
+            failures.append(
+                {
+                    "rule": "batch_common_device_not_exclusion",
+                    "case_id": "BATCH-ATO-COMMON-DEVICE-NOT-EXCLUSION-001",
+                    "reason": "common device_id cannot reduce or exclude batch ATO confidence without full device identity consistency",
+                }
+            )
+
+    login_gap_markers = ["no_data", "response_too_large", "wrapper mismatch", "wrapper_mismatch", "wrapper_response_mismatch", "无数据"]
+    low_risk_markers = ["低风险", "无风险", "排除 ato", "排除ATO", "排除被盗", "risk_excluded"]
+    low_risk_negated = any(
+        phrase in raw_text
+        for phrase in [
+            "不得输出低风险",
+            "不能输出低风险",
+            "不得作为低风险",
+            "不能作为低风险",
+            "不是低风险",
+            "不当低风险反证",
+            "不得当低风险反证",
+            "不能当低风险反证",
+        ]
+    )
+    if any(marker in text for marker in login_gap_markers) and any(marker.lower() in text for marker in low_risk_markers) and not low_risk_negated:
+        failures.append(
+            {
+                "rule": "batch_login_gap_not_low_risk",
+                "case_id": "BATCH-ATO-LOGIN-NODATA-NOT-LOW-RISK-001",
+                "reason": "login no_data / response_too_large / wrapper mismatch cannot be low-risk counter evidence",
+            }
+        )
+
+    if any(phrase in raw_text for phrase in ["所有账号都被盗", "全批账号都被盗", "全量都是 ATO", "全部都是 ATO"]):
+        if not any(marker in text for marker in ["coverage", "similarity", "counter", "反例", "代表样本不能"]):
+            failures.append(
+                {
+                    "rule": "representative_not_global_proof",
+                    "case_id": "BATCH-ATO-REPRESENTATIVE-NOT-GLOBAL-PROOF-001",
+                    "reason": "representative sample or batch commonality cannot prove the full batch without coverage/similarity/counter-example analysis",
+                }
+            )
+
+    if "track" in text and any(phrase in raw_text for phrase in ["证明本人", "本人操作", "低风险"]):
+        failures.append(
+            {
+                "rule": "batch_track_not_owner_proof",
+                "case_id": "BATCH-ATO-TRACK-NOT-OWNER-PROOF-001",
+                "reason": "Track activity is auxiliary and cannot prove owner operation or batch low risk",
+            }
+        )
+
+    realtime_incomplete_markers = [
+        "实时登录源不完整",
+        "实时源不完整",
+        "在线登录源不完整",
+        "在线窗口",
+        "窗口不足",
+        "admin",
+        "app 日志",
+        "APP 日志",
+        "WEB",
+        "H5",
+        "PC",
+        "token",
+        "OAuth",
+        "扫码",
+        "no_data",
+        "response_too_large",
+        "wrapper_response_mismatch",
+        "source_contract_gap",
+    ]
+    if any(marker in raw_text or marker.lower() in text for marker in realtime_incomplete_markers):
+        missing_flags = [
+            flag for flag in ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS
+            if flag not in text and flag not in raw_text
+        ]
+        if missing_flags:
+            failures.append(
+                {
+                    "rule": "batch_ato_realtime_incomplete_hive_required",
+                    "case_id": "BATCH-ATO-HIVE-REQUIRED-WHEN-REALTIME-INCOMPLETE-001",
+                    "reason": f"batch ATO realtime incomplete answer must mark Hive-required gap flags {missing_flags}",
+                }
+            )
+        if "account_security_hive_source_registry" not in text and "registry-first" not in text and "registry first" not in text:
+            failures.append(
+                {
+                    "rule": "batch_ato_hive_registry_first_required_in_answer",
+                    "case_id": "BATCH-ATO-HIVE-REGISTRY-FIRST-001",
+                    "reason": "batch ATO Hive query plan must be registry-first and must not freely guess tables",
+                }
+            )
+
     return failures
 
 
@@ -1046,6 +1379,7 @@ def main() -> int:
     parser.add_argument("--final-conclusion", default=None)
     parser.add_argument("--answer-text", default=None, help="Optional user-facing answer text for response-time contract validation.")
     parser.add_argument("--ato-single-case", action="store_true", help="Validate ATO single-case answer hard gates.")
+    parser.add_argument("--batch-ato", action="store_true", help="Validate batch ATO cluster lens answer hard gates.")
     parser.add_argument(
         "--output-context",
         choices=sorted(USER_FACING_CONTEXTS),
@@ -1072,7 +1406,9 @@ def main() -> int:
     failures = static_failures + failures
     answer_failures: list[dict[str, str]] = []
     if args.answer_text and not args.allow_runtime_yaml:
-        if args.ato_single_case:
+        if args.batch_ato:
+            answer_failures = validate_batch_ato_user_facing_answer(args.answer_text)
+        elif args.ato_single_case:
             answer_failures = validate_ato_user_facing_answer(args.answer_text)
         else:
             answer_failures = validate_user_facing_answer(args.answer_text, output_context=args.output_context)
@@ -1092,6 +1428,7 @@ def main() -> int:
         "source_completion_matrix_present": bool(matrix),
         "answer_text_validated": bool(args.answer_text),
         "ato_single_case_answer_validated": bool(args.ato_single_case and args.answer_text),
+        "batch_ato_answer_validated": bool(args.batch_ato and args.answer_text),
         "output_context": args.output_context,
         "runtime_yaml_allowed": args.allow_runtime_yaml,
         "validation_pass": not failures,

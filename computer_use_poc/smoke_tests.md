@@ -8454,3 +8454,47 @@
 - input: `build_small_batch_evidence_output(..., output_scope="external_share")`，构造同一组 `user_id=["772671837","3481089791"]`。
 - expected_runtime_behavior: small_batch_external_titles_alias_and_mask
 - expected_output_boundary: `external_share` 不得暴露完整 user_id；允许输出 `用户 U1（user_***1837）`、`用户 U2（user_***9791）` 或用户 A/B；deviceId、eventId、sourceId、IP、hitFusePolicyCode、logSource、method、timestamp 必须 masked；credential secret 和 raw dump 仍任何模式禁止。
+
+## 886. Batch ATO cluster lens alignment
+
+- test_id: BATCH-ATO-CLUSTER-LENS-ALIGNMENT-001
+- input: 批量 ATO / 盗号投放 / WEB 非可信登录后导流内容 / 内容相似簇叠加账号接管嫌疑。
+- expected_runtime_behavior: existing_batch_clustering_plus_ato_lens_overlay
+- expected_output_boundary: 必须保留已有内容相似、设备共性、策略命中、时间聚集、账号画像和行为模式分簇，再叠加 `ato_cluster_lens`；输出 `compromised_account_cluster`、`web_untrusted_login_cluster`、`existing_cluster_plus_ato_lens`、`device_identity_inconsistency_cluster`、`login_to_action_delta`、`representative_ato_single_case_deep_dive`、`cluster_level_backfill`；不得写成“完全没有分簇”；不得逐用户 for-loop；不得把常用 device_id、Track 活跃、login no_data、response_too_large 或 wrapper mismatch 当低风险反证；不得默认调用 DataAgent/Hive。
+
+Keyword check:
+
+```bash
+grep -R "ato_cluster_lens\|compromised_account_cluster\|web_untrusted_login_cluster\|existing_cluster_plus_ato_lens\|device_identity_inconsistency_cluster\|login_to_action_delta\|representative_ato_single_case_deep_dive\|cluster_level_backfill\|BATCH-ATO-WEB-UNTRUSTED-LOGIN-CLUSTER\|BATCH-ATO-EXISTING-CLUSTER-PLUS-ATO-LENS" computer_use_poc skills AGENTS.md 2>/dev/null
+```
+
+Text gate checks:
+
+- batch ATO 必须包含 `ato_cluster_lens`。
+- 已有内容 / 策略 / 设备分簇时，必须说明 ATO lens 是否命中。
+- WEB 非可信登录 + 后置导流动作时，必须识别 `compromised_account_cluster` 或 `high_suspected_ato_cluster`。
+- 常用 `device_id` 不得降低 ATO 置信度，除非 `device_identity_consistency` 完整一致。
+- online login no_data / `response_too_large` / wrapper mismatch 不得作为低风险反证。
+- user-facing batch answer 默认不得输出内部 metadata YAML / `source_quality` YAML / `boundary_flags` YAML。
+- 代表样本单案结论不得默认泛化到全批。
+
+## 887. ATO realtime source incomplete requires Hive hint
+
+- test_id: ATO-REALTIME-SOURCE-INCOMPLETE-HIVE-REQUIRED-001
+- input: ATO 单案或批量 ATO 中，统一登录日志超过在线窗口、admin 仅 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失，或在线源出现 no_data / response_too_large / wrapper mismatch / source_contract_gap。
+- expected_runtime_behavior: ato_realtime_incomplete_hive_required_hint
+- expected_output_boundary: 用户正文的证据缺口 / 下一步补证必须强提醒 `hive_required_hint`、`offline_hive_required`、`login_log_window_incomplete`、`admin_app_log_only_gap`、`web_control_chain_missing`、`hive_registry_first_query_plan`；不得写“实时源无异常，所以倾向不是盗号”；不得实际调用 DataAgent/Hive。
+
+Keyword check:
+
+```bash
+grep -R "hive_required_hint\|offline_hive_required\|login_log_window_incomplete\|admin_app_log_only_gap\|web_control_chain_missing\|hive_registry_first_query_plan\|ATO-REALTIME-SOURCE-INCOMPLETE-HIVE-REQUIRED\|BATCH-ATO-HIVE-REQUIRED-WHEN-REALTIME-INCOMPLETE" computer_use_poc skills AGENTS.md 2>/dev/null
+```
+
+Text gate checks:
+
+- ATO single case 实时源不完整时必须包含 Hive-required hint。
+- admin APP-only 日志不能关闭 WEB/H5/PC/token/OAuth/扫码控制链。
+- 在线登录日志 no_data、`response_too_large`、wrapper mismatch、`source_contract_gap` 不能作为低风险反证。
+- batch ATO 实时登录源不完整时必须输出账号安全 Hive registry-first 补证计划，不默认定性全批。
+- 未获用户逐次明确授权时，不调用 DataAgent/Hive。

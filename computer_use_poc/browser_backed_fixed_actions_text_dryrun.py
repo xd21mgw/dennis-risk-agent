@@ -117,6 +117,13 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_dump_boundary_flags_yaml_by_default",
     "do_not_show_full_metadata_without_debug_request",
     "do_not_hide_internal_run_log_metadata",
+    "do_not_treat_common_device_id_as_ato_exclusion",
+    "do_not_treat_track_as_owner_proof",
+    "do_not_globalize_representative_sample",
+    "do_not_skip_ato_cluster_lens",
+    "do_not_treat_realtime_no_anomaly_as_ato_exclusion",
+    "do_not_treat_admin_app_log_as_full_control_chain",
+    "do_not_skip_hive_required_hint_when_realtime_incomplete",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -180,6 +187,24 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "track_activity_not_owner_proof": "Track 活跃只能做辅助信号，不能证明本人操作",
     "response_too_large_not_login_evidence": "登录日志 response_too_large 是 wrapper/source contract gap，不是登录证据",
     "wrapper_response_mismatch_requires_source_contract_gap": "UI 无数据但 wrapper 返回过大时必须标 source contract gap 和登录日志不可用",
+    "batch_ato_cluster_lens_required": "批量 ATO 要在已有分簇上叠加 ATO lens，不是从零分簇或逐用户 for-loop",
+    "existing_cluster_plus_ato_lens": "保留内容/设备/策略/时间等已有簇，再判断是否叠加 ATO 盗号投放嫌疑",
+    "web_untrusted_login_cluster": "多个账号存在 WEB/H5/PC 非可信登录或登录端从 APP 偏移",
+    "login_to_action_delta_required": "需要提取 WEB/控制链登录到发视频/评论/直播/私信等后置动作的时间差",
+    "device_identity_inconsistency_cluster": "批量层面要聚合机型、系统、UA、IP、登录端、登录方式等身份变量漂移",
+    "compromised_account_cluster_detection": "登录/控制链异常 + 后置动作异常 + 设备身份或历史行为突变时识别盗号投放簇",
+    "representative_ato_single_case_deep_dive": "每个疑似 ATO 簇抽代表样本走单案链路证明机制",
+    "cluster_level_backfill": "把代表样本发现回填到簇级覆盖率、相似度、置信度和缺口",
+    "representative_sample_not_global_proof": "代表样本不能默认证明全批账号都被盗",
+    "batch_login_gap_not_low_risk": "批量登录 no_data/response_too_large/wrapper mismatch 只能进缺口或 Hive 补证计划",
+    "batch_user_facing_no_runtime_yaml": "批量 ATO 用户正文默认不得输出内部过程 YAML",
+    "hive_required_hint": "ATO 实时源不完整时，用户正文必须强提醒 Hive 长周期补证",
+    "offline_hive_required": "Hive 长周期登录日志和发布动作链路是定性闭环所需关键补证，但需用户逐次授权",
+    "login_log_window_incomplete": "统一登录日志存在在线窗口限制，7 天外或超窗不能排除 ATO",
+    "admin_app_log_only_gap": "admin 侧 APP 日志不能覆盖完整 WEB/H5/PC/token/OAuth/扫码控制链",
+    "web_control_chain_missing": "WEB/H5/PC/token/OAuth/扫码控制端链路缺失时不能用 APP 日志排除 ATO",
+    "hive_registry_first_query_plan": "Hive query plan 必须先读账号安全 Hive registry，不自由猜表",
+    "realtime_no_anomaly_not_ato_exclusion": "实时源无异常不能推出非盗号，除非登录、内容、设备身份和历史基线均闭合",
 }
 
 DEMO_CASES = [
@@ -582,6 +607,30 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     actions: list[str] = []
     flags: list[str] = []
     orchestration = "explicit_source_plan_only"
+    realtime_incomplete_hive_requested = has_any(text, [
+        "7 天外",
+        "7天外",
+        "超过在线窗口",
+        "在线窗口",
+        "窗口不足",
+        "实时源不完整",
+        "实时登录源不完整",
+        "在线登录源不完整",
+        "admin 只有 app",
+        "admin 只有APP",
+        "admin 侧主要覆盖 app",
+        "app 日志",
+        "APP 日志",
+        "web/h5/pc",
+        "web h5 pc",
+        "token/oauth",
+        "扫码链路缺失",
+        "控制链缺失",
+        "source_contract_gap",
+        "wrapper mismatch",
+        "wrapper_response_mismatch",
+        "response_too_large",
+    ])
 
     if has_any(text, ["cookie", "token", "session", "header", "password", "raw login records", "raw labelinfo", "raw body"]):
         return finalize_route(plan, text, {
@@ -629,6 +678,62 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             ]),
         })
 
+    batch_ato_requested = (
+        has_any(text, ["批量", "一批", "多账号", "多个账号", "batch", "cluster", "分簇", "cluster lens", "簇"])
+        and has_any(text, ["ato", "盗号", "被盗", "compromised", "盗号投放", "web 非可信登录", "导流视频"])
+    )
+    if batch_ato_requested:
+        return finalize_route(plan, text, {
+            "actions": ["source_plan_only_no_action_selected"],
+            "orchestration": (
+                "batch ATO uses existing_cluster_signal_collection -> ato_cluster_lens_overlay -> "
+                "representative_ato_single_case_deep_dive -> cluster_level_backfill; no platform execution"
+            ),
+            "boundary_flags": [
+                "batch_ato_cluster_lens_required",
+                "existing_cluster_plus_ato_lens",
+                "web_untrusted_login_cluster",
+                "login_to_action_delta_required",
+                "device_identity_inconsistency_cluster",
+                "compromised_account_cluster_detection",
+                "representative_ato_single_case_deep_dive",
+                "cluster_level_backfill",
+                "representative_sample_not_global_proof",
+                "batch_login_gap_not_low_risk",
+                "hive_required_hint",
+                "offline_hive_required",
+                "login_log_window_incomplete",
+                "admin_app_log_only_gap",
+                "web_control_chain_missing",
+                "hive_registry_first_query_plan",
+                "batch_user_facing_no_runtime_yaml",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": [
+                "source_plan",
+                "batch_conclusion",
+                "existing_cluster_evidence",
+                "ato_lens_hits",
+                "risk_clusters",
+                "representative_single_case_summary",
+                "cluster_level_backfill_features",
+                "missing_evidence",
+                "final_answer_boundary",
+            ],
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_skip_ato_cluster_lens",
+                "do_not_treat_common_device_id_as_ato_exclusion",
+                "do_not_treat_track_as_owner_proof",
+                "do_not_globalize_representative_sample",
+                "do_not_treat_realtime_no_anomaly_as_ato_exclusion",
+                "do_not_treat_admin_app_log_as_full_control_chain",
+                "do_not_skip_hive_required_hint_when_realtime_incomplete",
+                "do_not_call_dataagent",
+                "do_not_call_hive",
+                "do_not_access_real_platform",
+            ]),
+        })
+
     if has_any(text, ["先给计划", "先给 plan", "plan_mode", "plan mode", "不要执行", "不查平台"]):
         flags += ["plan_mode_no_platform_execution", "default_runtime_routing_false"]
         orchestration = "plan mode only; translate platform_called=false and dataagent_called=false into natural language"
@@ -646,6 +751,18 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
 
     if has_any(text, ["no_data", "无数据", "没查到"]):
         flags += ["no_data_not_risk_exclusion"]
+
+    if realtime_incomplete_hive_requested:
+        flags += [
+            "hive_required_hint",
+            "offline_hive_required",
+            "login_log_window_incomplete",
+            "admin_app_log_only_gap",
+            "web_control_chain_missing",
+            "hive_registry_first_query_plan",
+            "realtime_no_anomaly_not_ato_exclusion",
+        ]
+        orchestration = "realtime source incomplete; user-facing evidence gap must strongly recommend registry-first Hive supplementation without executing Hive"
 
     if has_any(text, ["partial", "部分观察", "不完整"]):
         flags += ["partial_observation_available"]
@@ -982,6 +1099,13 @@ def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
             f"不能直接定性。source_plan：{plan_label}，只解决事件层上下文；策略命中只是辅助证据。"
             "风险结论还要回到控制权变化、异常行为闭环和账号/设备/发布链路的交叉验证。"
             "没有 source_quality 支撑时，只能写线索和待补证。"
+        ),
+        "batch_ato_lens": (
+            f"批量 ATO 先保留已有分簇，再叠加 ato_cluster_lens，source_plan：{plan_label}。"
+            "输出要区分内容导流簇、compromised_account_cluster、content_abuse_only_cluster 和 mixed_cluster。"
+            "核心检查 web_untrusted_login_cluster、login_to_action_delta、device_identity_inconsistency_cluster，"
+            "每个疑似簇抽代表样本做 representative_ato_single_case_deep_dive，再做 cluster_level_backfill。"
+            "代表样本不能证明全批账号都被盗，常用 device_id、Track 活跃和登录 no_data 都不能当排除 ATO 的反证。"
         ),
     }
     draft = drafts.get(

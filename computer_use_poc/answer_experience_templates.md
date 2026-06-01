@@ -1184,11 +1184,14 @@ source_observation:
 统一登录日志 source boundary：
 
 - 在线 API 约 7 天可靠窗口。
-- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为。
+- admin / user-center-workbench 主要覆盖 APP 登录、refresh token、密码验证等登录侧行为；不能等同于完整 WEB / H5 / PC / token / OAuth / 扫码控制链。
 - 客诉时间不在在线窗口内：标 `login_log_window_incomplete` / `source_time_range_gap`。
 - APP 登录日志 no_data / 单 DID / IP 稳定只能写 `app_login_visible_window_no_strong_anomaly`。
 - 禁止直接写“低风险 / 无风险 / 排除 ATO”。
 - 扫码 / OAuth / 地推欺诈 / 陌生链接诱导 / 发布违规 / 好友删除类客诉：标 `app_login_only_source_gap`、`missing_oauth_or_scan_chain`、`missing_publish_audit`、`missing_device_sdk`、`missing_strategy_hit`。
+- 如果风险动作是 WEB 登录后发导流视频、评论、直播、私信或资料修改，但实时源仅覆盖 APP 或窗口不完整，必须在“证据缺口 / 下一步补证”中强提醒 `hive_required_hint` / `offline_hive_required`，并标 `admin_app_log_only_gap`、`web_control_chain_missing`。
+- 用户正文推荐表达：“当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。”
+- 不允许写“实时源无异常，所以倾向不是盗号”，除非登录链路、内容动作链路、设备身份一致性和历史基线均已闭合。
 
 Small batch 输出模板：
 
@@ -1450,6 +1453,98 @@ required_validation:
 - blocked/timeout/partial source 必须 source_gap。
 - 不能仅凭相似性判断同团伙。
 - 历史 case 不能污染当前批次事实证据。
+
+### batch ATO cluster lens 模板
+
+适用：批量 ATO、盗号投放、compromised-account、WEB 非可信登录后导流、内容导流簇叠加账号接管嫌疑、常用 `device_id` 下设备身份变量漂移。
+
+定位：
+
+- 这是在已有 batch clustering 之上新增 `ato_cluster_lens`，不是推翻已有批量分簇。
+- 已有内容相似、设备共性、策略命中、时间聚集、账号画像、行为模式等分簇仍保留。
+- ATO lens 只负责判断这些簇是否叠加盗号投放 / 控制权异常机制。
+- 不逐用户 for-loop；代表样本单案深挖用于证明代表簇机制，再回填簇级 coverage / similarity / confidence。
+
+```text
+批量结论:
+- 是否存在 compromised_account_cluster / ATO 盗号投放嫌疑:
+- 更像内容导流 / 垃圾注册 / 养号矩阵 / 真人灰产 / mixed cluster / 证据不足:
+- 当前置信度:
+- 不默认全批账号都被盗:
+
+已有分簇依据:
+- 内容相似:
+- 设备 / IP / 账号关系:
+- 策略命中:
+- 时间聚集:
+- 账号画像:
+- 行为模式:
+
+ATO lens 命中情况:
+- ato_cluster_lens:
+- existing_cluster_plus_ato_lens:
+- web_untrusted_login_cluster:
+- 登录端 / 登录方式异常:
+- login_to_action_delta:
+- device_identity_inconsistency_cluster:
+- historical_behavior_shift:
+- shared infrastructure:
+
+风险分簇:
+- cluster_id:
+- 规模:
+- 共性:
+- ATO lens 命中项:
+- 代表样本:
+- 置信度:
+- mixed_cluster 标记:
+
+代表样本单案摘要:
+- 为什么选这个样本:
+- representative_ato_single_case_deep_dive:
+- 单案是否支持该簇 ATO 假设:
+- 反例或边界:
+
+批量回填特征:
+- cluster_level_backfill:
+- login_to_action_delta:
+- device_identity_inconsistency:
+- shared IP / UA / ASN / browser fingerprint:
+- content similarity:
+- landing page / contact info:
+- strategy hit combination:
+- coverage / similarity / confidence:
+
+证据缺口:
+- 登录日志在线窗口不足:
+- Hive 长周期缺失:
+- 发布审计缺失:
+- 四项信息缺失:
+- source contract gap:
+- representative sample not verified:
+
+建议动作:
+- Hive registry-first query plan:
+- 发布审计 / 四项信息补证:
+- 人工复核:
+- 保护性验证:
+- 灰度拦截:
+- 策略扩散:
+- 不建议动作:
+```
+
+批量 ATO 证据边界：
+
+- 内容导流簇 + WEB 非可信登录共性 = 内容导流簇叠加 ATO 盗号投放嫌疑，不是二选一。
+- 批量共性不能证明每个用户被盗。
+- 代表样本单案不能无脑泛化到全批；必须看 coverage、similarity、source quality 和 counter examples。
+- Track 活跃不能证明本人操作。
+- 常用 `device_id` 不能排除 ATO；必须看 `device_identity_consistency`。
+- online login no_data / `response_too_large` / wrapper mismatch 只能进入 source gap / Hive required，不得输出低风险。
+- 批量 ATO 中实时登录 / 控制链不完整时，Hive 不是可选增强，而是定性闭环所需的关键补证；只生成账号安全 Hive registry-first query plan，不实际调用 DataAgent/Hive。
+- admin 仅 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失、登录日志超出在线窗口、`source_contract_gap` 或 wrapper mismatch 时，用户正文必须把 `login_log_window_incomplete`、`admin_app_log_only_gap`、`web_control_chain_missing`、`offline_hive_required` 写入证据缺口或下一步补证的自然语言摘要。
+- 策略命中和内容命中只能作为动作锚点或旁证，不能替代登录 / 控制链和历史基线。
+- 用户正文默认不得展示内部 runtime YAML、debug 字段或 validation 字段。
 
 ### non-ATO expert mode 模板
 
@@ -2416,6 +2511,24 @@ evidence_card:
 
 现有证据不足以闭合 ATO 链路，也不足以反向排除 ATO。用户点击疑似助力链接 + 异常发布 + 在线日志窗口不完整，更适合标记为 partial_support，并优先补查发布审计与离线登录日志。
 ```
+
+### ATO 实时源不足 Hive 强提醒标准表达
+
+触发条件：统一登录日志超过在线可靠窗口、admin 侧仅覆盖 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失、风险动作是 WEB 登录后发布 / 评论 / 直播 / 私信 / 资料修改，或在线源出现 no_data、`response_too_large`、wrapper mismatch、`source_contract_gap`。
+
+用户正文必须在“证据缺口 / 下一步补证”中写明：
+
+```text
+当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。
+```
+
+强规则：
+
+- 必须标记 `login_log_window_incomplete`、`admin_app_log_only_gap`、`web_control_chain_missing`、`offline_hive_required` 中适用的缺口。
+- 在线 no_data、`response_too_large`、wrapper mismatch、`source_contract_gap` 不得进入低风险反证。
+- 除非登录链路、内容动作链路、设备身份一致性和历史基线均闭合，否则不得输出“实时源无异常，所以倾向不是盗号”。
+- Hive query plan 必须先读 `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md`，不得自由猜表。
+- 本轮未获用户逐次明确授权时，不实际调用 DataAgent/Hive。
 
 ### ATO Hive query plan 标准表达
 

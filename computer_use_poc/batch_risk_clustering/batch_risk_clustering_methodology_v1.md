@@ -16,11 +16,12 @@ It must not turn similarity into a gang conclusion without join keys or shared i
 6. Build cluster candidates by dimension.
 7. Build abnormal A -> B correlation matrix.
 8. Compare with baseline if available; mark `baseline_missing` if not.
-9. Select representative samples.
-10. Build cluster evidence cards.
-11. Produce pattern summary and hypotheses.
-12. Separate current evidence, historical similar pattern and missing evidence.
-13. Produce follow-up plan and strategy / monitoring suggestions.
+9. Apply domain lens overlay when relevant. For batch ATO / compromised-account suspicion, apply `ato_cluster_lens` on top of existing clusters.
+10. Select representative samples.
+11. Build cluster evidence cards.
+12. Produce pattern summary and hypotheses.
+13. Separate current evidence, historical similar pattern and missing evidence.
+14. Produce follow-up plan and strategy / monitoring suggestions.
 
 ## 2A. L1 Batch Feature Layer
 
@@ -197,6 +198,42 @@ Inputs from the L1 layer:
 - Frequent patterns with high contribution become candidate matrix rows.
 - Contribution score can prioritize validation, but cannot upgrade to final risk judgement by itself.
 
+## 10A. ATO / Compromised-Account Cluster Lens
+
+Use `batch_ato_cluster_lens_v1.md` when the batch may contain stolen-account posting, non-trusted WEB / H5 / PC login, token / OAuth / scan / one-click control-chain abnormality, or common `device_id` with identity-variable drift.
+
+This lens is additive:
+
+- Keep existing content, device, strategy, time, account-profile and behavior clusters.
+- Add `ato_cluster_lens_overlay` to each relevant cluster.
+- Output whether the cluster is `existing_cluster_plus_ato_lens`, `web_untrusted_login_cluster`, `login_to_action_cluster`, `device_identity_inconsistency_cluster`, `compromised_account_cluster`, `content_abuse_only_cluster`, `mixed_cluster` or `insufficient_evidence_cluster`.
+
+Required ATO lens checks:
+
+- WEB / H5 / PC login commonality and whether login source shifted from historical APP.
+- abnormal login method: token / OAuth / scan / one-click / refreshToken / passToken / byToken / resetPwd / kick out.
+- `login_to_action_delta` between suspicious login/control event and publish, live, comment, private message, profile change or four-items change.
+- `content_action_deep_dive` for representative samples: `photo_id` / `live_id` / `comment_id`, action time, publish source, publish device, IP / UA, audit / strategy / diversion reason and four-items if available.
+- `device_identity_consistency`: device model, OS, app version, UA, browser fingerprint, IP / province / city / ASN, login source and login type. Common `device_id` cannot reduce ATO confidence unless these identity variables are also consistent.
+- shared infrastructure: IP, ASN, UA, browser fingerprint, landing page, contact info, diversion wording and cadence.
+- historical behavior shift: normal historical accounts suddenly publish diversion content or use a new WEB / control endpoint.
+
+Representative deep dive:
+
+- For every suspected ATO cluster, select 2-3 high-suspicion, 1-2 medium-suspicion, 1 boundary and 1 counter-example sample when available.
+- Representative samples run the current ATO single-case chain: `suspicious_anchor_discovery -> login/control-chain evidence -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card`.
+- Backfill single-case findings to cluster level as `cluster_level_backfill`: `login_to_action_delta` distribution, identity inconsistency coverage, possible spoofing coverage, shared infrastructure coverage, content similarity, historical behavior shift, strategy-hit combination, source quality and missing evidence.
+
+Boundary:
+
+- Representative single-case proof does not prove every account in the full batch is stolen.
+- Content diversion cluster + ATO lens hit should be written as "content diversion cluster with ATO stolen-account posting suspicion", not as mutually exclusive labels.
+- Track activity cannot prove owner operation.
+- Online login no_data, `response_too_large`, wrapper mismatch, blocked or timeout is `source_gap` / Hive-required evidence gap, not low-risk evidence.
+- Admin APP-only login evidence cannot cover WEB/H5/PC/token/OAuth/scan control-chain evidence.
+- Batch ATO long-window or incomplete realtime login/control evidence must use the account-security Hive registry first; no free table guessing and no DataAgent/Hive execution without authorization.
+- Incomplete realtime control-chain evidence should surface `login_log_window_incomplete`, `admin_app_log_only_gap`, `web_control_chain_missing` and `offline_hive_required` in evidence gaps / next actions.
+
 ## 11. Evidence Boundaries
 
 - current batch facts must come from `current_input` or `current_task_observation`.
@@ -205,4 +242,6 @@ Inputs from the L1 layer:
 - blocked/timeout/partial source 必须 source_gap.
 - 不能仅凭相似性判断同团伙.
 - 高频组合 / 高贡献度 only creates cluster hint or candidate feature hint.
+- 批量共性不能证明每个账号被盗；ATO lens 必须通过覆盖率、相似度、反例和 source quality 回填置信度.
+- 常用 `device_id` 不能排除 ATO；必须比较 `device_identity_consistency`.
 - 身份证、手机号、实名信息 and credential-like fields are controlled auxiliary evidence and must not be output in plaintext.

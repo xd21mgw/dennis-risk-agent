@@ -201,3 +201,164 @@ cases:
       - denominator_status
       - require_review
     forbidden_behavior: "不能因为高贡献组合直接强判渠道作假或套利。"
+  - case_id: BATCH-ATO-CLUSTER-LENS-REQUIRED-001
+    input_summary: "已有内容相似 / 策略命中分簇的一批账号。"
+    entity_count: 30
+    expected_mode: batch_clustering_mode
+    expected_behavior: "保留 existing cluster signals，并额外输出 ato_cluster_lens / existing_cluster_plus_ato_lens。"
+    required_outputs:
+      - existing_cluster_signal_collection
+      - ato_cluster_lens
+      - existing_cluster_plus_ato_lens
+    forbidden_behavior: "不能只停留在内容或策略簇解释。"
+  - case_id: BATCH-ATO-WEB-UNTRUSTED-LOGIN-CLUSTER-001
+    input_summary: "多个账号都存在 WEB 非可信登录，并在短时间内发布导流视频。"
+    entity_count: 25
+    expected_mode: batch_clustering_mode
+    expected_behavior: "识别 web_untrusted_login_cluster、login_to_action_delta、compromised_account_cluster / high_suspected_ato_cluster。"
+    required_outputs:
+      - web_untrusted_login_cluster
+      - login_to_action_delta
+      - compromised_account_cluster
+    forbidden_behavior: "不能只归到内容导流簇或策略命中簇。"
+  - case_id: BATCH-ATO-EXISTING-CLUSTER-PLUS-ATO-LENS-001
+    input_summary: "已有内容相似分簇，同时存在 WEB 非可信登录共性。"
+    entity_count: 18
+    expected_mode: batch_clustering_mode
+    expected_behavior: "输出内容导流簇 + ATO 盗号投放嫌疑。"
+    required_outputs:
+      - content_similarity_cluster_preserved
+      - existing_cluster_plus_ato_lens
+    forbidden_behavior: "不能把内容导流簇与 ATO lens 写成互斥。"
+  - case_id: BATCH-ATO-DEVICE-ID-SPOOFING-CLUSTER-LENS-001
+    input_summary: "多账号 device_id 看似常用，但 UA / 机型 / IP / 登录端异常。"
+    entity_count: 16
+    expected_mode: batch_clustering_mode
+    expected_behavior: "识别 device_identity_inconsistency_cluster / possible_device_id_spoofing。"
+    required_outputs:
+      - device_identity_inconsistency_cluster
+      - possible_device_id_spoofing
+      - common_device_id_not_sufficient_to_exclude_ato
+    forbidden_behavior: "不得用常用 device_id 降低 ATO 置信度。"
+  - case_id: BATCH-ATO-LOGIN-TO-ACTION-DELTA-001
+    input_summary: "多个账号 WEB 登录后 0-30 分钟内发视频 / 评论 / 直播。"
+    entity_count: 22
+    expected_mode: batch_clustering_mode
+    expected_behavior: "提取 login_to_action_delta，并作为 ATO lens 核心特征。"
+    required_outputs:
+      - login_to_action_delta
+      - login_to_action_cluster
+    forbidden_behavior: "不能只说时间聚集而不对齐登录到动作时间差。"
+  - case_id: BATCH-ATO-CONTENT-ACTION-DEEP-DIVE-001
+    input_summary: "批量账号存在发视频、直播、评论、私信导流。"
+    entity_count: 40
+    expected_mode: batch_clustering_mode
+    expected_behavior: "代表样本必须进入 content_action_deep_dive，提取内容 ID、发布时间、来源端、设备、IP/UA、四项信息。"
+    required_outputs:
+      - content_action_deep_dive
+      - photo_id_live_id_comment_id
+      - publish_source_device_ip_ua
+    forbidden_behavior: "不得在缺 photo_id / 动作时间时直接让用户补充而不尝试动作锚点发现。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-CASE-SELECTION-001
+    input_summary: "批量中存在多个疑似 ATO 簇。"
+    entity_count: 35
+    expected_mode: batch_clustering_mode
+    expected_behavior: "每簇抽高疑似、中疑似、边界和反例样本做单案深挖。"
+    required_outputs:
+      - representative_case_selection
+      - high_suspicion_samples
+      - boundary_sample
+      - counter_example_sample
+    forbidden_behavior: "不全量逐个深挖，也不跳过单案机制证明。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-DEEP-DIVE-BACKFILL-001
+    input_summary: "代表样本证明 device_identity_inconsistency。"
+    entity_count: 28
+    expected_mode: batch_clustering_mode
+    expected_behavior: "将单案发现回填到簇级 coverage / similarity / confidence。"
+    required_outputs:
+      - representative_ato_single_case_deep_dive
+      - cluster_level_backfill
+      - coverage_similarity_confidence
+    forbidden_behavior: "不能停留在单案结论。"
+  - case_id: BATCH-ATO-MIXED-CLUSTER-001
+    input_summary: "同一批里既有盗号投放，也有垃圾注册投放。"
+    entity_count: 32
+    expected_mode: batch_clustering_mode
+    expected_behavior: "输出 mixed_cluster 并拆分 compromised_account_cluster 与 content_abuse_only_cluster。"
+    required_outputs:
+      - mixed_cluster
+      - compromised_account_cluster
+      - content_abuse_only_cluster
+    forbidden_behavior: "不做单一归因。"
+  - case_id: BATCH-ATO-COMMON-DEVICE-NOT-EXCLUSION-001
+    input_summary: "多账号候选 device_id 是历史常用，但登录端 / UA / IP / 机型异常。"
+    entity_count: 15
+    expected_mode: batch_clustering_mode
+    expected_behavior: "常用 device_id 不作为排除 ATO 的强反证。"
+    required_outputs:
+      - common_device_id_not_sufficient_to_exclude_ato
+      - device_identity_consistency_required
+    forbidden_behavior: "不能输出常用设备所以低风险。"
+  - case_id: BATCH-ATO-TRACK-NOT-OWNER-PROOF-001
+    input_summary: "批量账号 Track 有活跃。"
+    entity_count: 20
+    expected_mode: batch_clustering_mode
+    expected_behavior: "Track 只能作为辅助活跃信号或 front/backend mismatch 线索。"
+    required_outputs:
+      - track_activity_not_owner_proof
+      - track_auxiliary_only
+    forbidden_behavior: "不能证明本人，也不能作为批量低风险反证。"
+  - case_id: BATCH-ATO-LOGIN-NODATA-NOT-LOW-RISK-001
+    input_summary: "在线登录日志 no_data / response_too_large / wrapper mismatch。"
+    entity_count: 26
+    expected_mode: batch_clustering_mode
+    expected_behavior: "标记 source gap / Hive required，不输出低风险。"
+    required_outputs:
+      - source_gap
+      - hive_required_if_long_window
+      - no_low_risk_from_login_gap
+    forbidden_behavior: "不得把 no_data / response_too_large / wrapper mismatch 当无风险反证。"
+  - case_id: BATCH-ATO-HIVE-REGISTRY-FIRST-001
+    input_summary: "批量在线登录日志不足。"
+    entity_count: 80
+    expected_mode: large_batch_aggregation_mode
+    expected_behavior: "生成基于账号安全 Hive registry 的 query plan，不自由猜表，不实际调用 Hive。"
+    required_outputs:
+      - account_security_hive_source_registry_read_first
+      - hive_registry_first_query_plan
+      - no_free_table_guessing
+    forbidden_behavior: "不得实际调用 DataAgent/Hive。"
+  - case_id: BATCH-ATO-HIVE-REQUIRED-WHEN-REALTIME-INCOMPLETE-001
+    input_summary: "批量导流视频 + 部分 WEB 非可信登录，但实时登录源不完整。"
+    entity_count: 35
+    expected_mode: batch_clustering_mode
+    expected_behavior: "在已有 batch clustering + ATO lens 基础上标记实时控制链缺口，并输出账号安全 Hive registry-first 补证计划。"
+    required_outputs:
+      - ato_cluster_lens
+      - login_log_window_incomplete
+      - admin_app_log_only_gap
+      - web_control_chain_missing
+      - offline_hive_required
+      - hive_required_hint
+      - hive_registry_first_query_plan
+      - representative_sample_not_global_proof
+    forbidden_behavior: "不得把实时登录源不完整解释成低风险；不得默认定性全批账号都被盗；不得实际调用 DataAgent/Hive。"
+  - case_id: BATCH-ATO-REPRESENTATIVE-NOT-GLOBAL-PROOF-001
+    input_summary: "代表样本支持 ATO。"
+    entity_count: 24
+    expected_mode: batch_clustering_mode
+    expected_behavior: "只证明对应簇存在 ATO 模式，需要按覆盖率、相似度和反例回填。"
+    required_outputs:
+      - representative_sample_not_global_proof
+      - coverage_similarity_required
+      - counter_examples_required
+    forbidden_behavior: "不能默认全批账号都被盗。"
+  - case_id: BATCH-USER-FACING-NO-ROUTING-METADATA-001
+    input_summary: "批量 ATO partial conclusion。"
+    entity_count: 30
+    expected_mode: batch_clustering_mode
+    expected_behavior: "用户正文不得输出内部过程 YAML/debug 字段。"
+    required_outputs:
+      - batch_ato_business_template
+      - no_debug_or_validator_fields
+    forbidden_behavior: "不得默认输出 routing metadata / source quality YAML / boundary flags。"

@@ -397,6 +397,36 @@
               "online_api_vs_offline_hive_boundary"
             ]
           },
+          "realtime_source_incomplete_hive_required_contract": {
+            "hive_required_hint": true,
+            "offline_hive_required_when_realtime_incomplete": true,
+            "user_facing_gap_section_required": true,
+            "trigger_conditions": [
+              "login_log_window_over_7d_or_incomplete",
+              "admin_source_app_log_only",
+              "web_h5_pc_token_oauth_scan_chain_missing",
+              "risk_action_is_web_publish_comment_live_dm_profile_change",
+              "online_login_no_data",
+              "response_too_large",
+              "wrapper_response_mismatch",
+              "source_contract_gap"
+            ],
+            "required_gap_flags": [
+              "hive_required_hint",
+              "login_log_window_incomplete",
+              "admin_app_log_only_gap",
+              "web_control_chain_missing",
+              "offline_hive_required"
+            ],
+            "recommended_user_facing_expression": "当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。",
+            "low_risk_from_realtime_no_anomaly_forbidden_unless_closed": [
+              "login_control_chain_closed",
+              "content_action_chain_closed",
+              "device_identity_consistency_closed",
+              "historical_baseline_closed"
+            ],
+            "actual_dataagent_or_hive_call_allowed": false
+          },
           "source_plan": [
             {
               "source_id": "ato_suspicious_anchor_discovery",
@@ -527,6 +557,10 @@
             "response_too_large_not_login_evidence",
             "wrapper_response_mismatch_requires_source_contract_gap",
             "login_no_data_or_window_gap_not_ato_exclusion",
+            "login_log_window_incomplete",
+            "admin_app_log_only_gap",
+            "web_control_chain_missing",
+            "offline_hive_required",
             "archives_required_for_behavior_closure_non_blocking",
             "archives_failure_enters_partial_evidence",
             "track_check_data_ready_not_risk_conclusion",
@@ -1365,6 +1399,217 @@
         "collected_at",
         "source_provenance",
         "redaction"
+      ]
+    },
+    "batch_ato_cluster_lens_alignment_v1": {
+      "applies_to": [
+        "batch_ato_cluster_lens",
+        "batch_compromised_account_analysis",
+        "batch_stolen_account_posting",
+        "batch_clustering_mode",
+        "batch_account_security"
+      ],
+      "primary_access_method": "planning_only",
+      "default_runtime_routing": false,
+      "real_platform_access": false,
+      "dataagent_hive_execution": false,
+      "entity_count": {
+        "min": 10,
+        "max": 1000000
+      },
+      "positioning": "Overlay compromised-account / ATO lens on top of existing batch clustering; do not replace existing cluster signals and do not run per-user online loop.",
+      "workflow": [
+        "existing_cluster_signal_collection",
+        "ato_cluster_lens_overlay",
+        "compromised_account_cluster_detection",
+        "representative_case_selection",
+        "representative_ato_single_case_deep_dive",
+        "cluster_level_backfill",
+        "batch_conclusion"
+      ],
+      "required_steps": [
+        {
+          "step_id": "existing_cluster_signal_collection",
+          "purpose": "Preserve current content similarity, device, strategy, time, account-profile and behavior clusters.",
+          "required_outputs": [
+            "content_similarity_cluster",
+            "device_or_ip_cluster",
+            "strategy_hit_cluster",
+            "time_concentration_cluster",
+            "account_profile_cluster",
+            "behavior_pattern_cluster"
+          ]
+        },
+        {
+          "step_id": "ato_cluster_lens_overlay",
+          "purpose": "Apply ATO lens to every relevant existing cluster.",
+          "required_outputs": [
+            "ato_cluster_lens",
+            "existing_cluster_plus_ato_lens",
+            "web_untrusted_login_cluster",
+            "login_to_action_delta",
+            "device_identity_inconsistency_cluster",
+            "historical_behavior_shift",
+            "shared_infrastructure"
+          ]
+        },
+        {
+          "step_id": "compromised_account_cluster_detection",
+          "purpose": "Detect clusters where login/control-chain abnormality, downstream content/action abnormality and identity/historical shift jointly support compromised-account suspicion.",
+          "required_outputs": [
+            "compromised_account_cluster",
+            "high_suspected_ato_cluster",
+            "content_abuse_only_cluster",
+            "mixed_cluster",
+            "insufficient_evidence_cluster"
+          ]
+        },
+        {
+          "step_id": "representative_case_selection",
+          "purpose": "Select samples by clearest WEB untrusted login, shortest login_to_action_delta, strongest device identity inconsistency, typical diversion content and lowest source gap.",
+          "required_outputs": [
+            "high_suspicion_samples_2_to_3",
+            "medium_suspicion_samples_1_to_2",
+            "boundary_sample",
+            "counter_example_sample"
+          ]
+        },
+        {
+          "step_id": "representative_ato_single_case_deep_dive",
+          "purpose": "Run the latest ATO single-case reasoning chain for representative samples, not for every user by default.",
+          "required_chain": [
+            "suspicious_anchor_discovery",
+            "login_control_chain_evidence",
+            "content_action_deep_dive",
+            "candidate_control_endpoint_extraction",
+            "device_identity_consistency",
+            "historical_baseline_comparison",
+            "business_evidence_card"
+          ]
+        },
+        {
+          "step_id": "cluster_level_backfill",
+          "purpose": "Backfill representative findings to cluster-level coverage, similarity, confidence and source-gap matrices.",
+          "required_outputs": [
+            "login_to_action_delta_distribution",
+            "device_identity_inconsistency_coverage",
+            "possible_device_id_spoofing_coverage",
+            "shared_ip_ua_asn_browser_fingerprint_coverage",
+            "content_similarity_coverage",
+            "historical_behavior_shift_coverage",
+            "strategy_hit_combination_coverage",
+            "source_quality_missing_evidence_coverage"
+          ]
+        },
+        {
+          "step_id": "batch_conclusion",
+          "purpose": "Produce cluster-level conclusion without claiming every account is stolen.",
+          "required_outputs": [
+            "cluster_level_conclusion",
+            "confidence",
+            "coverage",
+            "missing_evidence",
+            "next_actions"
+          ]
+        }
+      ],
+      "lens_output_labels": [
+        "ato_cluster_lens",
+        "existing_cluster_plus_ato_lens",
+        "web_untrusted_login_cluster",
+        "login_to_action_cluster",
+        "device_identity_inconsistency_cluster",
+        "compromised_account_cluster",
+        "high_suspected_ato_cluster",
+        "content_abuse_only_cluster",
+        "mixed_cluster",
+        "insufficient_evidence_cluster"
+      ],
+      "device_identity_consistency_batch_fields": [
+        "device_id_commonness",
+        "first_seen_time",
+        "active_days_30_90_180",
+        "device_model_drift",
+        "os_version_drift",
+        "app_version_drift",
+        "UA_drift",
+        "browser_fingerprint_drift",
+        "IP_province_city_ASN_drift",
+        "login_source_drift",
+        "login_type_drift"
+      ],
+      "content_action_deep_dive_fields": [
+        "photo_id",
+        "live_id",
+        "comment_id",
+        "publish_time",
+        "publish_source",
+        "publish_device",
+        "publish_ip",
+        "publish_UA",
+        "audit_reason",
+        "strategy_reason",
+        "diversion_reason",
+        "four_items"
+      ],
+      "hive_registry_preflight": {
+        "required_before_dataagent_or_hive": true,
+        "registry": "computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md",
+        "query_plan_template": "computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md",
+        "free_table_guessing_forbidden": true,
+        "actual_dataagent_or_hive_call_allowed": false
+      },
+      "realtime_source_incomplete_hive_required_contract": {
+        "hive_required_hint": true,
+        "offline_hive_required_when_realtime_incomplete": true,
+        "user_facing_gap_section_required": true,
+        "trigger_conditions": [
+          "batch_diversion_video_with_partial_web_untrusted_login",
+          "online_login_source_incomplete",
+          "admin_source_app_log_only",
+          "web_h5_pc_token_oauth_scan_chain_missing",
+          "online_login_no_data",
+          "response_too_large",
+          "wrapper_response_mismatch",
+          "source_contract_gap"
+        ],
+        "required_gap_flags": [
+          "hive_required_hint",
+          "login_log_window_incomplete",
+          "admin_app_log_only_gap",
+          "web_control_chain_missing",
+          "offline_hive_required"
+        ],
+        "required_plan": "Hive registry-first query plan only; do not execute DataAgent/Hive without explicit per-call authorization.",
+        "global_conclusion_forbidden": "Do not default classify the full batch when realtime login/control-chain sources are incomplete."
+      },
+      "evidence_boundaries": [
+        "existing_clusters_and_ato_lens_are_additive",
+        "batch_commonality_not_global_ato_proof",
+        "representative_sample_not_global_proof",
+        "track_activity_not_owner_proof",
+        "common_device_id_not_sufficient_to_exclude_ato",
+        "login_no_data_response_too_large_wrapper_mismatch_not_low_risk",
+        "realtime_source_incomplete_requires_offline_hive_hint",
+        "strategy_hit_or_content_hit_not_standalone_ato",
+        "user_facing_no_runtime_yaml_by_default"
+      ],
+      "stop_conditions": {
+        "allow_per_user_online_loop_by_default": false,
+        "allow_low_risk_from_common_device_id": false,
+        "allow_low_risk_from_login_no_data": false,
+        "allow_global_ato_conclusion_from_representative_only": false,
+        "allow_dataagent_hive_without_explicit_authorization": false
+      },
+      "user_facing_required_sections": [
+        "batch_conclusion",
+        "existing_cluster_evidence",
+        "ato_lens_hits",
+        "risk_clusters",
+        "representative_single_case_summary",
+        "cluster_level_backfill_features",
+        "evidence_gaps",
+        "next_actions"
       ]
     }
   }

@@ -42,6 +42,7 @@
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 做分簇、异常相关性矩阵、代表样本抽样、证据缺口和策略建议 | `computer_use_poc/batch_risk_clustering/` templates | batch_plan_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙 |
+| `batch_ato_cluster_lens` | 在已有 batch clustering 之上叠加 compromised-account / ATO 盗号投放 lens，识别 WEB 非可信登录、login_to_action_delta、设备身份漂移、代表样本单案深挖和簇级回填 | `computer_use_poc/batch_risk_clustering/batch_ato_cluster_lens_v1.md` | batch_clustering_mode overlay | documented | 不是从零分簇，不逐用户 for-loop，不把代表样本无脑泛化到全批；实时登录 / 控制链不完整时只生成账号安全 Hive registry-first 补证计划，不调用 DataAgent/Hive |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
 | `ato_case_expansion_planning` | 对单个或少量 ATO case 设计举一返三扩展路径和 Hive 取数问题 | `ato_case_expansion_plan_v1.md` | plan only | documented | 围绕账号控制权异常和攻击链路扩展，不按昵称/简介扩展，不执行真实查询 |
 | `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
@@ -111,7 +112,7 @@
   - controlled parallel 典型场景：ATO 中 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可 `independent_parallel`，`archives_user_analysis` 后续 `auth_sensitive_serial`；RCP `rcp_event_detail -> rcp_event_feature_list` 是 `dependency_serial`；`archives_user_analysis` / `rcp_event_feature_list` 大响应进入 `large_response_serial`；Archives 同源链路进入 `auth_sensitive_serial`。
   - controlled parallel 合并边界：`completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 分类进入 `source_quality_matrix`；completed 或 partial source 进入 `evidence_card_inputs`，失败或依赖缺口进入 `missing_evidence`。单 source 失败不阻塞其他 source，且 no_data / partial / timeout 不得当低风险反证。
   - ATO single-case anchor-first：`browser_backed_fixed_actions_v1` 在 ATO 裸问中必须服务 `suspicious_anchor_discovery -> login_control_chain_evidence / content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison`。不能把 Track / RCP / Weapon / 登录日志 / 档案中心平铺 source 状态当成 ATO 研判主线。
-  - ATO suspicious source priority：登录链路和内容 / 行为链路是可疑来源发现主入口；Track / Weapon / RCP 是补证 source。在线统一登录日志不可用、窗口不足、`response_too_large` 或 UI/wrapper 不一致时，只能生成基于 `account_security_hive_source_registry_v1.md` 的 Hive query plan，等待用户逐次授权，不得让 DataAgent 自由猜表。
+  - ATO suspicious source priority：登录链路和内容 / 行为链路是可疑来源发现主入口；Track / Weapon / RCP 是补证 source。在线统一登录日志不可用、窗口不足、admin 侧仅 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失、`response_too_large` 或 UI/wrapper 不一致时，只能生成基于 `account_security_hive_source_registry_v1.md` 的 Hive query plan，等待用户逐次授权，不得让 DataAgent 自由猜表。
   - `device_identity_consistency` 是 ATO 设备判断能力：比较 `device_id`、首次出现、30/90/180 天出现天数、机型、系统、app 版本、UA、browser fingerprint、IP/省市/ASN、登录端和登录方式。风险标签包括 `device_identity_inconsistency`、`possible_device_id_spoofing`、`common_device_id_but_abnormal_fingerprint`、`common_device_id_not_sufficient_to_exclude_ato`。
   - Track 表述：当前 v1 裸问优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；历史 `track_analysis_summary` 只作为 Track 活跃画像泛化能力描述，避免混成当前 action 名。
   - 未稳定 source：private message、资料四件套 / 过往四项、related_devices 等不作为默认已验证 source；只有已有稳定接口、显式 source plan 或用户补充线索时，才写“可进一步查看”。
@@ -274,6 +275,7 @@ requires:
   - batch L1 feature query contract
   - top dimension drilldown
   - frequent pattern contribution analysis
+  - ATO cluster lens overlay when compromised-account / stolen-account posting is suspected
   - evidence source metadata
   - representative sampling
   - abnormal correlation matrix
@@ -295,6 +297,9 @@ boundaries:
   - DataAgent only for Hive / warehouse query planning when needed
   - no_data cannot be no-risk counter evidence
   - blocked_timeout_partial_source_must_be_source_gap
+  - batch_ato_lens_additive_to_existing_clusters
+  - common_device_id_not_sufficient_to_exclude_ato
+  - representative_sample_not_global_proof
 workflow:
   - batch_input
   - L1_wide_table_profile_shallow_query_plan
@@ -303,7 +308,11 @@ workflow:
   - frequent_pattern_contribution_score
   - A_to_B_directed_abnormal_correlation
   - cluster_hint
+  - ato_cluster_lens_overlay_when_relevant
+  - compromised_account_cluster_detection
   - representative_sampling
+  - representative_ato_single_case_deep_dive_when_relevant
+  - cluster_level_backfill
   - cluster_evidence_card
   - expansion_and_strategy_recommendation
 required_output_fields_for_10_plus:
@@ -323,6 +332,8 @@ required_output_fields_for_10_plus:
   - top_dimension_summary
   - frequent_pattern
   - contribution_score
+  - ato_cluster_lens_when_relevant
+  - cluster_level_backfill_when_relevant
 templates:
   - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
   - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
@@ -334,6 +345,7 @@ templates:
   - computer_use_poc/batch_risk_clustering/batch_risk_case_schema_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_threshold_policy_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_clustering_methodology_v1.md
+  - computer_use_poc/batch_risk_clustering/batch_ato_cluster_lens_v1.md
   - computer_use_poc/batch_risk_clustering/abnormal_correlation_matrix_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_representative_sampling_v1.md
   - computer_use_poc/batch_risk_clustering/batch_risk_evidence_card_template_v1.md
@@ -350,6 +362,14 @@ Account-security Hive source boundary:
 - Web RCP 使用 `ks_rc_arch.antispam_feature_map_default_partitioned`，30 天窗口。
 - App RCP 使用 `ks_raw_log_v2.antispam_feature_map_partitioned`，50 天窗口，必须限制 `p_date + p_hourmin + p_action_type`。
 - DataAgent 仅作为 Hive / 数仓取数分析计划或确认后的离线执行能力，不是万能风控执行器。
+
+Batch ATO cluster lens boundary:
+
+- `batch_ato_cluster_lens` 是 `batch_risk_clustering_analysis` 的 overlay，不推翻已有内容相似、设备共性、策略命中、时间聚集、账号画像和行为模式分簇。
+- 识别 `web_untrusted_login_cluster`、`login_to_action_cluster`、`device_identity_inconsistency_cluster`、`compromised_account_cluster`、`content_abuse_only_cluster`、`mixed_cluster` 和 `insufficient_evidence_cluster`。
+- 每个疑似 ATO 簇抽代表样本做 `representative_ato_single_case_deep_dive`，再用 `cluster_level_backfill` 回填 coverage / similarity / confidence / source gap；不得默认全批账号都被盗。
+- Track 活跃、策略命中、内容命中、常用 `device_id`、在线登录 no_data / `response_too_large` / wrapper mismatch 都不能作为排除 ATO 的强反证。
+- 当批量 ATO 的实时登录 / 控制链不完整，或 admin 仅 APP 日志无法覆盖 WEB/H5/PC/token/OAuth/扫码链路时，必须提示 `offline_hive_required` 并使用账号安全 Hive registry-first query plan；未获用户逐次授权不得调用 DataAgent/Hive。
 
 ## batch_case_analysis
 
