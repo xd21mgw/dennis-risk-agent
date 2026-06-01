@@ -588,3 +588,103 @@ cases:
     expected_execution_groups: []
     should_not_do: [do_not_claim_complete_feature_coverage, do_not_output_raw_feature_values, do_not_claim_complete_from_capped_body]
     expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-NATURAL-001
+    user_query: "帮我判断 user_id=2871834924 是否疑似 ATO"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "ATO natural question must plan login, archives profile, archives analysis, and Track readiness."
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-002
+    user_query: "登录日志没查到，是不是就说明没风险？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Login no_data/window gap is source quality, not risk exclusion."
+    expected_boundary_flags: [no_data_not_risk_exclusion, login_log_window_incomplete_possible]
+    expected_execution_groups: []
+    should_not_do: [do_not_output_low_risk_from_no_data, do_not_stop_multisource_plan]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-003
+    user_query: "看下这个账号画像、状态，以及最近有没有异常操作"
+    expected_route_or_actions: [archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Profile and recent operation timeline must be planned together."
+    expected_boundary_flags: [profile_context_not_final_judgement, large_response_limited_enters_source_quality, partial_observation_available]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_make_final_risk_judgement_from_profile_only, do_not_dump_raw_records, do_not_claim_complete_timeline]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-004
+    user_query: "这个账号是不是异常发布/色导导流？"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Abnormal publish question must use photo search, account profile, and user analysis."
+    expected_boundary_flags: [photo_search_no_data_not_abnormal_publish_exclusion, archives_failure_enters_partial_evidence]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_output_no_abnormal_publish_from_photo_no_data, do_not_use_archives_no_data_as_no_risk, do_not_make_final_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-005
+    user_query: "这个账号有没有同设备关联账号？是不是一批黑产？"
+    expected_route_or_actions: [archives_related_users, archives_user_profile, login_logs_search, track_analysis_check_data_ready]
+    expected_orchestration: "Same-device is spread clue only and requires profile/login/Track validation."
+    expected_boundary_flags: [related_users_not_gang_conclusion, archives_related_users_spread_clue_not_gang]
+    expected_execution_groups: [auth_sensitive_serial, dependency_serial]
+    should_not_do: [do_not_label_gang_from_same_device_only, do_not_claim_archives_related_users_gang, do_not_bulk_expand_without_plan]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-006
+    user_query: "这个 eventId 为什么被拦？"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "RCP event attribution must query event detail before feature list."
+    expected_boundary_flags: [event_detail_not_policy_tree_asset_lookup, strategy_hit_not_final_judgement]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_jump_to_policy_tree_asset_lookup, do_not_make_final_risk_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-007
+    user_query: "这条策略挂在哪棵策略树？能不能说明用户有风险？"
+    expected_route_or_actions: [rcp_policy_tree_lookup]
+    expected_orchestration: "Policy-tree lookup is governance context only and cannot prove user risk."
+    expected_boundary_flags: [policy_tree_asset_not_event_hit_path, strategy_hit_not_final_judgement]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_treat_policy_tree_as_event_hit, do_not_make_user_risk_judgement]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-008
+    user_query: "命中过策略，能不能直接定性风险？"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Strategy hit is auxiliary evidence and cannot be final judgement alone."
+    expected_boundary_flags: [strategy_hit_not_final_judgement]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_make_final_judgement_from_strategy_hit_only]
+    expected_answer_contract: [source_quality_matrix, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-NATURAL-009
+    user_query: "这批设备行为很像协议上号，应该怎么查？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Anti-cheat device protocol question is plan-only with realtime-first and offline device/request/behavior/feature supplementation."
+    expected_boundary_flags: [universal_realtime_first_workflow, offline_device_request_behavior_feature_plan_required, strategy_hit_not_final_judgement, default_runtime_routing_false]
+    expected_execution_groups: []
+    should_not_do: [do_not_treat_device_protocol_similarity_as_final_conclusion, do_not_skip_offline_device_request_behavior_plan, do_not_execute_platform_when_user_asks_analysis_only]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-NATURAL-010
+    user_query: "这批账号是不是同一批盗号？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Batch ATO uses existing clustering plus ATO lens, representative deep dive, and cluster-level backfill."
+    expected_boundary_flags: [batch_ato_cluster_lens_required, existing_cluster_plus_ato_lens, compromised_account_cluster_detection, representative_ato_single_case_deep_dive, cluster_level_backfill, representative_sample_not_global_proof]
+    expected_execution_groups: []
+    should_not_do: [do_not_skip_ato_cluster_lens, do_not_globalize_representative_sample, do_not_treat_track_as_owner_proof]
+    expected_answer_contract: [batch_conclusion, ato_lens_hits, risk_clusters, representative_single_case_summary, cluster_level_backfill_features, missing_evidence, final_answer_boundary]
+  - id: BBFA-NATURAL-011
+    user_query: "登录没异常，但档案中心操作很可疑，怎么判断？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Conflicting login and Archives evidence needs source_quality and missing_evidence."
+    expected_boundary_flags: [conflicting_sources_require_source_quality, final_judgement_boundary_required, single_source_not_enough_for_ato]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_discard_conflicting_source, do_not_force_conclusion, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-NATURAL-012
+    user_query: "先别查平台，告诉我应该怎么分析"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Plan-mode answer only; do not claim platform execution."
+    expected_boundary_flags: [plan_mode_no_platform_execution, default_runtime_routing_false]
+    expected_execution_groups: []
+    should_not_do: [do_not_execute_platform_when_user_asks_analysis_only, do_not_emit_full_routing_metadata_by_default, do_not_call_dataagent, do_not_call_hive]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_user_visible_contains: ["本轮未访问真实平台", "未调用 DataAgent/Hive"]
+    expected_user_visible_absent: ["routing_metadata:"]

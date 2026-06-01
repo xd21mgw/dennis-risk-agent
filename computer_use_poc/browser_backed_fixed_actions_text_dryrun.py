@@ -129,6 +129,9 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_require_service_source_card",
     "do_not_use_compat_summary_in_pure_passthrough",
     "do_not_claim_complete_from_capped_body",
+    "do_not_treat_device_protocol_similarity_as_final_conclusion",
+    "do_not_skip_offline_device_request_behavior_plan",
+    "do_not_execute_platform_when_user_asks_analysis_only",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -222,6 +225,11 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "body_truncated_means_partial_observation": "body_truncated=true 只能支持 partial_observation_available",
     "raw_body_capped_limited_observation_only": "raw body suppressed/capped 时只能做有限观察，不声称完整明细",
     "timeout_platform_error_parse_error_missing_evidence": "timeout/platform_error/parse_error 进入 missing_evidence，不阻塞 partial answer",
+    "universal_realtime_first_workflow": "通用风险研判先规划实时只读 source，实时不闭合再给离线补证计划",
+    "offline_device_request_behavior_feature_plan_required": "设备/协议上号实时证据不闭合时，需要设备、请求、行为和特征宽表离线补证计划",
+    "plan_mode_no_platform_execution": "plan mode 只输出分析流程和 source plan，不声称已查询平台",
+    "conflicting_sources_require_source_quality": "多源结论冲突时必须用 source_quality 和 missing_evidence 表达证据边界",
+    "final_judgement_boundary_required": "关键链路未闭合时不得强行定论",
 }
 
 DEMO_CASES = [
@@ -428,6 +436,221 @@ DEMO_CASES = [
         ],
         "expected_answer_contract": ["source_quality_matrix", "missing_evidence", "evidence_strength", "final_answer_boundary"],
         "answer_focus": "batch_passthrough_merge",
+    },
+    {
+        "id": "BBFA-NATURAL-001",
+        "user_query": "帮我判断 user_id=2871834924 是否疑似 ATO",
+        "expected_route_or_actions": [
+            "login_logs_search",
+            "archives_user_profile",
+            "archives_user_analysis",
+            "track_analysis_check_data_ready",
+        ],
+        "expected_orchestration": "ATO multi-source plan, not login logs only.",
+        "expected_boundary_flags": [
+            "single_source_not_enough_for_ato",
+            "no_data_not_risk_exclusion",
+            "archives_required_for_behavior_closure_non_blocking",
+        ],
+        "should_not_do": [
+            "do_not_only_query_login_logs",
+            "do_not_skip_archives_for_ato",
+            "do_not_make_final_judgement_without_source_quality",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "ato",
+    },
+    {
+        "id": "BBFA-NATURAL-002",
+        "user_query": "登录日志没查到，是不是就说明没风险？",
+        "expected_route_or_actions": ["login_logs_search"],
+        "expected_orchestration": "Explain login no_data/window gap as source quality, not counter-evidence.",
+        "expected_boundary_flags": ["no_data_not_risk_exclusion", "login_log_window_incomplete_possible"],
+        "should_not_do": ["do_not_output_low_risk_from_no_data", "do_not_stop_multisource_plan"],
+        "expected_answer_contract": ["source_quality_matrix", "missing_evidence", "evidence_strength", "final_answer_boundary"],
+        "answer_focus": "login_no_data",
+    },
+    {
+        "id": "BBFA-NATURAL-003",
+        "user_query": "看下这个账号画像、状态，以及最近有没有异常操作",
+        "expected_route_or_actions": ["archives_user_profile", "archives_user_analysis"],
+        "expected_orchestration": "Profile baseline plus recent operation timeline; profile is not final risk judgement.",
+        "expected_boundary_flags": [
+            "profile_context_not_final_judgement",
+            "large_response_limited_enters_source_quality",
+            "partial_observation_available",
+        ],
+        "should_not_do": [
+            "do_not_make_final_risk_judgement_from_profile_only",
+            "do_not_dump_raw_records",
+            "do_not_claim_complete_timeline",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "profile_analysis",
+    },
+    {
+        "id": "BBFA-NATURAL-004",
+        "user_query": "这个账号是不是异常发布/色导导流？",
+        "expected_route_or_actions": ["archives_photo_search", "archives_user_profile", "archives_user_analysis"],
+        "expected_orchestration": "Publish/content branch with photo search, profile baseline, and user analysis.",
+        "expected_boundary_flags": [
+            "photo_search_no_data_not_abnormal_publish_exclusion",
+            "archives_failure_enters_partial_evidence",
+        ],
+        "should_not_do": [
+            "do_not_output_no_abnormal_publish_from_photo_no_data",
+            "do_not_use_archives_no_data_as_no_risk",
+            "do_not_make_final_judgement",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "publish",
+    },
+    {
+        "id": "BBFA-NATURAL-005",
+        "user_query": "这个账号有没有同设备关联账号？是不是一批黑产？",
+        "expected_route_or_actions": [
+            "archives_related_users",
+            "archives_user_profile",
+            "login_logs_search",
+            "track_analysis_check_data_ready",
+        ],
+        "expected_orchestration": "Same-device relation is an expansion clue with cross-source validation.",
+        "expected_boundary_flags": [
+            "related_users_not_gang_conclusion",
+            "archives_related_users_spread_clue_not_gang",
+        ],
+        "should_not_do": [
+            "do_not_label_gang_from_same_device_only",
+            "do_not_claim_archives_related_users_gang",
+            "do_not_bulk_expand_without_plan",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "same_device",
+    },
+    {
+        "id": "BBFA-NATURAL-006",
+        "user_query": "这个 eventId 为什么被拦？",
+        "expected_route_or_actions": ["rcp_event_detail", "rcp_event_feature_list"],
+        "expected_orchestration": "Event attribution first, feature list second when exact event identity is available.",
+        "expected_boundary_flags": ["event_detail_not_policy_tree_asset_lookup", "strategy_hit_not_final_judgement"],
+        "should_not_do": ["do_not_jump_to_policy_tree_asset_lookup", "do_not_make_final_risk_judgement"],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "event_attribution",
+    },
+    {
+        "id": "BBFA-NATURAL-007",
+        "user_query": "这条策略挂在哪棵策略树？能不能说明用户有风险？",
+        "expected_route_or_actions": ["rcp_policy_tree_lookup"],
+        "expected_orchestration": "Policy-tree lookup is governance context only.",
+        "expected_boundary_flags": ["policy_tree_asset_not_event_hit_path", "strategy_hit_not_final_judgement"],
+        "should_not_do": ["do_not_treat_policy_tree_as_event_hit", "do_not_make_user_risk_judgement"],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "policy_tree",
+    },
+    {
+        "id": "BBFA-NATURAL-008",
+        "user_query": "命中过策略，能不能直接定性风险？",
+        "expected_route_or_actions": ["rcp_event_detail", "rcp_event_feature_list"],
+        "expected_orchestration": "Strategy hit is auxiliary evidence; risk judgement needs cross-source context.",
+        "expected_boundary_flags": ["strategy_hit_not_final_judgement"],
+        "should_not_do": ["do_not_make_final_judgement_from_strategy_hit_only"],
+        "expected_answer_contract": ["source_quality_matrix", "evidence_strength", "missing_evidence", "final_answer_boundary"],
+        "answer_focus": "strategy_hit_boundary",
+    },
+    {
+        "id": "BBFA-NATURAL-009",
+        "user_query": "这批设备行为很像协议上号，应该怎么查？",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Anti-cheat device protocol question stays plan-only; realtime sources first and offline device/request/behavior/feature plan when incomplete.",
+        "expected_boundary_flags": [
+            "universal_realtime_first_workflow",
+            "offline_device_request_behavior_feature_plan_required",
+            "strategy_hit_not_final_judgement",
+            "default_runtime_routing_false",
+        ],
+        "should_not_do": [
+            "do_not_treat_device_protocol_similarity_as_final_conclusion",
+            "do_not_skip_offline_device_request_behavior_plan",
+            "do_not_execute_platform_when_user_asks_analysis_only",
+        ],
+        "expected_answer_contract": [
+            "source_plan",
+            "source_quality_matrix",
+            "missing_evidence",
+            "final_answer_boundary",
+        ],
+        "answer_focus": "anti_cheat_device_plan",
+    },
+    {
+        "id": "BBFA-NATURAL-010",
+        "user_query": "这批账号是不是同一批盗号？",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Batch ATO uses existing clustering plus ATO lens, representative deep dive, and cluster backfill.",
+        "expected_boundary_flags": [
+            "batch_ato_cluster_lens_required",
+            "existing_cluster_plus_ato_lens",
+            "compromised_account_cluster_detection",
+            "representative_ato_single_case_deep_dive",
+            "cluster_level_backfill",
+            "representative_sample_not_global_proof",
+        ],
+        "should_not_do": [
+            "do_not_skip_ato_cluster_lens",
+            "do_not_globalize_representative_sample",
+            "do_not_treat_track_as_owner_proof",
+        ],
+        "expected_answer_contract": [
+            "batch_conclusion",
+            "ato_lens_hits",
+            "risk_clusters",
+            "representative_single_case_summary",
+            "cluster_level_backfill_features",
+            "missing_evidence",
+            "final_answer_boundary",
+        ],
+        "answer_focus": "batch_ato_lens",
+    },
+    {
+        "id": "BBFA-NATURAL-011",
+        "user_query": "登录没异常，但档案中心操作很可疑，怎么判断？",
+        "expected_route_or_actions": [
+            "login_logs_search",
+            "archives_user_profile",
+            "archives_user_analysis",
+            "track_analysis_check_data_ready",
+        ],
+        "expected_orchestration": "Conflicting login and Archives observations require source_quality and missing evidence, not forced conclusion.",
+        "expected_boundary_flags": [
+            "conflicting_sources_require_source_quality",
+            "final_judgement_boundary_required",
+            "single_source_not_enough_for_ato",
+        ],
+        "should_not_do": [
+            "do_not_discard_conflicting_source",
+            "do_not_force_conclusion",
+            "do_not_make_final_judgement_without_source_quality",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "multi_source_conflict",
+    },
+    {
+        "id": "BBFA-NATURAL-012",
+        "user_query": "先别查平台，告诉我应该怎么分析",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Plan-mode answer only; do not claim platform execution.",
+        "expected_boundary_flags": ["plan_mode_no_platform_execution", "default_runtime_routing_false"],
+        "should_not_do": [
+            "do_not_execute_platform_when_user_asks_analysis_only",
+            "do_not_emit_full_routing_metadata_by_default",
+            "do_not_call_dataagent",
+            "do_not_call_hive",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "expected_metadata_visibility": "user_visible_summary",
+        "expected_full_metadata_allowed": False,
+        "expected_user_visible_contains": ["本轮未访问真实平台", "未调用 DataAgent/Hive"],
+        "expected_user_visible_absent": ["routing_metadata:"],
+        "answer_focus": "plan_mode_summary",
     },
 ]
 
@@ -874,9 +1097,33 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             ]),
         })
 
-    if has_any(text, ["先给计划", "先给 plan", "plan_mode", "plan mode", "不要执行", "不查平台"]):
+    if has_any(text, [
+        "先给计划",
+        "先给 plan",
+        "plan_mode",
+        "plan mode",
+        "不要执行",
+        "不查平台",
+        "别查平台",
+        "先别查平台",
+        "告诉我应该怎么分析",
+        "应该怎么分析",
+    ]):
         flags += ["plan_mode_no_platform_execution", "default_runtime_routing_false"]
         orchestration = "plan mode only; translate platform_called=false and dataagent_called=false into natural language"
+
+    if has_any(text, ["协议上号", "设备行为", "设备异常", "反作弊设备", "请求行为", "设备很像协议"]):
+        actions = ["source_plan_only_no_action_selected"]
+        flags += [
+            "universal_realtime_first_workflow",
+            "offline_device_request_behavior_feature_plan_required",
+            "strategy_hit_not_final_judgement",
+            "default_runtime_routing_false",
+        ]
+        orchestration = (
+            "anti-cheat device protocol question stays plan-only; realtime sources first, "
+            "then offline device/request/behavior/feature plan if evidence does not close"
+        )
 
     if has_any(text, ["controlled parallel", "受控并行", "parallel", "batch", "execution_group", "multi_source_plan", "多 source", "多源"]):
         flags += [
@@ -931,9 +1178,13 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             actions += ["rcp_event_detail", "rcp_event_feature_list", "rcp_policy_tree_lookup"]
             flags += ["event_detail_not_policy_tree_asset_lookup", "policy_tree_asset_not_event_hit_path"]
             orchestration = "produce separate event attribution and policy asset branches"
-        elif has_any(text, ["证明", "这次命中", "命中了策略", "用户这次"]):
+        elif has_any(text, ["证明", "这次命中", "命中了策略", "用户这次", "用户有风险", "用户风险"]):
             actions += ["rcp_policy_tree_lookup"]
-            flags += ["policy_tree_asset_not_event_hit_path", "policy_tree_lookup_not_single_case_risk_evidence"]
+            flags += [
+                "policy_tree_asset_not_event_hit_path",
+                "policy_tree_lookup_not_single_case_risk_evidence",
+                "strategy_hit_not_final_judgement",
+            ]
             orchestration = "policy tree explains assets only; event hit requires event detail/source evidence"
         elif has_any(text, ["命中归因直接查策略树"]):
             actions += scenario_actions(plan, "rcp_event_attribution")
@@ -969,7 +1220,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         flags += ["profile_context_not_final_judgement"]
         orchestration = "profile is baseline context"
 
-    if has_any(text, ["用户操作", "风险日志", "操作日志", "archives_user_analysis", "大量操作", "用户分析"]):
+    if has_any(text, ["用户操作", "风险日志", "操作日志", "异常操作", "archives_user_analysis", "大量操作", "用户分析"]):
         actions += ["archives_user_analysis"]
         flags += ["large_response_limited_enters_source_quality", "partial_observation_available"]
         orchestration = "archives_user_analysis with bounded window/page and partial boundary when capped"
@@ -1009,7 +1260,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             actions += scenario_actions(plan, "rcp_event_attribution")
         flags += ["strategy_hit_not_final_judgement"]
 
-    if has_any(text, ["冲突", "不一致", "登录日志没异常但"]):
+    if has_any(text, ["冲突", "不一致", "登录日志没异常但", "登录没异常但", "登录没异常，但", "登录无异常但"]):
         flags += ["conflicting_sources_require_source_quality", "final_judgement_boundary_required"]
 
     if actions and actions != ["source_plan_only_no_action_selected"]:
@@ -1206,6 +1457,11 @@ def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
             "重点是账号状态、注册/资料状态和风险摘要，用来判断背景线索。"
             "画像正常不等于本人操作，画像异常也不等于风险定性；行为链路要另补。"
         ),
+        "profile_analysis": (
+            f"这个问题拆成账号基线和近期操作两段，source_plan：{plan_label}。"
+            "账号画像/状态只回答基线是否异常；近期操作要看档案用户分析里的改密、保护、发布、直播、关注等时间线。"
+            "如果操作明细被截断，只能写 partial_observation_available，并把未覆盖窗口放进 missing_evidence。"
+        ),
         "analysis": (
             f"这个问题收敛到操作时间线，source_plan：{plan_label}。"
             "重点看登录、改密、保护账号、冻结、直播/发布等动作是否能串成异常行为闭环。"
@@ -1239,6 +1495,21 @@ def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
             f"不能直接定性。source_plan：{plan_label}，只解决事件层上下文；策略命中只是辅助证据。"
             "风险结论还要回到控制权变化、异常行为闭环和账号/设备/发布链路的交叉验证。"
             "没有 source_quality 支撑时，只能写线索和待补证。"
+        ),
+        "anti_cheat_device_plan": (
+            f"先按反作弊设备异常的通用 workflow 走，source_plan：{plan_label}。"
+            "实时层先看设备/IP/请求/策略命中/前端活跃能否形成协议上号链路；实时不闭合时，"
+            "离线补设备宽表、请求明细、行为序列和特征宽表。相似设备行为只是线索，不能直接定性为协议或群控。"
+        ),
+        "multi_source_conflict": (
+            f"这类冲突不能二选一强判，source_plan：{plan_label}。"
+            "登录无异常只说明可见登录链路暂未发现问题；档案中心操作可疑要继续对齐动作时间、来源端、设备/IP/UA 和历史基线。"
+            "最终用 source_quality 标出哪个来源完成、哪个来源缺口，missing_evidence 写清未闭合控制链。"
+        ),
+        "plan_mode_summary": (
+            f"本轮只给分析路径，不查平台，source_plan：{plan_label}。"
+            "先明确风险假设和实体字段，再列实时只读 source；实时证据能闭合才给 evidence-based 结论，"
+            "不闭合就输出 partial evidence、missing_evidence 和离线补证计划。DataAgent/Hive 执行前必须逐次授权。"
         ),
         "batch_ato_lens": (
             f"批量 ATO 先保留已有分簇，再叠加 ato_cluster_lens，source_plan：{plan_label}。"
