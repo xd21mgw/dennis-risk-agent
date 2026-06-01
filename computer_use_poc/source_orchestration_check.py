@@ -141,6 +141,7 @@ PASSTHROUGH_BATCH_REQUIRED_FIELDS = {
     "batch_status",
     "source_results",
     "transport_status_matrix",
+    "classifications",
     "missing_or_failed_sources",
 }
 LEGACY_SERVICE_BUSINESS_FIELDS = {
@@ -459,6 +460,20 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                 "reason": "controlled parallel contract must list all supported execution groups",
             }
         )
+    if batch_contract.get("manual_local_actions_batch_curl_fallback_allowed") is not False:
+        failures.append(
+            {
+                "rule": "manual_local_batch_curl_fallback_forbidden",
+                "reason": "case execution must not fall back to manual curl /actions/batch after harness failure",
+            }
+        )
+    if "harness_error" not in str(batch_contract.get("harness_error_policy", "")):
+        failures.append(
+            {
+                "rule": "structured_harness_error_policy_required",
+                "reason": "harness failure must return structured harness_error/source_gap",
+            }
+        )
     merge_contract = batch_contract.get("merge_contract", {})
     service_merge_fields = set(merge_contract.get("service_output_fields", []))
     if {"source_quality_matrix", "evidence_card_inputs", "evidence_card", "missing_evidence"} & service_merge_fields:
@@ -537,6 +552,32 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                     {
                         "rule": "ato_single_case_realtime_p0_plan_required",
                         "reason": f"ATO source_plan missing realtime P0 actions {missing_actions}",
+                    }
+                )
+            missing_window_policy = [
+                str(item.get("source_id") or item.get("action"))
+                for item in source_plan
+                if isinstance(item, dict)
+                and str(item.get("action")) in ATO_REALTIME_P0_REQUIRED_ACTIONS
+                and not item.get("window_policy")
+            ]
+            if missing_window_policy:
+                failures.append(
+                    {
+                        "rule": "ato_source_specific_window_policy_required",
+                        "reason": f"ATO realtime P0 source_plan items missing window_policy {missing_window_policy}",
+                    }
+                )
+            track_items = [
+                item
+                for item in source_plan
+                if isinstance(item, dict) and item.get("action") == "track_analysis_check_data_ready"
+            ]
+            if not track_items or "candidate_device" not in str(track_items[0].get("device_id_policy", "")):
+                failures.append(
+                    {
+                        "rule": "ato_track_candidate_device_policy_required",
+                        "reason": "Track checkDataReady must use provided or prior-source candidate device_id, and missing device_id must not fail the batch",
                     }
                 )
             if (

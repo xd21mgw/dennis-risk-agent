@@ -162,7 +162,8 @@ Batch service results align to Dennis-owned merging:
 ```yaml
 batch_result:
 source_results: []
-transport_status_matrix:
+transport_status_matrix: {}   # keyed by source_id in current service; Dennis also accepts list form
+classifications:
   completed: []
   no_data: []
   partial: []
@@ -170,12 +171,15 @@ transport_status_matrix:
   blocked: []
   timeout: []
   parse_error: []
+  planned: []
 missing_or_failed_sources: []
 raw_upstream_body_user_visible: false
 final_risk_conclusion_generated_by_service: false
 ```
 
 Dennis converts `transport_status_matrix` and `source_results` into `source_quality_matrix`, evidence card inputs, and missing evidence. `completed` and usable `partial` sources can enter Dennis evidence cards. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter Dennis `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
+
+`runtime_case_execution_runner.py` is the only live case execution caller for this contract. If the harness receives an HTTP/service/parse error from `/actions/batch`, it returns structured `harness_error` and source gaps; Codex must not manually reconstruct the payload with `curl /actions/batch` outside the harness.
 
 ## ATO Realtime P0 And Login Log Contract Patch
 
@@ -735,6 +739,7 @@ The client reads these pure passthrough service fields:
 - `source_results`
 - `transport_status_matrix`
 - `missing_or_failed_sources`
+- `classifications`
 
 Dennis interpretation buckets:
 
@@ -743,6 +748,12 @@ Dennis interpretation buckets:
 | `completed_sources` | response envelope present, no timeout/error/auth redirect, usable body or explicit empty result metadata |
 | `partial_sources` | `body_truncated=true` or `raw_body_handling=capped` |
 | `no_data_sources` | empty result metadata or `body_present=false` without transport/platform error |
+
+### Source-specific time windows
+
+ATO source windows are source-specific. `login_logs_search` defaults to the reliable online login-log window, currently 7 days unless a playbook overrides it. `archives_user_profile`, `archives_user_analysis`, and `archives_photo_search` use the scene/action window and are not constrained by login logs' 7-day reliability window. `track_analysis_check_data_ready`, Weapon, and RCP use their own source capability windows. A response gap in one window must enter `source_quality_matrix`; it must not shrink other source windows or become low-risk counter-evidence.
+
+When Track lacks a `device_id`, Dennis first attempts to extract a candidate device from login, Archives, Weapon, or prior source results. If no candidate is available, Track is marked `missing_required_fields` in `source_quality_matrix` without failing the whole batch.
 | `auth_failed_sources` | `auth_redirect_detected=true`, `api_code=302`, or HTTP auth redirect |
 | `blocked_sources` | `transport_error`, `platform_error`, or service HTTP error |
 | `timeout_sources` | `timeout=true` |

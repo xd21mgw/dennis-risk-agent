@@ -145,10 +145,14 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_dom_parse_for_case_execution",
     "do_not_ad_hoc_fetch_for_case_execution",
     "do_not_call_single_action_freeform",
+    "do_not_single_action_freeform",
+    "do_not_manual_curl_actions_batch",
     "do_not_fallback_sso_session_runner",
     "do_not_fallback_archives_profile_runner",
     "do_not_fallback_weapon_runner",
     "do_not_treat_source_gap_as_low_risk",
+    "do_not_default_all_realtime_sources_to_7d",
+    "do_not_make_login_window_limit_archives",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -240,6 +244,12 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "service_source_card_not_required": "service 不再输出 source_card",
     "compat_summary_legacy_only": "compat_summary 仅历史说明，不作为 pure passthrough fallback",
     "transport_status_matrix_merge_required": "batch 只有 transport_status_matrix/source_results 时，Dennis 仍需合并质量矩阵",
+    "batch_classifications_merge_required": "harness 兼容 service 返回的 classifications 分类字段并合并 source_quality_matrix",
+    "harness_batch_contract_aligned": "runtime_case_execution_runner 生成的 payload 对齐 /actions/batch execution_groups contract",
+    "harness_error_structured_source_gap": "harness live 失败只能返回 structured harness_error/source_gap，不触发手工 curl fallback",
+    "no_manual_actions_batch_curl_fallback": "case execution 禁止在 harness 失败后手工 curl 本机 /actions/batch",
+    "source_specific_time_window_policy": "login_logs 可靠窗口不限制 Archives/Photo/Track/Weapon/RCP 各自 source window",
+    "track_candidate_device_from_prior_sources": "Track 缺 device_id 时先从 login/archives/weapon/prior source 结果提候选设备",
     "transport_status_matrix_dict_list_compatible": "harness 兼容 transport_status_matrix 的 dict/list 两种返回形态",
     "missing_or_failed_sources_dict_list_compatible": "harness 兼容 missing_or_failed_sources 的 dict/list 两种返回形态",
     "track_missing_device_id_blocked_not_batch_failure": "Track 缺 device_id 只标 blocked/missing_required_fields，不导致整个 batch 失败",
@@ -1006,6 +1016,8 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "transport_status_matrix_dict_list_compatible",
                 "missing_or_failed_sources_dict_list_compatible",
             ]
+        if has_any(text, ["classifications", "分类字段"]):
+            passthrough_flags += ["batch_classifications_merge_required"]
         if has_any(text, ["body_truncated", "capped body", "raw body", "截断", "partial"]):
             passthrough_flags += [
                 "body_truncated_means_partial_observation",
@@ -1162,20 +1174,32 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "controlled_parallel_plan_only",
             "source_quality_matrix_merge_required",
             "service_batch_contract_aligned",
+            "harness_batch_contract_aligned",
             "default_runtime_routing_false",
         ]
+        if has_any(text, ["classifications", "分类字段"]):
+            flags += ["batch_classifications_merge_required"]
 
-    if has_any(text, ["runtime_case_execution_runner", "真实 case", "case 执行", "browser click", "dom parsing", "ad-hoc fetch", "direct curl", "旧 runner", "old runner"]):
+    if has_any(text, ["runtime_case_execution_runner", "真实 case", "case 执行", "browser click", "dom parsing", "ad-hoc fetch", "direct curl", "旧 runner", "old runner", "/actions/batch"]):
         actions = ["source_plan_only_no_action_selected"]
         flags += [
             "controlled_case_execution_harness_required",
             "no_legacy_runner_fallback",
+            "no_manual_actions_batch_curl_fallback",
             "default_runtime_routing_false",
         ]
+        if has_any(text, ["harness 失败", "harness failure", "structured harness_error", "source_gap"]):
+            flags += ["harness_error_structured_source_gap"]
         orchestration = (
             "case execution must use runtime_case_execution_runner -> controlled batch -> "
-            "passthrough envelope; no browser click, DOM parsing, ad-hoc fetch, direct curl, or old runner fallback"
+            "passthrough envelope; no manual curl /actions/batch, browser click, DOM parsing, ad-hoc fetch, direct curl, or old runner fallback"
         )
+
+    if has_any(text, ["7-day", "7 天", "七天", "source-specific", "source specific", "window_policy", "time_window", "时间窗口"]):
+        flags += ["source_specific_time_window_policy", "login_log_window_incomplete_possible"]
+
+    if has_any(text, ["候选 device", "候选设备", "candidate device", "prior source", "前序 source"]):
+        flags += ["track_candidate_device_from_prior_sources", "track_missing_device_id_blocked_not_batch_failure"]
 
     if has_any(text, ["timeout", "超时"]):
         flags += ["source_timeout_non_blocking_partial", "partial_evidence_required"]

@@ -217,12 +217,13 @@ source_plan_item:
   timeout_class: short_readiness | standard_readonly | auth_sensitive | large_response
   failure_policy: non_blocking_partial | dependent_only_block
   source_priority: P0 | P0-conditional | P0-explicit | P1 | P2 | conditional
+  window_policy:
   expected_observation:
 ```
 
 典型编排：
 
-- ATO / 登录异常：`login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 使用 `independent_parallel`；`archives_user_analysis` 在 `archives_user_profile` 后使用 `auth_sensitive_serial`，大响应时按 `large_response` timeout 处理。
+- ATO / 登录异常：`login_logs_search`、`archives_user_profile` 使用 `independent_parallel`；`archives_photo_search` 和 `archives_user_analysis` 在 `archives_user_profile` 后使用 `auth_sensitive_serial`。`track_analysis_check_data_ready` 是 P0 辅助 source：有 `device_id` 时可并行；缺 `device_id` 时先从 login / Archives / Weapon / prior source 结果提候选设备，找不到才标 `missing_required_fields`，不能让整个 batch fail。
 - 异常发布 / 内容承接：`archives_photo_search -> archives_user_profile -> archives_user_analysis` 使用 `auth_sensitive_serial`。
 - 同设备扩散：`archives_related_users` 先产出候选关系，再对代表用户/种子用户补 `archives_user_profile`、`login_logs_search`、`track_analysis_check_data_ready`，后续项带 `depends_on`，不能仅凭同设备定团伙。
 - RCP 归因：`rcp_event_detail -> rcp_event_feature_list` 使用 `dependency_serial`；`rcp_event_feature_list` 大 pageSize 或 partial 时标 `large_response_serial`。
@@ -234,7 +235,8 @@ source_plan_item:
 service_batch_passthrough:
   batch_status:
   source_results: []
-  transport_status_matrix:
+  transport_status_matrix: {}  # current service returns source_id-keyed dict; Dennis also accepts list
+  classifications:
     completed: []
     no_data: []
     partial: []
@@ -283,6 +285,10 @@ evidence_card:
 ```
 
 `no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error` 都是 Dennis 生成的 source-quality 状态：不阻塞 partial answer，也不能作为低风险 / 无风险反证。service 只输出 `batch_status`、`source_results`、`transport_status_matrix`、`missing_or_failed_sources` 等 passthrough/transport 字段；Dennis 负责 evidence card 和最终业务研判，不展示 raw upstream body。
+
+执行类 case 只能由 `runtime_case_execution_runner.py` 调用本机 `/actions/batch` 或 `/actions/multi_source_plan`。如果 harness live 调用失败，输出 structured `harness_error` / `source_gap`；不得由 Codex 手工拼 `curl /actions/batch` 接管执行。
+
+时间窗口是 source-specific：`login_logs_search` 默认使用登录日志可靠在线窗口（通常 7 天或 playbook 指定窗口）；`archives_user_profile`、`archives_user_analysis`、`archives_photo_search` 使用 scene/action window，不受登录日志 7 天限制；Track / Weapon / RCP 按各自 source 能力配置。不得输出“所有实时 source 默认只查近 7 天”。
 
 展示层必须保留 source-quality 语义：
 
@@ -399,7 +405,7 @@ account_security_browser_backed_source_plan:
     boundary: photo_search_no_data_not_ato_or_abnormal_publish_exclusion
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` / `bin/archives_profile_runner` 在 case execution 中不得尝试；执行类 case 必须经 `computer_use_poc/runtime_case_execution_runner.py` 生成 controlled batch payload。ATO 单案默认 source_quality_matrix 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；`archives_photo_search` 和 `archives_user_analysis` 依赖 profile 在 Archives auth-sensitive 组中执行。登录日志失败 / 空结果、档案中心 `body_missing`、Track 缺 device_id 或 readiness gap，均由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，也不得 fallback 旧 runner。
+`bin/sso_session_runner` / `bin/track_analysis_runner` / `bin/archives_profile_runner` 在 case execution 中不得尝试；执行类 case 必须经 `computer_use_poc/runtime_case_execution_runner.py` 生成 controlled batch payload。ATO 单案默认 source_quality_matrix 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；`archives_photo_search` 和 `archives_user_analysis` 依赖 profile 在 Archives auth-sensitive 组中执行。登录日志失败 / 空结果、档案中心 `body_missing`、Track 缺 device_id 或 readiness gap，均由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，也不得 fallback 旧 runner 或手工 `curl /actions/batch`。
 
 迁移边界：
 

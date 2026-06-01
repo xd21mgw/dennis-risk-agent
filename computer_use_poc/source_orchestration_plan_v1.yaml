@@ -212,6 +212,8 @@
         "legacy_runner_fallback_allowed": false,
         "browser_backed_single_action_freeform_allowed": false,
         "direct_platform_curl_allowed": false,
+        "manual_local_actions_batch_curl_fallback_allowed": false,
+        "harness_error_policy": "return_structured_harness_error_source_gap_no_manual_curl_fallback",
         "service_single_source_envelope_fields": [
           "action_name",
           "source_id",
@@ -233,6 +235,7 @@
           "batch_status",
           "source_results",
           "transport_status_matrix",
+          "classifications",
           "missing_or_failed_sources"
         ],
         "service_legacy_business_fields_not_required": [
@@ -293,6 +296,7 @@
             "batch_result",
             "source_results",
             "transport_status_matrix",
+            "classifications",
             "missing_or_failed_sources"
           ],
           "dennis_generated_fields": [
@@ -603,6 +607,7 @@
               "timeout_class": "standard_readonly",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
+              "window_policy": "login_logs_reliable_online_window_7d_or_playbook_override",
               "expected_observation": "login/control-chain evidence with login_source/login_type/device/IP/UA/session/request fields; response_too_large only source_contract_gap"
             },
             {
@@ -614,6 +619,7 @@
               "timeout_class": "auth_sensitive",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
+              "window_policy": "profile_current_state_no_7d_login_window_constraint",
               "expected_observation": "account_baseline_status_profile_and_risk_context"
             },
             {
@@ -625,6 +631,8 @@
               "timeout_class": "short_readiness",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
+              "window_policy": "track_readiness_source_window_7d_default_or_explicit_track_window",
+              "device_id_policy": "use_provided_device_id_or_candidate_device_id_extracted_from_login_archives_weapon_prior_sources; if unavailable mark missing_required_fields without failing batch",
               "expected_observation": "track_data_readiness_and_provenance_only; activity_present_not_owner_proof; absent_plus_backend_action_marks_front_backend_activity_mismatch"
             },
             {
@@ -638,6 +646,7 @@
               "timeout_class": "auth_sensitive",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
+              "window_policy": "archives_scene_window_not_constrained_by_login_logs_7d",
               "expected_observation": "recent publish/content handoff, photo_id, publish time, source end, device/IP/UA, and photo_search no_data boundary"
             },
             {
@@ -651,6 +660,7 @@
               "timeout_class": "large_response",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
+              "window_policy": "archives_scene_window_not_constrained_by_login_logs_7d",
               "expected_observation": "bounded operation/action timeline for publish/live/comment/profile/four_items anchors and behavior closure"
             }
           ],
@@ -676,7 +686,9 @@
             "archives_required_for_behavior_closure_non_blocking",
             "archives_failure_enters_partial_evidence",
             "track_check_data_ready_not_risk_conclusion",
-            "large_response_limited_enters_source_quality"
+            "large_response_limited_enters_source_quality",
+            "source_specific_time_window_policy",
+            "track_candidate_device_from_prior_sources"
           ]
         },
         "abnormal_publish_content_handoff": {

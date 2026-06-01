@@ -83,16 +83,30 @@ The required chain is `source_orchestration_check -> source_plan -> controlled
 batch -> passthrough envelope -> Dennis-generated source_quality_matrix /
 evidence_card / missing_evidence`.
 
+`runtime_case_execution_runner.py` owns the full execution loop: source_plan,
+batch_payload, live `/actions/batch` call, response parsing, source-quality
+merge, evidence card, and final boundary. If the harness fails, it must return
+structured `harness_error` / source gaps. Codex must not manually reconstruct
+or retry the same case with `curl /actions/batch` outside the harness.
+
 For ATO single-case execution the default realtime P0 source plan is
 `login_logs_search`, `archives_user_profile`, `archives_user_analysis`,
 `archives_photo_search`, and `track_analysis_check_data_ready`. Suspicious
 anchors are Dennis-side derivations from those P0 observations, not a
 standalone source action.
 
+ATO source windows are source-specific: login logs use the reliable online
+login-log window, while Archives profile/analysis/photo use the scene window;
+Track, Weapon, and RCP use their own capability windows. The login-log window
+must not silently constrain Archives or photo/action review. If Track lacks
+`device_id`, the harness first tries to extract a candidate from prior source
+results; if none is available, Track becomes missing evidence without failing
+the whole batch.
+
 `sso_session_runner`, `archives_profile_runner`, Weapon runner, freeform
-`browser_backed_service_client --action`, arbitrary curl, and ad-hoc browser
-fetch are debug/manual diagnostic tools only. They are not runtime case
-execution fallback paths.
+`browser_backed_service_client --action`, arbitrary curl, manual local
+`curl /actions/batch`, and ad-hoc browser fetch are debug/manual diagnostic
+tools only. They are not runtime case execution fallback paths.
 
 ## 5. source_failure_policy
 

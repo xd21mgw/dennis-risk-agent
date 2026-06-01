@@ -25,6 +25,10 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ORCHESTRATION_CHECK = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"
 DEFAULT_RECALL_SOURCE = "2,0,1,3"
+MILLIS_PER_DAY = 24 * 60 * 60 * 1000
+DEFAULT_SCENE_WINDOW_DAYS = 30
+LOGIN_LOG_RELIABLE_WINDOW_DAYS = 7
+TRACK_READINESS_WINDOW_DAYS = 7
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SECRET_KEY_FRAGMENTS = (
@@ -58,6 +62,9 @@ class SourcePlanItem:
     params: dict[str, Any]
     timeout_ms: int
     required_fields: list[str]
+    window_policy: str
+    window_start_ms: int
+    window_end_ms: int
 
     def to_plan_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +77,11 @@ class SourcePlanItem:
             "source_priority": self.source_priority,
             "expected_observation": self.expected_observation,
             "required_fields": self.required_fields,
+            "window_policy": self.window_policy,
+            "time_window_ms": {
+                "start": self.window_start_ms,
+                "end": self.window_end_ms,
+            },
         }
 
     def to_batch_source(self) -> dict[str, Any]:
@@ -85,10 +97,14 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _default_window() -> tuple[int, int]:
+def _default_scene_window() -> tuple[int, int]:
     end_ms = _now_ms()
-    start_ms = end_ms - 7 * 24 * 60 * 60 * 1000
+    start_ms = end_ms - DEFAULT_SCENE_WINDOW_DAYS * MILLIS_PER_DAY
     return start_ms, end_ms
+
+
+def _bounded_source_window(scene_start_ms: int, scene_end_ms: int, days: int) -> tuple[int, int]:
+    return max(scene_start_ms, scene_end_ms - days * MILLIS_PER_DAY), scene_end_ms
 
 
 def _compact_case_id(task: str, user_id: str) -> str:
@@ -125,6 +141,16 @@ def build_ato_single_case_source_plan(
     include_abnormal_publish: bool,
     include_same_device: bool,
 ) -> list[SourcePlanItem]:
+    login_start_ms, login_end_ms = _bounded_source_window(
+        window_start_ms,
+        window_end_ms,
+        LOGIN_LOG_RELIABLE_WINDOW_DAYS,
+    )
+    track_start_ms, track_end_ms = _bounded_source_window(
+        window_start_ms,
+        window_end_ms,
+        TRACK_READINESS_WINDOW_DAYS,
+    )
     items = [
         SourcePlanItem(
             source_id="ato_login_logs_search",
@@ -140,13 +166,16 @@ def build_ato_single_case_source_plan(
             ),
             params={
                 "user_id": user_id,
-                "from_timestamp": window_start_ms,
-                "to_timestamp": window_end_ms,
+                "from_timestamp": login_start_ms,
+                "to_timestamp": login_end_ms,
                 "recallSource": DEFAULT_RECALL_SOURCE,
                 "limit": 50,
             },
             timeout_ms=30_000,
             required_fields=["user_id"],
+            window_policy="login_logs_reliable_online_window_7d_or_playbook_override",
+            window_start_ms=login_start_ms,
+            window_end_ms=login_end_ms,
         ),
         SourcePlanItem(
             source_id="ato_archives_user_profile",
@@ -163,6 +192,9 @@ def build_ato_single_case_source_plan(
             },
             timeout_ms=30_000,
             required_fields=["user_id"],
+            window_policy="profile_current_state_no_7d_login_window_constraint",
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
         ),
         SourcePlanItem(
             source_id="ato_track_analysis_check_data_ready",
@@ -177,8 +209,8 @@ def build_ato_single_case_source_plan(
             ),
             params={
                 "device_id": device_id,
-                "startTime": window_start_ms,
-                "endTime": window_end_ms,
+                "startTime": track_start_ms,
+                "endTime": track_end_ms,
                 "appName": "KUAISHOU",
                 "product": "KUAISHOU",
                 "mode": "track_analysis_data_readiness_precheck",
@@ -192,6 +224,9 @@ def build_ato_single_case_source_plan(
             },
             timeout_ms=15_000,
             required_fields=["device_id", "startTime", "endTime"],
+            window_policy="track_readiness_source_window_7d_default_or_explicit_track_window",
+            window_start_ms=track_start_ms,
+            window_end_ms=track_end_ms,
         ),
         SourcePlanItem(
             source_id="ato_archives_photo_search",
@@ -214,6 +249,9 @@ def build_ato_single_case_source_plan(
             },
             timeout_ms=30_000,
             required_fields=["user_id"],
+            window_policy="archives_scene_window_not_constrained_by_login_logs_7d",
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
         ),
         SourcePlanItem(
             source_id="ato_archives_user_analysis",
@@ -237,6 +275,9 @@ def build_ato_single_case_source_plan(
             },
             timeout_ms=45_000,
             required_fields=["user_id"],
+            window_policy="archives_scene_window_not_constrained_by_login_logs_7d",
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
         ),
     ]
 
@@ -260,15 +301,27 @@ def build_ato_single_case_source_plan(
                 },
                 timeout_ms=30_000,
                 required_fields=["user_id"],
+                window_policy="archives_related_users_current_relation_window_or_explicit_scene_window",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
             )
         )
 
     return items
 
 
-def build_batch_payload(case_id: str, source_plan: list[SourcePlanItem], dry_run: bool) -> dict[str, Any]:
+def build_batch_payload(
+    case_id: str,
+    source_plan: list[SourcePlanItem],
+    dry_run: bool,
+    *,
+    excluded_source_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    excluded_source_ids = excluded_source_ids or set()
     groups: dict[str, dict[str, Any]] = {}
     for item in source_plan:
+        if item.source_id in excluded_source_ids:
+            continue
         group = groups.setdefault(
             item.execution_group,
             {
@@ -290,6 +343,68 @@ def build_batch_payload(case_id: str, source_plan: list[SourcePlanItem], dry_run
         "response_mode": "controlled_batch_passthrough",
         "default_timeout_ms": 30_000,
         "execution_groups": execution_groups,
+    }
+
+
+def validate_batch_payload_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    errors: list[str] = []
+    groups = payload.get("execution_groups")
+    if not isinstance(groups, list) or not groups:
+        errors.append("execution_groups_required")
+
+    source_ids: set[str] = set()
+    supported_groups = {
+        "independent_parallel",
+        "dependency_serial",
+        "large_response_serial",
+        "auth_sensitive_serial",
+    }
+    forbidden_key_parts = set(SECRET_KEY_FRAGMENTS) | {"url", "uri", "href", "path", "endpoint", "raw_body"}
+
+    def scan_for_forbidden(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                lowered = key.lower()
+                if any(part in lowered for part in forbidden_key_parts):
+                    errors.append(f"forbidden_key:{path}.{key}")
+                scan_for_forbidden(child, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                scan_for_forbidden(child, f"{path}[{index}]")
+
+    for group in groups if isinstance(groups, list) else []:
+        if not isinstance(group, dict):
+            errors.append("execution_group_must_be_object")
+            continue
+        execution = group.get("execution")
+        if execution not in supported_groups:
+            errors.append(f"unsupported_execution_group:{execution}")
+        sources = group.get("sources")
+        if not isinstance(sources, list) or not sources:
+            errors.append(f"group_sources_required:{group.get('group_id')}")
+            continue
+        for source in sources:
+            if not isinstance(source, dict):
+                errors.append("source_must_be_object")
+                continue
+            source_id = source.get("source_id")
+            action = source.get("action")
+            if not source_id or not action:
+                errors.append("source_id_and_action_required")
+            if source_id in source_ids:
+                errors.append(f"duplicate_source_id:{source_id}")
+            source_ids.add(str(source_id))
+            params = source.get("params")
+            if not isinstance(params, dict):
+                errors.append(f"params_required:{source_id}")
+            scan_for_forbidden(source, f"source:{source_id}")
+
+    return {
+        "valid": not errors,
+        "errors": errors,
+        "contract": "browser_backed_actions_batch_v1",
+        "endpoint": "/actions/batch",
+        "manual_curl_fallback_allowed": False,
     }
 
 
@@ -350,8 +465,8 @@ def sanitize_for_output(value: Any) -> Any:
 
 
 def build_dry_run_batch_result(source_plan: list[SourcePlanItem]) -> dict[str, Any]:
-    transport_rows: list[dict[str, Any]] = []
-    source_results: list[dict[str, Any]] = []
+    transport_rows: dict[str, dict[str, Any]] = {}
+    source_results: dict[str, dict[str, Any]] = {}
     missing_or_failed_sources: list[dict[str, Any]] = []
 
     for item in source_plan:
@@ -395,16 +510,14 @@ def build_dry_run_batch_result(source_plan: list[SourcePlanItem]) -> dict[str, A
             "raw_body_handling": "not_requested_in_dry_run",
             "missing_required_fields": missing,
         }
-        transport_rows.append(row)
-        source_results.append(
-            {
-                "source_id": item.source_id,
-                "action": item.action,
-                "category": category,
-                "source_status": source_status,
-                "transport": row,
-            }
-        )
+        transport_rows[item.source_id] = row
+        source_results[item.source_id] = {
+            "source_id": item.source_id,
+            "action": item.action,
+            "category": category,
+            "source_status": source_status,
+            "transport": row,
+        }
 
     return {
         "ok": True,
@@ -413,6 +526,7 @@ def build_dry_run_batch_result(source_plan: list[SourcePlanItem]) -> dict[str, A
         "scheduler": "controlled_parallel",
         "source_results": source_results,
         "transport_status_matrix": transport_rows,
+        "classifications": build_classifications(transport_rows),
         "missing_or_failed_sources": missing_or_failed_sources,
         "safety": {
             "raw_body_returned": False,
@@ -420,6 +534,27 @@ def build_dry_run_batch_result(source_plan: list[SourcePlanItem]) -> dict[str, A
             "single_action_freeform_attempted": False,
         },
     }
+
+
+def build_classifications(transport_rows: dict[str, dict[str, Any]] | list[dict[str, Any]]) -> dict[str, list[str]]:
+    rows = list(transport_rows.values()) if isinstance(transport_rows, dict) else transport_rows
+    classifications: dict[str, list[str]] = {
+        "completed": [],
+        "no_data": [],
+        "partial": [],
+        "auth_failed": [],
+        "blocked": [],
+        "timeout": [],
+        "parse_error": [],
+        "planned": [],
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source_id = str(row.get("source_id") or "unknown_source")
+        classification = classify_source(row)
+        classifications.setdefault(classification, []).append(source_id)
+    return classifications
 
 
 def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -435,53 +570,104 @@ def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[st
     try:
         with opener.open(request, timeout=35) as response:
             data = response.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read() if hasattr(exc, "read") else b""
+        error_payload: dict[str, Any] = {}
+        if body:
+            try:
+                error_payload = sanitize_for_output(json.loads(body.decode("utf-8")))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                error_payload = {"body_present": True, "body_parse_error": "non_json_error_body"}
+        return build_harness_error_result(
+            source_status="batch_contract_rejected",
+            error_type=getattr(exc, "code", None) or "http_error",
+            detail=error_payload,
+            http_status=getattr(exc, "code", None),
+        )
     except urllib.error.URLError as exc:
-        return {
-            "ok": False,
-            "response_mode": "controlled_batch_passthrough",
-            "batch_status": "service_unavailable",
-            "transport_status_matrix": [],
-            "source_results": [],
-            "missing_or_failed_sources": [
-                {
-                    "source_id": "browser_backed_batch",
-                    "category": "blocked",
-                    "source_status": "service_unavailable",
-                    "error_type": type(exc).__name__,
-                }
-            ],
-            "safety": {"legacy_runner_fallback_attempted": False},
-        }
+        return build_harness_error_result(
+            source_status="service_unavailable",
+            error_type=type(exc).__name__,
+            detail={"reason": sanitize_for_output(str(exc.reason) if hasattr(exc, "reason") else str(exc))},
+        )
 
     try:
         return sanitize_for_output(json.loads(data.decode("utf-8")))
     except json.JSONDecodeError:
-        return {
-            "ok": False,
-            "response_mode": "controlled_batch_passthrough",
-            "batch_status": "parse_error",
-            "transport_status_matrix": [],
-            "source_results": [],
-            "missing_or_failed_sources": [
-                {
-                    "source_id": "browser_backed_batch",
-                    "category": "parse_error",
-                    "source_status": "parse_error",
-                    "error_type": "non_json_batch_response",
-                }
-            ],
-            "safety": {"legacy_runner_fallback_attempted": False},
-        }
+        return build_harness_error_result(
+            source_status="parse_error",
+            error_type="non_json_batch_response",
+            detail={"body_present": bool(data)},
+            category="parse_error",
+        )
+
+
+def build_harness_error_result(
+    *,
+    source_status: str,
+    error_type: Any,
+    detail: dict[str, Any],
+    category: str = "blocked",
+    http_status: int | None = None,
+) -> dict[str, Any]:
+    error_text = str(error_type)
+    row = {
+        "source_id": "browser_backed_batch",
+        "action": "controlled_batch",
+        "category": category,
+        "source_status": source_status,
+        "error_type": error_text,
+        "http_status": http_status,
+        "body_present": False,
+        "body_truncated": False,
+        "observed_bytes": 0,
+        "elapsed_ms": None,
+        "transport_error": error_text,
+        "platform_error": None,
+        "invalid_params": source_status == "batch_contract_rejected",
+        "timeout": "timeout" in error_text.lower(),
+        "raw_body_handling": "suppressed",
+    }
+    return {
+        "ok": False,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": "harness_error",
+        "harness_error": {
+            "source_status": source_status,
+            "error_type": error_text,
+            "detail": detail,
+            "manual_batch_curl_fallback_allowed": False,
+            "next_action": "return_structured_source_gap_or_retry_harness; do_not_manual_curl_actions_batch",
+        },
+        "source_results": {"browser_backed_batch": {"source_id": "browser_backed_batch", "transport": row}},
+        "transport_status_matrix": {"browser_backed_batch": row},
+        "classifications": build_classifications({"browser_backed_batch": row}),
+        "missing_or_failed_sources": [row],
+        "safety": {
+            "legacy_runner_fallback_attempted": False,
+            "manual_batch_curl_fallback_allowed": False,
+            "single_action_freeform_attempted": False,
+        },
+    }
 
 
 def classify_source(row: dict[str, Any]) -> str:
     status = str(row.get("source_status") or row.get("category") or "").lower()
     category = str(row.get("category") or "").lower()
     error_type = str(row.get("error_type") or "").lower()
+    platform_error = str(row.get("platform_error") or "").lower()
+    transport_error = str(row.get("transport_error") or "").lower()
 
-    if row.get("timed_out") or "timeout" in status or "timeout" in error_type:
+    if row.get("timed_out") or row.get("timeout") or "timeout" in status or "timeout" in error_type or "timeout" in transport_error:
         return "timeout"
-    if "auth" in status or "auth" in error_type or row.get("auth_redirect_detected"):
+    if (
+        "auth" in status
+        or "auth" in error_type
+        or "auth" in platform_error
+        or row.get("auth_redirect_detected")
+        or row.get("api_code") == 302
+        or row.get("http_status") == 302
+    ):
         return "auth_failed"
     if row.get("invalid_params") or "missing_required" in status or "invalid" in status:
         return "blocked"
@@ -489,7 +675,7 @@ def classify_source(row: dict[str, Any]) -> str:
         return "parse_error"
     if "no_data" in status or "empty" in status:
         return "no_data"
-    if row.get("body_truncated") or "response_too_large" in status or "too_large" in error_type:
+    if row.get("body_truncated") or "response_too_large" in status or "too_large" in error_type or "too_large" in platform_error:
         return "partial"
     if "partial" in status or "partial" in category:
         return "partial"
@@ -497,33 +683,62 @@ def classify_source(row: dict[str, Any]) -> str:
         return "completed"
     if "planned" in status or "planned" in category:
         return "planned"
-    if "blocked" in status or "blocked" in category or "unavailable" in status:
+    if "blocked" in status or "blocked" in category or "unavailable" in status or platform_error:
         return "blocked"
     return "blocked"
 
 
+def normalize_mapping_or_list(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        rows = []
+        for key, item in value.items():
+            if isinstance(item, dict):
+                row = dict(item)
+                row.setdefault("source_id", key)
+                rows.append(row)
+        return rows
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def rows_from_source_results(value: Any) -> list[dict[str, Any]]:
+    rows = []
+    for item in normalize_mapping_or_list(value):
+        transport = item.get("transport")
+        if isinstance(transport, dict):
+            row = dict(transport)
+            row.setdefault("source_id", item.get("source_id"))
+            row.setdefault("action", item.get("action"))
+            rows.append(row)
+            continue
+        rows.append(item)
+    return rows
+
+
 def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[str, Any]) -> dict[str, Any]:
     plan_by_id = {item.source_id: item for item in source_plan}
-    rows = batch_result.get("transport_status_matrix") or []
-    if isinstance(rows, dict):
-        rows = list(rows.values())
+    rows = normalize_mapping_or_list(batch_result.get("transport_status_matrix"))
     if not rows:
-        failed_sources = batch_result.get("missing_or_failed_sources", [])
-        if isinstance(failed_sources, dict):
-            failed_sources = list(failed_sources.values())
-        rows = []
-        for failed in failed_sources:
-            if not isinstance(failed, dict):
-                continue
-            rows.append(
-                {
-                    "source_id": failed.get("source_id"),
-                    "action": failed.get("action"),
-                    "category": failed.get("category"),
-                    "source_status": failed.get("source_status"),
-                    "error_type": failed.get("error_type"),
-                }
-            )
+        rows = rows_from_source_results(batch_result.get("source_results"))
+    if not rows:
+        rows = normalize_mapping_or_list(batch_result.get("missing_or_failed_sources"))
+    if not rows:
+        classifications = batch_result.get("classifications")
+        if isinstance(classifications, dict):
+            for category, source_ids in classifications.items():
+                if not isinstance(source_ids, list):
+                    continue
+                for source_id in source_ids:
+                    item = plan_by_id.get(str(source_id))
+                    rows.append(
+                        {
+                            "source_id": str(source_id),
+                            "action": item.action if item else None,
+                            "category": category,
+                            "source_status": category,
+                        }
+                    )
 
     buckets: dict[str, list[str]] = {
         "completed": [],
@@ -571,9 +786,11 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
                 "platform_error": row.get("platform_error"),
                 "invalid_params": row.get("invalid_params"),
                 "raw_body_handling": row.get("raw_body_handling"),
+                "missing_required_fields": row.get("missing_required_fields", []),
                 "failure_policy": item.failure_policy if item else "non_blocking_partial",
                 "boundary_notes": notes,
                 "legacy_runner_fallback_attempted": False,
+                "manual_batch_curl_fallback_attempted": False,
             }
         )
 
@@ -591,6 +808,7 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
                 "failure_policy": item.failure_policy,
                 "boundary_notes": ["missing_evidence_not_counter_evidence"],
                 "legacy_runner_fallback_attempted": False,
+                "manual_batch_curl_fallback_attempted": False,
             }
         )
 
@@ -620,6 +838,141 @@ def build_missing_evidence(source_quality_matrix: dict[str, Any]) -> list[dict[s
             }
         )
     return missing
+
+
+DEVICE_ID_KEYS = {
+    "device_id",
+    "deviceid",
+    "deviceId",
+    "did",
+    "candidate_device_id",
+    "candidateDeviceId",
+}
+
+
+def extract_candidate_device_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in DEVICE_ID_KEYS and isinstance(item, str) and item.strip():
+                return item.strip()
+            found = extract_candidate_device_id(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = extract_candidate_device_id(item)
+            if found:
+                return found
+    return None
+
+
+def with_track_device(source_plan: list[SourcePlanItem], device_id: str) -> SourcePlanItem:
+    for item in source_plan:
+        if item.source_id == "ato_track_analysis_check_data_ready":
+            params = dict(item.params)
+            params["device_id"] = device_id
+            return SourcePlanItem(
+                source_id=item.source_id,
+                action=item.action,
+                execution_group="independent_parallel",
+                depends_on=[],
+                timeout_class=item.timeout_class,
+                failure_policy=item.failure_policy,
+                source_priority=item.source_priority,
+                expected_observation=item.expected_observation,
+                params=params,
+                timeout_ms=item.timeout_ms,
+                required_fields=item.required_fields,
+                window_policy=item.window_policy,
+                window_start_ms=item.window_start_ms,
+                window_end_ms=item.window_end_ms,
+            )
+    raise ValueError("track source plan missing")
+
+
+def synthetic_track_missing_result(track_item: SourcePlanItem) -> dict[str, Any]:
+    row = {
+        "source_id": track_item.source_id,
+        "action": track_item.action,
+        "category": "blocked",
+        "source_status": "missing_required_fields",
+        "error_type": "missing_required_fields",
+        "http_status": None,
+        "content_type": None,
+        "body_present": False,
+        "body_truncated": False,
+        "observed_bytes": 0,
+        "elapsed_ms": 0,
+        "timeout_ms": track_item.timeout_ms,
+        "transport_error": None,
+        "platform_error": None,
+        "invalid_params": True,
+        "timeout": False,
+        "raw_body_handling": "not_requested_until_candidate_device_id",
+        "missing_required_fields": ["device_id"],
+        "candidate_device_lookup_attempted": True,
+    }
+    return {
+        "ok": True,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": "partial",
+        "source_results": {track_item.source_id: {"source_id": track_item.source_id, "transport": row}},
+        "transport_status_matrix": {track_item.source_id: row},
+        "classifications": build_classifications({track_item.source_id: row}),
+        "missing_or_failed_sources": [row],
+        "safety": {
+            "legacy_runner_fallback_attempted": False,
+            "manual_batch_curl_fallback_allowed": False,
+            "single_action_freeform_attempted": False,
+        },
+    }
+
+
+def merge_batch_results(results: list[dict[str, Any]]) -> dict[str, Any]:
+    merged_transport: dict[str, dict[str, Any]] = {}
+    merged_source_results: dict[str, Any] = {}
+    merged_missing: list[dict[str, Any]] = []
+    harness_errors: list[dict[str, Any]] = []
+
+    for result in results:
+        for row in normalize_mapping_or_list(result.get("transport_status_matrix")):
+            source_id = str(row.get("source_id") or f"unknown_{len(merged_transport) + 1}")
+            merged_transport[source_id] = row
+        for row in rows_from_source_results(result.get("source_results")):
+            source_id = str(row.get("source_id") or f"unknown_{len(merged_source_results) + 1}")
+            merged_source_results[source_id] = {"source_id": source_id, "transport": row}
+        merged_missing.extend(normalize_mapping_or_list(result.get("missing_or_failed_sources")))
+        if isinstance(result.get("harness_error"), dict):
+            harness_errors.append(result["harness_error"])
+
+    classifications = build_classifications(merged_transport)
+    non_planned = sum(len(values) for key, values in classifications.items() if key not in {"planned"})
+    if harness_errors:
+        batch_status = "harness_error"
+    elif non_planned and (classifications.get("blocked") or classifications.get("timeout") or classifications.get("parse_error") or classifications.get("auth_failed")):
+        batch_status = "partial"
+    elif classifications.get("planned") and not non_planned:
+        batch_status = "planned"
+    elif classifications.get("completed") and len(classifications["completed"]) == len(merged_transport):
+        batch_status = "completed"
+    else:
+        batch_status = "partial" if merged_transport else "empty"
+
+    return {
+        "ok": not harness_errors,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": batch_status,
+        "source_results": merged_source_results,
+        "transport_status_matrix": merged_transport,
+        "classifications": classifications,
+        "missing_or_failed_sources": merged_missing,
+        "harness_errors": harness_errors,
+        "safety": {
+            "legacy_runner_fallback_attempted": False,
+            "manual_batch_curl_fallback_allowed": False,
+            "single_action_freeform_attempted": False,
+        },
+    }
 
 
 def build_evidence_card(
@@ -681,7 +1034,7 @@ def build_evidence_card(
 
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
     if args.window_start_ms is None or args.window_end_ms is None:
-        window_start_ms, window_end_ms = _default_window()
+        window_start_ms, window_end_ms = _default_scene_window()
     else:
         window_start_ms, window_end_ms = args.window_start_ms, args.window_end_ms
 
@@ -697,16 +1050,48 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         include_abnormal_publish=args.include_abnormal_publish,
         include_same_device=args.include_same_device,
     )
-    batch_payload = build_batch_payload(case_id, source_plan, dry_run=args.mode == "dry_run")
+    track_missing_device_id = args.device_id is None
+    deferred_source_ids = {"ato_track_analysis_check_data_ready"} if track_missing_device_id else set()
+    primary_source_plan = [item for item in source_plan if item.source_id not in deferred_source_ids]
+    track_item = next((item for item in source_plan if item.source_id == "ato_track_analysis_check_data_ready"), None)
+    batch_payload = build_batch_payload(case_id, primary_source_plan, dry_run=args.mode == "dry_run")
+    batch_contract_validation = validate_batch_payload_contract(batch_payload)
 
     if args.mode == "dry_run":
-        batch_result = build_dry_run_batch_result(source_plan)
+        primary_result = build_dry_run_batch_result(primary_source_plan)
     else:
         if not args.browser_backed_base:
             raise ValueError("--browser-backed-base is required in live mode")
-        batch_result = call_browser_backed_batch(args.browser_backed_base, batch_payload)
+        primary_result = call_browser_backed_batch(args.browser_backed_base, batch_payload)
 
-    batch_result = sanitize_for_output(batch_result)
+    primary_result = sanitize_for_output(primary_result)
+    candidate_device_id = args.device_id or extract_candidate_device_id(primary_result)
+    followup_batch_payloads: list[dict[str, Any]] = []
+    followup_results: list[dict[str, Any]] = []
+    track_device_resolution = {
+        "device_id_provided": args.device_id is not None,
+        "candidate_device_lookup_attempted": track_missing_device_id,
+        "candidate_device_found": bool(candidate_device_id),
+        "track_missing_device_id_blocks_batch": False,
+    }
+
+    if track_item and track_missing_device_id:
+        if candidate_device_id:
+            followup_track = with_track_device(source_plan, candidate_device_id)
+            followup_payload = build_batch_payload(
+                f"{case_id}:track_followup",
+                [followup_track],
+                dry_run=args.mode == "dry_run",
+            )
+            followup_batch_payloads.append(followup_payload)
+            if args.mode == "dry_run":
+                followup_results.append(build_dry_run_batch_result([followup_track]))
+            else:
+                followup_results.append(call_browser_backed_batch(args.browser_backed_base, followup_payload))
+        else:
+            followup_results.append(synthetic_track_missing_result(track_item))
+
+    batch_result = sanitize_for_output(merge_batch_results([primary_result, *followup_results]))
     source_quality_matrix = merge_source_quality(source_plan, batch_result)
     missing_evidence = build_missing_evidence(source_quality_matrix)
     evidence_card = build_evidence_card(
@@ -726,11 +1111,21 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "start": window_start_ms,
             "end": window_end_ms,
             "inferred": args.window_start_ms is None or args.window_end_ms is None,
+            "policy": "scene_window_default_30d; source-specific windows may be narrower",
+        },
+        "source_time_windows": {
+            item.source_id: {
+                "start": item.window_start_ms,
+                "end": item.window_end_ms,
+                "window_policy": item.window_policy,
+            }
+            for item in source_plan
         },
         "execution_gate": {
             "entry": "runtime_case_execution_runner.py",
             "source_plan_required": True,
             "batch_endpoint": "/actions/batch",
+            "manual_local_batch_curl_fallback_allowed": False,
             "legacy_runner_fallback_allowed": False,
             "browser_backed_single_action_freeform_allowed": False,
             "direct_platform_curl_allowed": False,
@@ -749,6 +1144,9 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "batch_endpoint": "/actions/batch",
         "batch_payload": batch_payload,
+        "batch_contract_validation": batch_contract_validation,
+        "followup_batch_payloads": followup_batch_payloads,
+        "track_device_resolution": track_device_resolution,
         "batch_result": batch_result,
         "transport_status_matrix": batch_result.get("transport_status_matrix", []),
         "source_quality_matrix": source_quality_matrix,
@@ -760,6 +1158,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "service_normalized_observation_dependency": False,
             "service_source_quality_dependency": False,
             "service_evidence_card_inputs_dependency": False,
+            "manual_curl_actions_batch_fallback_allowed": False,
             "dataagent_hive_called": False,
             "offline_hive_requires_per_request_authorization": True,
             "final_risk_judgement_made": False,
@@ -770,6 +1169,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "platform_call_scope": "local_browser_backed_batch_only" if args.mode == "live" else "none",
             "dataagent_called": False,
             "legacy_runner_called": False,
+            "manual_actions_batch_curl_called": False,
             "direct_platform_url_called": False,
             "secrets_output": False,
         },

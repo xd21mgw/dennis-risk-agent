@@ -57,6 +57,9 @@ FULL_RUNTIME_AGENTS = """# Dennis Risk Agent Full Runtime
 - 执行类风险 case 必须使用 `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id <user_id> --mode dry_run|live --format json`。
 - ATO 单案默认实时 P0 source plan 是 `login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`；可疑锚点由这些 passthrough observations 派生，不是独立 action。
 - live mode 只能调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`，不得直接调用平台 URL。
+- harness live 失败只能返回 structured `harness_error` / source gap，不得由 Codex 手工 `curl /actions/batch` 接管执行。
+- source window 必须按 source 配置：login logs 可靠在线窗口不限制 Archives/Photo/Track/Weapon/RCP。
+- Track 缺 `device_id` 时先尝试从 prior source 结果提候选设备；找不到才标 `missing_required_fields`，不得导致 batch fail。
 - `sso_session_runner`、`archives_profile_runner`、Weapon runner、单独 `browser_backed_service_client --action`、curl 和 ad-hoc browser fetch 只允许 debug / manual diagnostic / unit test，不得作为 case execution fallback。
 - `body_missing`、`body_truncated`、`response_too_large`、`platform_not_enabled`、`auth_failed`、`timeout`、`platform_error`、`parse_error`、`service_unavailable` 进入 Dennis-generated source_quality_matrix / missing_evidence，不触发旧 runner fallback。
 

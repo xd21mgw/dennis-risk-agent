@@ -8557,12 +8557,27 @@ Text gate checks:
 - test_id: CONTROLLED-RUNTIME-ATO-DRY-RUN-BATCH-PAYLOAD-001
 - command: `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id 2892617234 --mode dry_run --format json`
 - expected_runtime_behavior: dry_run_no_platform_access
-- expected_output_boundary: 输出包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；`independent_parallel` 在前，`archives_photo_search` 和 `archives_user_analysis` 通过 `auth_sensitive_serial` 依赖 `archives_user_profile`；`default_runtime_routing=false`；不访问真实平台、不调用 DataAgent/Hive。
+- expected_output_boundary: `source_plan` 包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；初始 `batch_payload` 对齐 `/actions/batch` 的 `execution_groups` contract；缺 `device_id` 时 Track 先等待候选设备提取，找不到再进入 `source_quality_matrix.blocked/missing_required_fields`；`default_runtime_routing=false`；不访问真实平台、不调用 DataAgent/Hive。
+
+- test_id: CONTROLLED-RUNTIME-BATCH-CONTRACT-VALIDATION-001
+- input: harness generated live/dry-run batch payload。
+- expected_runtime_behavior: batch_payload_matches_browser_backed_contract
+- expected_output_boundary: payload 必须包含 `execution_groups[].group_id`、`execution_groups[].execution`、`execution_groups[].sources[].source_id/action/params/timeout_ms`，且不得包含 URL/path/header/cookie/token/session/raw body；`batch_contract_validation.valid=true`。
+
+- test_id: CONTROLLED-RUNTIME-HARNESS-ERROR-NO-MANUAL-CURL-001
+- input: harness live 调用 `/actions/batch` 返回 HTTP/service/parse error。
+- expected_runtime_behavior: structured_harness_error_no_manual_batch_curl
+- expected_output_boundary: harness 输出 `harness_error`、`source_quality_matrix`、`missing_evidence` 和 `manual_curl_actions_batch_fallback_allowed=false`；Codex 不得手工 `curl /actions/batch` 接管执行。
 
 - test_id: CONTROLLED-RUNTIME-HARNESS-MERGE-COMPAT-001
-- input: `/actions/batch` 返回 `transport_status_matrix` 或 `missing_or_failed_sources` 为 dict/list 任一形态，或 Track 缺 `device_id`。
+- input: `/actions/batch` 返回 `transport_status_matrix` 或 `missing_or_failed_sources` 为 dict/list 任一形态，返回 `classifications`，或 Track 缺 `device_id`。
 - expected_runtime_behavior: harness_merge_dict_list_and_missing_required_fields_compatible
-- expected_output_boundary: harness 仍合并 Dennis-generated `source_quality_matrix`；Track 缺 `device_id` 只进入 blocked / missing_required_fields，不导致整个 batch 失败；不得 fallback 旧 runner。
+- expected_output_boundary: harness 仍合并 Dennis-generated `source_quality_matrix`；Track 缺 `device_id` 时先尝试从 prior source 提候选设备，找不到只进入 blocked / missing_required_fields，不导致整个 batch 失败；不得 fallback 旧 runner。
+
+- test_id: CONTROLLED-RUNTIME-SOURCE-SPECIFIC-WINDOWS-001
+- input: ATO 单案未给显式时间窗。
+- expected_runtime_behavior: source_specific_window_policy
+- expected_output_boundary: `login_logs_search` 默认按登录日志可靠在线窗口（通常 7 天或 playbook 指定窗口）；`archives_user_profile`、`archives_user_analysis`、`archives_photo_search` 使用 scene/action window；Track / Weapon / RCP 按各自能力配置；不得说所有实时 source 都只查近 7 天。
 
 - test_id: CONTROLLED-RUNTIME-NO-LEGACY-FALLBACK-AFTER-BROWSER-BACKED-GAP-001
 - input: `login_logs_search response_too_large / archives body_missing / weapon platform_not_enabled / service_unavailable`
@@ -8570,9 +8585,9 @@ Text gate checks:
 - expected_output_boundary: 这些状态进入 `transport_status_matrix`、Dennis-generated `source_quality_matrix` 和 `missing_evidence`，输出 partial evidence；不得调用 `sso_session_runner`、`archives_profile_runner` 或 Weapon runner；不得把 source gap 当低风险反证。
 
 - test_id: CONTROLLED-RUNTIME-LOCAL-BATCH-ONLY-001
-- input: case execution 中尝试直接 `curl https://...` 或直接调用平台 URL。
+- input: case execution 中尝试直接 `curl https://...`、手工 `curl http://127.0.0.1:8787/actions/batch` 或直接调用平台 URL。
 - expected_runtime_behavior: direct_platform_curl_forbidden
-- expected_output_boundary: 只能由 harness 在 live mode 调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`；任意平台 URL curl、cookie/header 拼接、单 action freeform 调用都不是默认执行路径。
+- expected_output_boundary: 只能由 harness 在 live mode 调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`；任意平台 URL curl、本机 batch 手工 curl、cookie/header 拼接、单 action freeform 调用都不是默认执行路径。
 
 - test_id: CONTROLLED-RUNTIME-FULL-RUNTIME-SHARED-HARNESS-001
 - input: `outputs/full_runtime/computer_use_poc/runtime_case_execution_runner.py`
