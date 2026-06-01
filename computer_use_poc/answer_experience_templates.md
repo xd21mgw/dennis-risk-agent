@@ -73,46 +73,48 @@ Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`
 
 ### Browser-Backed Service Result Output
 
-`browser_backed_service` 是 Dennis 的允许访问方式之一，但浏览器和登录态只属于本地 browser-backed API service。Dennis 只调用固定 action endpoint。账号安全四源主链默认显式请求 `response_mode=passthrough`，由 Dennis parser 生成 `normalized_observation`，再生成 evidence card；`compat_summary` 只作为 legacy migration fallback，在显式 `allow_compat_fallback=true` 或明确 legacy 调用时使用。
+`browser_backed_service` 是 Dennis 的允许访问方式之一，但浏览器和登录态只属于本地 browser-backed API service。Dennis 只调用固定 action endpoint。新模式是 pure passthrough：service 只负责 fixed action、typed params、browser session、safe passthrough、transport status 和 controlled parallel batch；不再输出 service-side `normalized_observation`、`source_quality`、`source_card`、`evidence_card_inputs` 或 `compat_summary`。Dennis 必须直接消费 passthrough envelope / transport metadata / capped body，并在 Dennis 侧生成 observation、`source_quality_matrix`、evidence card、missing evidence 和 final answer boundary。
 
 ```yaml
-browser_backed_source_result:
-  source_name:
+browser_backed_passthrough_envelope:
   action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_summary | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
-  typed_params_summary:
-    mode:
-    sub_interfaces: []
-    fallback_window:
-  source_status: completed | blocked | auth_failed | invalid_parameter | parse_error | timeout | platform_partial_available
-  failure_layer: no_failure | same_origin_context | auth_session | network | platform_contract | parameter_contract | parser | timeout | runner_invocation
-  error_type:
-  latency_ms:
-  source_card:
-  source_quality:
-  output_scope: internal_risk_review | external_share
-  field_classification:
-    credential_secret: []
-    pii_strict: []
-    risk_entity_identifier: []
-    source_summary_metric: []
-  sensitive_output: false
-  source_provenance: browser_backed_service
+  source_id:
+  platform:
+  http_status:
+  content_type:
+  body_present:
+  body_truncated:
+  observed_bytes:
+  elapsed_ms:
+  transport_error:
+  platform_error:
+  invalid_params:
+  timeout:
+  auth_redirect_detected:
+  raw_body_handling: suppressed | capped | metadata_only
 ```
 
-Passthrough 主链输出必须包含：
+Dennis 生成：
 
 ```yaml
-browser_backed_passthrough_observation:
-  response_mode: passthrough
-  normalized_observation:
-  source_quality:
-    normalized_observation_present:
-    no_data_not_risk_exclusion:
-  raw_body_suppressed: true
-  sensitive_output: false
+dennis_passthrough_interpretation:
+  observation:
+  source_quality_matrix:
+  evidence_card:
+  missing_evidence:
+  final_answer_boundary:
 ```
 
-`blocked` / `auth_failed` / `network_error` / `platform_error` 是 source_quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
+解释规则：
+
+- `body_truncated=true` 只能输出 `partial_observation_available`，不得声称完整明细。
+- `auth_redirect_detected=true` 或 `api_code=302` 统一写 `auth_flow_not_completed_in_bound_context`，不得直接说用户无权限。
+- no_data / empty result 是 Dennis source quality，不是低风险或无风险反证。
+- timeout / platform_error / parse_error 进入 missing evidence，不阻塞 completed source 的 partial answer。
+- raw body suppressed / capped 只能做有限观察，不输出 raw upstream body，不生成“完整覆盖”结论。
+- `compat_summary` 只作为历史迁移说明，不作为 pure passthrough fallback。
+
+`blocked` / `auth_failed` / `network_error` / `platform_error` 是 Dennis 侧 source quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
 
 默认 `output_scope=internal_risk_review`。内部研判 evidence card 可以展示最小必要风控实体字段，例如 UID / user_id、DID / device_id、IP、eventId、sourceId、hitFusePolicyCode、login method、logSource、timestamp。`output_scope=external_share` 时这些实体字段必须 masked。cookie / token / session / header / authorization / password、raw source body、raw login records、raw labelInfo、raw originalLog 任何模式都禁止输出。`sensitive_output=false` 只表示没有认证秘密和 raw dump，不表示没有展示风控实体字段。
 
@@ -204,19 +206,58 @@ source_plan_item:
 合并规则：
 
 ```yaml
-source_quality_matrix:
-  completed: []
-  no_data: []
-  partial: []
-  auth_failed: []
-  blocked: []
-  timeout: []
-  parse_error: []
-evidence_card_inputs: completed_or_partial_sources_only
-missing_evidence: failed_or_missing_or_dependent_skipped_sources
+service_batch_passthrough:
+  batch_status:
+  source_results: []
+  transport_status_matrix:
+    completed: []
+    no_data: []
+    partial: []
+    auth_failed: []
+    blocked: []
+    timeout: []
+    parse_error: []
+  missing_or_failed_sources: []
+
+dennis_generated_merge:
+  source_quality_matrix:
+    completed: []
+    no_data: []
+    partial: []
+    auth_failed: []
+    blocked: []
+    timeout: []
+    parse_error: []
+  evidence_card: completed_or_partial_sources_only
+  missing_evidence: failed_or_missing_or_dependent_skipped_sources
 ```
 
-`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error` 都是 source-quality 状态：不阻塞 partial answer，也不能作为低风险 / 无风险反证。service 输出 `batch_result`、`source_results`、`source_quality_matrix`、`evidence_card_inputs`、`missing_evidence`；Dennis 负责 evidence card 和最终业务研判，不展示 raw upstream body。
+Dennis 合并示例：
+
+```yaml
+source_quality_matrix:
+  completed:
+    - source_id: login_logs_search
+      evidence_use: login_control_chain_candidate
+  partial:
+    - source_id: rcp_event_feature_list
+      reason: body_truncated
+      evidence_use: feature_group_context_only
+  auth_failed:
+    - source_id: archives_user_profile
+      reason: auth_flow_not_completed_in_bound_context
+  timeout:
+    - source_id: archives_user_analysis
+      reason: source_timeout
+missing_evidence:
+  - archives_user_analysis full action timeline
+  - complete feature detail beyond capped body
+evidence_card:
+  - login_logs_search completed passthrough observation
+  - rcp_event_feature_list partial passthrough observation
+```
+
+`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error` 都是 Dennis 生成的 source-quality 状态：不阻塞 partial answer，也不能作为低风险 / 无风险反证。service 只输出 `batch_status`、`source_results`、`transport_status_matrix`、`missing_or_failed_sources` 等 passthrough/transport 字段；Dennis 负责 evidence card 和最终业务研判，不展示 raw upstream body。
 
 展示层必须保留 source-quality 语义：
 
@@ -276,7 +317,7 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - 最小 source 类型：`login_control_source`、`publish_action_audit_source`、`candidate_control_endpoint_source`、`device_identity_consistency_source`、`historical_baseline_source`、`wrapper_diagnostic_source`。
 - 不把 normalizer 作为本地 service 默认责任，不新增泛化 observation normalizer 路线。
 
-账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action，默认请求 `response_mode=passthrough`。短期保留 `compat_summary` 作为显式 legacy fallback；长期只保留 passthrough 单模式，新 action 一律 passthrough-only。
+账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action，默认请求 `response_mode=passthrough`。pure passthrough 是主链路；`compat_summary` 只保留为历史迁移说明，不作为默认 fallback 或 service 依赖，新 action 一律 passthrough-only。
 
 ```yaml
 account_security_browser_backed_source_plan:
@@ -321,7 +362,7 @@ account_security_browser_backed_source_plan:
       recallSource: "2,0,1,3"
     request_options:
       response_mode: passthrough
-    fallback: 7d_parse_error_auto_add_24h_fallback_and_preserve_primary_source_quality_as_standard_source_result
+    fallback: 7d_parse_error_auto_add_24h_passthrough_retry_and_preserve_primary_transport_status
   - source_name: archives_profile_readonly
     access_method: optional_controlled_runner_only_when_live_connected
     runner_name: archives_profile_runner
@@ -329,14 +370,14 @@ account_security_browser_backed_source_plan:
     fallback: stub_source_gap_does_not_block_or_enter_default_four_source_matrix
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 输出 Dennis-owned normalized source result。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须归一成含 `normalized_observation`、Dennis-owned `source_quality`、`latency_ms`、`sensitive_output=false` 的 browser-backed source result，不得输出未标准化 parse error。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
+`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 获取 pure passthrough envelope。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
 
 迁移边界：
 
 - 并行双跑只是迁移期策略，不是最终架构。
 - browser-backed service 最终只保留受控透传，不保留 summary / `source_card` / `source_quality` / evidence summary 加工。
-- Dennis 负责 parser、`normalized_observation`、evidence card 和业务研判。
-- 删除 legacy summary 前必须完成四源 passthrough dual-run、`full_runtime` controlled pilot、normalized evidence card 可用性验证和引用检查。
+- Dennis 负责理解 passthrough envelope / transport metadata / capped body，生成 observation、source quality、evidence card 和业务研判。
+- 删除 legacy summary 引用前必须完成四源 passthrough 检查、`full_runtime` controlled pilot、Dennis 侧 evidence card 可用性验证和引用检查。
 
 Track 命名边界：v1 裸问中优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；如果引用历史 `track_analysis_summary`，应描述为 Track 活跃画像的泛化能力，不把它当作当前 v1 readiness action 名。
 

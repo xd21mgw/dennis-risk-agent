@@ -3,8 +3,8 @@
 
 This module intentionally keeps Dennis out of browser ownership and auth
 material handling. It only calls fixed local service actions with typed JSON
-parameters and normalizes standard source responses for the source completion
-matrix / partial evidence card path.
+parameters and interprets safe passthrough envelopes for Dennis-side source
+completion matrix / partial evidence card generation.
 """
 
 from __future__ import annotations
@@ -23,11 +23,9 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8787"
 DEFAULT_TIMEOUT_SECONDS = 10
-RESPONSE_MODE_COMPAT_SUMMARY = "compat_summary"
 RESPONSE_MODE_PASSTHROUGH = "passthrough"
-RESPONSE_MODES = {RESPONSE_MODE_COMPAT_SUMMARY, RESPONSE_MODE_PASSTHROUGH}
+RESPONSE_MODES = {RESPONSE_MODE_PASSTHROUGH}
 ACCOUNT_SECURITY_DEFAULT_RESPONSE_MODE = RESPONSE_MODE_PASSTHROUGH
-PASSTHROUGH_FALLBACK_TRIGGER_STATUSES = {"blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"}
 PASSTHROUGH_PARSER_REGISTRY: Dict[str, Any] = {}
 
 ACTION_ENDPOINTS = {
@@ -296,9 +294,9 @@ class BrowserBackedServiceClient:
         action_name: str,
         typed_params: Optional[Mapping[str, Any]] = None,
         *,
-        response_mode: str = RESPONSE_MODE_COMPAT_SUMMARY,
+        response_mode: str = RESPONSE_MODE_PASSTHROUGH,
     ) -> Dict[str, Any]:
-        """Call one fixed browser-backed action and normalize the response.
+        """Call one fixed browser-backed action and interpret passthrough output.
 
         Transport failures are returned as source results instead of escaping as
         Dennis runtime failures.
@@ -306,12 +304,13 @@ class BrowserBackedServiceClient:
 
         _validate_action_name(action_name)
         if response_mode not in RESPONSE_MODES:
-            raise BrowserBackedServiceInputError(f"unsupported browser-backed response_mode: {response_mode}")
+            raise BrowserBackedServiceInputError(
+                "unsupported browser-backed response_mode: pure passthrough is the only runtime mode"
+            )
         params = dict(typed_params or {})
         _validate_typed_params(params)
         request_params = dict(params)
-        if response_mode == RESPONSE_MODE_PASSTHROUGH:
-            params["response_mode"] = RESPONSE_MODE_PASSTHROUGH
+        params["response_mode"] = RESPONSE_MODE_PASSTHROUGH
 
         endpoint = ACTION_ENDPOINTS[action_name]
         service_url = f"{self.base_url}{endpoint}"
@@ -365,14 +364,12 @@ class BrowserBackedServiceClient:
                 http_status=http_status,
             )
 
-        if response_mode == RESPONSE_MODE_PASSTHROUGH:
-            return normalize_passthrough_service_response(
-                action_name,
-                service_payload,
-                http_status=http_status,
-                request_params=request_params,
-            )
-        return normalize_service_response(action_name, service_payload, http_status=http_status)
+        return normalize_passthrough_service_response(
+            action_name,
+            service_payload,
+            http_status=http_status,
+            request_params=request_params,
+        )
 
     def call_account_security_sources(
         self,
@@ -380,7 +377,6 @@ class BrowserBackedServiceClient:
         app_name: str = "KUAISHOU",
         include_rcp_snapshot: bool = True,
         response_mode: str = ACCOUNT_SECURITY_DEFAULT_RESPONSE_MODE,
-        allow_compat_fallback: bool = False,
     ) -> list[Dict[str, Any]]:
         """Call the default single-user account-security browser-backed sources.
 
@@ -390,7 +386,9 @@ class BrowserBackedServiceClient:
         """
 
         if response_mode not in RESPONSE_MODES:
-            raise BrowserBackedServiceInputError(f"unsupported browser-backed response_mode: {response_mode}")
+            raise BrowserBackedServiceInputError(
+                "unsupported browser-backed response_mode: pure passthrough is the only runtime mode"
+            )
         results: list[Dict[str, Any]] = []
         track_results: list[Dict[str, Any]] = []
         for request_plan in build_account_security_browser_backed_requests(
@@ -408,41 +406,12 @@ class BrowserBackedServiceClient:
             result["planned_source_name"] = request_plan.get("source_name")
             result["typed_params_summary"] = _typed_params_summary(request_plan.get("typed_params", {}))
             result["account_security_response_mode"] = response_mode
-            if response_mode == RESPONSE_MODE_PASSTHROUGH:
-                result["compat_fallback_allowed"] = allow_compat_fallback
-                if allow_compat_fallback and result.get("source_status") in PASSTHROUGH_FALLBACK_TRIGGER_STATUSES:
-                    fallback_result = self.call_action(
-                        action_name,
-                        request_plan.get("typed_params", {}),
-                        response_mode=RESPONSE_MODE_COMPAT_SUMMARY,
-                    )
-                    fallback_result["planned_source_name"] = request_plan.get("source_name")
-                    fallback_result["typed_params_summary"] = _typed_params_summary(request_plan.get("typed_params", {}))
-                    fallback_result["account_security_response_mode"] = RESPONSE_MODE_COMPAT_SUMMARY
-                    fallback_result["compat_fallback_used"] = True
-                    fallback_result["compat_fallback_for_response_mode"] = RESPONSE_MODE_PASSTHROUGH
-                    fallback_result["passthrough_primary_status"] = result.get("source_status")
-                    fallback_result["passthrough_primary_error_type"] = result.get("error_type")
-                    result = fallback_result
             if request_plan.get("bundle_source_name") == TRACK_ANALYSIS_BUNDLE_SOURCE_NAME:
                 result["requested_track_sub_interface"] = request_plan.get("track_sub_interface")
                 track_results.append(result)
                 continue
 
             results.append(result)
-            fallback = request_plan.get("fallback_on")
-            if response_mode == RESPONSE_MODE_COMPAT_SUMMARY and result.get("source_status") == "parse_error" and isinstance(fallback, Mapping):
-                fallback_plan = fallback.get("parse_error")
-                if isinstance(fallback_plan, Mapping):
-                    fallback_result = self.call_action(
-                        str(fallback_plan["action_name"]),
-                        fallback_plan.get("typed_params", {}),
-                        response_mode=RESPONSE_MODE_COMPAT_SUMMARY,
-                    )
-                    fallback_result["planned_source_name"] = fallback_plan.get("source_name")
-                    fallback_result["typed_params_summary"] = _typed_params_summary(fallback_plan.get("typed_params", {}))
-                    fallback_result["fallback_for"] = request_plan.get("source_name")
-                    results.append(fallback_result)
 
         if track_results:
             results.insert(0, merge_track_analysis_account_security_bundle(track_results))
@@ -527,18 +496,6 @@ def build_account_security_browser_backed_requests(
                     "user_id": user_id,
                     "window": "last_7d",
                     "recallSource": "2,0,1,3",
-                },
-                "fallback_on": {
-                    "parse_error": {
-                        "source_name": "user_login_unified_log_24h_fallback",
-                        "action_name": "login_logs_search",
-                        "typed_params": {
-                            "user_id": user_id,
-                            "window": "last_24h",
-                            "recallSource": "2,0,1,3",
-                        },
-                        "preserve_primary_source_quality": True,
-                    }
                 },
             },
         ]
@@ -1398,11 +1355,11 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
     latest_timestamp_summary: Dict[str, Any] = {}
     use_duration_summary: Dict[str, Any] = {}
     device_ids_summary: Dict[str, Any] = {}
-    normalized_fields_observed: list[Any] = []
-    normalized_samples: list[Any] = []
+    dennis_fields_observed: list[Any] = []
+    dennis_samples: list[Any] = []
     profile_fields_observed: list[Any] = []
     profile_sections_observed: list[Any] = []
-    normalized_records_count = 0
+    dennis_records_count = 0
     total_latency = 0
 
     for result in materialized:
@@ -1425,18 +1382,18 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         latest_timestamp_summary.update(summary.get("latest_timestamp_summary") or {})
         use_duration_summary.update(summary.get("use_duration_summary") or {})
         device_ids_summary.update(summary.get("device_ids_summary") or {})
-        observation = result.get("normalized_observation") if isinstance(result.get("normalized_observation"), Mapping) else {}
+        observation = _result_observation(result)
         for field in observation.get("fields_observed", []) if isinstance(observation.get("fields_observed"), list) else []:
-            if field not in normalized_fields_observed:
-                normalized_fields_observed.append(field)
+            if field not in dennis_fields_observed:
+                dennis_fields_observed.append(field)
         for sample in observation.get("samples", []) if isinstance(observation.get("samples"), list) else []:
-            if sample not in normalized_samples:
-                normalized_samples.append(sample)
+            if sample not in dennis_samples:
+                dennis_samples.append(sample)
         if requested == "profile":
             profile_fields_observed = list(observation.get("profile_fields_observed", [])) if isinstance(observation.get("profile_fields_observed"), list) else []
             profile_sections_observed = list(observation.get("profile_sections_observed", [])) if isinstance(observation.get("profile_sections_observed"), list) else []
         if isinstance(observation.get("records_count"), int):
-            normalized_records_count += int(observation["records_count"])
+            dennis_records_count += int(observation["records_count"])
 
     completed = [
         sub_interface
@@ -1452,7 +1409,7 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         [str(result.get("source_status") or "blocked") for result in materialized],
         completed_count=len(completed),
     )
-    source_quality = {
+    dennis_source_quality = {
         "source_status": source_status,
         "output_scope": DEFAULT_OUTPUT_SCOPE,
         "field_classification": _field_classification_summary(),
@@ -1465,70 +1422,41 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
         "redaction_applied": True,
         "raw_reference_retained_for_followup": False,
         "sensitive_output": False,
-        "response_mode": RESPONSE_MODE_PASSTHROUGH
-        if any(result.get("response_mode") == RESPONSE_MODE_PASSTHROUGH for result in materialized)
-        else RESPONSE_MODE_COMPAT_SUMMARY,
+        "response_mode": RESPONSE_MODE_PASSTHROUGH,
     }
-    normalized_observation: Dict[str, Any] = {
+    dennis_observation: Dict[str, Any] = {
         "source_name": "track_analysis_summary",
         "source_status": source_status,
         "sub_interface": TRACK_ANALYSIS_BUNDLE_MODE,
         "sub_interfaces_completed": completed,
         "sub_interfaces_missing": missing,
-        "records_count": normalized_records_count,
-        "fields_observed": normalized_fields_observed[:64],
-        "samples": normalized_samples[:8],
+        "records_count": dennis_records_count,
+        "fields_observed": dennis_fields_observed[:64],
+        "samples": dennis_samples[:8],
         "raw_body_suppressed": True,
         "no_data_not_risk_exclusion": True,
         "activity_signal_not_final_judgement": True,
     }
     if profile_fields_observed:
-        normalized_observation["profile_fields_observed"] = profile_fields_observed
+        dennis_observation["profile_fields_observed"] = profile_fields_observed
     if profile_sections_observed:
-        normalized_observation["profile_sections_observed"] = profile_sections_observed
+        dennis_observation["profile_sections_observed"] = profile_sections_observed
     if isinstance(device_ids_summary.get("device_ids_count"), int):
-        normalized_observation["device_ids_count"] = device_ids_summary["device_ids_count"]
+        dennis_observation["device_ids_count"] = device_ids_summary["device_ids_count"]
     if isinstance(use_duration_summary.get("rows_count"), int):
-        normalized_observation["rows_count"] = use_duration_summary["rows_count"]
+        dennis_observation["rows_count"] = use_duration_summary["rows_count"]
     return {
         "source_name": "track_analysis_summary",
         "planned_source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
         "action_name": "track_analysis_summary",
-        "response_mode": source_quality["response_mode"],
-        "account_security_response_mode": source_quality["response_mode"],
+        "response_mode": dennis_source_quality["response_mode"],
+        "account_security_response_mode": dennis_source_quality["response_mode"],
         "source_status": source_status,
         "failure_layer": "no_failure" if source_status == "completed" else "source_observation",
         "error_type": None,
         "latency_ms": total_latency,
-        "source_card": {
-            "source_name": TRACK_ANALYSIS_BUNDLE_SOURCE_NAME,
-            "action_name": "track_analysis_summary",
-            "source_status": source_status,
-            "bundle_summary": {
-                "mode": TRACK_ANALYSIS_BUNDLE_MODE,
-                "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-                "sub_interfaces_completed": completed,
-                "sub_interfaces_missing": missing,
-                "account_security_bundle": True,
-            },
-            "profile_summary": profile_summary,
-            "latest_timestamp_summary": latest_timestamp_summary,
-            "getUseDuration": use_duration_summary,
-            "getDeviceIds": device_ids_summary,
-            "sub_interface_statuses": sub_interface_statuses,
-            "output_scope": DEFAULT_OUTPUT_SCOPE,
-            "field_classification": _field_classification_summary(),
-            "body_policy": {
-                "raw_response_full_body_returned": False,
-                "credential_secret_plaintext_returned": False,
-                "raw_records_full_dump_returned": False,
-                "raw_labelInfo_full_dump_returned": False,
-                "raw_originalLog_full_dump_returned": False,
-                "sensitive_output": False,
-            },
-        },
-        "source_quality": source_quality,
-        "normalized_observation": normalized_observation,
+        "dennis_generated_source_quality": dennis_source_quality,
+        "dennis_observation": dennis_observation,
         "source_checkpoint_private": {"raw_references": [], "downstream_source_chaining": []},
         "redaction": {
             "redaction_applied": True,
@@ -1543,10 +1471,9 @@ def merge_track_analysis_account_security_bundle(results: Iterable[Mapping[str, 
 
 def _observed_track_sub_interface(result: Mapping[str, Any]) -> str | None:
     for container in (
-        result.get("normalized_observation"),
+        result.get("dennis_observation"),
         result.get("response_shape_summary"),
-        result.get("source_card"),
-        result.get("source_quality"),
+        result.get("dennis_generated_source_quality"),
     ):
         found = _find_first(container, ("sub_interface", "observed_sub_interface"))
         if isinstance(found, str) and found:
@@ -1575,125 +1502,18 @@ def normalize_service_response(
     service_payload: Mapping[str, Any],
     http_status: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Normalize a standard browser-backed service result for Dennis."""
+    """Reject removed service-side normalization payloads.
+
+    Dennis runtime now consumes only pure passthrough envelopes. The former
+    service-normalized response path is intentionally removed so callers cannot
+    silently depend on `source_card`, service `source_quality`, or compat
+    summaries.
+    """
 
     _validate_action_name(action_name)
-    source_name = ACTION_TO_SOURCE[action_name]
-
-    if service_payload.get("sensitive_output") is not False:
-        return {
-            "source_name": source_name,
-            "action_name": action_name,
-            "source_status": "blocked",
-            "failure_layer": "sensitive_output_policy",
-            "error_type": "sensitive_output_violation",
-            "http_status": http_status,
-            "latency_ms": service_payload.get("latency_ms"),
-            "source_card": _synthetic_source_card(action_name, "blocked", "sensitive_output_violation"),
-            "source_quality": _synthetic_source_quality("blocked", "sensitive_output_violation"),
-            "sensitive_output": False,
-            "source_provenance": "browser_backed_service",
-        }
-
-    raw_status = _coerce_status(service_payload)
-    error_type = service_payload.get("error_type")
-    normalized_status, failure_layer = _normalize_status(raw_status, error_type)
-    output_scope = _coerce_output_scope(service_payload.get("output_scope"))
-    source_card = _sanitize_display_material(
-        service_payload.get("source_card") or _synthetic_source_card(action_name, normalized_status, error_type),
-        output_scope,
+    raise BrowserBackedServiceInputError(
+        "service-side normalized response mode was removed; use pure passthrough envelopes"
     )
-    source_quality = _sanitize_display_material(
-        service_payload.get("source_quality") or _synthetic_source_quality(normalized_status, error_type),
-        output_scope,
-    )
-    source_checkpoint_private = _sanitize_source_checkpoint_private(service_payload)
-    raw_reference_retained = bool(source_checkpoint_private.get("raw_references"))
-    if isinstance(source_quality, Mapping):
-        source_quality = dict(source_quality)
-        source_quality.setdefault("raw_reference_retained_for_followup", raw_reference_retained)
-        source_quality.setdefault("redaction_applied", True)
-        source_quality.setdefault("sensitive_output", False)
-        source_quality.setdefault("output_scope", output_scope)
-        source_quality.setdefault("field_classification", _field_classification_summary())
-        source_quality.setdefault(
-            "source_status_not_risk_exclusion",
-            normalized_status in {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"},
-        )
-    no_data_not_risk_exclusion = _extract_no_data_marker(source_quality, normalized_status)
-
-    normalized: Dict[str, Any] = {
-        "source_name": source_name,
-        "action_name": action_name,
-        "service_action_status": service_payload.get("status"),
-        "source_status": normalized_status,
-        "failure_layer": failure_layer,
-        "error_type": error_type,
-        "http_status": http_status,
-        "latency_ms": service_payload.get("latency_ms"),
-        "output_scope": output_scope,
-        "field_classification": _field_classification_summary(),
-        "source_card": source_card,
-        "source_quality": source_quality,
-        "source_checkpoint_private": source_checkpoint_private,
-        "redaction": {
-            "redaction_applied": True,
-            "raw_reference_retained_for_followup": raw_reference_retained,
-            "sensitive_output": False,
-        },
-        "sensitive_output": False,
-        "source_provenance": "browser_backed_service",
-        "no_data_not_risk_exclusion": no_data_not_risk_exclusion,
-    }
-
-    response_summary = _safe_nested_get(service_payload, ("data", "response_summary"))
-    if isinstance(response_summary, Mapping):
-        normalized["response_shape_summary"] = dict(response_summary)
-
-    if action_name == "track_analysis_check_data_ready":
-        _attach_track_analysis_check_data_ready_contract_fields(
-            normalized,
-            service_payload,
-            source_card,
-            source_quality,
-            output_scope,
-        )
-    if action_name == "archives_user_analysis":
-        _attach_archives_user_analysis_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "archives_photo_search":
-        _attach_archives_photo_search_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "archives_user_profile":
-        _attach_archives_user_profile_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "archives_related_users":
-        _attach_archives_related_users_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "archives_private_message_search":
-        _attach_archives_private_message_search_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "archives_past_four_items":
-        _attach_archives_past_four_items_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_event_detail":
-        _attach_rcp_event_detail_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_event_feature_list":
-        _attach_rcp_event_feature_list_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_policy_version_lookup":
-        _attach_rcp_policy_version_lookup_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_policy_detail_lookup":
-        _attach_rcp_policy_detail_lookup_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_policy_release_record_lookup":
-        _attach_rcp_policy_release_record_lookup_contract_fields(
-            normalized,
-            service_payload,
-            source_card,
-            source_quality,
-            output_scope,
-        )
-    if action_name == "rcp_policy_tree_lookup":
-        _attach_rcp_policy_tree_lookup_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_node_policy_attribution":
-        _attach_rcp_node_policy_attribution_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-    if action_name == "rcp_node_bind_policy_attribution":
-        _attach_rcp_node_bind_policy_attribution_contract_fields(normalized, service_payload, source_card, source_quality, output_scope)
-
-    return normalized
 
 
 def normalize_passthrough_service_response(
@@ -1733,7 +1553,7 @@ def normalize_passthrough_service_response(
     safety = service_payload.get("safety") if isinstance(service_payload.get("safety"), Mapping) else {}
     credential_material_output = safety.get("credential_material_output") if isinstance(safety, Mapping) else None
     if credential_material_output is not False:
-        normalized_observation = {
+        dennis_observation = {
             "source_name": source_name,
             "source_status": "blocked",
             "error_type": "credential_material_violation",
@@ -1745,8 +1565,12 @@ def normalize_passthrough_service_response(
                 "failure_layer": "sensitive_output_policy",
                 "error_type": "credential_material_violation",
                 "credential_material_violation": True,
-                "normalized_observation": normalized_observation,
-                "source_quality": _passthrough_source_quality("blocked", "credential_material_violation", normalized_observation),
+                "dennis_observation": dennis_observation,
+                "dennis_generated_source_quality": _passthrough_source_quality(
+                    "blocked",
+                    "credential_material_violation",
+                    dennis_observation,
+                ),
             }
         )
         return base
@@ -1757,7 +1581,7 @@ def normalize_passthrough_service_response(
         service_error_type = upstream.get("error_type")
     if service_payload.get("ok") is False and service_error_type:
         source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type)
-        normalized_observation = {
+        dennis_observation = {
             "source_name": source_name,
             "source_status": source_status,
             "error_type": service_error_type,
@@ -1768,8 +1592,8 @@ def normalize_passthrough_service_response(
                 "source_status": source_status,
                 "failure_layer": failure_layer,
                 "error_type": service_error_type,
-                "normalized_observation": normalized_observation,
-                "source_quality": _passthrough_source_quality(source_status, service_error_type, normalized_observation),
+                "dennis_observation": dennis_observation,
+                "dennis_generated_source_quality": _passthrough_source_quality(source_status, service_error_type, dennis_observation),
             }
         )
         return base
@@ -1777,7 +1601,7 @@ def normalize_passthrough_service_response(
     if not isinstance(upstream, Mapping) or "body" not in upstream or upstream.get("body") is None:
         if service_payload.get("ok") is not True:
             source_status, failure_layer = _normalize_passthrough_service_failure(service_error_type or "passthrough_failed")
-            normalized_observation = {
+            dennis_observation = {
                 "source_name": source_name,
                 "source_status": source_status,
                 "error_type": service_error_type or "passthrough_failed",
@@ -1788,16 +1612,16 @@ def normalize_passthrough_service_response(
                     "source_status": source_status,
                     "failure_layer": failure_layer,
                     "error_type": service_error_type or "passthrough_failed",
-                    "normalized_observation": normalized_observation,
-                    "source_quality": _passthrough_source_quality(
+                    "dennis_observation": dennis_observation,
+                    "dennis_generated_source_quality": _passthrough_source_quality(
                         source_status,
                         service_error_type or "passthrough_failed",
-                        normalized_observation,
+                        dennis_observation,
                     ),
                 }
             )
             return base
-        normalized_observation = {
+        dennis_observation = {
             "source_name": source_name,
             "source_status": "parse_error",
             "error_type": "passthrough_body_missing",
@@ -1808,29 +1632,33 @@ def normalize_passthrough_service_response(
                 "source_status": "parse_error",
                 "failure_layer": "parser",
                 "error_type": "passthrough_body_missing",
-                "normalized_observation": normalized_observation,
-                "source_quality": _passthrough_source_quality("parse_error", "passthrough_body_missing", normalized_observation),
+                "dennis_observation": dennis_observation,
+                "dennis_generated_source_quality": _passthrough_source_quality(
+                    "parse_error",
+                    "passthrough_body_missing",
+                    dennis_observation,
+                ),
             }
         )
         return base
 
-    normalized_observation = parse_passthrough_response(action_name, upstream.get("body"), request_params=request_params)
+    dennis_observation = parse_passthrough_response(action_name, upstream.get("body"), request_params=request_params)
     normalized_status, failure_layer = _normalize_status(
-        str(normalized_observation.get("source_status") or "completed"),
-        normalized_observation.get("error_type"),
+        str(dennis_observation.get("source_status") or "completed"),
+        dennis_observation.get("error_type"),
     )
     base.update(
         {
             "source_status": normalized_status,
             "failure_layer": failure_layer,
-            "error_type": normalized_observation.get("error_type"),
-            "normalized_observation": normalized_observation,
-            "source_quality": _passthrough_source_quality(
+            "error_type": dennis_observation.get("error_type"),
+            "dennis_observation": dennis_observation,
+            "dennis_generated_source_quality": _passthrough_source_quality(
                 normalized_status,
-                normalized_observation.get("error_type"),
-                normalized_observation,
+                dennis_observation.get("error_type"),
+                dennis_observation,
             ),
-            "no_data_not_risk_exclusion": bool(normalized_observation.get("no_data_not_risk_exclusion")),
+            "no_data_not_risk_exclusion": bool(dennis_observation.get("no_data_not_risk_exclusion")),
         }
     )
     return base
@@ -1839,15 +1667,15 @@ def normalize_passthrough_service_response(
 def _passthrough_source_quality(
     source_status: str,
     error_type: Optional[Any],
-    normalized_observation: Mapping[str, Any],
+    dennis_observation: Mapping[str, Any],
 ) -> Dict[str, Any]:
     return {
         "source_status": source_status,
         "error_type": error_type,
         "quality_status": "available" if source_status == "completed" else source_status,
         "response_mode": RESPONSE_MODE_PASSTHROUGH,
-        "normalized_observation_present": bool(normalized_observation),
-        "no_data_not_risk_exclusion": bool(normalized_observation.get("no_data_not_risk_exclusion")),
+        "dennis_observation_present": bool(dennis_observation),
+        "no_data_not_risk_exclusion": bool(dennis_observation.get("no_data_not_risk_exclusion")),
         "source_status_not_risk_exclusion": source_status in {
             "no_data",
             "blocked",
@@ -1857,11 +1685,10 @@ def _passthrough_source_quality(
             "invalid_parameter",
         },
         "passthrough_default_path": True,
-        "legacy_compat_summary_fallback": "disabled_unless_allow_compat_fallback_true",
         "raw_body_suppressed": True,
-        "raw_records_suppressed": bool(normalized_observation.get("raw_records_suppressed", True)),
-        "raw_labelInfo_suppressed": bool(normalized_observation.get("raw_labelInfo_suppressed", True)),
-        "raw_originalLog_suppressed": bool(normalized_observation.get("raw_originalLog_suppressed", True)),
+        "raw_records_suppressed": bool(dennis_observation.get("raw_records_suppressed", True)),
+        "raw_labelInfo_suppressed": bool(dennis_observation.get("raw_labelInfo_suppressed", True)),
+        "raw_originalLog_suppressed": bool(dennis_observation.get("raw_originalLog_suppressed", True)),
         "redaction_applied": True,
         "raw_reference_retained_for_followup": False,
         "sensitive_output": False,
@@ -1886,17 +1713,23 @@ def parse_passthrough_response(
     upstream_body: Any,
     request_params: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Parse passthrough upstream.body into a Dennis normalized observation."""
+    """Parse passthrough upstream.body into a Dennis-owned observation."""
 
     _validate_action_name(action_name)
     parser = PASSTHROUGH_PARSER_REGISTRY.get(action_name)
     if parser is None:
+        body = _coerce_json_body(upstream_body)
+        fields_observed = _observed_field_names(body)
+        rows = _extract_row_mappings(body)
+        record_count = _infer_generic_record_count(body, rows)
         return {
             "source_name": ACTION_TO_SOURCE[action_name],
-            "source_status": "blocked",
-            "error_type": "unsupported_passthrough_parser",
-            "fields_observed": _observed_field_names(_coerce_json_body(upstream_body)),
+            "source_status": "completed" if record_count > 0 or fields_observed else "no_data",
+            "records_count": record_count,
+            "fields_observed": fields_observed,
+            "samples": _generic_samples(body, rows),
             "raw_body_suppressed": True,
+            "no_data_not_risk_exclusion": True,
         }
     return parser(upstream_body, request_params=request_params)
 
@@ -2305,6 +2138,28 @@ def _extract_row_mappings(value: Any) -> list[Mapping[str, Any]]:
         if nested:
             return nested
     return []
+
+
+def _infer_generic_record_count(body: Any, rows: list[Mapping[str, Any]]) -> int:
+    if rows:
+        return len(rows)
+    count = _find_first(body, ("total", "totalCount", "count", "records_count", "event_count"))
+    if isinstance(count, int):
+        return max(count, 0)
+    if isinstance(body, list):
+        return len(body)
+    if isinstance(body, Mapping) and body:
+        return 1
+    return 0
+
+
+def _generic_samples(body: Any, rows: list[Mapping[str, Any]]) -> list[Any]:
+    material = rows[:3] if rows else ([body] if isinstance(body, Mapping) else body[:3] if isinstance(body, list) else [])
+    samples = []
+    for item in material:
+        if isinstance(item, Mapping):
+            samples.append(_sanitize_display_material(item, DEFAULT_OUTPUT_SCOPE))
+    return samples
 
 
 def _extract_device_ids(value: Any) -> list[Any]:
@@ -2839,807 +2694,8 @@ def _safe_passthrough_sample(value: Mapping[str, Any], candidate_keys: Iterable[
     return sample
 
 
-def _attach_track_analysis_check_data_ready_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("device_id", "deviceId", "appName", "product", "startTime", "endTime"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use readiness only as source-quality context; run profile/use-duration/device/latest source actions for evidence."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("track_analysis_action_contract", "track_analysis_check_data_ready")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_readiness_body_suppressed", True)
-        quality.setdefault("trace_id_value_suppressed", True)
-        quality.setdefault("readiness_not_evidence", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_user_analysis_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("user_id", "userId", "deviceId", "device_id_sample", "ip", "userIpDesc", "photo_id", "photoId"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Cross-check Archives user analysis with login logs, Weapon, and RCP before any risk judgement."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_user_analysis")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("requestParam_extraParam_suppressed", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_photo_search_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("user_id", "userId", "reportedIds", "photo_ids", "photoIds", "photo_id", "photoId", "live_id", "liveId"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use photo search as a content/report signal; cross-check publish detail, audit logs, and account timeline."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_photo_search")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_report_text_suppressed", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_user_profile_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("user_id", "userId", "uid", "device_id", "deviceId", "did", "ip", "userIpDesc"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use Archives user profile as account baseline; cross-check action logs and external evidence before judgement."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_user_profile")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_profile_body_suppressed", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_related_users_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("user_id", "userId", "related_user_ids", "relatedUserIds", "device_id", "deviceId", "did"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use related users only as expansion candidates; validate each related account before judgement."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_related_users")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_related_user_profile_suppressed", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_private_message_search_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("user_id", "userId", "fromUserId", "toUserId", "counterpart_user_ids", "counterpartUserIds"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use private-message summary only as social-interaction context; do not output plaintext."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_private_message_search")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_message_plaintext_suppressed", True)
-        quality.setdefault("private_message_summary_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_archives_past_four_items_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(material, ("user_id", "userId", "keyword"), output_scope)
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use four-info change logs as profile-change timeline only; cross-check with login/publish evidence."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("archives_action_contract", "archives_past_four_items")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_old_new_profile_content_suppressed", True)
-        quality.setdefault("raw_media_url_suppressed", True)
-        quality.setdefault("four_info_change_log_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_event_detail_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "eventId",
-                "eventType",
-                "sourceId",
-                "deviceId",
-                "ip",
-                "userRegisterIp",
-                "policyCode",
-                "policy_codes",
-                "hitFusePolicyCode",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use event detail only as single-event strategy evidence; call feature/policy attribution only with required upstream ids."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_event_detail")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_detail_body_suppressed", True)
-        quality.setdefault("strategy_event_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_event_feature_list_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("eventId", "eventType", "sourceId", "policyCode", "policy_codes", "hitFusePolicyCode"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use feature snapshot for attribution context only; do not output raw feature values."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_event_feature_list")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_feature_values_suppressed", True)
-        quality.setdefault("strategy_feature_snapshot_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_policy_version_lookup_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            ("eventId", "eventType", "policyCode", "policyVersion", "policy_codes", "snapshotVersion"),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use policy version context only for attribution prerequisites; do not treat version existence as risk judgement."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_policy_version_lookup")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_policy_version_body_suppressed", True)
-        quality.setdefault("policy_version_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_policy_detail_lookup_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "policyCode",
-                "policyVersion",
-                "eventTypeCode",
-                "policyTreeCode",
-                "policyTreeVersion",
-                "policy_codes",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use policy detail for strategy-governance context only; do not output raw condition expressions."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_policy_detail_lookup")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_policy_detail_body_suppressed", True)
-        quality.setdefault("raw_condition_expression_suppressed", True)
-        quality.setdefault("policy_detail_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_policy_release_record_lookup_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "policyCode",
-                "statusCode",
-                "business_union_key_count",
-                "parsed_policy_versions",
-                "pipeline_versions",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use release records for policy lifecycle provenance only; do not treat release status as risk judgement."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_policy_release_record_lookup")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_release_records_suppressed", True)
-        quality.setdefault("operator_identity_suppressed", True)
-        quality.setdefault("release_record_not_final_judgement", True)
-        quality.setdefault("pipelineVersion_not_policy_version", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_policy_tree_lookup_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "policyTreeCode",
-                "policyTreeVersion",
-                "policyTreeNodeCode",
-                "targetPolicyCode",
-                "policyCode",
-                "policy_codes",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use queryProPolicyTree for node resolution; never guess policyTreeNodeCode from policyCode or node name."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_policy_tree_lookup")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_policy_tree_body_suppressed", True)
-        quality.setdefault("raw_node_binding_list_suppressed", True)
-        quality.setdefault("raw_all_policy_code_list_suppressed", True)
-        quality.setdefault("policyTreeList_is_coarse_filter", True)
-        quality.setdefault("policy_tree_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_node_policy_attribution_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "eventId",
-                "eventType",
-                "policyCode",
-                "policyVersion",
-                "policyTreeNodeCode",
-                "sourceId",
-                "deviceId",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use condition-level attribution as policy explanation only; do not emit raw condition/feature dumps."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_node_policy_attribution")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_condition_dump_suppressed", True)
-        quality.setdefault("raw_feature_values_suppressed", True)
-        quality.setdefault("policy_attribution_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
-def _attach_rcp_node_bind_policy_attribution_contract_fields(
-    normalized: Dict[str, Any],
-    service_payload: Mapping[str, Any],
-    source_card: Any,
-    source_quality: Any,
-    output_scope: str,
-) -> None:
-    material = {
-        "service_payload": service_payload,
-        "source_card": source_card if isinstance(source_card, Mapping) else {},
-        "source_quality": source_quality if isinstance(source_quality, Mapping) else {},
-    }
-    key_entities = service_payload.get("key_entities")
-    if not isinstance(key_entities, Mapping):
-        key_entities = _pick_fields(
-            material,
-            (
-                "eventId",
-                "eventType",
-                "policyTreeCode",
-                "policyTreeVersion",
-                "policyTreeNodeCode",
-                "targetPolicyCode",
-                "effectivePolicy",
-                "policyCode",
-            ),
-            output_scope,
-        )
-    missing_fields = service_payload.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = _find_first(material, ("missing_fields", "fields_missing", "required_fields_missing"), output_scope)
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    next_action = service_payload.get("next_action")
-    if not isinstance(next_action, str) or not next_action:
-        next_action = _find_first(material, ("next_action",), output_scope)
-    if not isinstance(next_action, str) or not next_action:
-        next_action = "Use node-binding attribution only as strategy-tree explanation; do not emit raw condition or binding dumps."
-
-    normalized["key_entities"] = _sanitize_display_material(key_entities, output_scope)
-    normalized["missing_fields"] = _sanitize_display_material(missing_fields, output_scope)
-    normalized["next_action"] = _safe_display_value("next_action", next_action, output_scope)
-    normalized["no_data_not_risk_exclusion"] = True
-    if isinstance(normalized.get("source_quality"), Mapping):
-        quality = dict(normalized["source_quality"])
-        quality.setdefault("rcp_action_contract", "rcp_node_bind_policy_attribution")
-        quality["no_data_not_risk_exclusion"] = True
-        quality.setdefault("raw_response_full_body_returned", False)
-        quality.setdefault("raw_node_binding_body_suppressed", True)
-        quality.setdefault("raw_condition_dump_suppressed", True)
-        quality.setdefault("node_binding_attribution_not_final_judgement", True)
-        normalized["source_quality"] = quality
-    if isinstance(normalized.get("source_card"), Mapping):
-        card = dict(normalized["source_card"])
-        card.setdefault("key_entities", normalized["key_entities"])
-        card.setdefault("missing_fields", normalized["missing_fields"])
-        card.setdefault("next_action", normalized["next_action"])
-        normalized["source_card"] = card
-
-
 def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
-    """Bucket normalized source results for Dennis evidence rendering."""
+    """Bucket Dennis-interpreted source results for evidence rendering."""
 
     matrix: Dict[str, Any] = {
         "completed_sources": [],
@@ -3675,8 +2731,8 @@ def build_source_completion_matrix(results: Iterable[Mapping[str, Any]]) -> Dict
             "error_type": result.get("error_type"),
             "latency_ms": result.get("latency_ms"),
             "output_scope": _coerce_output_scope(result.get("output_scope")),
-            "source_card_present": result.get("source_card") is not None,
-            "source_quality_present": result.get("source_quality") is not None,
+            "dennis_observation_present": bool(_result_observation(result)),
+            "dennis_generated_source_quality_present": bool(_result_quality(result)),
             "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
             "source_status_not_risk_exclusion": status in {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "invalid_parameter"},
             "sensitive_output": False,
@@ -3688,7 +2744,7 @@ def build_partial_evidence_card(
     results: Iterable[Mapping[str, Any]],
     output_scope: str = DEFAULT_OUTPUT_SCOPE,
 ) -> Dict[str, Any]:
-    """Build a display-safe partial evidence card from normalized source results."""
+    """Build a display-safe partial evidence card from Dennis source results."""
 
     scope = _coerce_output_scope(output_scope)
     materialized_results = [dict(result) for result in results]
@@ -3700,8 +2756,8 @@ def build_partial_evidence_card(
                 "source_name": result.get("source_name"),
                 "source_status": result.get("source_status"),
                 "error_type": result.get("error_type"),
-                "source_card_present": result.get("source_card") is not None,
-                "source_quality_present": result.get("source_quality") is not None,
+                "dennis_observation_present": bool(_result_observation(result)),
+                "dennis_generated_source_quality_present": bool(_result_quality(result)),
                 "no_data_not_risk_exclusion": bool(result.get("no_data_not_risk_exclusion")),
                 "business_summary": build_business_evidence_summary(result, output_scope=scope),
             }
@@ -3720,7 +2776,11 @@ def build_partial_evidence_card(
         "source_completion_matrix": matrix,
         "completed_sources": matrix["completed_sources"],
         "no_data_sources": matrix["no_data_sources"],
+        "auth_failed_sources": matrix["auth_failed_sources"],
         "blocked_sources": matrix["blocked_sources"],
+        "timeout_sources": matrix["timeout_sources"],
+        "parse_error_sources": matrix["parse_error_sources"],
+        "invalid_parameter_sources": matrix["invalid_parameter_sources"],
         "source_quality": matrix["source_quality"],
         "no_data_not_risk_exclusion": any(
             bool(result.get("no_data_not_risk_exclusion")) for result in materialized_results
@@ -3799,7 +2859,7 @@ def build_business_evidence_summary(
     result: Mapping[str, Any],
     output_scope: str = DEFAULT_OUTPUT_SCOPE,
 ) -> Dict[str, Any]:
-    """Extract display-safe business evidence from source_card/source_quality."""
+    """Extract display-safe business evidence from Dennis-owned observations."""
 
     if output_scope == DEFAULT_OUTPUT_SCOPE and result.get("output_scope"):
         scope = _coerce_output_scope(result.get("output_scope"))
@@ -3854,8 +2914,7 @@ def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[st
     for result in results:
         source_name = str(result.get("source_name"))
         status = result.get("source_status")
-        source_quality = result.get("source_quality") if isinstance(result.get("source_quality"), Mapping) else {}
-        source_card = result.get("source_card") if isinstance(result.get("source_card"), Mapping) else {}
+        source_quality = _result_quality(result)
         for sub_interface in source_quality.get("sub_interfaces_missing", []) if isinstance(source_quality.get("sub_interfaces_missing"), list) else []:
             missing.append(
                 {
@@ -3864,12 +2923,8 @@ def build_missing_evidence(results: Iterable[Mapping[str, Any]]) -> list[Dict[st
                     "caveat": "account-security track bundle is partial until this sub-interface is collected",
                 }
             )
-        normalized_observation = (
-            result.get("normalized_observation")
-            if isinstance(result.get("normalized_observation"), Mapping)
-            else {}
-        )
-        weapon_material = source_card if source_card else normalized_observation
+        observation = _result_observation(result)
+        weapon_material = observation
         if source_name == "weapon_inventory" and _find_first(weapon_material, ("riskData_status",)) == "not_executed_missing_device_id":
             missing.append(
                 {
@@ -3918,11 +2973,25 @@ def _source_to_action(source_name: str) -> str:
 
 def _summary_material(result: Mapping[str, Any], output_scope: str = DEFAULT_OUTPUT_SCOPE) -> Dict[str, Any]:
     merged: Dict[str, Any] = {}
-    for key in ("source_card", "source_quality", "response_shape_summary", "normalized_observation"):
+    for key in (
+        "dennis_generated_source_quality",
+        "response_shape_summary",
+        "dennis_observation",
+    ):
         value = result.get(key)
         if isinstance(value, Mapping):
             merged[key] = _sanitize_display_material(value, output_scope)
     return merged
+
+
+def _result_observation(result: Mapping[str, Any]) -> Dict[str, Any]:
+    value = result.get("dennis_observation")
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _result_quality(result: Mapping[str, Any]) -> Dict[str, Any]:
+    value = result.get("dennis_generated_source_quality")
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _has_private_raw_reference(result: Mapping[str, Any], ref_type: str) -> bool:
@@ -4221,9 +3290,8 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str, output_s
         "latency_ms": result.get("latency_ms"),
         "output_scope": output_scope,
         "field_classification": _field_classification_summary(),
-        "source_card_exists": result.get("source_card") is not None,
-        "source_quality_exists": result.get("source_quality") is not None,
-        "normalized_observation_exists": isinstance(result.get("normalized_observation"), Mapping),
+        "dennis_generated_source_quality_exists": bool(_result_quality(result)),
+        "dennis_observation_exists": bool(_result_observation(result)),
         "response_mode": result.get("response_mode"),
         "sensitive_output": False,
         "raw_body_suppressed": True,
@@ -4235,7 +3303,7 @@ def _base_source_summary(result: Mapping[str, Any], evidence_type: str, output_s
 
 def _track_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
-    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
+    observation = material.get("dennis_observation") if isinstance(material.get("dennis_observation"), Mapping) else {}
     summary = _base_source_summary(result, "track_analysis", output_scope)
     summary["bundle_summary"] = _pick_fields(
         material,
@@ -4278,7 +3346,7 @@ def _track_analysis_summary(result: Mapping[str, Any], output_scope: str) -> Dic
         output_scope,
     )
     if observation:
-        summary["normalized_observation_summary"] = _pick_fields(
+        summary["dennis_observation_summary"] = _pick_fields(
             observation,
             (
                 "sub_interface",
@@ -4340,7 +3408,7 @@ def _track_analysis_check_data_ready_summary(result: Mapping[str, Any], output_s
 
 def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
-    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
+    observation = material.get("dennis_observation") if isinstance(material.get("dennis_observation"), Mapping) else {}
     summary = _base_source_summary(result, "rcp_snapshot", output_scope)
     summary["event_summary"] = _pick_fields(
         material,
@@ -4365,7 +3433,7 @@ def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]
         "_occurTime": _find_first(material, ("_occurTime_present", "_occurTime", "occurTime_samples"), output_scope) is not None,
     }
     if observation:
-        summary["normalized_observation_summary"] = _pick_fields(
+        summary["dennis_observation_summary"] = _pick_fields(
             observation,
             (
                 "event_count",
@@ -4387,7 +3455,7 @@ def _rcp_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]
 
 def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
-    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
+    observation = material.get("dennis_observation") if isinstance(material.get("dennis_observation"), Mapping) else {}
     summary = _base_source_summary(result, "weapon_inventory", output_scope)
     summary["graph_summary"] = _pick_fields(
         material,
@@ -4417,7 +3485,7 @@ def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, A
         "raw_device_id_suppressed_from_display": True,
     }
     if observation:
-        summary["normalized_observation_summary"] = _pick_fields(
+        summary["dennis_observation_summary"] = _pick_fields(
             observation,
             (
                 "graph_status",
@@ -4443,7 +3511,7 @@ def _weapon_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, A
 
 def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[str, Any]:
     material = _summary_material(result, output_scope)
-    observation = material.get("normalized_observation") if isinstance(material.get("normalized_observation"), Mapping) else {}
+    observation = material.get("dennis_observation") if isinstance(material.get("dennis_observation"), Mapping) else {}
     summary = _base_source_summary(result, "login_logs", output_scope)
     summary["login_window_summary"] = _pick_fields(
         material,
@@ -4464,13 +3532,13 @@ def _login_logs_summary(result: Mapping[str, Any], output_scope: str) -> Dict[st
     summary["login_window_summary"]["source_status"] = result.get("source_status")
     summary["login_window_summary"]["error_type"] = result.get("error_type")
     summary["login_window_summary"]["standard_browser_backed_source_result"] = (
-        (result.get("source_card") is not None or isinstance(result.get("normalized_observation"), Mapping))
-        and result.get("source_quality") is not None
+        bool(_result_observation(result))
+        and bool(_result_quality(result))
         and result.get("latency_ms") is not None
         and result.get("sensitive_output") is False
     )
     if observation:
-        summary["normalized_observation_summary"] = _pick_fields(
+        summary["dennis_observation_summary"] = _pick_fields(
             observation,
             ("records_count", "fields_observed", "samples", "raw_records_suppressed"),
             output_scope,
@@ -4497,7 +3565,7 @@ def _archives_user_analysis_summary(result: Mapping[str, Any], output_scope: str
         "raw_full_body_suppressed": True,
         "requestParam_extraParam_suppressed": True,
     }
-    summary["risk_event_scan"] = _pick_fields(
+    summary["dennis_action_observation"] = _pick_fields(
         material,
         (
             "total_records_visible",
@@ -5219,6 +4287,12 @@ def _transport_result(
     detail: Optional[str] = None,
 ) -> Dict[str, Any]:
     normalized_status, normalized_failure_layer = _normalize_status(source_status, error_type)
+    dennis_observation = {
+        "source_name": ACTION_TO_SOURCE[action_name],
+        "source_status": normalized_status,
+        "error_type": error_type,
+        "raw_body_suppressed": True,
+    }
     return {
         "source_name": ACTION_TO_SOURCE[action_name],
         "action_name": action_name,
@@ -5229,8 +4303,8 @@ def _transport_result(
         "latency_ms": int((time.monotonic() - started_at) * 1000),
         "output_scope": DEFAULT_OUTPUT_SCOPE,
         "field_classification": _field_classification_summary(),
-        "source_card": _synthetic_source_card(action_name, normalized_status, error_type),
-        "source_quality": _synthetic_source_quality(normalized_status, error_type, detail=detail),
+        "dennis_observation": dennis_observation,
+        "dennis_generated_source_quality": _synthetic_source_quality(normalized_status, error_type, detail=detail),
         "sensitive_output": False,
         "source_provenance": "browser_backed_service",
         "no_data_not_risk_exclusion": False,
@@ -5340,26 +4414,6 @@ def _sanitize_source_checkpoint_private(payload: Mapping[str, Any]) -> Dict[str,
     }
 
 
-def _synthetic_source_card(action_name: str, source_status: str, error_type: Optional[str]) -> Dict[str, Any]:
-    return {
-        "source_name": ACTION_TO_SOURCE[action_name],
-        "action_name": action_name,
-        "source_status": source_status,
-        "error_type": error_type,
-        "source_provenance": "browser_backed_service",
-        "body_policy": {
-            "raw_response_full_body_returned": False,
-            "credential_secret_plaintext_returned": False,
-            "raw_records_full_dump_returned": False,
-            "raw_labelInfo_full_dump_returned": False,
-            "raw_originalLog_full_dump_returned": False,
-            "sensitive_output": False,
-        },
-        "output_scope": DEFAULT_OUTPUT_SCOPE,
-        "field_classification": _field_classification_summary(),
-    }
-
-
 def _synthetic_source_quality(source_status: str, error_type: Optional[str], detail: Optional[str] = None) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "source_status": source_status,
@@ -5441,823 +4495,79 @@ def _passthrough_fixture_payload(
     return payload
 
 
-def _fixture_payload(
-    action_name: str,
-    source_status: str,
-    error_type: Optional[str] = None,
-    *,
-    track_sub_interface: Optional[str] = None,
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
-        "action": action_name,
-        "status": source_status,
-        "source_status": source_status,
-        "error_type": error_type,
-        "latency_ms": 123,
-        "output_scope": DEFAULT_OUTPUT_SCOPE,
-        "field_classification": _field_classification_summary(),
-        "source_card": {
-            "source_name": ACTION_TO_SOURCE[action_name],
-            "action_name": action_name,
-            "source_status": source_status,
-            "output_scope": DEFAULT_OUTPUT_SCOPE,
-            "field_classification": _field_classification_summary(),
-            "body_policy": {
-                "raw_response_full_body_returned": False,
-                "credential_secret_plaintext_returned": False,
-                "raw_records_full_dump_returned": False,
-                "raw_labelInfo_full_dump_returned": False,
-                "raw_originalLog_full_dump_returned": False,
-                "sensitive_output": False,
-            },
-        },
-        "source_quality": {
-            "source_status": source_status,
-            "error_type": error_type,
-            "output_scope": DEFAULT_OUTPUT_SCOPE,
-            "field_classification": _field_classification_summary(),
-            "no_data_not_risk_exclusion": source_status in NO_DATA_STATUSES,
-            "sensitive_output_false_meaning": "no credential_secret/raw dumps; risk entities allowed in internal review",
-        },
-        "sensitive_output": False,
-        "data": {
-            "response_summary": {
-                "shape_only": True,
-                "raw_response_full_body_returned": False,
+def _default_passthrough_body(action_name: str, typed_params: Mapping[str, Any]) -> Dict[str, Any]:
+    user_id = str(typed_params.get("user_id") or typed_params.get("entity_id") or "2871834924")
+    if action_name == "login_logs_search":
+        return {
+            "data": {
+                "logSearchModels": [
+                    {
+                        "logSource": "APP_LOGIN",
+                        "method": "PASSWORD",
+                        "timestamp": 1764288000000,
+                        "userId": user_id,
+                        "deviceId": "ANDROID_login_device_001",
+                        "userIpDesc": "10.20.30.40",
+                    }
+                ]
             }
-        },
-    }
-    source_card = payload["source_card"]
+        }
     if action_name == "track_analysis_summary":
-        source_card["bundle_summary"] = {
-            "mode": TRACK_ANALYSIS_BUNDLE_MODE,
-            "sub_interfaces": list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-            "sub_interfaces_completed": [track_sub_interface] if track_sub_interface else list(ACCOUNT_SECURITY_TRACK_SUB_INTERFACES),
-            "sub_interfaces_missing": [
-                item for item in ACCOUNT_SECURITY_TRACK_SUB_INTERFACES if track_sub_interface and item != track_sub_interface
-            ],
-            "account_security_bundle": True,
-        }
-        payload["data"]["response_summary"]["track_analysis"] = {
-            "sub_interface": track_sub_interface or "account_security_bundle",
-            "appName": "KUAISHOU",
-            "no_data_not_risk_exclusion": True,
-        }
-        if track_sub_interface in {None, "profile"}:
-            source_card["profile_summary"] = {
-                "register_time_present": True,
-                "fan_distribution_present": True,
-                "active_days_bucket_present": True,
-                "device_ids_count": 2,
-                "user_id_sample": "2871834924",
-            }
-        if track_sub_interface in {None, "getLastestDateTime"}:
-            source_card["latest_timestamp_summary"] = {
-                "latest_datetime_present": True,
-                "uid_did_relation_latest_datetime_present": True,
-            }
-        if track_sub_interface in {None, "getUseDuration"}:
-            source_card["getUseDuration"] = {
-                "rows_count": 7,
-                "nonzero_days_count": 5,
-                "total_duration": 32400,
-                "peak_date": "2026-05-28",
-            }
-        if track_sub_interface in {None, "getDeviceIds"}:
-            source_card["getDeviceIds"] = {
-                "device_ids_count": 2,
-                "device_id_sample": "ANDROID_track_device_001",
-                "deviceIds": ["ANDROID_track_device_001", "IOS_track_device_002"],
-                "device_model_fields_present": True,
-                "last_active_fields_present": True,
-            }
-    elif action_name == "track_analysis_check_data_ready":
-        source_card["track_analysis_check_data_ready_summary"] = {
-            "fixed_path": TRACK_ANALYSIS_CHECK_DATA_READY_FIXED_PATH,
-            "readiness_status": "completed",
-            "dateStatus": "ready",
-            "date_status_present": True,
-            "code": 1,
-            "message_summary": "readiness status returned",
-            "trace_id_present": True,
-            "coverage_limitations": ["readiness_not_evidence"],
-            "rawReadinessBody": "raw_readiness_body_should_not_render",
-            "traceId": "trace_id_value_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "device_id": "ANDROID_track_device_001",
-            "deviceId": "ANDROID_track_device_001",
-            "appName": "KUAISHOU",
-            "product": "KUAISHOU",
-            "startTime": 1764201600000,
-            "endTime": 1764288000000,
-        }
-        source_card["missing_fields"] = ["track_analysis_profile", "track_analysis_getUseDuration", "track_analysis_getDeviceIds"]
-        source_card["next_action"] = "Use readiness only as source-quality context; run Track Analysis evidence actions next."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "track_analysis_action_contract": "track_analysis_check_data_ready",
-                "fixed_path": TRACK_ANALYSIS_CHECK_DATA_READY_FIXED_PATH,
-                "raw_readiness_body_suppressed": True,
-                "trace_id_value_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "readiness_not_evidence": True,
-            }
-        )
-    elif action_name == "rcp_snapshot":
-        source_card["event_summary"] = {
-            "event_count": 3,
-            "table_header_columns": ["eventId", "_occurTime", "hitFusePolicyCode"],
-            "returned_columns_observed": ["eventId", "_occurTime", "hitFusePolicyCode"],
-            "first_event_shape_keys": ["eventId", "_occurTime", "hitFusePolicyCode"],
-            "dynamic_columns_observed": ["hitFusePolicyCode"],
-            "first_event_entity_samples": {
-                "eventId": "evt_rcp_001",
-                "sourceId": "src_rcp_001",
-                "deviceId": "ANDROID_rcp_device_001",
-                "hitFusePolicyCode": "BS_fake_account_register",
-                "_occurTime": "2026-05-29 10:00:00",
+        sub_interface = typed_params.get("sub_interface") or "profile"
+        return {
+            "data": {
+                "profile": {
+                    "firstLevelProfile": {
+                        "userId": user_id,
+                        "province": "Guangdong",
+                        "city": "Shenzhen",
+                        "registerTime": "2020-01-01",
+                    }
+                },
+                "deviceIds": ["ANDROID_track_device_001"],
+                "latestDateTime": "2026-05-28",
             },
-            "hitFusePolicyCode_present": True,
-            "eventId_present": True,
-            "_occurTime_present": True,
+            "sub_interface": sub_interface,
         }
-    elif action_name == "weapon_inventory":
-        source_card["weapon_summary"] = {
-            "graph_status": "completed",
-            "related_device_count": 2,
-            "related_user_count": 4,
-            "related_device_id_sample": "ANDROID_weapon_device_001",
-            "related_user_id_sample": "2871834924",
-            "riskData_status": "completed",
-            "risk_label_count": 2,
-            "risk_group_names_observed": ["account_risk", "device_risk"],
-            "readable_label_sample": ["risk_label_sample"],
-            "userLevel_observed": True,
-            "originalLog_eventId_sample": "evt_weapon_001",
-            "raw_labelInfo": {"deviceId": "raw_device_should_not_render", "originalLog": "raw_log_should_not_render"},
-        }
-        payload["source_checkpoint_private"] = {
-            "raw_references": [
-                {
-                    "ref_type": "device_id",
-                    "raw_reference_safe_id": "device_safe_handle_001",
-                    "alias": "device_ref_1",
-                    "masked_value": "ANDROID_***9999",
-                    "allowed_downstream_sources": ["weapon_device_risk_if_device_id_available"],
-                    "retention_scope": "current_task_only",
-                    "raw_value": "ANDROID_raw_device_should_not_render",
+    if action_name == "weapon_inventory":
+        return {
+            "data": {
+                "graphData": {
+                    "pointInfoMap": {
+                        user_id: {"entityType": "USER_ID"},
+                        "ANDROID_weapon_device_001": {"entityType": "DEVICE_ID"},
+                    },
+                    "relationEdgeList": [{"source": user_id, "target": "ANDROID_weapon_device_001"}],
                 }
-            ],
-            "raw_device_ids_for_chaining": [
-                {
-                    "raw_reference_safe_id": "device_safe_handle_001",
-                    "alias": "device_ref_1",
-                    "masked_value": "ANDROID_***9999",
-                    "allowed_downstream_sources": ["weapon_device_risk_if_device_id_available"],
-                    "raw_value": "ANDROID_raw_device_should_not_render",
-                }
-            ],
-            "downstream_source_chaining": ["weapon_device_risk_if_device_id_available"],
-        }
-    elif action_name == "login_logs_search":
-        source_card["login_logs_summary"] = {
-            "records_count": 0 if source_status in NO_DATA_STATUSES else 2,
-            "time_window_observed": "visible_window",
-            "first_login_time_observed": None,
-            "last_login_time_observed": None,
-            "ip_sample": "10.20.30.40",
-            "device_id_sample": "ANDROID_login_device_001",
-            "user_id_sample": "2871834924",
-            "method_sample": "PASSWORD",
-            "logSource_sample": "account_login",
-            "phone_number_sample": "13812345678",
-            "id_card": "110105199001011234",
-            "real_name": "Fixture User",
-        }
-    elif action_name == "archives_user_analysis":
-        source_card["archives_user_analysis_summary"] = {
-            "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
-            "records_count": 3,
-            "total_records_visible": 3,
-            "dataList_length": 3,
-            "operation_type_counts": {"loginStart": 2, "scanCode": 1},
-            "success_failure_counts": {"success": 2, "failed": 1},
-            "earliest_event_time": "2026-05-28 09:00:00",
-            "latest_event_time": "2026-05-28 11:00:00",
-            "login_method_sequence": ["loginStart", "scanCode"],
-            "ip_consistency": "mixed",
-            "device_consistency": "single_device",
-            "app_version_consistency": "stable",
-            "geo_consistency": "mixed_city",
-            "suspicious_event_markers": ["scanCode_after_loginStart"],
-            "pagination_required": False,
-            "coverage_limitations": ["archives_user_analysis_is_not_unified_login_log"],
-            "userId": "2871834924",
-            "deviceId": "ANDROID_archives_device_001",
-            "userIpDesc": "10.20.30.40",
-            "requestParam": "token=raw_token_should_not_render&open_id=raw_open_id_should_not_render",
-            "extraParam": "refresh_token=raw_refresh_token_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "user_id": "2871834924",
-            "deviceId": "ANDROID_archives_device_001",
-            "ip": "10.20.30.40",
-            "photo_id": "photo_123456",
-        }
-        source_card["missing_fields"] = ["unified_login_full_window"]
-        source_card["next_action"] = "Cross-check with login logs and Weapon before judgement."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_user_analysis",
-                "fixed_path": ARCHIVES_USER_ANALYSIS_FIXED_PATH,
-                "requestParam_extraParam_suppressed": True,
-                "raw_response_full_body_returned": False,
             }
-        )
-    elif action_name == "archives_photo_search":
-        source_card["archives_photo_search_summary"] = {
-            "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
-            "photo_count": 2,
-            "totalCount": 2,
-            "dataList_length": 2,
-            "publish_time_range": {
-                "earliest_publish_time": "2026-05-27 08:00:00",
-                "latest_publish_time": "2026-05-28 12:00:00",
-            },
-            "status_summary": {"visible": 1, "deleted": 1},
-            "risk_context_summary": ["reported_photo_cluster", "publish_time_anchor_present"],
-            "report_reason_summary": {"fraud": 1, "harassment": 1},
-            "pagination_required": False,
-            "coverage_limitations": ["report_signal_not_final_judgement"],
-            "userId": "2871834924",
-            "reportedIds": "2871834924",
-            "photo_ids": ["photo_1001", "photo_1002"],
-            "photoId": "photo_1001",
-            "liveId": "live_2001",
-            "reportText": "raw_report_text_should_not_render",
-            "reportContent": "raw_report_content_should_not_render",
         }
-        source_card["key_entities"] = {
-            "user_id": "2871834924",
-            "photo_ids": ["photo_1001", "photo_1002"],
-            "live_id": "live_2001",
-        }
-        source_card["missing_fields"] = ["photo_detail_meta"]
-        source_card["next_action"] = "Cross-check reported photo with photo detail, audit log, and account timeline."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_photo_search",
-                "fixed_path": ARCHIVES_PHOTO_SEARCH_FIXED_PATH,
-                "raw_report_text_suppressed": True,
-                "raw_response_full_body_returned": False,
-            }
-        )
-    elif action_name == "archives_user_profile":
-        source_card["archives_user_profile_summary"] = {
-            "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
-            "account_status_summary": {"account_state": "normal", "profile_visible": True},
-            "registration_summary": {"register_time_present": True, "register_channel_present": True},
-            "profile_state_summary": {"avatar_present": True, "intro_present": True, "nickname_present": True},
-            "label_summary": {"risk_label_count": 1, "label_groups_observed": ["account_baseline"]},
-            "risk_info_summary": {"risk_info_present": True, "risk_info_count": 1},
-            "shop_status_summary": {"shop_status_present": False},
-            "punish_status_summary": {"user_level_punish_unsupported": True},
-            "coverage_limitations": ["home_info_is_current_state_not_history"],
-            "userId": "2871834924",
-            "deviceId": "ANDROID_profile_device_001",
-            "userIpDesc": "10.20.30.41",
-            "phone_number": "13812345678",
-            "id_card": "110105199001011234",
-            "real_name": "Fixture User",
-            "rawProfileBody": "raw_profile_body_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "user_id": "2871834924",
-            "deviceId": "ANDROID_profile_device_001",
-            "ip": "10.20.30.41",
-        }
-        source_card["missing_fields"] = ["profile_change_history"]
-        source_card["next_action"] = "Cross-check profile baseline with user analysis and content/report evidence."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_user_profile",
-                "fixed_path": ARCHIVES_USER_PROFILE_FIXED_PATH,
-                "raw_profile_body_suppressed": True,
-                "raw_response_full_body_returned": False,
-            }
-        )
-    elif action_name == "archives_related_users":
-        source_card["archives_related_users_summary"] = {
-            "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
-            "related_user_count": 3,
-            "relation_type_summary": {
-                "same_device_registered_count": 2,
-                "same_device_login_count": 1,
-            },
-            "same_device_registered_count": 2,
-            "same_device_login_count": 1,
-            "status_summary": {"normal": 2, "restricted": 1},
-            "risk_context_summary": ["same_device_cluster_candidate", "needs_per_account_validation"],
-            "pagination_required": False,
-            "coverage_limitations": ["same_device_relation_not_standalone_judgement"],
-            "userId": "2871834924",
-            "related_user_ids": ["772671837", "3481089791", "2871834924"],
-            "deviceId": "ANDROID_relation_device_001",
-            "rawRelatedUserProfile": "raw_related_user_profile_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "user_id": "2871834924",
-            "related_user_ids": ["772671837", "3481089791", "2871834924"],
-            "deviceId": "ANDROID_relation_device_001",
-        }
-        source_card["missing_fields"] = ["related_user_login_behavior"]
-        source_card["next_action"] = "Validate related users individually before any cluster judgement."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_related_users",
-                "fixed_path": ARCHIVES_RELATED_USERS_FIXED_PATH,
-                "raw_related_user_profile_suppressed": True,
-                "raw_response_full_body_returned": False,
-            }
-        )
-    elif action_name == "archives_private_message_search":
-        source_card["archives_private_message_search_summary"] = {
-            "fixed_path": ARCHIVES_PRIVATE_MESSAGE_SEARCH_FIXED_PATH,
-            "private_message_count": 12,
-            "total": 12,
-            "direction_summary": {"sent": 7, "received": 5},
-            "message_time_range": {
-                "earliest_message_time": "2026-05-27 10:00:00",
-                "latest_message_time": "2026-05-28 16:30:00",
-            },
-            "status_summary": {"normal": 10, "deleted": 2},
-            "counterpart_count": 3,
-            "risk_context_summary": ["message_activity_present", "plaintext_suppressed"],
-            "pagination_required": False,
-            "coverage_limitations": ["private_message_summary_not_final_judgement"],
-            "userId": "2871834924",
-            "fromUserId": "2871834924",
-            "counterpart_user_ids": ["772671837", "3481089791"],
-            "messageContent": "raw_private_message_text_should_not_render",
-            "privateMessagePlaintext": "raw_private_message_plaintext_should_not_render",
-            "messageText": "full_message_text_should_not_render",
-            "counterpartNickname": "raw_counterpart_nickname_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "user_id": "2871834924",
-            "counterpart_user_ids": ["772671837", "3481089791"],
-        }
-        source_card["missing_fields"] = ["message_risk_policy_attribution"]
-        source_card["next_action"] = "Use message counts/status only; do not output private message plaintext."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_private_message_search",
-                "fixed_path": ARCHIVES_PRIVATE_MESSAGE_SEARCH_FIXED_PATH,
-                "raw_message_plaintext_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "private_message_summary_not_final_judgement": True,
-            }
-        )
-    elif action_name == "archives_past_four_items":
-        source_card["archives_past_four_items_summary"] = {
-            "fixed_path": ARCHIVES_PAST_FOUR_ITEMS_FIXED_PATH,
-            "total_changes": 6,
-            "total": 6,
-            "change_time_range": {
-                "earliest_change_time": "2026-05-26 09:00:00",
-                "latest_change_time": "2026-05-28 14:00:00",
-            },
-            "info_type_summary": {
-                "username": 1,
-                "avatar": 2,
-                "profile_description": 2,
-                "background": 1,
-            },
-            "status_summary": {"approved": 4, "rejected": 2},
-            "profile_change_risk_summary": ["profile_changed_after_login_window", "raw_profile_content_suppressed"],
-            "pagination_required": False,
-            "coverage_limitations": ["four_info_change_log_not_final_judgement"],
-            "userId": "2871834924",
-            "keyword": "2871834924",
-            "oldValue": "raw_old_profile_value_should_not_render",
-            "newValue": "raw_new_profile_value_should_not_render",
-            "avatarUrl": "https://example.invalid/raw_avatar_should_not_render",
-            "backgroundUrl": "https://example.invalid/raw_background_should_not_render",
-            "profileDescription": "raw_profile_description_should_not_render",
-            "operatorName": "raw_operator_name_should_not_render",
-            "rawFourInfo": "full_four_info_raw_should_not_render",
-        }
-        source_card["key_entities"] = {"user_id": "2871834924"}
-        source_card["missing_fields"] = ["login_or_publish_alignment"]
-        source_card["next_action"] = "Align profile-change timeline with login, publish, and report evidence before judgement."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "archives_action_contract": "archives_past_four_items",
-                "fixed_path": ARCHIVES_PAST_FOUR_ITEMS_FIXED_PATH,
-                "raw_old_new_profile_content_suppressed": True,
-                "raw_media_url_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "four_info_change_log_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_event_detail":
-        source_card["rcp_event_detail_summary"] = {
-            "fixed_path": RCP_EVENT_DETAIL_FIXED_PATH,
-            "event_detail_status": "completed",
-            "eventType": "USER_REGISTER_NEW",
-            "eventId": "5370247893355116990",
-            "_occurTime": 1779774526479,
-            "occur_time": "2026-05-26 01:48:46",
-            "sourceId": "2871834924",
-            "deviceId": "ANDROID_rcp_detail_device_001",
-            "userRegisterIp": "10.20.30.42",
-            "real_time_feedback": "blocked",
-            "error_code": "217009",
-            "side_effect_ops_summary": ["REGISTER_BLOCK"],
-            "effective_policy_summary": "BS_fake_account_register_thirdPlatformAll_bindphone#5",
-            "hit_policy_count": 2,
-            "hit_policy_codes": [
-                "BS_Register_nosense_captcha_all#5",
-                "BS_fake_account_register_thirdPlatformAll_bindphone#5",
-            ],
-            "policy_exception_summary": {"exception_present": False},
-            "coverage_limitations": ["single_event_detail_not_final_judgement"],
-            "rawDetailBody": "raw_rcp_detail_body_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "eventId": "5370247893355116990",
-            "eventType": "USER_REGISTER_NEW",
-            "sourceId": "2871834924",
-            "deviceId": "ANDROID_rcp_detail_device_001",
-            "userRegisterIp": "10.20.30.42",
-            "policy_codes": ["BS_Register_nosense_captcha_all#5", "BS_fake_account_register_thirdPlatformAll_bindphone#5"],
-        }
-        source_card["missing_fields"] = ["policyTreeNodeCode"]
-        source_card["next_action"] = "Use _occurTime as queryTime for rcp_event_feature_list or policy attribution if needed."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_event_detail",
-                "fixed_path": RCP_EVENT_DETAIL_FIXED_PATH,
-                "raw_detail_body_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "strategy_event_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_event_feature_list":
-        source_card["rcp_event_feature_list_summary"] = {
-            "fixed_path": RCP_EVENT_FEATURE_LIST_FIXED_PATH,
-            "feature_snapshot_status": "completed",
-            "eventType": "USER_REGISTER_NEW",
-            "eventId": "5370247893355116990",
-            "queryTime": 1779774526479,
-            "featureGroup": "",
-            "feature_count": 519,
-            "feature_group_distribution": {
-                "DERIVE": 120,
-                "ORIG": 90,
-                "COUNTER": 160,
-                "SYS": 50,
-                "DATASERV": 60,
-                "OTHER": 39,
-            },
-            "feature_key_samples": ["deviceIdWeaponLogCnt", "deviceClientEventLogCnt3h", "appealPhoneModel"],
-            "feature_name_samples": ["device log count", "client event count", "phone model"],
-            "check_result_summary": {"feature_values_present": True, "raw_values_suppressed": True},
-            "coverage_limitations": ["feature_snapshot_context_only"],
-            "rawFeatureValue": "raw_feature_value_should_not_render",
-            "featureValue": "full_feature_value_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "eventId": "5370247893355116990",
-            "eventType": "USER_REGISTER_NEW",
-        }
-        source_card["missing_fields"] = ["policy_condition_attribution"]
-        source_card["next_action"] = "Use policy attribution for condition-level explanation; do not expose raw feature values."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_event_feature_list",
-                "fixed_path": RCP_EVENT_FEATURE_LIST_FIXED_PATH,
-                "raw_feature_values_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "strategy_feature_snapshot_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_policy_version_lookup":
-        source_card["rcp_policy_version_lookup_summary"] = {
-            "fixed_path": RCP_POLICY_VERSION_LOOKUP_FIXED_PATH,
-            "version_lookup_status": "completed",
-            "eventType": "USER_REGISTER_NEW",
-            "eventId": "5370247893355116990",
-            "queryTime": 1779774526479,
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
-            "version_found": True,
-            "policy_name_summary": "third platform bind phone registration policy",
-            "policy_type_summary": "risk_control_policy",
-            "snapshotVersion": "887",
-            "version_metadata_summary": {"versionStr_present": True, "online_status_present": True},
-            "coverage_limitations": ["policy_version_context_not_final_judgement"],
-            "rawPolicyVersionBody": "raw_policy_version_body_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "eventId": "5370247893355116990",
-            "eventType": "USER_REGISTER_NEW",
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
-            "snapshotVersion": "887",
-        }
-        source_card["missing_fields"] = ["policyTreeNodeCode"]
-        source_card["next_action"] = "Resolve policyTreeNodeCode via queryProPolicyTree before node binding attribution."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_policy_version_lookup",
-                "fixed_path": RCP_POLICY_VERSION_LOOKUP_FIXED_PATH,
-                "raw_policy_version_body_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "policy_version_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_policy_detail_lookup":
-        source_card["rcp_policy_detail_lookup_summary"] = {
-            "fixed_path": RCP_POLICY_DETAIL_LOOKUP_FIXED_PATH,
-            "policy_detail_status": "completed",
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
-            "eventTypeCode": "USER_REGISTER_NEW",
-            "policy_name_summary": "third platform bind phone registration policy",
-            "policy_status_summary": {"online_status_present": True, "status_code": 2},
-            "condition_count": 4,
-            "condition_expression_present": True,
-            "punish_summary": {"punish_config_present": True, "raw_punish_body_suppressed": True},
-            "version_count": 5,
-            "latest_version": 5,
-            "relation_policy_tree_count": 1,
-            "coverage_limitations": ["policy_detail_not_final_judgement"],
-            "rawPolicyDetailBody": "raw_policy_detail_body_should_not_render",
-            "conditionExpressionRaw": "raw_condition_expression_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
-            "eventTypeCode": "USER_REGISTER_NEW",
-        }
-        source_card["missing_fields"] = ["event_attribution_for_specific_hit_path"]
-        source_card["next_action"] = "Use event attribution for a specific hit path; do not output raw condition expressions."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_policy_detail_lookup",
-                "fixed_path": RCP_POLICY_DETAIL_LOOKUP_FIXED_PATH,
-                "raw_policy_detail_body_suppressed": True,
-                "raw_condition_expression_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "policy_detail_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_policy_release_record_lookup":
-        source_card["rcp_policy_release_record_lookup_summary"] = {
-            "fixed_path": RCP_POLICY_RELEASE_LIST_FIXED_PATH,
-            "companion_readonly_paths": [RCP_POLICY_RELEASE_SELECT_INFO_FIXED_PATH],
-            "release_record_status": "completed",
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "statusCode": "",
-            "record_count": 4,
-            "business_union_key_count": 4,
-            "business_union_keys_present": True,
-            "parsed_policy_versions": [2, 3, 4, 5],
-            "pipeline_versions": [11, 12, 13],
-            "status_distribution": {"001": 1, "000": 2, "202": 1},
-            "experiment_or_gray_summary": {"experiment_or_gray_record_present": True},
-            "terminal_records": 2,
-            "online_acceptance_records": 1,
-            "coverage_limitations": ["release_record_not_final_judgement"],
-            "rawReleaseRecords": "raw_release_records_should_not_render",
-            "pipelineRecordsRaw": "raw_pipeline_records_should_not_render",
-            "operatorName": "operator_identity_should_not_render",
-            "createUser": "create_user_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "statusCode": "",
-            "parsed_policy_versions": [2, 3, 4, 5],
-            "pipeline_versions": [11, 12, 13],
-        }
-        source_card["missing_fields"] = ["event_attribution_for_specific_hit_path"]
-        source_card["next_action"] = "Use release records as lifecycle provenance only; do not treat release status as risk judgement."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_policy_release_record_lookup",
-                "fixed_path": RCP_POLICY_RELEASE_LIST_FIXED_PATH,
-                "selectInfo_fixed_path": RCP_POLICY_RELEASE_SELECT_INFO_FIXED_PATH,
-                "extrbB_exact_policyCode_filter": True,
-                "raw_release_records_suppressed": True,
-                "operator_identity_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "release_record_not_final_judgement": True,
-                "pipelineVersion_not_policy_version": True,
-            }
-        )
-    elif action_name == "rcp_policy_tree_lookup":
-        source_card["rcp_policy_tree_lookup_summary"] = {
-            "fixed_path": RCP_POLICY_TREE_LOOKUP_FIXED_PATH,
-            "policy_tree_status": "completed",
-            "policyTreeCode": "USER_REGISTER_NEW",
-            "policyTreeVersion": 887,
-            "targetPolicyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyTreeNodeCode": "53187346034508",
-            "node_name_summary": "third platform bind phone registration node",
-            "node_code_source": "recursive_queryProPolicyTree_parse",
-            "target_policy_found": True,
-            "policy_tree_depth_summary": {"nodes_scanned": 18, "max_depth_observed": 4},
-            "policy_tree_list_records_total": 20,
-            "node_binding_policy_count": 13,
-            "all_policy_code_count": 20,
-            "policy_code_sample_count": 3,
-            "target_policy_binding_status": "bound_to_resolved_node",
-            "coverage_limitations": ["policy_tree_context_not_final_judgement"],
-            "incorrect_path_forbidden": "/v2/rest/pc/policytree/getPolicyTreeByVersion",
-            "companion_readonly_paths": [
-                RCP_POLICY_TREE_LIST_FIXED_PATH,
-                RCP_POLICY_TREE_BINDING_BY_NODE_FIXED_PATH,
-                RCP_POLICY_TREE_ALL_POLICY_CODE_FIXED_PATH,
-            ],
-            "rawPolicyTreeBody": "raw_policy_tree_body_should_not_render",
-            "policyTreeRaw": "full_policy_tree_raw_should_not_render",
-            "rawNodeBindingList": "raw_node_binding_list_should_not_render",
-            "rawAllPolicyCodeList": "raw_all_policy_code_list_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "policyTreeCode": "USER_REGISTER_NEW",
-            "policyTreeVersion": 887,
-            "policyTreeNodeCode": "53187346034508",
-            "targetPolicyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-        }
-        source_card["missing_fields"] = []
-        source_card["next_action"] = "Use resolved policyTreeNodeCode only for node binding attribution when required; never guess it."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_policy_tree_lookup",
-                "fixed_path": RCP_POLICY_TREE_LOOKUP_FIXED_PATH,
-                "companion_readonly_paths": [
-                    RCP_POLICY_TREE_LIST_FIXED_PATH,
-                    RCP_POLICY_TREE_BINDING_BY_NODE_FIXED_PATH,
-                    RCP_POLICY_TREE_ALL_POLICY_CODE_FIXED_PATH,
+    if action_name == "rcp_snapshot":
+        return {
+            "data": {
+                "eventList": [
+                    {
+                        "eventId": "evt_rcp_001",
+                        "sourceId": user_id,
+                        "deviceId": "ANDROID_rcp_device_001",
+                        "hitFusePolicyCode": "BS_fake_account_register",
+                        "_occurTime": "2026-05-29 10:00:00",
+                    }
                 ],
-                "incorrect_path_forbidden": "/v2/rest/pc/policytree/getPolicyTreeByVersion",
-                "raw_policy_tree_body_suppressed": True,
-                "raw_node_binding_list_suppressed": True,
-                "raw_all_policy_code_list_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "policyTreeList_is_coarse_filter": True,
-                "policy_tree_not_final_judgement": True,
+                "pagination": {"total": 1},
             }
-        )
-    elif action_name == "rcp_node_policy_attribution":
-        source_card["rcp_node_policy_attribution_summary"] = {
-            "fixed_path": RCP_NODE_POLICY_ATTRIBUTION_FIXED_PATH,
-            "attribution_status": "completed",
-            "eventType": "USER_REGISTER_NEW",
-            "eventId": "5370247893355116990",
-            "queryTime": 1779774526479,
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
-            "condition_count": 4,
-            "true_condition_count": 4,
-            "false_condition_count": 0,
-            "condition_result_summary": {"all_conditions_true": True, "failed_condition_present": False},
-            "error_feature_count": 0,
-            "node_status_summary": {"nodeStatus_present": True, "node_result_true": True},
-            "coverage_limitations": ["policy_attribution_not_final_judgement"],
-            "rawConditionDump": "raw_condition_dump_should_not_render",
-            "conditionListRaw": "full_condition_list_should_not_render",
-            "rawFeatureValue": "raw_feature_value_should_not_render",
         }
-        source_card["key_entities"] = {
-            "eventId": "5370247893355116990",
-            "eventType": "USER_REGISTER_NEW",
-            "policyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "policyVersion": 5,
+    return {
+        "data": {
+            "records": [
+                {
+                    "source_name": ACTION_TO_SOURCE[action_name],
+                    "userId": user_id,
+                    "eventId": "evt_fixture_001",
+                }
+            ],
+            "total": 1,
         }
-        source_card["missing_fields"] = ["node_bind_policy_attribution"]
-        source_card["next_action"] = "Use node binding attribution only if node-level strategy-tree context is required."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_node_policy_attribution",
-                "fixed_path": RCP_NODE_POLICY_ATTRIBUTION_FIXED_PATH,
-                "raw_condition_dump_suppressed": True,
-                "raw_feature_values_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "policy_attribution_not_final_judgement": True,
-            }
-        )
-    elif action_name == "rcp_node_bind_policy_attribution":
-        source_card["rcp_node_bind_policy_attribution_summary"] = {
-            "fixed_path": RCP_NODE_BIND_POLICY_ATTRIBUTION_FIXED_PATH,
-            "node_binding_status": "completed",
-            "eventType": "USER_REGISTER_NEW",
-            "eventId": "5370247893355116990",
-            "queryTime": 1779774526479,
-            "policyTreeCode": "USER_REGISTER_NEW",
-            "policyTreeVersion": 887,
-            "policyTreeNodeCode": "53187346034508",
-            "node_name_summary": "third platform bind phone registration node",
-            "binding_policy_count": 2,
-            "effective_policy_summary": "BS_fake_account_register_thirdPlatformAll_bindphone#5",
-            "targetPolicyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "target_policy_online": True,
-            "target_policy_result": True,
-            "condition_count": 4,
-            "nodebinding_policy_summary": {
-                "target_policy_found": True,
-                "node_binding_list_present": True,
-            },
-            "coverage_limitations": ["node_binding_attribution_not_final_judgement"],
-            "rawNodeBindingBody": "raw_node_binding_body_should_not_render",
-            "nodebindingPolicyListRaw": "full_nodebinding_policy_list_should_not_render",
-            "rawConditionDump": "raw_condition_dump_should_not_render",
-        }
-        source_card["key_entities"] = {
-            "eventId": "5370247893355116990",
-            "eventType": "USER_REGISTER_NEW",
-            "policyTreeCode": "USER_REGISTER_NEW",
-            "policyTreeVersion": 887,
-            "policyTreeNodeCode": "53187346034508",
-            "targetPolicyCode": "BS_fake_account_register_thirdPlatformAll_bindphone",
-            "effectivePolicy": "BS_fake_account_register_thirdPlatformAll_bindphone#5",
-        }
-        source_card["missing_fields"] = []
-        source_card["next_action"] = "Use node binding attribution as strategy-tree explanation only; do not treat it as final risk judgement."
-        payload["key_entities"] = dict(source_card["key_entities"])
-        payload["missing_fields"] = list(source_card["missing_fields"])
-        payload["next_action"] = source_card["next_action"]
-        payload["source_quality"].update(
-            {
-                "no_data_not_risk_exclusion": True,
-                "rcp_action_contract": "rcp_node_bind_policy_attribution",
-                "fixed_path": RCP_NODE_BIND_POLICY_ATTRIBUTION_FIXED_PATH,
-                "raw_node_binding_body_suppressed": True,
-                "raw_condition_dump_suppressed": True,
-                "raw_response_full_body_returned": False,
-                "node_binding_attribution_not_final_judgement": True,
-            }
-        )
-    return payload
+    }
 
 
 def parse_typed_params_json(raw_json: str) -> Dict[str, Any]:
@@ -6280,7 +4590,10 @@ def run_action_invocation(action_name: str, typed_params: Mapping[str, Any], *, 
     _validate_action_name(action_name)
     params = dict(typed_params)
     _validate_typed_params(params)
-    client = BrowserBackedServiceClient() if live_service else BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload(action_name, "completed")))
+    fixture_body = _default_passthrough_body(action_name, typed_params)
+    client = BrowserBackedServiceClient() if live_service else BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload(action_name, fixture_body))
+    )
     result = client.call_action(action_name, params)
     result["invocation_mode"] = "live_service" if live_service else "mock"
     result["live_service_called"] = bool(live_service)
@@ -6310,19 +4623,6 @@ def run_mock_action_invocation(action_name: str, typed_params: Mapping[str, Any]
 def run_fixture_tests() -> Dict[str, Any]:
     results = []
 
-    for action_name in ("track_analysis_summary", "rcp_snapshot", "weapon_inventory"):
-        client = BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload(action_name, "completed")))
-        result = client.call_action(action_name, {"user_id": "fixture"})
-        assert result["source_status"] == "completed"
-        assert result["source_card"] and result["source_quality"]
-        results.append((f"{action_name}_completed", "passed"))
-
-    client = BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload("login_logs_search", "no_data")))
-    result = client.call_action("login_logs_search", {"user_id": "fixture"})
-    assert result["source_status"] == "no_data"
-    assert result["no_data_not_risk_exclusion"] is True
-    results.append(("login_logs_search_no_data", "passed"))
-
     passthrough_login_body = {
         "data": {
             "logSearchModels": [
@@ -6341,18 +4641,29 @@ def run_fixture_tests() -> Dict[str, Any]:
     passthrough_result = BrowserBackedServiceClient(opener=passthrough_opener).call_action(
         "login_logs_search",
         {"user_id": "fixture"},
-        response_mode=RESPONSE_MODE_PASSTHROUGH,
     )
     passthrough_request_body = json.loads((passthrough_opener.calls[0]["body"] or b"{}").decode("utf-8"))
     assert passthrough_request_body["response_mode"] == RESPONSE_MODE_PASSTHROUGH
     assert passthrough_result["response_mode"] == RESPONSE_MODE_PASSTHROUGH
     assert passthrough_result["source_status"] == "completed"
-    assert passthrough_result["normalized_observation"]["records_count"] == 1
-    assert passthrough_result["normalized_observation"]["raw_records_suppressed"] is True
+    assert passthrough_result["dennis_observation"]["records_count"] == 1
+    assert passthrough_result["dennis_observation"]["raw_records_suppressed"] is True
     assert "source_card" not in passthrough_result
-    assert passthrough_result["source_quality"]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
-    assert passthrough_result["source_quality"]["normalized_observation_present"] is True
+    assert "source_quality" not in passthrough_result
+    assert passthrough_result["dennis_generated_source_quality"]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
+    assert passthrough_result["dennis_generated_source_quality"]["dennis_observation_present"] is True
     results.append(("passthrough_client_parses_upstream_body", "passed"))
+
+    try:
+        BrowserBackedServiceClient(opener=passthrough_opener).call_action(
+            "login_logs_search",
+            {"user_id": "fixture"},
+            response_mode="compat_summary",
+        )
+    except BrowserBackedServiceInputError:
+        results.append(("compat_summary_runtime_mode_removed", "passed"))
+    else:
+        raise AssertionError("compat_summary response mode must be rejected")
 
     summary_field_result = BrowserBackedServiceClient(
         opener=_FakeOpener(
@@ -6362,10 +4673,12 @@ def run_fixture_tests() -> Dict[str, Any]:
                 include_summary_fields=True,
             )
         )
-    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    ).call_action("login_logs_search", {"user_id": "fixture"})
     assert summary_field_result["source_status"] == "completed"
     assert summary_field_result["unexpected_summary_fields"] == ["source_card", "source_quality"]
-    results.append(("passthrough_unexpected_summary_fields_marked", "passed"))
+    assert "source_card" not in summary_field_result
+    assert "source_quality" not in summary_field_result
+    results.append(("service_summary_fields_not_consumed", "passed"))
 
     credential_violation = BrowserBackedServiceClient(
         opener=_FakeOpener(
@@ -6375,10 +4688,12 @@ def run_fixture_tests() -> Dict[str, Any]:
                 credential_material_output=True,
             )
         )
-    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    ).call_action("login_logs_search", {"user_id": "fixture"})
     assert credential_violation["source_status"] == "blocked"
     assert credential_violation["error_type"] == "credential_material_violation"
     assert credential_violation["sensitive_output"] is False
+    assert "source_card" not in credential_violation
+    assert "source_quality" not in credential_violation
     results.append(("passthrough_credential_material_fail_closed", "passed"))
 
     landing_flow_blocked = BrowserBackedServiceClient(
@@ -6390,31 +4705,16 @@ def run_fixture_tests() -> Dict[str, Any]:
                 error_type="landing_flow_blocked",
             )
         )
-    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    ).call_action("login_logs_search", {"user_id": "fixture"})
     assert landing_flow_blocked["source_status"] == "auth_failed"
     assert landing_flow_blocked["failure_layer"] == "auth_session"
     assert landing_flow_blocked["error_type"] == "landing_flow_blocked"
-    assert landing_flow_blocked["normalized_observation"]["error_type"] == "landing_flow_blocked"
+    assert landing_flow_blocked["dennis_observation"]["error_type"] == "landing_flow_blocked"
     results.append(("passthrough_landing_flow_blocked_preserves_service_error", "passed"))
-
-    auth_failed = BrowserBackedServiceClient(
-        opener=_FakeOpener(
-            _passthrough_fixture_payload(
-                "login_logs_search",
-                include_body=False,
-                ok=False,
-                error_type="auth_failed",
-            )
-        )
-    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
-    assert auth_failed["source_status"] == "auth_failed"
-    assert auth_failed["failure_layer"] == "auth_session"
-    assert auth_failed["error_type"] == "auth_failed"
-    results.append(("passthrough_auth_failed_preserves_service_error", "passed"))
 
     missing_body_result = BrowserBackedServiceClient(
         opener=_FakeOpener(_passthrough_fixture_payload("login_logs_search", include_body=False))
-    ).call_action("login_logs_search", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
+    ).call_action("login_logs_search", {"user_id": "fixture"})
     assert missing_body_result["source_status"] == "parse_error"
     assert missing_body_result["error_type"] == "passthrough_body_missing"
     results.append(("passthrough_body_missing_marked", "passed"))
@@ -6434,102 +4734,18 @@ def run_fixture_tests() -> Dict[str, Any]:
                     {"label": "fanDistribution", "value": "bucketed"},
                 ],
             },
-            "latestDateTime": "数据更新时间:2026-05-28",
+            "latestDateTime": "2026-05-28",
         }
     }
-    track_profile_observation = parse_passthrough_response(
-        "track_analysis_summary",
-        track_profile_body,
-        request_params={"sub_interface": "profile"},
-    )
-    assert track_profile_observation["source_status"] == "completed"
-    assert track_profile_observation["sub_interface"] == "profile"
-    assert track_profile_observation["entity"]["userId"] == "2871834924"
-    assert track_profile_observation["records_count"] == 1
-    assert track_profile_observation["device_ids_count"] == 2
-    assert "firstLevelProfile.userId" in track_profile_observation["profile_fields_observed"]
-    assert "firstLevelProfile" in track_profile_observation["profile_sections_observed"]
-    assert track_profile_observation["samples"][0]["city"] == "Shenzhen"
-    assert track_profile_observation["raw_body_suppressed"] is True
-    results.append(("track_analysis_profile_body_with_deviceids_detected_as_profile", "passed"))
-
-    track_profile_hint_opener = _FakeOpener(_passthrough_fixture_payload("track_analysis_summary", track_profile_body))
-    track_profile_hint_result = BrowserBackedServiceClient(opener=track_profile_hint_opener).call_action(
+    track_profile_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload("track_analysis_summary", track_profile_body))
+    ).call_action(
         "track_analysis_summary",
         {"user_id": "2871834924", "appName": "KUAISHOU", "sub_interface": "profile"},
-        response_mode=RESPONSE_MODE_PASSTHROUGH,
     )
-    assert track_profile_hint_result["normalized_observation"]["sub_interface"] == "profile"
-    assert track_profile_hint_result["normalized_observation"]["profile_sections_observed"] == [
-        "firstLevelProfile",
-        "secondLevelProfile",
-    ]
-    results.append(("track_analysis_request_sub_interface_profile_hint_used", "passed"))
-
-    track_observation = parse_passthrough_response(
-        "track_analysis_summary",
-        {
-            "sub_interface": "getDeviceIds",
-            "userId": "2871834924",
-            "data": {
-                "deviceIds": ["ANDROID_track_device_001", "IOS_track_device_002"],
-            },
-        },
-    )
-    assert track_observation["source_status"] == "completed"
-    assert track_observation["sub_interface"] == "getDeviceIds"
-    assert track_observation["device_ids_count"] == 2
-    assert track_observation["raw_body_suppressed"] is True
-    results.append(("track_analysis_passthrough_parser_normalizes_observation", "passed"))
-
-    track_device_array_observation = parse_passthrough_response(
-        "track_analysis_summary",
-        {
-            "data": [
-                {"deviceId": "ANDROID_track_device_001"},
-                {"deviceId": "IOS_track_device_002"},
-            ]
-        },
-    )
-    assert track_device_array_observation["sub_interface"] == "getDeviceIds"
-    assert track_device_array_observation["device_ids_count"] == 2
-    results.append(("track_analysis_device_array_detected_as_getDeviceIds", "passed"))
-
-    track_duration_observation = parse_passthrough_response(
-        "track_analysis_summary",
-        {
-            "data": {
-                "rows": [
-                    {"date": "2026-05-28", "duration": 3600},
-                    {"date": "2026-05-29", "duration": 7200},
-                ]
-            }
-        },
-    )
-    assert track_duration_observation["sub_interface"] == "getUseDuration"
-    assert track_duration_observation["rows_count"] == 2
-    assert track_duration_observation["records_count"] == 2
-    results.append(("track_analysis_use_duration_rows_detected", "passed"))
-
-    track_latest_observation = parse_passthrough_response(
-        "track_analysis_summary",
-        {
-            "data": {
-                "latestDateTime": "数据更新时间:2026-05-28",
-                "uidDidRelLatestDateTime": "2026-05-28 10:00:00",
-            }
-        },
-    )
-    assert track_latest_observation["sub_interface"] == "getLastestDateTime"
-    assert track_latest_observation["raw_body_suppressed"] is True
-    results.append(("track_analysis_latest_datetime_detected", "passed"))
-
-    login_observation = parse_passthrough_response("login_logs_search", passthrough_login_body)
-    assert login_observation["source_status"] == "completed"
-    assert login_observation["records_count"] == 1
-    assert login_observation["samples"][0]["logSource"] == "APP_LOGIN"
-    assert login_observation["raw_records_suppressed"] is True
-    results.append(("login_logs_passthrough_parser_log_search_models", "passed"))
+    assert track_profile_result["dennis_observation"]["sub_interface"] == "profile"
+    assert track_profile_result["dennis_observation"]["device_ids_count"] == 2
+    results.append(("track_analysis_passthrough_observation", "passed"))
 
     weapon_graph_body = {
         "data": {
@@ -6537,164 +4753,23 @@ def run_fixture_tests() -> Dict[str, Any]:
                 "pointInfoMap": {
                     "2871834924": {"id": "2871834924", "entityType": "USER_ID"},
                     "ANDROID_c081c29a506f9db1": {"id": "ANDROID_c081c29a506f9db1", "entityType": "DEVICE_ID"},
-                    "HARMONY_weapon_device_002": {"id": "HARMONY_weapon_device_002", "entityType": "DEVICE_ID"},
                 },
                 "relationEdgeList": [
                     {"source": "2871834924", "target": "ANDROID_c081c29a506f9db1"},
-                    {"source": "2871834924", "target": "HARMONY_weapon_device_002"},
                 ],
             }
         }
     }
-    weapon_graph_observation = parse_passthrough_response("weapon_inventory", weapon_graph_body)
-    assert weapon_graph_observation["source_status"] == "completed"
-    assert weapon_graph_observation["graph_status"] == "completed"
-    assert weapon_graph_observation["pointInfoMap_present"] is True
-    assert weapon_graph_observation["pointInfoMap_count"] == 3
-    assert weapon_graph_observation["relationEdgeList_present"] is True
-    assert weapon_graph_observation["relationEdgeList_count"] == 2
-    assert weapon_graph_observation["related_device_count"] == 2
-    assert weapon_graph_observation["related_user_count"] == 1
-    assert weapon_graph_observation["device_id_samples"] == [
-        "ANDROID_c081c29a506f9db1",
-        "HARMONY_weapon_device_002",
-    ]
-    assert weapon_graph_observation["user_id_samples"] == ["2871834924"]
-    assert weapon_graph_observation["raw_body_suppressed"] is True
-    results.append(("weapon_passthrough_graphData_normalized", "passed"))
-
-    weapon_live_wrapper_body = {
-        "graphData": {
-            "code": 1,
-            "msg": "ok",
-            "data": {
-                "pointInfoMap": {
-                    "2871834924": {"type": "USER_ID", "weight": 1},
-                    "0D215351-9A1D-681A-BF82-6DF9E639E126": {"type": "DEVICE_ID", "weight": 1},
-                },
-                "relationEdgeList": [
-                    {
-                        "source": "2871834924",
-                        "target": "0D215351-9A1D-681A-BF82-6DF9E639E126",
-                        "id": "edge_001",
-                    }
-                ],
-            },
-        },
-        "riskDataResults": [],
-        "weapon_chain": {
-            "graphData_status": "completed",
-            "riskData_status": "no_data",
-            "selected_device_count": 1,
-        },
-    }
-    weapon_live_wrapper_observation = parse_passthrough_response("weapon_inventory", weapon_live_wrapper_body)
-    assert weapon_live_wrapper_observation["source_status"] == "completed"
-    assert weapon_live_wrapper_observation["graph_status"] == "completed"
-    assert weapon_live_wrapper_observation["pointInfoMap_present"] is True
-    assert weapon_live_wrapper_observation["pointInfoMap_count"] == 2
-    assert weapon_live_wrapper_observation["relationEdgeList_present"] is True
-    assert weapon_live_wrapper_observation["relationEdgeList_count"] == 1
-    assert weapon_live_wrapper_observation["related_user_count"] == 1
-    assert weapon_live_wrapper_observation["related_device_count"] == 1
-    assert weapon_live_wrapper_observation["riskData_status"] == "no_data"
-    assert weapon_live_wrapper_observation["weapon_chain_selected_device_count"] == 1
-    assert weapon_live_wrapper_observation["device_id_samples"] == ["0D215351-9A1D-681A-BF82-6DF9E639E126"]
-    assert weapon_live_wrapper_observation["user_id_samples"] == ["2871834924"]
-    results.append(("weapon_passthrough_live_wrapper_graphData_normalized", "passed"))
-
-    weapon_data_wrapper_observation = parse_passthrough_response(
-        "weapon_inventory",
-        {
-            "data": {
-                "pointInfoMap": {
-                    "2871834924": {"entityType": "USER_ID"},
-                    "ANDROID_weapon_device_003": {"entityType": "DEVICE_ID"},
-                },
-                "relationEdgeList": [{"source": "2871834924", "target": "ANDROID_weapon_device_003"}],
-            }
-        },
-    )
-    assert weapon_data_wrapper_observation["graph_status"] == "completed"
-    assert weapon_data_wrapper_observation["pointInfoMap_count"] == 2
-    assert weapon_data_wrapper_observation["relationEdgeList_count"] == 1
-    results.append(("weapon_passthrough_data_wrapper_graphData_normalized", "passed"))
-
-    weapon_long_generic_device_observation = parse_passthrough_response(
-        "weapon_inventory",
-        {
-            "pointInfoMap": {
-                "2871834924": {"type": "USER_ID"},
-                "genericDeviceAlpha1234567890": {"type": "DEVICE_ID"},
-            },
-            "relationEdgeList": [{"source": "2871834924", "target": "genericDeviceAlpha1234567890"}],
-        },
-    )
-    assert weapon_long_generic_device_observation["related_user_count"] == 1
-    assert weapon_long_generic_device_observation["related_device_count"] == 1
-    assert weapon_long_generic_device_observation["device_id_samples"] == ["genericDeviceAlpha1234567890"]
-    assert weapon_long_generic_device_observation["user_id_samples"] == ["2871834924"]
-    results.append(("weapon_passthrough_long_non_numeric_device_id_normalized", "passed"))
-
-    weapon_risk_body = {
-        "data": {
-            "riskData": {
-                "userLevel": 3,
-                "riskItems": [
-                    {
-                        "riskGroupName": "device_risk",
-                        "labelInfo": [
-                            {
-                                "readableLabel": "simulator",
-                                "labelName": "emulator",
-                                "originalLog": {"raw": "raw_original_log_should_not_render"},
-                            },
-                            {
-                                "readableLabel": "no_sim",
-                                "originalLog": "raw_original_log_string_should_not_render",
-                            },
-                        ],
-                    }
-                ],
-            }
-        }
-    }
-    weapon_risk_result = BrowserBackedServiceClient(
-        opener=_FakeOpener(_passthrough_fixture_payload("weapon_inventory", weapon_risk_body))
-    ).call_action("weapon_inventory", {"user_id": "fixture"}, response_mode=RESPONSE_MODE_PASSTHROUGH)
-    weapon_risk_observation = weapon_risk_result["normalized_observation"]
-    assert weapon_risk_result["source_status"] == "completed"
-    assert weapon_risk_observation["riskData_status"] == "completed"
-    assert weapon_risk_observation["risk_item_count"] == 1
-    assert weapon_risk_observation["risk_label_count"] == 2
-    assert "device_risk" in weapon_risk_observation["risk_group_names_observed"]
-    assert "simulator" in weapon_risk_observation["readable_label_sample"]
-    assert weapon_risk_observation["userLevel_observed"] is True
-    serialized_weapon_risk = json.dumps(weapon_risk_result, ensure_ascii=True)
-    assert "raw_original_log_should_not_render" not in serialized_weapon_risk
-    assert "raw_original_log_string_should_not_render" not in serialized_weapon_risk
-    assert '"labelInfo":' not in serialized_weapon_risk
-    results.append(("weapon_passthrough_riskData_suppresses_raw_labelinfo_originalLog", "passed"))
-
-    weapon_empty_graph_observation = parse_passthrough_response(
-        "weapon_inventory",
-        {"data": {"graphData": {"pointInfoMap": {}, "relationEdgeList": []}}},
-    )
-    assert weapon_empty_graph_observation["source_status"] == "no_data"
-    assert weapon_empty_graph_observation["graph_status"] == "no_data"
-    assert weapon_empty_graph_observation["no_data_not_risk_exclusion"] is True
-    results.append(("weapon_passthrough_empty_graph_not_risk_exclusion", "passed"))
+    weapon_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload("weapon_inventory", weapon_graph_body))
+    ).call_action("weapon_inventory", {"user_id": "fixture"})
+    assert weapon_result["source_status"] == "completed"
+    assert weapon_result["dennis_observation"]["related_device_count"] == 1
+    results.append(("weapon_passthrough_observation", "passed"))
 
     rcp_event_body = {
         "data": {
-            "pagination": {"page": 1, "pageSize": 10, "total": 2},
-            "tableHeaderList": [
-                {"dataIndex": "eventId"},
-                {"dataIndex": "sourceId"},
-                {"dataIndex": "deviceId"},
-                {"dataIndex": "hitFusePolicyCode"},
-                {"dataIndex": "_occurTime"},
-            ],
+            "pagination": {"page": 1, "pageSize": 10, "total": 1},
             "eventList": [
                 {
                     "eventId": "evt_rcp_001",
@@ -6702,1139 +4777,63 @@ def run_fixture_tests() -> Dict[str, Any]:
                     "deviceId": "ANDROID_rcp_device_001",
                     "hitFusePolicyCode": "BS_fake_account_register",
                     "_occurTime": "2026-05-29 10:00:00",
-                    "rawEventBody": "raw_event_body_should_not_render",
-                },
-                {
-                    "eventId": "evt_rcp_002",
-                    "sourceId": "src_rcp_002",
-                    "deviceId": "IOS_rcp_device_002",
-                    "hitFusePolicyCode": "BS_fake_account_register_v2",
-                    "_occurTime": "2026-05-29 10:01:00",
-                },
+                }
             ],
         }
     }
-    rcp_event_observation = parse_passthrough_response("rcp_snapshot", rcp_event_body)
-    assert rcp_event_observation["source_status"] == "completed"
-    assert rcp_event_observation["event_count"] == 2
-    assert rcp_event_observation["eventId_samples"] == ["evt_rcp_001", "evt_rcp_002"]
-    assert rcp_event_observation["sourceId_samples"] == ["src_rcp_001", "src_rcp_002"]
-    assert rcp_event_observation["deviceId_samples"] == ["ANDROID_rcp_device_001", "IOS_rcp_device_002"]
-    assert rcp_event_observation["hitFusePolicyCode_samples"][0] == "BS_fake_account_register"
-    assert rcp_event_observation["occurTime_samples"][0] == "2026-05-29 10:00:00"
-    assert rcp_event_observation["raw_eventList_full_dump_suppressed"] is True
-    serialized_rcp_event = json.dumps(rcp_event_observation, ensure_ascii=True)
-    assert "raw_event_body_should_not_render" not in serialized_rcp_event
-    results.append(("rcp_passthrough_eventList_normalized", "passed"))
+    rcp_result = BrowserBackedServiceClient(
+        opener=_FakeOpener(_passthrough_fixture_payload("rcp_snapshot", rcp_event_body))
+    ).call_action("rcp_snapshot", {"entity_type": "user_id", "entity_id": "fixture"})
+    assert rcp_result["source_status"] == "completed"
+    assert rcp_result["dennis_observation"]["event_count"] == 1
+    results.append(("rcp_passthrough_observation", "passed"))
 
-    rcp_empty_observation = parse_passthrough_response("rcp_snapshot", {"data": {"eventList": [], "pagination": {"total": 0}}})
-    assert rcp_empty_observation["source_status"] == "no_data"
-    assert rcp_empty_observation["event_count"] == 0
-    assert rcp_empty_observation["no_data_not_risk_exclusion"] is True
-    assert rcp_empty_observation["eventList_not_final_judgement"] is True
-    results.append(("rcp_passthrough_empty_eventList_not_risk_exclusion", "passed"))
+    evidence_card = build_partial_evidence_card([passthrough_result, missing_body_result, landing_flow_blocked])
+    assert evidence_card["completed_sources"] == ["login_logs_search"]
+    assert "login_logs_search" in evidence_card["parse_error_sources"]
+    assert "login_logs_search" in evidence_card["auth_failed_sources"]
+    assert evidence_card["source_quality"]["login_logs_search"]["dennis_generated_source_quality_present"] is True
+    serialized_card = json.dumps(evidence_card, ensure_ascii=True)
+    assert "source_card" not in serialized_card
+    assert "normalized_observation" not in serialized_card
+    assert "compat_summary" not in serialized_card
+    results.append(("partial_evidence_card_dennis_generated_only", "passed"))
 
-    compat_opener = _FakeOpener(_fixture_payload("login_logs_search", "completed"))
-    compat_result = BrowserBackedServiceClient(opener=compat_opener).call_action("login_logs_search", {"user_id": "fixture"})
-    compat_request_body = json.loads((compat_opener.calls[0]["body"] or b"{}").decode("utf-8"))
-    assert "response_mode" not in compat_request_body
-    assert compat_result["source_card"] and compat_result["source_quality"]
-    assert compat_result["source_status"] == "completed"
-    results.append(("compat_summary_fixture_not_regressed", "passed"))
-
-    readiness_plan = build_track_analysis_check_data_ready_browser_backed_request(
-        "ANDROID_track_device_001",
-        start_time_ms=1764201600000,
-        end_time_ms=1764288000000,
-        categories=["active"],
-    )
-    assert readiness_plan["action_name"] == "track_analysis_check_data_ready"
-    assert readiness_plan["fixed_path"] == TRACK_ANALYSIS_CHECK_DATA_READY_FIXED_PATH
-    assert readiness_plan["typed_params"]["device_id"] == "ANDROID_track_device_001"
-    assert readiness_plan["typed_params"]["type"] == "deviceId"
-    serialized_readiness_plan = json.dumps(readiness_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_readiness_plan.lower()
-    assert "token" not in serialized_readiness_plan.lower()
-    assert "session" not in serialized_readiness_plan.lower()
-    assert "/dp/platform/app/analytics/v2/sequence/checkDataReady" in serialized_readiness_plan
-    assert "http://" not in serialized_readiness_plan.lower()
-    assert "https://" not in serialized_readiness_plan.lower()
-    results.append(("track_analysis_check_data_ready_typed_request_plan", "passed"))
-
-    readiness_opener = _FakeOpener(_fixture_payload("track_analysis_check_data_ready", "completed"))
-    client = BrowserBackedServiceClient(opener=readiness_opener)
-    readiness_result = client.call_action("track_analysis_check_data_ready", readiness_plan["typed_params"])
-    assert readiness_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["track_analysis_check_data_ready"])
-    assert readiness_result["source_status"] == "completed"
-    assert readiness_result["key_entities"]["device_id"] == "ANDROID_track_device_001"
-    assert readiness_result["missing_fields"] == [
-        "track_analysis_profile",
-        "track_analysis_getUseDuration",
-        "track_analysis_getDeviceIds",
-    ]
-    readiness_card = build_partial_evidence_card([readiness_result])
-    readiness_summary = readiness_card["evidence_summary_by_source"]["track_analysis_check_data_ready"]
-    assert readiness_summary["action_contract"]["fixed_path"] == TRACK_ANALYSIS_CHECK_DATA_READY_FIXED_PATH
-    assert readiness_summary["readiness_summary"]["date_status_present"] is True
-    readiness_text = json.dumps(readiness_card, ensure_ascii=True)
-    assert "raw_readiness_body_should_not_render" not in readiness_text
-    assert "trace_id_value_should_not_render" not in readiness_text
-    assert '"rawReadinessBody":' not in readiness_text
-    assert '"traceId":' not in readiness_text
-    results.append(("track_analysis_check_data_ready_standard_source_result", "passed"))
-
-    archives_plan = build_archives_user_analysis_browser_backed_request(
-        "2871834924",
-        begin_time_ms=1764201600000,
-        end_time_ms=1764288000000,
-    )
-    assert archives_plan["action_name"] == "archives_user_analysis"
-    assert archives_plan["fixed_path"] == ARCHIVES_USER_ANALYSIS_FIXED_PATH
-    assert archives_plan["typed_params"]["user_id"] == "2871834924"
-    assert archives_plan["typed_params"]["pageIndex"] == 1
-    assert archives_plan["typed_params"]["pageSize"] == 30
-    assert archives_plan["typed_params"]["operation_filters"] == {
-        field: 1 for field in ARCHIVES_USER_ANALYSIS_FILTER_FIELDS
-    }
-    serialized_archives_plan = json.dumps(archives_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_archives_plan.lower()
-    assert "token" not in serialized_archives_plan.lower()
-    assert "session" not in serialized_archives_plan.lower()
-    assert "/v3/user/log/coreLogs/fetch" in serialized_archives_plan
-    assert "http://" not in serialized_archives_plan.lower()
-    assert "https://" not in serialized_archives_plan.lower()
-    results.append(("archives_user_analysis_typed_request_plan", "passed"))
-
-    archives_opener = _FakeOpener(_fixture_payload("archives_user_analysis", "completed"))
-    client = BrowserBackedServiceClient(opener=archives_opener)
-    archives_result = client.call_action("archives_user_analysis", archives_plan["typed_params"])
-    assert archives_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_user_analysis"])
-    assert archives_result["source_status"] == "completed"
-    assert archives_result["source_card"] and archives_result["source_quality"]
-    assert archives_result["key_entities"]["user_id"] == "2871834924"
-    assert archives_result["missing_fields"] == ["unified_login_full_window"]
-    assert archives_result["next_action"] == "Cross-check with login logs and Weapon before judgement."
-    assert archives_result["sensitive_output"] is False
-    assert archives_result["no_data_not_risk_exclusion"] is True
-    archives_card = build_partial_evidence_card([archives_result])
-    archives_summary = archives_card["evidence_summary_by_source"]["archives_user_analysis"]
-    assert archives_summary["action_contract"]["fixed_path"] == ARCHIVES_USER_ANALYSIS_FIXED_PATH
-    assert archives_summary["risk_event_scan"]["total_records_visible"] == 3
-    assert archives_summary["key_entities"]["deviceId"] == "ANDROID_archives_device_001"
-    archives_text = json.dumps(archives_card, ensure_ascii=True)
-    assert "raw_token_should_not_render" not in archives_text
-    assert "raw_open_id_should_not_render" not in archives_text
-    assert "raw_refresh_token_should_not_render" not in archives_text
-    assert '"requestParam":' not in archives_text
-    assert '"extraParam":' not in archives_text
-    assert archives_card["sensitive_output"] is False
-    results.append(("archives_user_analysis_standard_source_result", "passed"))
-
-    photo_plan = build_archives_photo_search_browser_backed_request(
-        "2871834924",
-        begin_time_ms=1764201600000,
-        end_time_ms=1764288000000,
-    )
-    assert photo_plan["action_name"] == "archives_photo_search"
-    assert photo_plan["fixed_path"] == ARCHIVES_PHOTO_SEARCH_FIXED_PATH
-    assert photo_plan["typed_params"]["user_id"] == "2871834924"
-    assert photo_plan["typed_params"]["matchType"] == "0"
-    assert photo_plan["typed_params"]["sort"] == "0"
-    assert photo_plan["body_builder_summary"]["reportedIds_source"] == "user_id"
-    serialized_photo_plan = json.dumps(photo_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_photo_plan.lower()
-    assert "token" not in serialized_photo_plan.lower()
-    assert "session" not in serialized_photo_plan.lower()
-    assert "/v4/archives/report/photo/search" in serialized_photo_plan
-    assert "http://" not in serialized_photo_plan.lower()
-    assert "https://" not in serialized_photo_plan.lower()
-    results.append(("archives_photo_search_typed_request_plan", "passed"))
-
-    photo_opener = _FakeOpener(_fixture_payload("archives_photo_search", "completed"))
-    client = BrowserBackedServiceClient(opener=photo_opener)
-    photo_result = client.call_action("archives_photo_search", photo_plan["typed_params"])
-    assert photo_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_photo_search"])
-    assert photo_result["source_status"] == "completed"
-    assert photo_result["source_card"] and photo_result["source_quality"]
-    assert photo_result["key_entities"]["photo_ids"] == ["photo_1001", "photo_1002"]
-    assert photo_result["missing_fields"] == ["photo_detail_meta"]
-    assert photo_result["sensitive_output"] is False
-    assert photo_result["no_data_not_risk_exclusion"] is True
-    photo_card = build_partial_evidence_card([photo_result])
-    photo_summary = photo_card["evidence_summary_by_source"]["archives_photo_search"]
-    assert photo_summary["action_contract"]["fixed_path"] == ARCHIVES_PHOTO_SEARCH_FIXED_PATH
-    assert photo_summary["photo_search_summary"]["photo_count"] == 2
-    assert photo_summary["photo_search_summary"]["publish_time_range"]["latest_publish_time"] == "2026-05-28 12:00:00"
-    assert photo_summary["key_entities"]["photo_ids"] == ["photo_1001", "photo_1002"]
-    photo_text = json.dumps(photo_card, ensure_ascii=True)
-    assert "raw_report_text_should_not_render" not in photo_text
-    assert "raw_report_content_should_not_render" not in photo_text
-    assert '"reportText":' not in photo_text
-    assert '"reportContent":' not in photo_text
-    results.append(("archives_photo_search_standard_source_result", "passed"))
-
-    profile_plan = build_archives_user_profile_browser_backed_request("2871834924")
-    assert profile_plan["action_name"] == "archives_user_profile"
-    assert profile_plan["fixed_path"] == ARCHIVES_USER_PROFILE_FIXED_PATH
-    assert profile_plan["typed_params"]["user_id"] == "2871834924"
-    serialized_profile_plan = json.dumps(profile_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_profile_plan.lower()
-    assert "token" not in serialized_profile_plan.lower()
-    assert "session" not in serialized_profile_plan.lower()
-    assert "/archives/user/home/info" in serialized_profile_plan
-    assert "http://" not in serialized_profile_plan.lower()
-    assert "https://" not in serialized_profile_plan.lower()
-    results.append(("archives_user_profile_typed_request_plan", "passed"))
-
-    profile_opener = _FakeOpener(_fixture_payload("archives_user_profile", "completed"))
-    client = BrowserBackedServiceClient(opener=profile_opener)
-    profile_result = client.call_action("archives_user_profile", profile_plan["typed_params"])
-    assert profile_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_user_profile"])
-    assert profile_result["source_status"] == "completed"
-    assert profile_result["key_entities"]["deviceId"] == "ANDROID_profile_device_001"
-    profile_card = build_partial_evidence_card([profile_result])
-    profile_summary = profile_card["evidence_summary_by_source"]["archives_user_profile"]
-    assert profile_summary["action_contract"]["fixed_path"] == ARCHIVES_USER_PROFILE_FIXED_PATH
-    assert profile_summary["profile_summary"]["account_status_summary"]["account_state"] == "normal"
-    profile_text = json.dumps(profile_card, ensure_ascii=True)
-    assert "13812345678" not in profile_text
-    assert "110105199001011234" not in profile_text
-    assert "Fixture User" not in profile_text
-    assert "raw_profile_body_should_not_render" not in profile_text
-    results.append(("archives_user_profile_standard_source_result", "passed"))
-
-    related_plan = build_archives_related_users_browser_backed_request("2871834924", "same_device_login")
-    assert related_plan["action_name"] == "archives_related_users"
-    assert related_plan["fixed_path"] == ARCHIVES_RELATED_USERS_FIXED_PATH
-    assert related_plan["typed_params"]["user_id"] == "2871834924"
-    assert related_plan["typed_params"]["inputType"] == 0
-    assert related_plan["typed_params"]["type"] == 1
-    assert related_plan["body_builder_summary"]["keyword_source"] == "user_id"
-    serialized_related_plan = json.dumps(related_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_related_plan.lower()
-    assert "token" not in serialized_related_plan.lower()
-    assert "session" not in serialized_related_plan.lower()
-    assert "/archives/user/search/device" in serialized_related_plan
-    assert "http://" not in serialized_related_plan.lower()
-    assert "https://" not in serialized_related_plan.lower()
-    results.append(("archives_related_users_typed_request_plan", "passed"))
-
-    related_opener = _FakeOpener(_fixture_payload("archives_related_users", "completed"))
-    client = BrowserBackedServiceClient(opener=related_opener)
-    related_result = client.call_action("archives_related_users", related_plan["typed_params"])
-    assert related_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_related_users"])
-    assert related_result["source_status"] == "completed"
-    assert related_result["key_entities"]["related_user_ids"] == ["772671837", "3481089791", "2871834924"]
-    related_card = build_partial_evidence_card([related_result])
-    related_summary = related_card["evidence_summary_by_source"]["archives_related_users"]
-    assert related_summary["action_contract"]["fixed_path"] == ARCHIVES_RELATED_USERS_FIXED_PATH
-    assert related_summary["related_users_summary"]["related_user_count"] == 3
-    assert related_summary["key_entities"]["related_user_ids"] == ["772671837", "3481089791", "2871834924"]
-    related_text = json.dumps(related_card, ensure_ascii=True)
-    assert "raw_related_user_profile_should_not_render" not in related_text
-    results.append(("archives_related_users_standard_source_result", "passed"))
-
-    private_message_plan = build_archives_private_message_search_browser_backed_request(
-        "2871834924",
-        direction="sent",
-    )
-    assert private_message_plan["action_name"] == "archives_private_message_search"
-    assert private_message_plan["fixed_path"] == ARCHIVES_PRIVATE_MESSAGE_SEARCH_FIXED_PATH
-    assert private_message_plan["typed_params"]["direction"] == "sent"
-    assert private_message_plan["body_builder_summary"]["direction_mapping"]["sent"] == "fromUserId"
-    serialized_private_message_plan = json.dumps(private_message_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_private_message_plan.lower()
-    assert "token" not in serialized_private_message_plan.lower()
-    assert "session" not in serialized_private_message_plan.lower()
-    assert "/archives/user/message/search" in serialized_private_message_plan
-    assert "http://" not in serialized_private_message_plan.lower()
-    assert "https://" not in serialized_private_message_plan.lower()
-    results.append(("archives_private_message_search_typed_request_plan", "passed"))
-
-    private_message_opener = _FakeOpener(_fixture_payload("archives_private_message_search", "completed"))
-    client = BrowserBackedServiceClient(opener=private_message_opener)
-    private_message_result = client.call_action("archives_private_message_search", private_message_plan["typed_params"])
-    assert private_message_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_private_message_search"])
-    assert private_message_result["source_status"] == "completed"
-    assert private_message_result["key_entities"]["counterpart_user_ids"] == ["772671837", "3481089791"]
-    assert private_message_result["missing_fields"] == ["message_risk_policy_attribution"]
-    private_message_card = build_partial_evidence_card([private_message_result])
-    private_message_summary = private_message_card["evidence_summary_by_source"]["archives_private_message_search"]
-    assert private_message_summary["action_contract"]["fixed_path"] == ARCHIVES_PRIVATE_MESSAGE_SEARCH_FIXED_PATH
-    assert private_message_summary["private_message_summary"]["private_message_count"] == 12
-    private_message_text = json.dumps(private_message_card, ensure_ascii=True)
-    assert "raw_private_message_text_should_not_render" not in private_message_text
-    assert "raw_private_message_plaintext_should_not_render" not in private_message_text
-    assert "full_message_text_should_not_render" not in private_message_text
-    assert "raw_counterpart_nickname_should_not_render" not in private_message_text
-    assert '"messageContent":' not in private_message_text
-    assert '"privateMessagePlaintext":' not in private_message_text
-    results.append(("archives_private_message_search_standard_source_result", "passed"))
-
-    four_items_plan = build_archives_past_four_items_browser_backed_request(
-        "2871834924",
-        info_type="profile_description",
-    )
-    assert four_items_plan["action_name"] == "archives_past_four_items"
-    assert four_items_plan["fixed_path"] == ARCHIVES_PAST_FOUR_ITEMS_FIXED_PATH
-    assert four_items_plan["typed_params"]["infoType"] == 3
-    assert four_items_plan["body_builder_summary"]["keyword_source"] == "user_id"
-    serialized_four_items_plan = json.dumps(four_items_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_four_items_plan.lower()
-    assert "token" not in serialized_four_items_plan.lower()
-    assert "session" not in serialized_four_items_plan.lower()
-    assert "/v4/audit/user/fourinfo/log/search" in serialized_four_items_plan
-    assert "http://" not in serialized_four_items_plan.lower()
-    assert "https://" not in serialized_four_items_plan.lower()
-    results.append(("archives_past_four_items_typed_request_plan", "passed"))
-
-    four_items_opener = _FakeOpener(_fixture_payload("archives_past_four_items", "completed"))
-    client = BrowserBackedServiceClient(opener=four_items_opener)
-    four_items_result = client.call_action("archives_past_four_items", four_items_plan["typed_params"])
-    assert four_items_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["archives_past_four_items"])
-    assert four_items_result["source_status"] == "completed"
-    assert four_items_result["key_entities"]["user_id"] == "2871834924"
-    assert four_items_result["missing_fields"] == ["login_or_publish_alignment"]
-    four_items_card = build_partial_evidence_card([four_items_result])
-    four_items_summary = four_items_card["evidence_summary_by_source"]["archives_past_four_items"]
-    assert four_items_summary["action_contract"]["fixed_path"] == ARCHIVES_PAST_FOUR_ITEMS_FIXED_PATH
-    assert four_items_summary["four_info_change_summary"]["total_changes"] == 6
-    four_items_text = json.dumps(four_items_card, ensure_ascii=True)
-    assert "raw_old_profile_value_should_not_render" not in four_items_text
-    assert "raw_new_profile_value_should_not_render" not in four_items_text
-    assert "raw_avatar_should_not_render" not in four_items_text
-    assert "raw_background_should_not_render" not in four_items_text
-    assert "raw_profile_description_should_not_render" not in four_items_text
-    assert "raw_operator_name_should_not_render" not in four_items_text
-    assert "full_four_info_raw_should_not_render" not in four_items_text
-    assert '"oldValue":' not in four_items_text
-    assert '"newValue":' not in four_items_text
-    assert '"avatarUrl":' not in four_items_text
-    results.append(("archives_past_four_items_standard_source_result", "passed"))
-
-    rcp_detail_plan = build_rcp_event_detail_browser_backed_request(
-        "USER_REGISTER_NEW",
-        "5370247893355116990",
-        1779774526479,
-    )
-    assert rcp_detail_plan["action_name"] == "rcp_event_detail"
-    assert rcp_detail_plan["fixed_path"] == RCP_EVENT_DETAIL_FIXED_PATH
-    assert rcp_detail_plan["typed_params"]["eventType"] == "USER_REGISTER_NEW"
-    assert rcp_detail_plan["typed_params"]["eventId"] == "5370247893355116990"
-    assert rcp_detail_plan["typed_params"]["queryTime"] == 1779774526479
-    serialized_rcp_detail_plan = json.dumps(rcp_detail_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_rcp_detail_plan.lower()
-    assert "token" not in serialized_rcp_detail_plan.lower()
-    assert "session" not in serialized_rcp_detail_plan.lower()
-    assert "/v2/rest/event/rcpEventDetail" in serialized_rcp_detail_plan
-    assert "http://" not in serialized_rcp_detail_plan.lower()
-    assert "https://" not in serialized_rcp_detail_plan.lower()
-    results.append(("rcp_event_detail_typed_request_plan", "passed"))
-
-    rcp_detail_opener = _FakeOpener(_fixture_payload("rcp_event_detail", "completed"))
-    client = BrowserBackedServiceClient(opener=rcp_detail_opener)
-    rcp_detail_result = client.call_action("rcp_event_detail", rcp_detail_plan["typed_params"])
-    assert rcp_detail_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_event_detail"])
-    assert rcp_detail_result["source_status"] == "completed"
-    assert rcp_detail_result["key_entities"]["eventId"] == "5370247893355116990"
-    assert rcp_detail_result["key_entities"]["deviceId"] == "ANDROID_rcp_detail_device_001"
-    assert rcp_detail_result["missing_fields"] == ["policyTreeNodeCode"]
-    assert rcp_detail_result["sensitive_output"] is False
-    assert rcp_detail_result["no_data_not_risk_exclusion"] is True
-    rcp_detail_card = build_partial_evidence_card([rcp_detail_result])
-    rcp_detail_summary = rcp_detail_card["evidence_summary_by_source"]["rcp_event_detail"]
-    assert rcp_detail_summary["action_contract"]["fixed_path"] == RCP_EVENT_DETAIL_FIXED_PATH
-    assert rcp_detail_summary["event_detail_summary"]["hit_policy_count"] == 2
-    rcp_detail_text = json.dumps(rcp_detail_card, ensure_ascii=True)
-    assert "raw_rcp_detail_body_should_not_render" not in rcp_detail_text
-    assert '"rawDetailBody":' not in rcp_detail_text
-    results.append(("rcp_event_detail_standard_source_result", "passed"))
-
-    rcp_feature_plan = build_rcp_event_feature_list_browser_backed_request(
-        "USER_REGISTER_NEW",
-        "5370247893355116990",
-        1779774526479,
-    )
-    assert rcp_feature_plan["action_name"] == "rcp_event_feature_list"
-    assert rcp_feature_plan["fixed_path"] == RCP_EVENT_FEATURE_LIST_FIXED_PATH
-    assert rcp_feature_plan["typed_params"]["featureGroup"] == ""
-    serialized_rcp_feature_plan = json.dumps(rcp_feature_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_rcp_feature_plan.lower()
-    assert "token" not in serialized_rcp_feature_plan.lower()
-    assert "session" not in serialized_rcp_feature_plan.lower()
-    assert "/v2/rest/event/rcpEventFeatureList" in serialized_rcp_feature_plan
-    assert "http://" not in serialized_rcp_feature_plan.lower()
-    assert "https://" not in serialized_rcp_feature_plan.lower()
-    results.append(("rcp_event_feature_list_typed_request_plan", "passed"))
-
-    try:
-        build_rcp_event_feature_list_browser_backed_request(
-            "USER_REGISTER_NEW",
-            "5370247893355116990",
-            1779774526479,
-            feature_group="ORIG",
-        )
-        raise AssertionError("feature_group override was not rejected")
-    except BrowserBackedServiceInputError:
-        results.append(("rcp_event_feature_list_feature_group_override_rejected", "passed"))
-
-    rcp_feature_opener = _FakeOpener(_fixture_payload("rcp_event_feature_list", "completed"))
-    client = BrowserBackedServiceClient(opener=rcp_feature_opener)
-    rcp_feature_result = client.call_action("rcp_event_feature_list", rcp_feature_plan["typed_params"])
-    assert rcp_feature_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_event_feature_list"])
-    assert rcp_feature_result["source_status"] == "completed"
-    assert rcp_feature_result["key_entities"]["eventId"] == "5370247893355116990"
-    assert rcp_feature_result["missing_fields"] == ["policy_condition_attribution"]
-    rcp_feature_card = build_partial_evidence_card([rcp_feature_result])
-    rcp_feature_summary = rcp_feature_card["evidence_summary_by_source"]["rcp_event_feature_list"]
-    assert rcp_feature_summary["action_contract"]["fixed_path"] == RCP_EVENT_FEATURE_LIST_FIXED_PATH
-    assert rcp_feature_summary["feature_snapshot_summary"]["feature_count"] == 519
-    rcp_feature_text = json.dumps(rcp_feature_card, ensure_ascii=True)
-    assert "raw_feature_value_should_not_render" not in rcp_feature_text
-    assert "full_feature_value_should_not_render" not in rcp_feature_text
-    assert '"rawFeatureValue":' not in rcp_feature_text
-    assert '"featureValue":' not in rcp_feature_text
-    results.append(("rcp_event_feature_list_standard_source_result", "passed"))
-
-    policy_version_plan = build_rcp_policy_version_lookup_browser_backed_request(
-        "USER_REGISTER_NEW",
-        "5370247893355116990",
-        "BS_fake_account_register_thirdPlatformAll_bindphone",
-        5,
-        1779774526479,
-    )
-    assert policy_version_plan["action_name"] == "rcp_policy_version_lookup"
-    assert policy_version_plan["fixed_path"] == RCP_POLICY_VERSION_LOOKUP_FIXED_PATH
-    assert policy_version_plan["typed_params"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert policy_version_plan["typed_params"]["policyVersion"] == 5
-    serialized_policy_version_plan = json.dumps(policy_version_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_policy_version_plan.lower()
-    assert "token" not in serialized_policy_version_plan.lower()
-    assert "session" not in serialized_policy_version_plan.lower()
-    assert "/v2/rest/pc/policy/getPolicyVersionListByEvent" in serialized_policy_version_plan
-    assert "http://" not in serialized_policy_version_plan.lower()
-    assert "https://" not in serialized_policy_version_plan.lower()
-    results.append(("rcp_policy_version_lookup_typed_request_plan", "passed"))
-
-    policy_version_opener = _FakeOpener(_fixture_payload("rcp_policy_version_lookup", "completed"))
-    client = BrowserBackedServiceClient(opener=policy_version_opener)
-    policy_version_result = client.call_action("rcp_policy_version_lookup", policy_version_plan["typed_params"])
-    assert policy_version_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_policy_version_lookup"])
-    assert policy_version_result["source_status"] == "completed"
-    assert policy_version_result["key_entities"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert policy_version_result["missing_fields"] == ["policyTreeNodeCode"]
-    policy_version_card = build_partial_evidence_card([policy_version_result])
-    policy_version_summary = policy_version_card["evidence_summary_by_source"]["rcp_policy_version_lookup"]
-    assert policy_version_summary["action_contract"]["fixed_path"] == RCP_POLICY_VERSION_LOOKUP_FIXED_PATH
-    assert policy_version_summary["policy_version_summary"]["version_found"] is True
-    policy_version_text = json.dumps(policy_version_card, ensure_ascii=True)
-    assert "raw_policy_version_body_should_not_render" not in policy_version_text
-    assert '"rawPolicyVersionBody":' not in policy_version_text
-    results.append(("rcp_policy_version_lookup_standard_source_result", "passed"))
-
-    policy_detail_plan = build_rcp_policy_detail_lookup_browser_backed_request(
-        "BS_fake_account_register_thirdPlatformAll_bindphone",
-        5,
-    )
-    assert policy_detail_plan["action_name"] == "rcp_policy_detail_lookup"
-    assert policy_detail_plan["fixed_path"] == RCP_POLICY_DETAIL_LOOKUP_FIXED_PATH
-    assert policy_detail_plan["typed_params"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert policy_detail_plan["typed_params"]["policyVersion"] == 5
-    serialized_policy_detail_plan = json.dumps(policy_detail_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_policy_detail_plan.lower()
-    assert "token" not in serialized_policy_detail_plan.lower()
-    assert "session" not in serialized_policy_detail_plan.lower()
-    assert "/v2/rest/pro/policy/getPolicyDetailByVersion" in serialized_policy_detail_plan
-    assert "/v2/rest/pro/policy/getPolicyAllVersion" in serialized_policy_detail_plan
-    assert "/v2/rest/pc/policyReview/getRelationPolicyTree" in serialized_policy_detail_plan
-    assert "http://" not in serialized_policy_detail_plan.lower()
-    assert "https://" not in serialized_policy_detail_plan.lower()
-    results.append(("rcp_policy_detail_lookup_typed_request_plan", "passed"))
-
-    policy_detail_opener = _FakeOpener(_fixture_payload("rcp_policy_detail_lookup", "completed"))
-    client = BrowserBackedServiceClient(opener=policy_detail_opener)
-    policy_detail_result = client.call_action("rcp_policy_detail_lookup", policy_detail_plan["typed_params"])
-    assert policy_detail_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_policy_detail_lookup"])
-    assert policy_detail_result["source_status"] == "completed"
-    assert policy_detail_result["key_entities"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert policy_detail_result["missing_fields"] == ["event_attribution_for_specific_hit_path"]
-    policy_detail_card = build_partial_evidence_card([policy_detail_result])
-    policy_detail_summary = policy_detail_card["evidence_summary_by_source"]["rcp_policy_detail_lookup"]
-    assert policy_detail_summary["action_contract"]["fixed_path"] == RCP_POLICY_DETAIL_LOOKUP_FIXED_PATH
-    assert policy_detail_summary["policy_detail_summary"]["condition_count"] == 4
-    policy_detail_text = json.dumps(policy_detail_card, ensure_ascii=True)
-    assert "raw_policy_detail_body_should_not_render" not in policy_detail_text
-    assert "raw_condition_expression_should_not_render" not in policy_detail_text
-    assert '"rawPolicyDetailBody":' not in policy_detail_text
-    assert '"conditionExpressionRaw":' not in policy_detail_text
-    results.append(("rcp_policy_detail_lookup_standard_source_result", "passed"))
-
-    release_plan = build_rcp_policy_release_record_lookup_browser_backed_request(
-        "BS_fake_account_register_thirdPlatformAll_bindphone",
-    )
-    assert release_plan["action_name"] == "rcp_policy_release_record_lookup"
-    assert release_plan["fixed_path"] == RCP_POLICY_RELEASE_LIST_FIXED_PATH
-    assert release_plan["typed_params"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert release_plan["typed_params"]["statusCode"] == ""
-    assert release_plan["typed_params"]["page"] == 1
-    assert release_plan["typed_params"]["size"] == 20
-    serialized_release_plan = json.dumps(release_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_release_plan.lower()
-    assert "token" not in serialized_release_plan.lower()
-    assert "session" not in serialized_release_plan.lower()
-    assert "/v2/rest/common/pipeline/list" in serialized_release_plan
-    assert "/v2/rest/common/pipeline/selectInfo" in serialized_release_plan
-    assert "http://" not in serialized_release_plan.lower()
-    assert "https://" not in serialized_release_plan.lower()
-    results.append(("rcp_policy_release_record_lookup_typed_request_plan", "passed"))
-
-    release_opener = _FakeOpener(_fixture_payload("rcp_policy_release_record_lookup", "completed"))
-    client = BrowserBackedServiceClient(opener=release_opener)
-    release_result = client.call_action("rcp_policy_release_record_lookup", release_plan["typed_params"])
-    assert release_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_policy_release_record_lookup"])
-    assert release_result["source_status"] == "completed"
-    assert release_result["key_entities"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert release_result["missing_fields"] == ["event_attribution_for_specific_hit_path"]
-    release_card = build_partial_evidence_card([release_result])
-    release_summary = release_card["evidence_summary_by_source"]["rcp_policy_release_record_lookup"]
-    assert release_summary["action_contract"]["fixed_path"] == RCP_POLICY_RELEASE_LIST_FIXED_PATH
-    assert release_summary["release_record_summary"]["record_count"] == 4
-    assert release_summary["release_record_summary"]["parsed_policy_versions"] == [2, 3, 4, 5]
-    release_text = json.dumps(release_card, ensure_ascii=True)
-    assert "raw_release_records_should_not_render" not in release_text
-    assert "raw_pipeline_records_should_not_render" not in release_text
-    assert "operator_identity_should_not_render" not in release_text
-    assert "create_user_should_not_render" not in release_text
-    assert '"rawReleaseRecords":' not in release_text
-    assert '"pipelineRecordsRaw":' not in release_text
-    assert '"operatorName":' not in release_text
-    assert '"createUser":' not in release_text
-    results.append(("rcp_policy_release_record_lookup_standard_source_result", "passed"))
-
-    policy_tree_plan = build_rcp_policy_tree_lookup_browser_backed_request(
-        "USER_REGISTER_NEW",
-        887,
-        target_policy_code="BS_fake_account_register_thirdPlatformAll_bindphone",
-    )
-    assert policy_tree_plan["action_name"] == "rcp_policy_tree_lookup"
-    assert policy_tree_plan["fixed_path"] == RCP_POLICY_TREE_LOOKUP_FIXED_PATH
-    assert policy_tree_plan["typed_params"]["policyTreeCode"] == "USER_REGISTER_NEW"
-    assert policy_tree_plan["typed_params"]["policyTreeVersion"] == 887
-    assert policy_tree_plan["typed_params"]["targetPolicyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    serialized_policy_tree_plan = json.dumps(policy_tree_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_policy_tree_plan.lower()
-    assert "token" not in serialized_policy_tree_plan.lower()
-    assert "session" not in serialized_policy_tree_plan.lower()
-    assert "/v2/rest/pro/policyTree/queryProPolicyTree" in serialized_policy_tree_plan
-    assert "/v2/rest/pro/policyTree/policyTreeList" in serialized_policy_tree_plan
-    assert "/v2/rest/pro/policyTree/queryBindingByNodeCode" in serialized_policy_tree_plan
-    assert "/v2/rest/pro/policyTree/getAllPolicyCodeByPage" in serialized_policy_tree_plan
-    assert "/v2/rest/pc/policytree/getPolicyTreeByVersion" in serialized_policy_tree_plan
-    assert "http://" not in serialized_policy_tree_plan.lower()
-    assert "https://" not in serialized_policy_tree_plan.lower()
-    results.append(("rcp_policy_tree_lookup_typed_request_plan", "passed"))
-
-    policy_tree_opener = _FakeOpener(_fixture_payload("rcp_policy_tree_lookup", "completed"))
-    client = BrowserBackedServiceClient(opener=policy_tree_opener)
-    policy_tree_result = client.call_action("rcp_policy_tree_lookup", policy_tree_plan["typed_params"])
-    assert policy_tree_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_policy_tree_lookup"])
-    assert policy_tree_result["source_status"] == "completed"
-    assert policy_tree_result["key_entities"]["policyTreeNodeCode"] == "53187346034508"
-    policy_tree_card = build_partial_evidence_card([policy_tree_result])
-    policy_tree_summary = policy_tree_card["evidence_summary_by_source"]["rcp_policy_tree_lookup"]
-    assert policy_tree_summary["action_contract"]["fixed_path"] == RCP_POLICY_TREE_LOOKUP_FIXED_PATH
-    assert RCP_POLICY_TREE_BINDING_BY_NODE_FIXED_PATH in policy_tree_summary["action_contract"]["companion_readonly_paths"]
-    assert RCP_POLICY_TREE_ALL_POLICY_CODE_FIXED_PATH in policy_tree_summary["action_contract"]["companion_readonly_paths"]
-    assert policy_tree_summary["policy_tree_summary"]["node_code_source"] == "recursive_queryProPolicyTree_parse"
-    assert policy_tree_summary["policy_tree_summary"]["node_binding_policy_count"] == 13
-    assert policy_tree_summary["policy_tree_summary"]["all_policy_code_count"] == 20
-    policy_tree_text = json.dumps(policy_tree_card, ensure_ascii=True)
-    assert "raw_policy_tree_body_should_not_render" not in policy_tree_text
-    assert "full_policy_tree_raw_should_not_render" not in policy_tree_text
-    assert "raw_node_binding_list_should_not_render" not in policy_tree_text
-    assert "raw_all_policy_code_list_should_not_render" not in policy_tree_text
-    assert '"rawPolicyTreeBody":' not in policy_tree_text
-    assert '"policyTreeRaw":' not in policy_tree_text
-    assert '"rawNodeBindingList":' not in policy_tree_text
-    assert '"rawAllPolicyCodeList":' not in policy_tree_text
-    results.append(("rcp_policy_tree_lookup_standard_source_result", "passed"))
-
-    node_attr_plan = build_rcp_node_policy_attribution_browser_backed_request(
-        "USER_REGISTER_NEW",
-        "5370247893355116990",
-        "BS_fake_account_register_thirdPlatformAll_bindphone",
-        5,
-        1779774526479,
-    )
-    assert node_attr_plan["action_name"] == "rcp_node_policy_attribution"
-    assert node_attr_plan["fixed_path"] == RCP_NODE_POLICY_ATTRIBUTION_FIXED_PATH
-    assert node_attr_plan["typed_params"]["type"] == ""
-    assert node_attr_plan["typed_params"]["region"] == "china"
-    serialized_node_attr_plan = json.dumps(node_attr_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_node_attr_plan.lower()
-    assert "token" not in serialized_node_attr_plan.lower()
-    assert "session" not in serialized_node_attr_plan.lower()
-    assert "/v2/rest/pc/policy/nodePolicyAttribution" in serialized_node_attr_plan
-    assert "http://" not in serialized_node_attr_plan.lower()
-    assert "https://" not in serialized_node_attr_plan.lower()
-    results.append(("rcp_node_policy_attribution_typed_request_plan", "passed"))
-
-    node_attr_opener = _FakeOpener(_fixture_payload("rcp_node_policy_attribution", "completed"))
-    client = BrowserBackedServiceClient(opener=node_attr_opener)
-    node_attr_result = client.call_action("rcp_node_policy_attribution", node_attr_plan["typed_params"])
-    assert node_attr_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_node_policy_attribution"])
-    assert node_attr_result["source_status"] == "completed"
-    assert node_attr_result["key_entities"]["policyCode"] == "BS_fake_account_register_thirdPlatformAll_bindphone"
-    assert node_attr_result["missing_fields"] == ["node_bind_policy_attribution"]
-    node_attr_card = build_partial_evidence_card([node_attr_result])
-    node_attr_summary = node_attr_card["evidence_summary_by_source"]["rcp_node_policy_attribution"]
-    assert node_attr_summary["action_contract"]["fixed_path"] == RCP_NODE_POLICY_ATTRIBUTION_FIXED_PATH
-    assert node_attr_summary["policy_attribution_summary"]["true_condition_count"] == 4
-    node_attr_text = json.dumps(node_attr_card, ensure_ascii=True)
-    assert "raw_condition_dump_should_not_render" not in node_attr_text
-    assert "full_condition_list_should_not_render" not in node_attr_text
-    assert "raw_feature_value_should_not_render" not in node_attr_text
-    assert '"rawConditionDump":' not in node_attr_text
-    assert '"conditionListRaw":' not in node_attr_text
-    results.append(("rcp_node_policy_attribution_standard_source_result", "passed"))
-
-    node_bind_plan = build_rcp_node_bind_policy_attribution_browser_backed_request(
-        "USER_REGISTER_NEW",
-        "5370247893355116990",
-        1779774526479,
-        "USER_REGISTER_NEW",
-        887,
-        "53187346034508",
-    )
-    assert node_bind_plan["action_name"] == "rcp_node_bind_policy_attribution"
-    assert node_bind_plan["fixed_path"] == RCP_NODE_BIND_POLICY_ATTRIBUTION_FIXED_PATH
-    assert node_bind_plan["typed_params"]["policyTreeNodeCode"] == "53187346034508"
-    serialized_node_bind_plan = json.dumps(node_bind_plan, ensure_ascii=True)
-    assert "cookie" not in serialized_node_bind_plan.lower()
-    assert "token" not in serialized_node_bind_plan.lower()
-    assert "session" not in serialized_node_bind_plan.lower()
-    assert "/v2/rest/pc/policy/nodeBindPolicyAttribution" in serialized_node_bind_plan
-    assert "http://" not in serialized_node_bind_plan.lower()
-    assert "https://" not in serialized_node_bind_plan.lower()
-    results.append(("rcp_node_bind_policy_attribution_typed_request_plan", "passed"))
-
-    node_bind_opener = _FakeOpener(_fixture_payload("rcp_node_bind_policy_attribution", "completed"))
-    client = BrowserBackedServiceClient(opener=node_bind_opener)
-    node_bind_result = client.call_action("rcp_node_bind_policy_attribution", node_bind_plan["typed_params"])
-    assert node_bind_opener.calls[0]["url"].endswith(ACTION_ENDPOINTS["rcp_node_bind_policy_attribution"])
-    assert node_bind_result["source_status"] == "completed"
-    assert node_bind_result["key_entities"]["policyTreeNodeCode"] == "53187346034508"
-    node_bind_card = build_partial_evidence_card([node_bind_result])
-    node_bind_summary = node_bind_card["evidence_summary_by_source"]["rcp_node_bind_policy_attribution"]
-    assert node_bind_summary["action_contract"]["fixed_path"] == RCP_NODE_BIND_POLICY_ATTRIBUTION_FIXED_PATH
-    assert node_bind_summary["node_binding_summary"]["target_policy_result"] is True
-    node_bind_text = json.dumps(node_bind_card, ensure_ascii=True)
-    assert "raw_node_binding_body_should_not_render" not in node_bind_text
-    assert "full_nodebinding_policy_list_should_not_render" not in node_bind_text
-    assert "raw_condition_dump_should_not_render" not in node_bind_text
-    assert '"rawNodeBindingBody":' not in node_bind_text
-    assert '"nodebindingPolicyListRaw":' not in node_bind_text
-    results.append(("rcp_node_bind_policy_attribution_standard_source_result", "passed"))
-
-    blocked_payload = _fixture_payload("rcp_snapshot", "blocked", "platform_error")
-    client = BrowserBackedServiceClient(opener=_FakeOpener(blocked_payload))
-    result = client.call_action("rcp_snapshot", {"eventType": "USER_REGISTER_NEW"})
-    assert result["source_status"] == "blocked"
-    assert result["source_card"] and result["source_quality"]
-    results.append(("blocked_platform_error_standardized", "passed"))
-
-    refused = urllib.error.URLError(ConnectionRefusedError("connection refused"))
-    client = BrowserBackedServiceClient(opener=_FakeOpener(exc=refused))
-    result = client.call_action("weapon_inventory", {"user_id": "fixture"})
-    assert result["source_status"] == "blocked"
-    assert result["error_type"] == "connection_refused"
-    results.append(("service_connection_refused", "passed"))
-
-    client = BrowserBackedServiceClient(opener=_FakeOpener(exc=socket.timeout("timed out")))
-    result = client.call_action("track_analysis_summary", {"user_id": "fixture"})
-    assert result["source_status"] == "timeout"
-    results.append(("service_timeout", "passed"))
-
-    sensitive_payload = _fixture_payload("weapon_inventory", "completed")
-    sensitive_payload["sensitive_output"] = True
-    client = BrowserBackedServiceClient(opener=_FakeOpener(sensitive_payload))
-    result = client.call_action("weapon_inventory", {"user_id": "fixture"})
-    assert result["source_status"] == "blocked"
-    assert result["error_type"] == "sensitive_output_violation"
-    assert result["sensitive_output"] is False
-    results.append(("sensitive_output_true_rejected", "passed"))
-
-    try:
-        BrowserBackedServiceClient().call_action("arbitrary_action", {})
-        raise AssertionError("arbitrary action was not rejected")
-    except BrowserBackedServiceInputError:
-        results.append(("arbitrary_action_rejected", "passed"))
-
-    for forbidden_key in ("header", "cookie", "token", "session", "secret"):
-        try:
-            BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload("rcp_snapshot", "completed"))).call_action(
-                "rcp_snapshot", {forbidden_key: "fixture"}
-            )
-            raise AssertionError(f"forbidden key was not rejected: {forbidden_key}")
-        except BrowserBackedServiceInputError:
-            continue
-    results.append(("forbidden_auth_material_keys_rejected", "passed"))
-
-    try:
-        BrowserBackedServiceClient(base_url="https://example.invalid:8787")
-        raise AssertionError("non-local base_url was not rejected")
-    except BrowserBackedServiceInputError:
-        results.append(("arbitrary_base_url_rejected", "passed"))
-
-    try:
-        BrowserBackedServiceClient(opener=_FakeOpener(_fixture_payload("rcp_snapshot", "completed"))).call_action(
-            "rcp_snapshot", {"typed_hint": "https://example.invalid/path"}
-        )
-        raise AssertionError("URL-like typed param was not rejected")
-    except BrowserBackedServiceInputError:
-        results.append(("url_like_typed_param_rejected", "passed"))
-
-    mock_invocation = run_mock_action_invocation(
-        "archives_user_analysis",
-        {
-            "user_id": "2871834924",
-            "beginTime": 1764201600000,
-            "endTime": 1764288000000,
-            "pageIndex": 1,
-            "pageSize": 20,
-        },
-    )
-    assert mock_invocation["source_status"] == "completed"
-    assert mock_invocation["invocation_mode"] == "mock"
-    assert mock_invocation["live_service_called"] is False
-    assert mock_invocation["platform_called"] is False
-    assert mock_invocation["default_runtime_routing"] is False
-    assert mock_invocation["live_verified"] is False
-    assert mock_invocation["fixed_action_endpoint"] == ACTION_ENDPOINTS["archives_user_analysis"]
-    results.append(("explicit_action_mock_invocation", "passed"))
-
-    try:
-        parse_typed_params_json('{"header": "forbidden"}')
-        raise AssertionError("forbidden CLI typed param was not rejected")
-    except BrowserBackedServiceInputError:
-        results.append(("explicit_action_cli_forbidden_typed_param_rejected", "passed"))
-
-    account_security_source_plan = build_account_security_browser_backed_requests(
-        "2871834924",
-        expand_track_analysis_bundle=False,
-    )
-    assert [item["action_name"] for item in account_security_source_plan] == [
-        "track_analysis_summary",
-        "rcp_snapshot",
-        "weapon_inventory",
-        "login_logs_search",
-    ]
-    track_plan = account_security_source_plan[0]
-    assert track_plan["typed_params"]["mode"] == "account_security_bundle"
-    assert track_plan["typed_params"]["sub_interfaces"] == [
-        "profile",
-        "getUseDuration",
-        "getDeviceIds",
-        "getLastestDateTime",
-    ]
-    rcp_plan = account_security_source_plan[1]
-    assert rcp_plan["typed_params"]["mode"] == "account_security_strategy_event_entry"
-    weapon_plan = account_security_source_plan[2]
-    assert weapon_plan["typed_params"]["riskData_trigger_device_prefix"] == ["ANDROID_", "HARMONY_"]
-    login_plan = account_security_source_plan[3]
-    assert login_plan["fallback_on"]["parse_error"]["typed_params"]["window"] == "last_24h"
-    expanded_account_security_plan = build_account_security_browser_backed_requests("2871834924")
-    assert [item.get("track_sub_interface") for item in expanded_account_security_plan[:4]] == [
-        "profile",
-        "getUseDuration",
-        "getDeviceIds",
-        "getLastestDateTime",
-    ]
-    assert [item["action_name"] for item in expanded_account_security_plan[:4]] == ["track_analysis_summary"] * 4
-    serialized_plan = json.dumps(expanded_account_security_plan, ensure_ascii=True)
-    assert "sso_session_runner" not in serialized_plan
-    assert "track_analysis_runner" not in serialized_plan
-    assert "cookie" not in serialized_plan.lower()
-    assert "token" not in serialized_plan.lower()
-    results.append(("account_security_browser_backed_request_plan", "passed"))
-
-    def account_security_payload(request: urllib.request.Request) -> Dict[str, Any]:
-        body = json.loads((request.data or b"{}").decode("utf-8"))
-        if body.get("response_mode") == RESPONSE_MODE_PASSTHROUGH:
-            if request.full_url.endswith(ACTION_ENDPOINTS["track_analysis_summary"]):
-                sub_interface = body.get("sub_interface")
-                if sub_interface == "profile":
-                    return _passthrough_fixture_payload(
-                        "track_analysis_summary",
-                        {
-                            "data": {
-                                "profile": {
-                                    "registerTime": "2026-05-20",
-                                    "fanDistribution": "low",
-                                    "activeDays": 3,
-                                },
-                                "deviceIds": ["ANDROID_track_device_001", "HARMONY_track_device_002"],
-                            }
-                        },
-                    )
-                if sub_interface == "getUseDuration":
-                    return _passthrough_fixture_payload(
-                        "track_analysis_summary",
-                        {"data": {"rows": [{"date": "2026-05-28", "duration": 3600}]}},
-                    )
-                if sub_interface == "getDeviceIds":
-                    return _passthrough_fixture_payload(
-                        "track_analysis_summary",
-                        {"data": ["ANDROID_track_device_001", "HARMONY_track_device_002"]},
-                    )
-                return _passthrough_fixture_payload(
-                    "track_analysis_summary",
-                    {"data": {"latestDateTime": "数据更新时间:2026-05-28"}},
-                )
-            if request.full_url.endswith(ACTION_ENDPOINTS["rcp_snapshot"]):
-                return _passthrough_fixture_payload(
-                    "rcp_snapshot",
-                    {
-                        "data": {
-                            "eventList": [
-                                {
-                                    "eventId": "event_001",
-                                    "sourceId": "2871834924",
-                                    "deviceId": "ANDROID_rcp_device_001",
-                                    "hitFusePolicyCode": "POLICY_001",
-                                    "_occurTime": "1779774526479",
-                                }
-                            ]
-                        }
-                    },
-                )
-            if request.full_url.endswith(ACTION_ENDPOINTS["weapon_inventory"]):
-                return _passthrough_fixture_payload(
-                    "weapon_inventory",
-                    {
-                        "graphData": {
-                            "data": {
-                                "pointInfoMap": {
-                                    "2871834924": {"type": "USER_ID"},
-                                    "ANDROID_weapon_device_001": {"type": "DEVICE_ID"},
-                                },
-                                "relationEdgeList": [
-                                    {"source": "2871834924", "target": "ANDROID_weapon_device_001"}
-                                ],
-                            }
-                        },
-                        "riskDataResults": [],
-                        "weapon_chain": {
-                            "graphData_status": "completed",
-                            "riskData_status": "not_executed_missing_device_id",
-                            "selected_device_count": 0,
-                        },
-                    },
-                )
-            if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
-                return _passthrough_fixture_payload("login_logs_search", passthrough_login_body)
-        if request.full_url.endswith(ACTION_ENDPOINTS["track_analysis_summary"]):
-            return _fixture_payload("track_analysis_summary", "completed", track_sub_interface=body.get("sub_interface"))
-        if request.full_url.endswith(ACTION_ENDPOINTS["rcp_snapshot"]):
-            return _fixture_payload("rcp_snapshot", "completed")
-        if request.full_url.endswith(ACTION_ENDPOINTS["weapon_inventory"]):
-            return _fixture_payload("weapon_inventory", "completed")
-        if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
-            return _fixture_payload("login_logs_search", "no_data")
-        return {}
-
-    account_security_opener = _FakeOpener(account_security_payload)
-    account_security_results = BrowserBackedServiceClient(opener=account_security_opener).call_account_security_sources("2871834924")
-    assert len(account_security_opener.calls) == 7
-    for call in account_security_opener.calls:
-        account_security_call_body = json.loads((call["body"] or b"{}").decode("utf-8"))
-        assert account_security_call_body["response_mode"] == RESPONSE_MODE_PASSTHROUGH
-    assert [result["source_name"] for result in account_security_results] == [
-        "track_analysis_summary",
-        "rcp_snapshot",
-        "weapon_inventory",
-        "login_logs_search",
-    ]
+    account_security_results = BrowserBackedServiceClient(
+        opener=_FakeOpener(lambda request: _passthrough_fixture_payload(
+            _action_name_from_url(request.full_url),
+            _default_passthrough_body(_action_name_from_url(request.full_url), json.loads((request.data or b"{}").decode("utf-8"))),
+        ))
+    ).call_account_security_sources("2871834924")
+    assert account_security_results[0]["dennis_observation"]["sub_interface"] == TRACK_ANALYSIS_BUNDLE_MODE
+    assert all("source_card" not in result for result in account_security_results)
+    assert all("source_quality" not in result for result in account_security_results)
     account_security_card = build_partial_evidence_card(account_security_results)
-    track_summary = account_security_card["evidence_summary_by_source"]["track_analysis_summary"]
-    assert account_security_results[0]["response_mode"] == RESPONSE_MODE_PASSTHROUGH
-    assert account_security_results[0]["normalized_observation"]["sub_interface"] == TRACK_ANALYSIS_BUNDLE_MODE
-    assert account_security_results[0]["normalized_observation"]["raw_body_suppressed"] is True
-    assert track_summary["bundle_summary"]["sub_interfaces_completed"] == [
-        "profile",
-        "getUseDuration",
-        "getDeviceIds",
-        "getLastestDateTime",
-    ]
-    assert track_summary["profile_summary"]["register_time_present"] is True
-    assert track_summary["use_duration_summary"]["rows_count"] == 1
-    assert track_summary["device_ids_summary"]["device_ids_count"] == 2
-    assert track_summary["latest_timestamp_summary"]["latest_datetime_present"] is True
-    assert account_security_card["evidence_summary_by_source"]["login_logs_search"]["normalized_observation_summary"]["records_count"] == 1
-    results.append(("call_account_security_sources_default_passthrough", "passed"))
-    results.append(("ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES", "passed"))
+    assert account_security_card["source_completion_matrix"]["source_quality"]
+    results.append(("account_security_passthrough_bundle", "passed"))
 
-    compat_fallback_calls = {"count": 0}
-
-    def account_security_fallback_payload(request: urllib.request.Request) -> Dict[str, Any]:
-        body = json.loads((request.data or b"{}").decode("utf-8"))
-        if request.full_url.endswith(ACTION_ENDPOINTS["login_logs_search"]):
-            compat_fallback_calls["count"] += 1
-            if body.get("response_mode") == RESPONSE_MODE_PASSTHROUGH:
-                return _passthrough_fixture_payload("login_logs_search", include_body=False)
-            return _fixture_payload("login_logs_search", "completed")
-        return _passthrough_fixture_payload("track_analysis_summary", {"data": {"latestDateTime": "数据更新时间:2026-05-28"}})
-
-    fallback_opener = _FakeOpener(account_security_fallback_payload)
-    fallback_client = BrowserBackedServiceClient(opener=fallback_opener)
-    no_fallback_result = fallback_client.call_action(
-        "login_logs_search",
-        {"user_id": "fixture"},
-        response_mode=RESPONSE_MODE_PASSTHROUGH,
-    )
-    assert no_fallback_result["source_status"] == "parse_error"
-    assert no_fallback_result["error_type"] == "passthrough_body_missing"
-    fallback_result = fallback_client.call_account_security_sources(
-        "2871834924",
-        include_rcp_snapshot=False,
-        allow_compat_fallback=True,
-    )[-1]
-    assert fallback_result["compat_fallback_used"] is True
-    assert fallback_result["source_status"] == "completed"
-    assert compat_fallback_calls["count"] >= 3
-    results.append(("compat_summary_fallback_requires_explicit_allow_flag", "passed"))
-
-    raw_payload = _fixture_payload("login_logs_search", "completed")
-    raw_payload["data"]["login_records"] = [{"ip": "203.0.113.10", "deviceId": "ANDROID_raw"}]
-    result = normalize_service_response("login_logs_search", raw_payload)
-    serialized_result = json.dumps(result, ensure_ascii=True)
-    assert "203.0.113.10" not in serialized_result
-    assert "ANDROID_raw" not in serialized_result
-    results.append(("raw_login_record_body_not_output", "passed"))
-
-    internal_results = [
-        normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
-        normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "completed")),
-        normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed")),
-        normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "completed")),
-    ]
-    internal_card = build_partial_evidence_card(internal_results)
-    internal_text = json.dumps(internal_card, ensure_ascii=True)
-    assert internal_card["output_scope"] == "internal_risk_review"
-    assert "10.20.30.40" in internal_text
-    assert "ANDROID_login_device_001" in internal_text
-    assert "ANDROID_weapon_device_001" in internal_text
-    assert "2871834924" in internal_text
-    assert "evt_rcp_001" in internal_text
-    assert "evt_weapon_001" in internal_text
-    assert "src_rcp_001" in internal_text
-    assert internal_card["evidence_boundary"]["sensitive_output_false_meaning"].startswith("no credential_secret")
-    assert internal_card["sensitive_output"] is False
-    assert "13812345678" not in internal_text
-    assert "1381234****" in internal_text
-    assert "110105199001011234" not in internal_text
-    assert "Fixture User" not in internal_text
-    assert "raw_device_should_not_render" not in internal_text
-    assert "raw_log_should_not_render" not in internal_text
-    results.append(("internal_risk_review_entity_fields_allowed", "passed"))
-
-    external_card = build_partial_evidence_card(internal_results, output_scope="external_share")
-    external_text = json.dumps(external_card, ensure_ascii=True)
-    assert external_card["output_scope"] == "external_share"
-    assert "10.20.30.40" not in external_text
-    assert "10.20.*.*" in external_text
-    assert "ANDROID_login_device_001" not in external_text
-    assert "ANDROID_weapon_device_001" not in external_text
-    assert "[masked_device_id:length=24]" in external_text
-    assert "evt_rcp_001" not in external_text
-    assert "evt_weapon_001" not in external_text
-    assert "src_rcp_001" not in external_text
-    assert "[masked_identifier:length=11]" in external_text
-    assert "2871834924" not in external_text
-    assert "[masked_user_id:length=10]" in external_text
-    assert "13812345678" not in external_text
-    assert "138********" in external_text
-    assert "110105199001011234" not in external_text
-    assert "Fixture User" not in external_text
-    results.append(("external_share_risk_entities_masked", "passed"))
-
-    def fixture_results_for_user(user_id: str) -> list[Dict[str, Any]]:
-        track_payload = _fixture_payload("track_analysis_summary", "completed")
-        track_payload["source_card"]["profile_summary"]["user_id_sample"] = user_id
-        rcp_payload = _fixture_payload("rcp_snapshot", "completed")
-        weapon_payload = _fixture_payload("weapon_inventory", "completed")
-        weapon_payload["source_card"]["weapon_summary"]["related_user_id_sample"] = user_id
-        login_payload = _fixture_payload("login_logs_search", "completed")
-        login_payload["source_card"]["login_logs_summary"]["user_id_sample"] = user_id
-        return [
-            normalize_service_response("track_analysis_summary", track_payload),
-            normalize_service_response("rcp_snapshot", rcp_payload),
-            normalize_service_response("weapon_inventory", weapon_payload),
-            normalize_service_response("login_logs_search", login_payload),
+    small_batch = build_small_batch_evidence_output(
+        [
+            {"user_id": "772671837", "source_results": [passthrough_result]},
+            {"user_id": "3481089791", "source_results": [missing_body_result]},
         ]
-
-    small_batch_input = [
-        {"user_id": "772671837", "results": fixture_results_for_user("772671837")},
-        {"user_id": "3481089791", "results": fixture_results_for_user("3481089791")},
-    ]
-    internal_batch = build_small_batch_evidence_output(small_batch_input, output_scope="internal_risk_review")
-    internal_batch_text = json.dumps(internal_batch, ensure_ascii=False)
-    assert internal_batch["output_scope"] == "internal_risk_review"
-    assert "用户 772671837" in internal_batch_text
-    assert "用户 3481089791" in internal_batch_text
-    assert "U1" not in internal_batch_text
-    assert "U2" not in internal_batch_text
-    assert "尾号" not in internal_batch_text
-    assert "user_***1837" not in internal_batch_text
-    assert "user_***9791" not in internal_batch_text
-    assert "ANDROID_login_device_001" in internal_batch_text
-    assert "ANDROID_weapon_device_001" in internal_batch_text
-    assert "evt_rcp_001" in internal_batch_text
-    assert "src_rcp_001" in internal_batch_text
-    assert "10.20.30.40" in internal_batch_text
-    results.append(("small_batch_internal_titles_show_raw_user_ids", "passed"))
-
-    external_batch = build_small_batch_evidence_output(small_batch_input, output_scope="external_share")
-    external_batch_text = json.dumps(external_batch, ensure_ascii=False)
-    assert external_batch["output_scope"] == "external_share"
-    assert "用户 U1（user_***1837）" in external_batch_text
-    assert "用户 U2（user_***9791）" in external_batch_text
-    assert "772671837" not in external_batch_text
-    assert "3481089791" not in external_batch_text
-    assert "ANDROID_login_device_001" not in external_batch_text
-    assert "ANDROID_weapon_device_001" not in external_batch_text
-    assert "evt_rcp_001" not in external_batch_text
-    assert "src_rcp_001" not in external_batch_text
-    assert "10.20.30.40" not in external_batch_text
-    assert "10.20.*.*" in external_batch_text
-    assert "13812345678" not in external_batch_text
-    assert "138********" in external_batch_text
-    assert "raw_device_should_not_render" not in external_batch_text
-    assert "raw_log_should_not_render" not in external_batch_text
-    results.append(("small_batch_external_titles_mask_user_ids", "passed"))
-
-    numeric_user_payload = _fixture_payload("login_logs_search", "completed")
-    numeric_user_payload["source_card"]["login_logs_summary"]["user_id_sample"] = "12345678901"
-    numeric_user_result = normalize_service_response("login_logs_search", numeric_user_payload)
-    numeric_user_card = build_partial_evidence_card([numeric_user_result])
-    numeric_user_summary = numeric_user_card["evidence_summary_by_source"]["login_logs_search"]
-    assert numeric_user_summary["login_window_summary"]["user_id_sample"] == "12345678901"
-    assert numeric_user_summary["login_window_summary"]["phone_number_sample"] == "1381234****"
-    numeric_user_text = json.dumps(numeric_user_card, ensure_ascii=True)
-    assert "13812345678" not in numeric_user_text
-    results.append(("phone_masking_does_not_reclassify_numeric_user_id", "passed"))
-
-    credential_payload = _fixture_payload("login_logs_search", "completed")
-    credential_payload["source_card"]["login_logs_summary"]["authorization"] = "Bearer raw_secret_value"
-    credential_payload["source_card"]["login_logs_summary"]["cookie"] = "ks_session=raw_cookie_value"
-    credential_payload["source_card"]["login_logs_summary"]["token"] = "raw_token_value"
-    credential_result = normalize_service_response("login_logs_search", credential_payload)
-    credential_card = build_partial_evidence_card([credential_result])
-    credential_text = json.dumps(credential_card, ensure_ascii=True)
-    assert "raw_secret_value" not in credential_text
-    assert "raw_cookie_value" not in credential_text
-    assert "raw_token_value" not in credential_text
-    assert credential_card["sensitive_output"] is False
-    results.append(("credential_secret_never_output", "passed"))
-
-    raw_dump_payload = _fixture_payload("weapon_inventory", "completed")
-    raw_dump_payload["source_card"]["raw_body"] = {"full": "raw_full_body_should_not_render"}
-    raw_dump_payload["source_card"]["raw_login_records"] = [{"ip": "198.51.100.10"}]
-    raw_dump_payload["source_card"]["raw_labelInfo"] = {"label": "raw_label_should_not_render"}
-    raw_dump_payload["source_card"]["raw_originalLog"] = {"eventId": "raw_original_event_should_not_render"}
-    raw_dump_result = normalize_service_response("weapon_inventory", raw_dump_payload)
-    raw_dump_card = build_partial_evidence_card([raw_dump_result])
-    raw_dump_text = json.dumps(raw_dump_card, ensure_ascii=True)
-    assert "raw_full_body_should_not_render" not in raw_dump_text
-    assert "198.51.100.10" not in raw_dump_text
-    assert "raw_label_should_not_render" not in raw_dump_text
-    assert "raw_original_event_should_not_render" not in raw_dump_text
-    results.append(("raw_body_records_labelinfo_originallog_not_output", "passed"))
-
-    completed = normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed"))
-    no_data = normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "no_data"))
-    blocked = normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "blocked", "platform_error"))
-    card = build_partial_evidence_card([completed, no_data, blocked])
-    assert card["completed_sources"] == ["track_analysis_summary"]
-    assert card["no_data_sources"] == ["login_logs_search"]
-    assert card["blocked_sources"] == ["rcp_snapshot"]
-    assert card["sensitive_output"] is False
-    assert card["no_data_not_risk_exclusion"] is True
-    results.append(("partial_evidence_card_mixed_sources", "passed"))
-
-    parse_error = normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "parse_error", "parse_error"))
-    parse_error_card = build_partial_evidence_card([parse_error])
-    assert parse_error["source_status"] == "parse_error"
-    assert parse_error["source_card"] and parse_error["source_quality"]
-    assert parse_error["sensitive_output"] is False
-    assert parse_error_card["source_completion_matrix"]["parse_error_sources"] == ["login_logs_search"]
-    results.append(("login_logs_parse_error_standard_source_result", "passed"))
-
-    network_error = normalize_service_response(
-        "login_logs_search",
-        _fixture_payload("login_logs_search", "network_error", "network_error"),
     )
-    network_error_card = build_partial_evidence_card([network_error])
-    network_login_summary = network_error_card["evidence_summary_by_source"]["login_logs_search"]
-    assert network_error["source_status"] == "blocked"
-    assert network_error["source_card"] and network_error["source_quality"]
-    assert network_error["latency_ms"] == 123
-    assert network_error["sensitive_output"] is False
-    assert network_error_card["source_completion_matrix"]["blocked_sources"] == ["login_logs_search"]
-    assert network_login_summary["login_window_summary"]["standard_browser_backed_source_result"] is True
-    assert network_login_summary["blocked_parse_or_no_data_not_counter_evidence"] is True
-    results.append(("LOGIN-LOGS-STANDARD-SOURCE-RESULT-IN-EVIDENCE-CARD", "passed"))
-
-    weapon_result = normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed"))
-    weapon_card = build_partial_evidence_card([weapon_result])
-    weapon_summary = weapon_card["evidence_summary_by_source"]["weapon_inventory"]
-    assert _has_private_raw_reference(weapon_result, "device_id") is True
-    assert weapon_summary["chaining_summary"]["raw_device_safe_handle_retained"] is True
-    serialized_weapon_result = json.dumps(weapon_result, ensure_ascii=True)
-    serialized_weapon_card = json.dumps(weapon_card, ensure_ascii=True)
-    assert "ANDROID_raw_device_should_not_render" not in serialized_weapon_result
-    assert "ANDROID_raw_device_should_not_render" not in serialized_weapon_card
-    assert "raw_value" not in serialized_weapon_result
-    results.append(("WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED", "passed"))
-
-    four_source_results = [
-        normalize_service_response("track_analysis_summary", _fixture_payload("track_analysis_summary", "completed")),
-        normalize_service_response("rcp_snapshot", _fixture_payload("rcp_snapshot", "completed")),
-        normalize_service_response("weapon_inventory", _fixture_payload("weapon_inventory", "completed")),
-        normalize_service_response("login_logs_search", _fixture_payload("login_logs_search", "no_data")),
-    ]
-    four_source_card = build_partial_evidence_card(four_source_results)
-    summaries = four_source_card["evidence_summary_by_source"]
-    assert summaries["track_analysis_summary"]["bundle_summary"]["mode"] == "account_security_bundle"
-    assert summaries["track_analysis_summary"]["bundle_summary"]["sub_interfaces"] == [
-        "profile",
-        "getUseDuration",
-        "getDeviceIds",
-        "getLastestDateTime",
-    ]
-    assert summaries["track_analysis_summary"]["profile_summary"]["register_time_present"] is True
-    assert summaries["track_analysis_summary"]["latest_timestamp_summary"]["latest_datetime_present"] is True
-    assert summaries["track_analysis_summary"]["use_duration_summary"]["rows_count"] == 7
-    assert summaries["track_analysis_summary"]["device_ids_summary"]["device_ids_count"] == 2
-    assert summaries["rcp_snapshot"]["event_summary"]["event_count"] == 3
-    assert summaries["rcp_snapshot"]["chaining_keys_present"]["hitFusePolicyCode"] is True
-    assert "final risk judgement" in summaries["rcp_snapshot"]["boundary"].lower()
-    assert summaries["weapon_inventory"]["graph_summary"]["related_device_count"] == 2
-    assert summaries["weapon_inventory"]["risk_summary"]["risk_label_count"] == 2
-    assert summaries["login_logs_search"]["login_window_summary"]["records_count"] == 0
-    assert four_source_card["missing_evidence"][0]["source_name"] == "login_logs_search"
-    assert four_source_card["evidence_boundary"]["final_risk_judgement_made"] is False
-    serialized_card = json.dumps(four_source_card, ensure_ascii=True)
-    assert '"raw_labelInfo":' not in serialized_card
-    assert "raw_device_should_not_render" not in serialized_card
-    assert "raw_log_should_not_render" not in serialized_card
-    results.append(("four_source_business_evidence_summary", "passed"))
+    assert small_batch["execution_mode"] == "small_batch_execution_with_checkpoint"
+    assert small_batch["user_count"] == 2
+    results.append(("small_batch_passthrough_evidence", "passed"))
 
     return {
         "fixture_tests": len(results),
         "passed": [name for name, status in results if status == "passed"],
     }
 
+
+def _action_name_from_url(url: str) -> str:
+    path = urllib.parse.urlparse(url).path
+    for action_name, endpoint in ACTION_ENDPOINTS.items():
+        if path.endswith(endpoint):
+            return action_name
+    raise BrowserBackedServiceInputError(f"unknown action endpoint in fixture URL: {path}")
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Browser-backed service client utilities")

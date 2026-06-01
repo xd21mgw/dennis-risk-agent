@@ -92,6 +92,46 @@ BATCH_ATO_REQUIRED_ANSWER_MARKERS = {
     "representative_ato_single_case_deep_dive",
     "cluster_level_backfill",
 }
+PASSTHROUGH_ENVELOPE_REQUIRED_FIELDS = {
+    "action_name",
+    "source_id",
+    "platform",
+    "http_status",
+    "content_type",
+    "body_present",
+    "body_truncated",
+    "observed_bytes",
+    "elapsed_ms",
+    "transport_error",
+    "platform_error",
+    "invalid_params",
+    "timeout",
+    "auth_redirect_detected",
+    "raw_body_handling",
+}
+PASSTHROUGH_BATCH_REQUIRED_FIELDS = {
+    "batch_status",
+    "source_results",
+    "transport_status_matrix",
+    "missing_or_failed_sources",
+}
+LEGACY_SERVICE_BUSINESS_FIELDS = {
+    "normalized_observation",
+    "source_quality",
+    "source_quality_matrix",
+    "evidence_card_inputs",
+    "source_card",
+    "compat_summary",
+    "risk_event_scan",
+    "feature_group_summary",
+}
+DENNIS_GENERATED_PASSTHROUGH_FIELDS = {
+    "observation",
+    "source_quality_matrix",
+    "evidence_card",
+    "missing_evidence",
+    "final_answer_boundary",
+}
 USER_FACING_RUNTIME_YAML_MARKERS = {
     "routing_metadata:",
     "source_quality:",
@@ -169,6 +209,81 @@ def parse_matrix(raw: str | None) -> list[dict[str, Any]]:
     return data
 
 
+def parse_passthrough_envelope(raw: str | None) -> dict[str, Any] | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"passthrough_envelope must be JSON: {exc}")
+    if not isinstance(data, dict):
+        raise SystemExit("passthrough_envelope must be a JSON object")
+    return data
+
+
+def classify_passthrough_source(envelope: dict[str, Any]) -> str:
+    if envelope.get("timeout") is True:
+        return "timeout"
+    if (
+        envelope.get("auth_redirect_detected") is True
+        or str(envelope.get("api_code")) == "302"
+        or str(envelope.get("http_status")) == "302"
+    ):
+        return "auth_failed"
+    if envelope.get("invalid_params"):
+        return "parse_error"
+    if envelope.get("transport_error") or envelope.get("platform_error"):
+        return "blocked"
+    if envelope.get("body_truncated") is True:
+        return "partial"
+    if envelope.get("body_present") is False:
+        return "no_data"
+    return "completed"
+
+
+def validate_passthrough_envelope(envelope: dict[str, Any] | None) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    if envelope is None:
+        return [], {}
+    failures: list[dict[str, str]] = []
+    missing_fields = sorted(field for field in PASSTHROUGH_ENVELOPE_REQUIRED_FIELDS if field not in envelope)
+    if missing_fields:
+        failures.append(
+            {
+                "rule": "passthrough_envelope_required_fields",
+                "reason": f"passthrough envelope missing fields {missing_fields}",
+            }
+        )
+    legacy_fields_present = sorted(field for field in LEGACY_SERVICE_BUSINESS_FIELDS if field in envelope)
+    if legacy_fields_present:
+        failures.append(
+            {
+                "rule": "service_must_not_emit_legacy_business_fields",
+                "reason": f"pure passthrough envelope must not require or emit service business fields {legacy_fields_present}",
+            }
+        )
+    if str(envelope.get("raw_body_handling", "")) not in {"suppressed", "capped", "metadata_only"}:
+        failures.append(
+            {
+                "rule": "raw_body_handling_required",
+                "reason": "raw_body_handling must be suppressed, capped, or metadata_only",
+            }
+        )
+    status = classify_passthrough_source(envelope)
+    generated = {
+        "dennis_generated_status": status,
+        "source_quality_bucket": status,
+        "partial_observation_available": envelope.get("body_truncated") is True,
+        "auth_flow_not_completed_in_bound_context": (
+            envelope.get("auth_redirect_detected") is True
+            or str(envelope.get("api_code")) == "302"
+            or str(envelope.get("http_status")) == "302"
+        ),
+        "raw_body_limited_observation_only": str(envelope.get("raw_body_handling", "")) in {"suppressed", "capped", "metadata_only"},
+        "missing_evidence_required": status in {"timeout", "auth_failed", "blocked", "parse_error", "no_data"},
+    }
+    return failures, generated
+
+
 def select_plan(plan: dict[str, Any], task_type: str, entity_count: int) -> dict[str, Any] | None:
     for candidate in plan.get("plans", {}).values():
         applies_to = {str(item).lower() for item in candidate.get("applies_to", [])}
@@ -213,12 +328,73 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                 }
             )
 
+    if batch_contract.get("service_output_mode") != "pure_passthrough_transport_envelope":
+        failures.append(
+            {
+                "rule": "pure_passthrough_output_mode_required",
+                "reason": "browser-backed service contract must be pure passthrough transport envelope, not service-side normalized observation",
+            }
+        )
+    envelope_fields = set(batch_contract.get("service_single_source_envelope_fields", []))
+    missing_envelope = sorted(PASSTHROUGH_ENVELOPE_REQUIRED_FIELDS - envelope_fields)
+    if missing_envelope:
+        failures.append(
+            {
+                "rule": "passthrough_envelope_fields_required",
+                "reason": f"passthrough envelope missing required fields {missing_envelope}",
+            }
+        )
+    batch_output_fields = set(batch_contract.get("service_batch_output_fields", []))
+    missing_batch_fields = sorted(PASSTHROUGH_BATCH_REQUIRED_FIELDS - batch_output_fields)
+    if missing_batch_fields:
+        failures.append(
+            {
+                "rule": "passthrough_batch_fields_required",
+                "reason": f"batch passthrough output missing required fields {missing_batch_fields}",
+            }
+        )
+    legacy_not_required = set(batch_contract.get("service_legacy_business_fields_not_required", []))
+    missing_legacy_markers = sorted(LEGACY_SERVICE_BUSINESS_FIELDS - legacy_not_required)
+    if missing_legacy_markers:
+        failures.append(
+            {
+                "rule": "legacy_service_business_fields_not_required",
+                "reason": f"pure passthrough contract must explicitly remove service dependency on {missing_legacy_markers}",
+            }
+        )
+    dennis_generated = set(batch_contract.get("dennis_generated_fields", []))
+    missing_dennis_generated = sorted(DENNIS_GENERATED_PASSTHROUGH_FIELDS - dennis_generated)
+    if missing_dennis_generated:
+        failures.append(
+            {
+                "rule": "dennis_generated_passthrough_fields_required",
+                "reason": f"Dennis must generate passthrough-derived fields {missing_dennis_generated}",
+            }
+        )
+
     supported_groups = set(batch_contract.get("execution_groups_supported", []))
     if not CONTROLLED_PARALLEL_EXECUTION_GROUPS.issubset(supported_groups):
         failures.append(
             {
                 "rule": "controlled_parallel_execution_groups_missing",
                 "reason": "controlled parallel contract must list all supported execution groups",
+            }
+        )
+    merge_contract = batch_contract.get("merge_contract", {})
+    service_merge_fields = set(merge_contract.get("service_output_fields", []))
+    if {"source_quality_matrix", "evidence_card_inputs", "evidence_card", "missing_evidence"} & service_merge_fields:
+        failures.append(
+            {
+                "rule": "service_merge_must_not_require_dennis_business_fields",
+                "reason": "service merge output must be transport_status_matrix/source_results only; Dennis generates quality, evidence card and missing evidence",
+            }
+        )
+    dennis_merge_fields = set(merge_contract.get("dennis_generated_fields", []))
+    if not {"source_quality_matrix", "evidence_card", "missing_evidence"}.issubset(dennis_merge_fields):
+        failures.append(
+            {
+                "rule": "dennis_merge_fields_required",
+                "reason": "Dennis merge contract must generate source_quality_matrix, evidence_card and missing_evidence from passthrough batch output",
             }
         )
 
@@ -425,9 +601,9 @@ def source_names(matrix: list[dict[str, Any]]) -> set[str]:
 def endpoint_for(matrix: list[dict[str, Any]], source_name: str) -> str:
     for item in matrix:
         if item.get("source_name") == source_name:
-            source_card = item.get("source_card", {})
-            nested_path = source_card.get("path", "") if isinstance(source_card, dict) else ""
-            return str(item.get("endpoint", "") or item.get("path", "") or item.get("api_path", "") or nested_path)
+            passthrough = item.get("passthrough_envelope", {})
+            passthrough_path = passthrough.get("path", "") if isinstance(passthrough, dict) else ""
+            return str(item.get("endpoint", "") or item.get("path", "") or item.get("api_path", "") or passthrough_path)
     return ""
 
 
@@ -460,7 +636,7 @@ def redaction_block(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def source_quality_block(item: dict[str, Any]) -> dict[str, Any]:
-    value = item.get("source_quality", {})
+    value = item.get("dennis_generated_source_quality", {})
     return value if isinstance(value, dict) else {}
 
 
@@ -550,7 +726,7 @@ def validate_matrix(
                 key == "redaction_applied"
                 and is_browser_backed_item(item)
                 and item.get("sensitive_output") is False
-                and item.get("source_card") is not None
+                and (item.get("passthrough_envelope") is not None or item.get("dennis_generated_source_quality") is not None)
             )
             if redaction.get(key) is not expected and quality.get(key) is not expected and top_level_value is not expected and not browser_backed_redaction_ok:
                 failures.append(
@@ -831,11 +1007,15 @@ def validate_matrix(
                 )
         if source_status == "no_data":
             if is_browser_backed_item(item):
-                if item.get("http_status") not in (None, 200) or item.get("source_card") is None or item.get("source_quality") is None:
+                has_passthrough_or_local_quality = (
+                    isinstance(item.get("passthrough_envelope"), dict)
+                    or isinstance(item.get("dennis_generated_source_quality"), dict)
+                )
+                if item.get("http_status") not in (None, 200) or not has_passthrough_or_local_quality:
                     failures.append(
                         {
                             "rule": "source_status_mismatch",
-                            "reason": f"entry {idx} browser-backed no_data must have source_card/source_quality and http_status absent or 200",
+                            "reason": f"entry {idx} browser-backed no_data must have passthrough envelope or Dennis-generated source quality and http_status absent or 200",
                         }
                     )
             elif item.get("http_status") != 200 or item.get("response_type") not in {"json", "structured_json"} or item.get("records_count") != 0:
@@ -1376,6 +1556,7 @@ def main() -> int:
     parser.add_argument("--entity-count", type=int, default=1)
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--source-completion-matrix", default=None)
+    parser.add_argument("--passthrough-envelope", default=None, help="Optional pure passthrough service envelope JSON for Dennis-side quality derivation validation.")
     parser.add_argument("--final-conclusion", default=None)
     parser.add_argument("--answer-text", default=None, help="Optional user-facing answer text for response-time contract validation.")
     parser.add_argument("--ato-single-case", action="store_true", help="Validate ATO single-case answer hard gates.")
@@ -1397,13 +1578,15 @@ def main() -> int:
     plan = load_plan()
     selected = select_plan(plan, args.task_type, args.entity_count)
     matrix = parse_matrix(args.source_completion_matrix)
+    passthrough_envelope = parse_passthrough_envelope(args.passthrough_envelope)
     static_failures = validate_static_plan_contract(plan)
+    passthrough_failures, generated_passthrough = validate_passthrough_envelope(passthrough_envelope)
     failures = (
         validate_matrix(selected, matrix, no_cache=args.no_cache, final_conclusion=args.final_conclusion)
         if selected and matrix
         else []
     )
-    failures = static_failures + failures
+    failures = static_failures + passthrough_failures + failures
     answer_failures: list[dict[str, str]] = []
     if args.answer_text and not args.allow_runtime_yaml:
         if args.batch_ato:
@@ -1426,6 +1609,8 @@ def main() -> int:
         "conditional_sources": selected.get("conditional_sources", []) if selected else [],
         "stop_conditions": selected.get("stop_conditions", {}) if selected else {},
         "source_completion_matrix_present": bool(matrix),
+        "passthrough_envelope_validated": passthrough_envelope is not None,
+        "dennis_generated_from_passthrough": generated_passthrough,
         "answer_text_validated": bool(args.answer_text),
         "ato_single_case_answer_validated": bool(args.ato_single_case and args.answer_text),
         "batch_ato_answer_validated": bool(args.batch_ato and args.answer_text),

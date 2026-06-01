@@ -230,11 +230,12 @@ ATO / 登录异常推荐顺序：
 
 controlled parallel 编排口径：
 
+- browser-backed service 是 pure passthrough：只提供 action envelope、transport metadata、capped body 和 batch `transport_status_matrix` / `source_results`。Dennis 不依赖 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，必须自行生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和最终边界。
 - ATO 单案 source plan 不再只表达线性顺序，必须表达 `execution_group`、`depends_on`、`timeout_class`、`failure_policy`、`source_priority` 和 `expected_observation`。
 - ATO 单案 first step 是 `suspicious_anchor_discovery`，之后才进入登录链路、内容动作链路、候选控制端提取、设备身份一致性和历史基线比较。
 - `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可作为 `independent_parallel` 组并行执行；三者分别覆盖登录侧、账号基线和 Track 数据可用性 / provenance。
 - `archives_user_analysis` 作为档案中心后续行为闭环 source，默认在 `archives_user_profile` 后走 `auth_sensitive_serial`；大 pageSize 或大响应时按 `large_response` timeout 处理，输出 partial 不等于完整时间线。
-- 合并时 `completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 必须进入 `source_quality_matrix`；completed / partial source 进入 `evidence_card_inputs`，失败或依赖缺口进入 `missing_evidence`。
+- 合并时 `completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 必须进入 Dennis 生成的 `source_quality_matrix`；completed / partial passthrough observation 可进入 Dennis evidence card，失败或依赖缺口进入 `missing_evidence`。
 - 单 source timeout / auth_failed 不阻塞其他 source 的 partial answer；`no_data` / `partial` / `timeout` 不能作为排除 ATO 或低风险反证。
 
 device_identity_consistency：

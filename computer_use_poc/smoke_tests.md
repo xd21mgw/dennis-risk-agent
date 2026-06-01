@@ -6738,7 +6738,7 @@
 - test_id: SINGLE-USER-P0-MULTISOURCE-62950989-001
 - input: `这个用户是不是有问题？从风控角度看一下，user_id=62950989，不走缓存`
 - expected_runtime_behavior: single_entity_execution_mode_with_p0_source_checkpoint
-- expected_output_boundary: 至少完成 runner 链路或结构化 `blocked/auth_failed/timeout`；必须输出 partial evidence card、source_quality 和 routing_metadata；不得使用旧缓存冒充实时结果。
+- expected_output_boundary: 至少完成 runner 链路或结构化 `blocked/auth_failed/timeout`；必须输出 partial evidence card、source_quality 自然语言摘要，并在 internal observation/debug/regression 保留 routing metadata；默认用户正文不得展示完整 `routing_metadata` YAML；不得使用旧缓存冒充实时结果。
 
 ## 669. Realtime readonly API does not ask for user confirmation
 
@@ -6843,7 +6843,7 @@
 - test_id: GENERAL-EVIDENCE-CARD-HARD-GATE-001
 - input: 判断某用户 / 设备 / 接口 / 批次 / 策略命中是否有风险。
 - expected_runtime_behavior: evidence_mode_structure_check
-- expected_output_boundary: evidence mode 必须输出 `evidence_card` / `source_quality` / `routing_metadata`；不得只有自然语言结论。
+- expected_output_boundary: evidence mode 必须输出 `evidence_card` / `source_quality` 自然语言摘要 / 用户可见执行状态；完整 `routing_metadata` 仅在 internal observation、debug、run log 或 regression 中保留，默认用户正文不得展示；不得只有松散自然语言结论。
 
 ## 684. Partial source is not final conclusion
 
@@ -7333,7 +7333,7 @@
 - test_id: WEAPON-RUNNER-ACTION-001
 - input: `sso_session_runner.py --platform weapon --action graph_data|risk_data`。
 - expected_runtime_behavior: controlled_weapon_api_executor
-- expected_output_boundary: 只允许 `/apiv2/graphData` 和 `/apiv2/riskData`；不接受 arbitrary URL；不打开 Weapon 前端；输出 `source_card` / `source_quality` / `response_type` / `records_count`。
+- expected_output_boundary: 只允许 `/apiv2/graphData` 和 `/apiv2/riskData`；不接受 arbitrary URL；不打开 Weapon 前端；service 返回 passthrough envelope，Dennis 生成 local source card / source quality / response_type / records_count。
 
 ## 754. Main fallback direct bypass forbidden
 
@@ -7585,7 +7585,7 @@
 - test_id: RCP_EVENTLIST_STRATEGY_HIT_SMOKE_001
 - input: “544963630 这个 case 有没有策略命中能辅助判断？”
 - expected_runtime_behavior: rcp_eventList_primary_chain
-- expected_output_boundary: main 只 spawn；executor_agent=dennis-risk-agent；RCP `eventList` 是主入口；response wrapper 是 `data.eventList`；realtime smoke 默认 30m/1h、pageSize 10/20；7 天窗口不得作为默认 smoke；`fastQueryHbase` 是 fallback；`completed_no_hit_for_small_window` 不当无风险反证；已收到 JSON 但深解析超时标 `extraction_timeout_after_response`；detail / feature / attribution 缺上游 ID 时标 `missing_upstream_id`；输出 platform_access_observations、evidence_card、source_quality、routing_metadata。
+- expected_output_boundary: main 只 spawn；executor_agent=dennis-risk-agent；RCP `eventList` 是主入口；response wrapper 是 `data.eventList`；realtime smoke 默认 30m/1h、pageSize 10/20；7 天窗口不得作为默认 smoke；`fastQueryHbase` 是 fallback；`completed_no_hit_for_small_window` 不当无风险反证；已收到 JSON 但深解析超时标 `extraction_timeout_after_response`；detail / feature / attribution 缺上游 ID 时标 `missing_upstream_id`；输出 platform_access_observations、evidence_card、source_quality 自然语言摘要；完整 routing metadata 仅在 internal observation/debug/regression 保留。
 
 ## 789A. RCP eventList response wrapper
 
@@ -8066,9 +8066,9 @@
 ## 850. Browser-backed blocked action is source quality
 
 - test_id: BROWSER-BACKED-ACTION-BLOCKED-IS-SOURCE-QUALITY-001
-- input: browser-backed action 返回 `blocked` / `auth_failed` / `network_error` / `platform_error` 标准结构。
+- input: browser-backed action 返回 passthrough envelope，其中 transport metadata 表示 `blocked` / `auth_failed` / `network_error` / `platform_error`。
 - expected_runtime_behavior: standard_action_failure_enters_source_completion_matrix
-- expected_output_boundary: passthrough 主链保留 Dennis-owned `source_quality`、`normalized_observation`、`latency_ms` 和 `sensitive_output=false`；legacy `compat_summary` 可保留 `source_card`；失败不是 Dennis runtime failure。
+- expected_output_boundary: service 不输出 `normalized_observation` / `source_card` / `source_quality` / `compat_summary`；Dennis 从 passthrough envelope 生成 source quality 和 partial evidence；失败不是 Dennis runtime failure。
 
 ## 851. No browser debug when service is available
 
@@ -8087,16 +8087,16 @@
 ## 853. Partial evidence card with service errors
 
 - test_id: PARTIAL-EVIDENCE-CARD-WITH-SERVICE-ERRORS-001
-- input: browser-backed sources 部分返回 `platform_error` / `network_error`，部分返回标准 source_card。
+- input: browser-backed sources 部分返回 `platform_error` / `network_error` transport metadata，部分返回 completed passthrough envelope。
 - expected_runtime_behavior: partial_evidence_card_from_standard_source_results
 - expected_output_boundary: 已完成 source 保留，失败 source 写 source_quality；不得写成低风险/无风险或系统崩溃。
 
 ## 854. Browser-backed service adapter dry-run
 
 - test_id: BROWSER-BACKED-SERVICE-ADAPTER-DRY-RUN-001
-- input: 模拟 `rcp_snapshot=blocked/platform_error`、`weapon_inventory=blocked/network_error`、`login_logs_search=auth_failed/auth_redirect`、`track_analysis_summary=completed/null`，且四个结果都有 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false`。
-- expected_runtime_behavior: browser_backed_standard_results_normalized_offline
-- expected_output_boundary: 输出 4-source `source_completion_matrix` 和 partial evidence card；失败 source 不算 Dennis runtime failure；不 browser debug、不读取 `.ks_sso`、不调用 `sso_session_runner`、不读取或输出 cookie/token/session/header；`no_data` / `auth_failed` / `blocked` / `timeout` 不作为无风险反证。
+- input: 模拟 `rcp_snapshot=blocked/platform_error`、`weapon_inventory=blocked/network_error`、`login_logs_search=auth_redirect_detected`、`track_analysis_summary=completed/body_present=false`，且四个结果只有 passthrough envelope / transport metadata。
+- expected_runtime_behavior: browser_backed_passthrough_results_interpreted_offline
+- expected_output_boundary: Dennis 输出 4-source `source_completion_matrix` 和 partial evidence card；失败 source 不算 Dennis runtime failure；不 browser debug、不读取 `.ks_sso`、不调用 `sso_session_runner`、不读取或输出 cookie/token/session/header；`no_data` / `auth_failed` / `blocked` / `timeout` 不作为无风险反证。
 
 ## 855. DataAgent connector contract exists
 
@@ -8291,50 +8291,50 @@
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PASSTHROUGH-PARSER-FRAMEWORK-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
-- expected_runtime_behavior: dennis_passthrough_default_path_with_legacy_compat_fallback
-- expected_output_boundary: `BrowserBackedServiceClient.call_action(..., response_mode="passthrough")` must send `response_mode=passthrough` and parse `upstream.body` into `normalized_observation` for `track_analysis_summary`, `login_logs_search`, `weapon_inventory`, and `rcp_snapshot` eventList; account-security `call_account_security_sources()` default requests must explicitly include `response_mode=passthrough`; passthrough must not require service-side `source_card/source_quality`, but Dennis must generate source_quality from normalized_observation; Weapon graph/riskData parser must suppress raw `labelInfo` / `originalLog`; RCP eventList parser must suppress full raw eventList dumps and not treat eventList as final judgement; unexpected summary fields are marked but not fatal; `safety.credential_material_output!=false` fails closed; missing `upstream.body` becomes `passthrough_body_missing`; raw upstream body is suppressed; compat_summary fallback only occurs when `allow_compat_fallback=true`; no silent fallback.
+- expected_runtime_behavior: dennis_pure_passthrough_default_path
+- expected_output_boundary: `BrowserBackedServiceClient.call_action(...)` consumes pure passthrough envelope / transport metadata / capped body; account-security source plans use fixed actions explicitly; passthrough must not require service-side `normalized_observation` / `source_card` / `source_quality` / `evidence_card_inputs` / `compat_summary`; Dennis generates source quality, observation and evidence card locally; raw upstream body is suppressed or capped; missing body becomes source quality / missing evidence; no silent legacy fallback.
 
 ## 875P-2. Browser-backed passthrough is target main chain
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PASSTHROUGH-TARGET-MAIN-CHAIN-001
 - input: Dennis account-security four-source browser-backed path.
-- expected_runtime_behavior: passthrough_target_main_chain_compat_summary_legacy_fallback
-- expected_output_boundary: 短期 `compat_summary` 只作为 legacy migration fallback；长期只保留 passthrough 单模式。新 action 一律 passthrough-only；service 侧 summary/source_card/source_quality/evidence summary 逻辑删除前必须完成四源 dual-run、full_runtime controlled pilot、Dennis normalized evidence card 可用性验证和引用检查。
+- expected_runtime_behavior: passthrough_target_main_chain_no_compat_summary_dependency
+- expected_output_boundary: `compat_summary` 只保留为历史迁移说明，不作为 pure passthrough fallback；service 侧 summary/source_card/source_quality/evidence summary 逻辑已不作为 Dennis 依赖；Dennis 从 passthrough envelope 生成 evidence card。
 
 ## 875A. Archives Center browser-backed user analysis action
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-USER-ANALYSIS-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: archives_user_analysis_fixed_action_mock_pass
-- expected_output_boundary: `archives_user_analysis` must be fixed to `POST /actions/archives_user_analysis` and representative platform path `/v3/user/log/coreLogs/fetch`; typed params include `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, `haveParamAuth`, and operation filters; output includes `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, cookie/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+- expected_output_boundary: `archives_user_analysis` must be fixed to `POST /actions/archives_user_analysis` and representative platform path `/v3/user/log/coreLogs/fetch`; typed params include `user_id`, `beginTime`, `endTime`, `pageIndex`, `pageSize`, `haveParamAuth`, and operation filters; service output is passthrough envelope / transport metadata / capped body only; Dennis generates source status, source quality, key entity summary, missing fields, next action, and no-data boundary; raw full body, full `requestParam`, full `extraParam`, token/tokenId/open_id/sig/refresh_token, cookie/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 875B. Archives Center browser-backed optional action closure
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-OPTIONAL-ACTIONS-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: archives_optional_fixed_actions_mock_pass
-- expected_output_boundary: `archives_photo_search` must be fixed to `POST /actions/archives_photo_search` and representative platform path `/v4/archives/report/photo/search`; typed params map `user_id` to service-owned `reportedIds` and use `begin/end`, `matchType`, `sort`, `page`, `count`. `archives_user_profile` must be fixed to `POST /actions/archives_user_profile` and service-owned `/archives/user/home/info`; Dennis passes only typed `user_id`. `archives_related_users` must be fixed to `POST /actions/archives_related_users` and service-owned `/archives/user/search/device`; typed params map `relation_type` to validated `type=0/1`. All three actions must output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; internal-review risk entities such as user_id/device_id/IP/photo_id/live_id/related_user_ids may remain raw, while external-share output masks them. Raw full body, raw report text, raw profile body, raw related-user profile, full phone, ID card, real name, cookie/token/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+- expected_output_boundary: `archives_photo_search` must be fixed to `POST /actions/archives_photo_search` and representative platform path `/v4/archives/report/photo/search`; typed params map `user_id` to service-owned `reportedIds` and use `begin/end`, `matchType`, `sort`, `page`, `count`. `archives_user_profile` must be fixed to `POST /actions/archives_user_profile` and service-owned `/archives/user/home/info`; Dennis passes only typed `user_id`. `archives_related_users` must be fixed to `POST /actions/archives_related_users` and service-owned `/archives/user/search/device`; typed params map `relation_type` to validated `type=0/1`. All three actions return pure passthrough envelopes; Dennis generates source status, source quality, key entity summary, missing fields, next action, and no-data boundary; internal-review risk entities such as user_id/device_id/IP/photo_id/live_id/related_user_ids may remain raw, while external-share output masks them. Raw full body, raw report text, raw profile body, raw related-user profile, full phone, ID card, real name, cookie/token/session/header/password must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 875B-2. Archives Center social and four-info mock-only actions
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-ARCHIVES-SOCIAL-FOURINFO-ACTIONS-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: archives_social_fourinfo_fixed_actions_mock_pass
-- expected_output_boundary: `archives_private_message_search` must be fixed to `POST /actions/archives_private_message_search` and representative platform path `/archives/user/message/search`; typed params include `user_id`, `direction=sent|received`, `page`, `count`, `status`, and `sort`, with service-side mapping to `fromUserId` or `toUserId`. `archives_past_four_items` must be fixed to `POST /actions/archives_past_four_items` and representative platform path `/v4/audit/user/fourinfo/log/search`; typed params include `user_id`, `info_type=all|username|avatar|profile_description|background`, validated `infoType=0..4`, `page`, `count`, `markResult`, and `punishResult`, with service-side mapping `user_id -> keyword`. Both actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; private message plaintext, counterpart nickname/profile, old/new profile content, avatar/background URLs, operator name, raw full body, cookie/token/session/header/password, full phone, ID card, and real name must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+- expected_output_boundary: `archives_private_message_search` must be fixed to `POST /actions/archives_private_message_search` and representative platform path `/archives/user/message/search`; typed params include `user_id`, `direction=sent|received`, `page`, `count`, `status`, and `sort`, with service-side mapping to `fromUserId` or `toUserId`. `archives_past_four_items` must be fixed to `POST /actions/archives_past_four_items` and representative platform path `/v4/audit/user/fourinfo/log/search`; typed params include `user_id`, `info_type=all|username|avatar|profile_description|background`, validated `infoType=0..4`, `page`, `count`, `markResult`, and `punishResult`, with service-side mapping `user_id -> keyword`. Both actions return pure passthrough envelopes; Dennis generates source status, source quality, key entity summary, missing fields, next action, and no-data boundary; private message plaintext, counterpart nickname/profile, old/new profile content, avatar/background URLs, operator name, raw full body, cookie/token/session/header/password, full phone, ID card, and real name must not appear; no live Archives Center, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 875C. RCP browser-backed event drill-down mock-only actions
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-RCP-DRILLDOWN-ACTIONS-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: rcp_event_drilldown_fixed_actions_mock_pass
-- expected_output_boundary: `rcp_event_detail` must be fixed to `POST /actions/rcp_event_detail` and representative platform path `/v2/rest/event/rcpEventDetail`; typed params include `eventType`, `eventId`, exact `queryTime`, and no URL/path/header/cookie/token/session fields. `rcp_event_feature_list` must be fixed to `POST /actions/rcp_event_feature_list` and representative platform path `/v2/rest/event/rcpEventFeatureList`; typed params include `eventType`, `eventId`, exact `queryTime`, and fixed `featureGroup=""`, while non-empty featureGroup overrides are rejected. Both actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; raw full body, raw event detail body, raw feature values, cookie/token/session/header/password, phone, ID card, and real name must not appear; strategy events/features are evidence context, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+- expected_output_boundary: `rcp_event_detail` must be fixed to `POST /actions/rcp_event_detail` and representative platform path `/v2/rest/event/rcpEventDetail`; typed params include `eventType`, `eventId`, exact `queryTime`, and no URL/path/header/cookie/token/session fields. `rcp_event_feature_list` must be fixed to `POST /actions/rcp_event_feature_list` and representative platform path `/v2/rest/event/rcpEventFeatureList`; typed params include `eventType`, `eventId`, exact `queryTime`, and fixed `featureGroup=""`, while non-empty featureGroup overrides are rejected. Both actions return pure passthrough envelopes; Dennis generates source status, source quality, key entity summary, missing fields, next action, and no-data boundary; raw full body, raw event detail body, raw feature values, cookie/token/session/header/password, phone, ID card, and real name must not appear; strategy events/features are evidence context, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 875D. RCP browser-backed policy governance mock-only actions
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-RCP-POLICY-GOVERNANCE-ACTIONS-001
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
 - expected_runtime_behavior: rcp_policy_governance_fixed_actions_mock_pass
-- expected_output_boundary: `rcp_policy_version_lookup` must be fixed to `POST /actions/rcp_policy_version_lookup` and representative platform path `/v2/rest/pc/policy/getPolicyVersionListByEvent`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, and exact `queryTime`. `rcp_policy_detail_lookup` must be fixed to `POST /actions/rcp_policy_detail_lookup` and representative platform path `/v2/rest/pro/policy/getPolicyDetailByVersion`; typed params include `policyCode` and `policyVersion`, while companion readonly version-history and relation-tree reads stay service-owned. `rcp_policy_release_record_lookup` must be fixed to `POST /actions/rcp_policy_release_record_lookup` and representative platform path `/v2/rest/common/pipeline/list`; typed params include `policyCode`, optional `statusCode`, `page`, and `size`; service-side body uses `extrbB=policyCode`, service-owned `configCode/createUser/extrbA/extrbC`, and companion `/v2/rest/common/pipeline/selectInfo`; `businessUnionKey` parses policy version and `pipelineVersion` is not policy version. `rcp_policy_tree_lookup` must be fixed to `POST /actions/rcp_policy_tree_lookup` and representative platform path `/v2/rest/pro/policyTree/queryProPolicyTree`; typed params include `policyTreeCode`, `policyTreeVersion`, and optional `targetPolicyCode`; service-side parser resolves `policyTreeNodeCode`, and `/v2/rest/pc/policytree/getPolicyTreeByVersion` must remain forbidden as an incorrect path. `rcp_node_policy_attribution` must be fixed to `POST /actions/rcp_node_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodePolicyAttribution`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, exact `queryTime`, `region`, and fixed `type=""`. `rcp_node_bind_policy_attribution` must be fixed to `POST /actions/rcp_node_bind_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodeBindPolicyAttribution`; typed params include `eventType`, `eventId`, exact `queryTime`, `policyTreeCode`, `policyTreeVersion`, and resolved `policyTreeNodeCode`. All actions output `source_status`, `source_card`, `source_quality`, `key_entities`, `missing_fields`, `next_action`, `sensitive_output=false`, and `no_data_not_risk_exclusion=true`; risk-control entities such as policyCode/eventId/deviceId/IP may remain raw in internal review, but raw policy version body, raw policy detail body, raw release records, operator identities, raw condition expression/dump, raw policy tree body, raw node-binding body/list, raw feature values, raw full body, cookie/token/session/header/password, phone, ID card, and real name must not appear; policy version/detail/release/tree/condition-attribution/node-binding context is attribution/governance evidence, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
+- expected_output_boundary: `rcp_policy_version_lookup` must be fixed to `POST /actions/rcp_policy_version_lookup` and representative platform path `/v2/rest/pc/policy/getPolicyVersionListByEvent`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, and exact `queryTime`. `rcp_policy_detail_lookup` must be fixed to `POST /actions/rcp_policy_detail_lookup` and representative platform path `/v2/rest/pro/policy/getPolicyDetailByVersion`; typed params include `policyCode` and `policyVersion`, while companion readonly version-history and relation-tree reads stay service-owned. `rcp_policy_release_record_lookup` must be fixed to `POST /actions/rcp_policy_release_record_lookup` and representative platform path `/v2/rest/common/pipeline/list`; typed params include `policyCode`, optional `statusCode`, `page`, and `size`; service-side body uses `extrbB=policyCode`, service-owned `configCode/createUser/extrbA/extrbC`, and companion `/v2/rest/common/pipeline/selectInfo`; `businessUnionKey` parses policy version and `pipelineVersion` is not policy version. `rcp_policy_tree_lookup` must be fixed to `POST /actions/rcp_policy_tree_lookup` and representative platform path `/v2/rest/pro/policyTree/queryProPolicyTree`; typed params include `policyTreeCode`, `policyTreeVersion`, and optional `targetPolicyCode`; service-side parser resolves `policyTreeNodeCode`, and `/v2/rest/pc/policytree/getPolicyTreeByVersion` must remain forbidden as an incorrect path. `rcp_node_policy_attribution` must be fixed to `POST /actions/rcp_node_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodePolicyAttribution`; typed params include `eventType`, `eventId`, `policyCode`, `policyVersion`, exact `queryTime`, `region`, and fixed `type=""`. `rcp_node_bind_policy_attribution` must be fixed to `POST /actions/rcp_node_bind_policy_attribution` and representative platform path `/v2/rest/pc/policy/nodeBindPolicyAttribution`; typed params include `eventType`, `eventId`, exact `queryTime`, `policyTreeCode`, `policyTreeVersion`, and resolved `policyTreeNodeCode`. All actions return pure passthrough envelopes; Dennis generates source status, source quality, key entity summary, missing fields, next action, and no-data boundary; risk-control entities such as policyCode/eventId/deviceId/IP may remain raw in internal review, but raw policy version body, raw policy detail body, raw release records, operator identities, raw condition expression/dump, raw policy tree body, raw node-binding body/list, raw feature values, raw full body, cookie/token/session/header/password, phone, ID card, and real name must not appear; policy version/detail/release/tree/condition-attribution/node-binding context is attribution/governance evidence, not final risk judgement; no live RCP/Tianshi, DataAgent, Hive, auth debug, arbitrary URL/path/header/cookie/token/session input, packaging, or release rebuild.
 
 ## 876. Full runtime browser-backed priority
 
@@ -8404,7 +8404,7 @@
 - test_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
 - input: `login_logs_search` 默认 7 天窗口返回 `parse_error`。
 - expected_runtime_behavior: preserve_primary_parse_error_and_add_small_window_fallback
-- expected_output_boundary: 7d `parse_error` 必须是标准 browser-backed source result，包含 `source_card`、`source_quality`、`latency_ms`、`sensitive_output=false`；自动追加 24h 小窗口 fallback source；fallback `no_data` / `parse_error` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
+- expected_output_boundary: 7d `parse_error` 必须保留为 pure passthrough envelope + Dennis-generated source quality；自动追加 24h 小窗口 passthrough retry source；不得要求 service-side `source_card` / `source_quality` / `compat_summary`；fallback `no_data` / `parse_error` 不得当无风险反证；不 debug auth、不读取 cookie/session/header。
 
 ## 879A. Login logs standard source result in evidence card
 
@@ -8498,3 +8498,27 @@ Text gate checks:
 - 在线登录日志 no_data、`response_too_large`、wrapper mismatch、`source_contract_gap` 不能作为低风险反证。
 - batch ATO 实时登录源不完整时必须输出账号安全 Hive registry-first 补证计划，不默认定性全批。
 - 未获用户逐次明确授权时，不调用 DataAgent/Hive。
+
+## 888. Browser-backed pure passthrough Dennis adapter
+
+- test_id: BROWSER-BACKED-PURE-PASSTHROUGH-DENNIS-ADAPTER-001
+- input: browser-backed service action / batch result only contains passthrough envelope, transport metadata, capped body, `source_results`, `transport_status_matrix`, and `missing_or_failed_sources`; it does not contain service-side `normalized_observation`, `source_quality`, `source_quality_matrix`, `evidence_card_inputs`, `source_card`, `compat_summary`, `risk_event_scan`, or `feature_group_summary`.
+- expected_runtime_behavior: dennis_generates_observation_quality_evidence_from_passthrough
+- expected_output_boundary: Dennis must generate observation, `source_quality_matrix`, evidence card, `missing_evidence`, and `final_answer_boundary`; `body_truncated=true` becomes `partial_observation_available`; `auth_redirect_detected` or `api_code=302` becomes `auth_flow_not_completed_in_bound_context`; no_data is not low-risk evidence; timeout/platform_error/parse_error becomes missing evidence and does not block partial answer; raw body suppressed/capped means limited observation only.
+
+Keyword check:
+
+```bash
+grep -R "pure_passthrough_envelope_required\|dennis_generates_observation_from_passthrough\|dennis_generates_source_quality_matrix\|dennis_generates_evidence_card\|transport_status_matrix_merge_required\|body_truncated_means_partial_observation\|raw_body_capped_limited_observation_only" computer_use_poc skills AGENTS.md 2>/dev/null
+```
+
+Text gate checks:
+
+- service envelope 不含 `normalized_observation` 时，Dennis 仍生成 source quality。
+- service envelope 不含 `evidence_card_inputs` 时，Dennis 仍生成 evidence card。
+- batch result 只有 `transport_status_matrix` / `source_results` 时，Dennis 仍合并 `source_quality_matrix`。
+- `body_truncated=true` 只能作为 partial observation。
+- auth redirect / 302 不得直接写成用户无权限。
+- 单 source timeout 不阻塞整体 partial evidence。
+- 普通用户回答默认不 dump routing metadata。
+- `default_runtime_routing=false` 保持。

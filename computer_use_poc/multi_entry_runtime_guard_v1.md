@@ -122,12 +122,16 @@ Browser-backed fixed actions v1 guard:
 
 - The v1 fixed action batch is registered for explicit source plans only; `default_runtime_routing=false` remains mandatory.
 - Before any browser-backed action call, the source plan must name the exact action and typed params. Caller-provided URL, path, header, cookie, token, session, secret, raw body, or raw query is forbidden.
+- ATO single-case explicit source plan must start with `suspicious_anchor_discovery`; runtime must not flatten Track/RCP/Weapon/Login/Archives states into the user-facing ATO judgement before finding login/control-chain or content/action anchors.
+- User-facing ATO answer must use the business evidence-card template: conclusion, suspicious anchors, candidate control endpoint / `device_identity_consistency`, login-chain evidence, content/four-items/post-action evidence, historical baseline, evidence gaps, next actions. It must not display `routing_metadata`, `source_quality` YAML, `boundary_flags`, `execution_mode`, validator fields, or platform debug YAML.
 - ATO / login anomaly source plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
 - Abnormal publish / content handoff source plan: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
 - Account spread source plan: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
 - RCP event attribution source plan: `rcp_event_detail -> rcp_event_feature_list`.
 - Policy asset governance source plan: `rcp_policy_tree_lookup` only.
 - Source output must include `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
+- Browser-backed service output is pure passthrough. Entry/runtime layers must not require service-side `normalized_observation`, `source_card`, `source_quality`, `evidence_card_inputs`, or `compat_summary`; Dennis generates observation, source quality, evidence card, missing evidence and final boundary from passthrough envelope / transport metadata / capped body.
+- `body_truncated=true` means partial observation only; auth redirect or API 302 means `auth_flow_not_completed_in_bound_context`; timeout/platform/parse errors enter missing evidence without blocking partial answer.
 - Controlled parallel source output must keep per-item `source_id`, `action`, `execution_group`, `depends_on`, `timeout_class`, `failure_policy`, `source_priority`, and `expected_observation`; supported groups are `independent_parallel`, `dependency_serial`, `large_response_serial`, and `auth_sensitive_serial`.
 - `/actions/batch` and `/actions/multi_source_plan` are explicit source-plan execution paths only. They do not change `default_runtime_routing=false`, do not authorize new actions, and do not allow caller-provided URL/path/header/cookie/token/session fields.
 - `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk evidence.

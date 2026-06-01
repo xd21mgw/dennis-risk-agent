@@ -124,6 +124,11 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_treat_realtime_no_anomaly_as_ato_exclusion",
     "do_not_treat_admin_app_log_as_full_control_chain",
     "do_not_skip_hive_required_hint_when_realtime_incomplete",
+    "do_not_require_service_normalized_observation",
+    "do_not_require_service_evidence_card_inputs",
+    "do_not_require_service_source_card",
+    "do_not_use_compat_summary_in_pure_passthrough",
+    "do_not_claim_complete_from_capped_body",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -205,6 +210,18 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "web_control_chain_missing": "WEB/H5/PC/token/OAuth/扫码控制端链路缺失时不能用 APP 日志排除 ATO",
     "hive_registry_first_query_plan": "Hive query plan 必须先读账号安全 Hive registry，不自由猜表",
     "realtime_no_anomaly_not_ato_exclusion": "实时源无异常不能推出非盗号，除非登录、内容、设备身份和历史基线均闭合",
+    "pure_passthrough_envelope_required": "browser-backed service 只提供 passthrough envelope / transport metadata / capped body",
+    "dennis_generates_observation_from_passthrough": "Dennis 从 passthrough envelope 生成 observation，不依赖 service normalized_observation",
+    "dennis_generates_source_quality_matrix": "Dennis 从 transport_status_matrix/source_results 合并 source_quality_matrix",
+    "dennis_generates_evidence_card": "Dennis 从 completed/partial passthrough 观察生成 evidence_card",
+    "service_normalized_observation_not_required": "service 不再输出 normalized_observation",
+    "service_evidence_card_inputs_not_required": "service 不再输出 evidence_card_inputs",
+    "service_source_card_not_required": "service 不再输出 source_card",
+    "compat_summary_legacy_only": "compat_summary 仅历史说明，不作为 pure passthrough fallback",
+    "transport_status_matrix_merge_required": "batch 只有 transport_status_matrix/source_results 时，Dennis 仍需合并质量矩阵",
+    "body_truncated_means_partial_observation": "body_truncated=true 只能支持 partial_observation_available",
+    "raw_body_capped_limited_observation_only": "raw body suppressed/capped 时只能做有限观察，不声称完整明细",
+    "timeout_platform_error_parse_error_missing_evidence": "timeout/platform_error/parse_error 进入 missing_evidence，不阻塞 partial answer",
 }
 
 DEMO_CASES = [
@@ -369,6 +386,48 @@ DEMO_CASES = [
         "expected_full_metadata_allowed": True,
         "expected_user_visible_contains": ["routing_metadata:", "platform_called: false", "dataagent_called: false"],
         "answer_focus": "debug_metadata",
+    },
+    {
+        "id": "BBFA-DEMO-013",
+        "user_query": "browser-backed pure passthrough：service 不含 normalized_observation / source_quality / evidence_card_inputs，Dennis 怎么生成证据卡",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Pure passthrough envelope is consumed by Dennis; Dennis generates observation, source_quality_matrix, evidence_card, missing_evidence and final_answer_boundary.",
+        "expected_boundary_flags": [
+            "pure_passthrough_envelope_required",
+            "dennis_generates_observation_from_passthrough",
+            "dennis_generates_source_quality_matrix",
+            "dennis_generates_evidence_card",
+            "service_normalized_observation_not_required",
+            "service_evidence_card_inputs_not_required",
+        ],
+        "should_not_do": [
+            "do_not_require_service_normalized_observation",
+            "do_not_require_service_evidence_card_inputs",
+            "do_not_use_compat_summary_in_pure_passthrough",
+        ],
+        "expected_answer_contract": GLOBAL_ANSWER_CONTRACT,
+        "answer_focus": "pure_passthrough",
+    },
+    {
+        "id": "BBFA-DEMO-014",
+        "user_query": "batch result 只有 transport_status_matrix/source_results，body_truncated=true，还有单 source timeout，Dennis 如何合并",
+        "expected_route_or_actions": ["source_plan_only_no_action_selected"],
+        "expected_orchestration": "Dennis merges transport_status_matrix/source_results into source_quality_matrix; body_truncated becomes partial observation and timeout becomes missing evidence.",
+        "expected_boundary_flags": [
+            "transport_status_matrix_merge_required",
+            "body_truncated_means_partial_observation",
+            "partial_observation_available",
+            "source_timeout_non_blocking_partial",
+            "timeout_platform_error_parse_error_missing_evidence",
+            "raw_body_capped_limited_observation_only",
+        ],
+        "should_not_do": [
+            "do_not_claim_complete_from_capped_body",
+            "do_not_discard_completed_source",
+            "do_not_make_final_judgement_without_source_quality",
+        ],
+        "expected_answer_contract": ["source_quality_matrix", "missing_evidence", "evidence_strength", "final_answer_boundary"],
+        "answer_focus": "batch_passthrough_merge",
     },
 ]
 
@@ -632,7 +691,21 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         "response_too_large",
     ])
 
-    if has_any(text, ["cookie", "token", "session", "header", "password", "raw login records", "raw labelinfo", "raw body"]):
+    secret_or_raw_dump_requested = has_any(text, [
+        "cookie",
+        "session",
+        "header",
+        "password",
+        "authorization",
+        "raw login records",
+        "raw labelinfo",
+        "raw body",
+        "输出 token",
+        "token 明文",
+        "raw token",
+        "token secret",
+    ])
+    if secret_or_raw_dump_requested:
         return finalize_route(plan, text, {
             "actions": [],
             "orchestration": "deny raw secret/raw dump request; offer sanitized source summary only",
@@ -646,6 +719,73 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_output_raw_login_records",
                 "do_not_output_raw_labelInfo",
                 "do_not_output_raw_full_body",
+            ]),
+        })
+
+    if has_any(text, [
+        "pure passthrough",
+        "passthrough",
+        "透传",
+        "passthrough batch",
+        "passthrough envelope",
+        "transport_status_matrix",
+        "source_results",
+        "normalized_observation",
+        "evidence_card_inputs",
+        "source_card",
+        "compat_summary",
+        "capped body",
+        "body_truncated",
+        "transport metadata",
+        "auth_redirect_detected",
+        "api_code=302",
+        "api_code",
+    ]):
+        passthrough_flags = [
+            "pure_passthrough_envelope_required",
+            "dennis_generates_observation_from_passthrough",
+            "dennis_generates_source_quality_matrix",
+            "dennis_generates_evidence_card",
+            "service_normalized_observation_not_required",
+            "service_evidence_card_inputs_not_required",
+            "service_source_card_not_required",
+            "compat_summary_legacy_only",
+            "default_runtime_routing_false",
+        ]
+        if has_any(text, ["transport_status_matrix", "source_results", "batch result", "batch"]):
+            passthrough_flags += ["transport_status_matrix_merge_required", "source_quality_matrix_merge_required"]
+        if has_any(text, ["body_truncated", "capped body", "raw body", "截断", "partial"]):
+            passthrough_flags += [
+                "body_truncated_means_partial_observation",
+                "partial_observation_available",
+                "raw_body_capped_limited_observation_only",
+            ]
+        if has_any(text, ["feature list", "feature_list", "特征明细", "完整特征"]):
+            passthrough_flags += ["feature_list_partial_only_feature_group_summary"]
+        if has_any(text, ["timeout", "platform_error", "parse_error"]):
+            passthrough_flags += [
+                "source_timeout_non_blocking_partial",
+                "timeout_platform_error_parse_error_missing_evidence",
+            ]
+        if has_any(text, ["no_data", "empty result", "无数据"]):
+            passthrough_flags += ["no_data_not_risk_exclusion"]
+        if has_any(text, ["auth_redirect_detected", "api_code=302", "302"]):
+            passthrough_flags += ["auth_flow_not_completed_in_bound_context"]
+        return finalize_route(plan, text, {
+            "actions": ["source_plan_only_no_action_selected"],
+            "orchestration": (
+                "pure passthrough envelope is consumed by Dennis; Dennis generates observation, "
+                "source_quality_matrix, evidence_card, missing_evidence and final_answer_boundary"
+            ),
+            "boundary_flags": unique(passthrough_flags),
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_require_service_normalized_observation",
+                "do_not_require_service_evidence_card_inputs",
+                "do_not_require_service_source_card",
+                "do_not_use_compat_summary_in_pure_passthrough",
+                "do_not_claim_complete_from_capped_body",
+                "do_not_discard_completed_source",
             ]),
         })
 
@@ -1126,7 +1266,7 @@ def evaluate_demo_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, 
             len(answer_draft) >= 80
             and "source_plan" in answer_draft
             and "routing_metadata:" not in answer_draft
-            and "action" not in answer_draft.lower()
+            and not answer_draft.strip().startswith("source_plan")
         )
     issues = []
     if not evaluated["pass"]:

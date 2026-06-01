@@ -3214,3 +3214,60 @@ platform_access_execution_v0_1_regression:
       - hive_registry_first_query_plan
       - no_global_batch_ato_conclusion
     pass_fail_criteria: "批量 ATO 实时登录源不完整时，输出 Hive registry-first 补证计划，不默认定性全批。"
+  - case_id: PASSTHROUGH-NO-NORMALIZED-OBSERVATION-DENNIS-QUALITY-001
+    input: "browser-backed service envelope 不含 normalized_observation。"
+    expected_output_boundary:
+      - pure_passthrough_envelope_required
+      - service_normalized_observation_not_required
+      - dennis_generates_observation_from_passthrough
+      - dennis_generates_source_quality_matrix
+    pass_fail_criteria: "Dennis 必须从 passthrough envelope / transport metadata 生成 source quality，不依赖 service normalized_observation。"
+  - case_id: PASSTHROUGH-NO-EVIDENCE-CARD-INPUTS-DENNIS-EVIDENCE-001
+    input: "service envelope 不含 evidence_card_inputs。"
+    expected_output_boundary:
+      - service_evidence_card_inputs_not_required
+      - dennis_generates_evidence_card
+      - completed_or_partial_passthrough_enters_dennis_evidence_card
+    pass_fail_criteria: "Dennis 必须自行选择 completed / partial passthrough observation 进入 evidence card。"
+  - case_id: PASSTHROUGH-BATCH-TRANSPORT-MATRIX-MERGE-001
+    input: "batch result 只有 transport_status_matrix / source_results。"
+    expected_output_boundary:
+      - transport_status_matrix_merge_required
+      - dennis_generates_source_quality_matrix
+      - dennis_generates_missing_evidence
+    pass_fail_criteria: "Dennis 仍能合并 source_quality_matrix、missing_evidence 和 evidence card 输入。"
+  - case_id: PASSTHROUGH-BODY-TRUNCATED-PARTIAL-001
+    input: "body_truncated=true。"
+    expected_output_boundary:
+      - body_truncated_means_partial_observation
+      - partial_observation_available
+      - raw_body_capped_limited_observation_only
+    pass_fail_criteria: "截断 body 只能作为 partial observation，不得声称完整明细。"
+  - case_id: PASSTHROUGH-AUTH-REDIRECT-302-001
+    input: "auth_redirect_detected=true 或 api_code=302。"
+    expected_output_boundary:
+      - auth_flow_not_completed_in_bound_context
+      - no_permission_claim_forbidden_without_explicit_permission_denial
+      - no_auth_repair
+    pass_fail_criteria: "认证跳转 / 302 标认证流程未在受控上下文完成，不直接说用户无权限。"
+  - case_id: PASSTHROUGH-SINGLE-SOURCE-TIMEOUT-PARTIAL-001
+    input: "batch passthrough 中单 source timeout，其他 source completed。"
+    expected_output_boundary:
+      - source_timeout_non_blocking_partial
+      - timeout_enters_missing_evidence
+      - completed_sources_preserved
+    pass_fail_criteria: "单 source timeout 不阻塞整体 partial evidence。"
+  - case_id: PASSTHROUGH-NODATA-NOT-LOW-RISK-001
+    input: "passthrough body_present=false 或 empty result。"
+    expected_output_boundary:
+      - no_data_not_risk_exclusion
+      - no_low_risk_from_empty_result
+      - source_quality_matrix_no_data_bucket
+    pass_fail_criteria: "no_data 只能进入 source quality，不得作为低风险或无风险反证。"
+  - case_id: PASSTHROUGH-RCP-FEATURE-LARGE-PARTIAL-001
+    input: "RCP feature list 大响应 capped / partial。"
+    expected_output_boundary:
+      - feature_list_partial_only_feature_group_summary
+      - body_truncated_means_partial_observation
+      - no_complete_feature_detail_claim
+    pass_fail_criteria: "RCP feature list 大响应由 Dennis 解释为 partial，不声称完整特征明细。"

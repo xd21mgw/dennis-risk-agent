@@ -101,7 +101,48 @@
         "service_plan_endpoint": "/actions/multi_source_plan",
         "contract_name": "controlled_parallel_executable",
         "default_runtime_routing": false,
+        "service_output_mode": "pure_passthrough_transport_envelope",
         "source_plan_required": true,
+        "service_single_source_envelope_fields": [
+          "action_name",
+          "source_id",
+          "platform",
+          "http_status",
+          "content_type",
+          "body_present",
+          "body_truncated",
+          "observed_bytes",
+          "elapsed_ms",
+          "transport_error",
+          "platform_error",
+          "invalid_params",
+          "timeout",
+          "auth_redirect_detected",
+          "raw_body_handling"
+        ],
+        "service_batch_output_fields": [
+          "batch_status",
+          "source_results",
+          "transport_status_matrix",
+          "missing_or_failed_sources"
+        ],
+        "service_legacy_business_fields_not_required": [
+          "normalized_observation",
+          "source_quality",
+          "source_quality_matrix",
+          "evidence_card_inputs",
+          "source_card",
+          "compat_summary",
+          "risk_event_scan",
+          "feature_group_summary"
+        ],
+        "dennis_generated_fields": [
+          "observation",
+          "source_quality_matrix",
+          "evidence_card",
+          "missing_evidence",
+          "final_answer_boundary"
+        ],
         "execution_groups_supported": [
           "independent_parallel",
           "dependency_serial",
@@ -135,15 +176,19 @@
           "non_blocking_partial": "completed/no_data/partial/auth_failed/blocked/timeout/parse_error all enter source_quality_matrix; failed sources enter missing_evidence; partial answer remains allowed.",
           "dependent_only_block": "Missing upstream fields skip or block only the dependent source with missing_upstream_id/missing_required_fields.",
           "do_not_use_as_counter_evidence": "no_data/partial/auth_failed/timeout/blocked/parse_error cannot support low-risk/no-risk counter evidence.",
-          "preserve_completed_sources": "Any completed source must remain in evidence_card_inputs even if a later source fails.",
+          "preserve_completed_sources": "Any completed passthrough source must remain eligible for Dennis-generated evidence card even if a later source fails.",
           "raw_body_suppressed": "Service batch result must not expose raw upstream body to the user-visible answer."
         },
         "merge_contract": {
           "service_output_fields": [
             "batch_result",
             "source_results",
+            "transport_status_matrix",
+            "missing_or_failed_sources"
+          ],
+          "dennis_generated_fields": [
             "source_quality_matrix",
-            "evidence_card_inputs",
+            "evidence_card",
             "missing_evidence"
           ],
           "status_buckets": [
@@ -155,10 +200,13 @@
             "timeout",
             "parse_error"
           ],
-          "completed_or_partial_enters": "evidence_card_inputs",
-          "failed_or_missing_enters": "missing_evidence",
+          "completed_or_partial_enters": "dennis_generated_evidence_card",
+          "failed_or_missing_enters": "dennis_generated_missing_evidence",
           "no_data_boundary": "no_data_not_risk_exclusion",
           "partial_boundary": "partial_observation_available_is_usable_partial",
+          "body_truncated_boundary": "body_truncated_true_means_partial_observation_available",
+          "auth_redirect_boundary": "auth_redirect_detected_or_api_code_302_means_auth_flow_not_completed_in_bound_context",
+          "raw_body_boundary": "raw_body_suppressed_or_capped_means_limited_observation_only",
           "final_risk_conclusion_generated_by_service": false,
           "raw_upstream_body_user_visible": false
         }
@@ -768,6 +816,10 @@
       "source_quality_boundaries": {
         "no_data_not_risk_exclusion": true,
         "partial_observation_available_is_usable_partial": true,
+        "body_truncated_true_enters_partial_observation_available": true,
+        "raw_body_suppressed_or_capped_limited_observation_only": true,
+        "transport_error_platform_error_timeout_parse_error_enter_missing_evidence": true,
+        "auth_redirect_detected_or_api_code_302": "auth_flow_not_completed_in_bound_context",
         "large_response_limited_enters_source_quality": true,
         "archives_302_status": "auth_flow_not_completed_in_bound_context",
         "archives_center_key_evidence_not_hard_blocker": true,
@@ -1300,12 +1352,21 @@
           }
         ],
         "required_result_fields": [
-          "source_card",
-          "source_quality",
-          "source_status",
-          "error_type",
-          "latency_ms",
-          "sensitive_output"
+          "action_name",
+          "source_id",
+          "platform",
+          "http_status",
+          "content_type",
+          "body_present",
+          "body_truncated",
+          "observed_bytes",
+          "elapsed_ms",
+          "transport_error",
+          "platform_error",
+          "invalid_params",
+          "timeout",
+          "auth_redirect_detected",
+          "raw_body_handling"
         ],
         "sensitive_output_must_equal": false,
         "standard_failure_statuses": [
@@ -1392,8 +1453,9 @@
         "failure_layer",
         "error_type",
         "latency_ms",
-        "source_card",
-        "source_quality",
+        "dennis_observation",
+        "dennis_generated_source_quality",
+        "passthrough_envelope",
         "sensitive_output",
         "evidence_time_range",
         "collected_at",

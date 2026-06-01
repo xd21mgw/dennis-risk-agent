@@ -412,7 +412,7 @@ cases:
   - id: BBFA-CP-005
     user_query: "controlled parallel：ATO 多源里单 source timeout，其他 completed source 仍然输出 partial answer"
     expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
-    expected_orchestration: "Single source timeout enters source_quality_matrix/missing_evidence and does not block completed source evidence_card_inputs."
+    expected_orchestration: "Single source timeout enters source_quality_matrix/missing_evidence and does not block Dennis-generated evidence card."
     expected_boundary_flags: [controlled_parallel_plan_only, source_timeout_non_blocking_partial, partial_evidence_required, source_quality_matrix_merge_required]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_discard_completed_source, do_not_make_final_judgement_without_source_quality]
@@ -524,3 +524,67 @@ cases:
     expected_execution_groups: []
     should_not_do: [do_not_call_hive, do_not_call_dataagent, do_not_globalize_representative_sample, do_not_access_real_platform]
     expected_answer_contract: [source_plan, batch_conclusion, ato_lens_hits, risk_clusters, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-001
+    user_query: "browser-backed pure passthrough：service 不含 normalized_observation，Dennis 仍要生成 source_quality"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Dennis consumes passthrough envelope / transport metadata and generates source_quality_matrix locally."
+    expected_boundary_flags: [pure_passthrough_envelope_required, dennis_generates_observation_from_passthrough, dennis_generates_source_quality_matrix, service_normalized_observation_not_required]
+    expected_execution_groups: []
+    should_not_do: [do_not_require_service_normalized_observation, do_not_use_compat_summary_in_pure_passthrough, do_not_access_real_platform]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-002
+    user_query: "browser-backed pure passthrough：service 不含 evidence_card_inputs，Dennis 仍要生成 evidence_card"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Dennis decides evidence_card inputs from completed/partial passthrough observations."
+    expected_boundary_flags: [pure_passthrough_envelope_required, dennis_generates_evidence_card, service_evidence_card_inputs_not_required]
+    expected_execution_groups: []
+    should_not_do: [do_not_require_service_evidence_card_inputs, do_not_require_service_source_card, do_not_access_real_platform]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-003
+    user_query: "batch result 只有 transport_status_matrix/source_results，Dennis 仍要合并 source_quality_matrix"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Dennis merges transport_status_matrix and source_results into source_quality_matrix and missing_evidence."
+    expected_boundary_flags: [pure_passthrough_envelope_required, transport_status_matrix_merge_required, dennis_generates_source_quality_matrix, source_quality_matrix_merge_required]
+    expected_execution_groups: []
+    should_not_do: [do_not_require_service_source_card, do_not_access_real_platform, do_not_call_dataagent]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-004
+    user_query: "body_truncated=true 的 passthrough capped body 能不能说完整明细"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "body_truncated=true becomes partial_observation_available and raw body capped means limited observation only."
+    expected_boundary_flags: [body_truncated_means_partial_observation, partial_observation_available, raw_body_capped_limited_observation_only]
+    expected_execution_groups: []
+    should_not_do: [do_not_claim_complete_from_capped_body, do_not_claim_full_coverage_when_limited, do_not_dump_raw_body]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-005
+    user_query: "auth_redirect_detected 或 api_code=302 时是不是直接说用户无权限"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "auth redirect/302 is auth_flow_not_completed_in_bound_context unless explicit permission denial is returned."
+    expected_boundary_flags: [pure_passthrough_envelope_required, auth_flow_not_completed_in_bound_context]
+    expected_execution_groups: []
+    should_not_do: [do_not_say_no_permission_without_evidence, do_not_auth_repair, do_not_read_cookie]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-006
+    user_query: "passthrough batch 里单 source timeout，其他 completed source 是否还能 partial evidence"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Single source timeout enters Dennis missing_evidence/source_quality_matrix and does not block partial evidence."
+    expected_boundary_flags: [pure_passthrough_envelope_required, source_timeout_non_blocking_partial, timeout_platform_error_parse_error_missing_evidence]
+    expected_execution_groups: []
+    should_not_do: [do_not_discard_completed_source, do_not_make_final_judgement_without_source_quality, do_not_access_real_platform]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-007
+    user_query: "pure passthrough no_data / empty result 能不能作为低风险反证"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "No data from passthrough is Dennis source quality only, not low-risk evidence."
+    expected_boundary_flags: [pure_passthrough_envelope_required, no_data_not_risk_exclusion]
+    expected_execution_groups: []
+    should_not_do: [do_not_output_low_risk_from_no_data, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-PASSTHROUGH-008
+    user_query: "RCP feature list 大响应 passthrough partial，能不能声称完整特征明细"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "RCP feature large/capped passthrough is partial and supports only limited feature context."
+    expected_boundary_flags: [body_truncated_means_partial_observation, feature_list_partial_only_feature_group_summary, partial_observation_available]
+    expected_execution_groups: []
+    should_not_do: [do_not_claim_complete_feature_coverage, do_not_output_raw_feature_values, do_not_claim_complete_from_capped_body]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]

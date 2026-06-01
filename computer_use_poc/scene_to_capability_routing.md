@@ -131,7 +131,8 @@ Controlled parallel 编排补丁：
 - `large_response_serial` 用于 `archives_user_analysis` / `rcp_event_feature_list` 大 pageSize、partial 或分页场景；partial 只支持部分观察，不升级强证据。
 - `auth_sensitive_serial` 用于 Archives 同源 / 共享认证上下文 source，例如异常发布 `archives_photo_search -> archives_user_profile -> archives_user_analysis`。
 - 单 source `auth_failed` / `blocked` / `timeout` / `parse_error` 只影响该 source 和显式依赖它的后续 source，不阻塞其他已完成 source 进入 partial evidence card。
-- `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial source 进入 `evidence_card_inputs`。
+- browser-backed service 采用 pure passthrough：service 只输出 passthrough envelope、transport metadata、capped body、`source_results`、`transport_status_matrix` 和 `missing_or_failed_sources`；Dennis 负责生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和 `final_answer_boundary`。
+- `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial passthrough observation 进入 Dennis evidence card。
 
 ATO 单案 anchor-first 路由补丁：
 

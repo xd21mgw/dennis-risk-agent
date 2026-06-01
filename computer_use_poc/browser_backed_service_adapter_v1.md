@@ -6,9 +6,85 @@ This adapter lets Dennis consume the local browser-backed API service without op
 
 - Service base URL: `http://127.0.0.1:8787`.
 - Dennis calls only fixed service actions.
-- The browser-backed service owns persistent browser context, origin readiness, same-origin checks, and source extraction.
-- Dennis receives normalized source results and writes them into the source completion matrix.
-- Action failures are source quality, not Dennis runtime failures, when the service returns the standard result contract.
+- The browser-backed service owns persistent browser context, origin readiness, same-origin checks, typed params, safe passthrough, transport status, and controlled parallel batch execution.
+- The service no longer returns business normalization fields such as `normalized_observation`, `source_quality`, `source_card`, `evidence_card_inputs`, `compat_summary`, `risk_event_scan`, or `feature_group_summary`.
+- Dennis consumes the pure passthrough envelope, transport metadata, capped body presence/truncation signals, and batch transport matrices.
+- Dennis generates observation, `source_quality_matrix`, evidence cards, missing evidence, and final answer boundaries locally.
+- Action failures are source quality inputs, not Dennis runtime failures, when the service returns a passthrough envelope or transport status.
+
+## Pure Passthrough Envelope Contract
+
+Service action output is a safe transport envelope. Dennis must not require service-side observation builders or evidence summaries.
+
+Required single-source envelope fields:
+
+```yaml
+passthrough_envelope:
+  action_name:
+  source_id:
+  platform:
+  http_status:
+  content_type:
+  body_present:
+  body_truncated:
+  observed_bytes:
+  elapsed_ms:
+  transport_error:
+  platform_error:
+  invalid_params:
+  timeout:
+  auth_redirect_detected:
+  raw_body_handling: suppressed | capped | metadata_only
+```
+
+Optional upstream metadata that Dennis may inspect when present:
+
+```yaml
+upstream_metadata:
+  api_code:
+  result_count:
+  result_array_length:
+  pagination_applied:
+  field_projection_applied:
+  body_excerpt_available:
+```
+
+Required batch envelope fields:
+
+```yaml
+batch_passthrough_envelope:
+  batch_status:
+  source_results: []
+  transport_status_matrix:
+    completed: []
+    no_data: []
+    partial: []
+    auth_failed: []
+    blocked: []
+    timeout: []
+    parse_error: []
+  missing_or_failed_sources: []
+```
+
+Dennis-generated fields:
+
+```yaml
+dennis_generated_from_passthrough:
+  observation:
+  source_quality_matrix:
+  evidence_card:
+  missing_evidence:
+  final_answer_boundary:
+```
+
+Mapping rules:
+
+- `body_truncated=true` -> `partial_observation_available`; do not claim complete detail coverage.
+- `auth_redirect_detected=true` or `api_code=302` -> `auth_flow_not_completed_in_bound_context`; do not say the user has no permission unless a permission denial is explicit.
+- `body_present=false` with empty result semantics -> `no_data` source quality; never low-risk/no-risk counter evidence.
+- `timeout=true`, `platform_error`, transport error, invalid params, or parse failure -> missing evidence and partial answer where other sources are usable.
+- `raw_body_handling=suppressed|capped` -> only limited observation; do not output raw upstream body or raw records.
+- Dennis may use model understanding over capped passthrough bodies for high-value sources, but full standard observation builders remain incremental Dennis-owned work, not service responsibility.
 
 ## Fixed Action Mapping
 
@@ -34,7 +110,7 @@ This adapter lets Dennis consume the local browser-backed API service without op
 | RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
 | RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
 
-For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) are the existing primary source path. Dennis now requests this path with explicit `response_mode=passthrough`, then parses service upstream bodies into Dennis-owned `normalized_observation` and evidence summaries. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. The browser-backed fixed actions v1 closure adds explicit, source-plan-selected actions for Archives Center, RCP/Tianshi drill-down, and Track Analysis readiness. These additions do not change default runtime routing.
+For clean `full_runtime` single-user account-security evidence cards, the four base fixed actions (`track_analysis_summary`, `rcp_snapshot`, `weapon_inventory`, `login_logs_search`) are the existing primary source path. Dennis requests passthrough envelopes and then creates Dennis-owned observations, source quality, evidence summaries, and missing-evidence rows. Dennis must not first try missing legacy runners such as `bin/sso_session_runner` or `bin/track_analysis_runner`. The browser-backed fixed actions v1 closure adds explicit, source-plan-selected actions for Archives Center, RCP/Tianshi drill-down, and Track Analysis readiness. These additions do not change default runtime routing.
 
 `archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. In browser-backed fixed actions v1 source plans, Archives Center is key evidence but not a hard blocker: ATO / login anomaly includes `archives_user_profile` and `archives_user_analysis`; abnormal publish / traffic diversion includes `archives_photo_search`, profile, and analysis; black-market spread / same-device analysis includes `archives_related_users` and profile. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, and `parse_error` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
 
@@ -81,12 +157,12 @@ Execution group mapping:
 - `large_response_serial`: `rcp_event_feature_list` or `archives_user_analysis` when page size, feature scope, or partial response pressure is large.
 - `auth_sensitive_serial`: Archives same-origin chains such as `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
 
-Batch service results align to Dennis merging:
+Batch service results align to Dennis-owned merging:
 
 ```yaml
 batch_result:
 source_results: []
-source_quality_matrix:
+transport_status_matrix:
   completed: []
   no_data: []
   partial: []
@@ -94,13 +170,12 @@ source_quality_matrix:
   blocked: []
   timeout: []
   parse_error: []
-evidence_card_inputs: []
-missing_evidence: []
+missing_or_failed_sources: []
 raw_upstream_body_user_visible: false
 final_risk_conclusion_generated_by_service: false
 ```
 
-`completed` and usable `partial` sources can enter `evidence_card_inputs`. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
+Dennis converts `transport_status_matrix` and `source_results` into `source_quality_matrix`, evidence card inputs, and missing evidence. `completed` and usable `partial` sources can enter Dennis evidence cards. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter Dennis `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
 
 ## ATO Anchor-First And Login Log Contract Patch
 
@@ -120,6 +195,21 @@ user_id -> suspicious_anchor_discovery -> login/control-chain or content/action 
 - When an `anchor_time` exists, the next plan should shrink to `anchor_time +/- 2-6h`; without anchor time, do `suspicious_anchor_discovery` first instead of widening the login window.
 
 The local service remains a safe passthrough + transport envelope. Dennis may use model understanding of passthrough/capped body/transport metadata for ATO, and should only standardize high-value observation builders incrementally. Do not move generic risk normalizer responsibility into the local browser-backed service.
+
+## Legacy Field Handling
+
+The following fields are legacy service-output dependencies and must not be required from the browser-backed service:
+
+| legacy field | treatment |
+| --- | --- |
+| `normalized_observation` | Removed as service dependency. Dennis may create Dennis-owned observation from passthrough. |
+| `source_quality` | Removed as service dependency. Dennis generates source quality from transport status and envelope fields. |
+| `source_quality_matrix` | Removed as service dependency. Dennis merges it from `transport_status_matrix` and `source_results`. |
+| `evidence_card_inputs` | Removed as service dependency. Dennis generates the evidence card directly from completed/partial observations. |
+| `source_card` | Removed as service dependency. Dennis evidence output must not require service-rendered source cards. |
+| `compat_summary` | Historical migration label only; not a runtime fallback and not used in pure passthrough mode. |
+| `risk_event_scan` | Historical Archives DOM/API derived scan name; not a required service output. |
+| `feature_group_summary` | Dennis-side limited interpretation of RCP feature passthrough; not a required service output. |
 
 ## Browser-Backed Fixed Actions v1 Closure Status
 
@@ -190,18 +280,18 @@ account_security_browser_backed_sequence:
           user_id: "{user_id}"
           window: last_24h
           recallSource: "2,0,1,3"
-        preserve_primary_source_quality: true
-        fallback_result_must_be_standard_browser_backed_source_result: true
+        preserve_primary_transport_status: true
+        fallback_result_must_be_passthrough_envelope: true
     boundary:
-      - parse_error / no_data / auth_failed / blocked 都是 source_quality
+      - parse_error / no_data / auth_failed / blocked 都进入 Dennis-generated source_quality
       - 不能把失败或空结果解释为无风险反证
 ```
 
-All four browser-backed sources must be represented in `source_completion_matrix` by default. In the passthrough default path, Dennis records passthrough parser failures directly in `source_quality` and `missing_evidence`; it must not silently fall back to summary mode. A 7-day `login_logs_search` `parse_error` may trigger the legacy 24-hour summary fallback only when the caller explicitly runs the legacy `compat_summary` path. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
+All four browser-backed sources must be represented in `source_completion_matrix` by default. In the passthrough default path, Dennis records passthrough parser failures directly in Dennis-generated `source_quality` and `missing_evidence`; it must not silently fall back to summary mode. A 7-day `login_logs_search` `parse_error` may trigger a narrower 24-hour passthrough retry source, but not a service-side `compat_summary` dependency. `no_data`, `parse_error`, and `source_gap` are not no-risk counter-evidence.
 
-For `track_analysis_account_security_bundle`, a single `sub_interfaces` list is only the source plan shape. The executable helper expands it into four `track_analysis_summary` calls with `sub_interface=profile|getUseDuration|getDeviceIds|getLastestDateTime`, then merges those standard action results into one Track Analysis source card. If the service returns a different observed sub-interface than requested, that requested sub-interface stays missing in `source_quality` instead of being treated as completed.
+For `track_analysis_account_security_bundle`, a single `sub_interfaces` list is only the source plan shape. The executable helper expands it into four `track_analysis_summary` calls with `sub_interface=profile|getUseDuration|getDeviceIds|getLastestDateTime`, then Dennis merges those passthrough envelopes into one local Track Analysis observation/card if needed. If the service returns a different observed sub-interface than requested, that requested sub-interface stays missing in Dennis-generated `source_quality` instead of being treated as completed.
 
-Legacy `archives_profile_readonly` / `archives_profile_runner` stub status must not be used to suppress the v1 Archives Center actions. In browser-backed fixed actions v1, `archives_user_profile` and `archives_user_analysis` are default ATO source-plan items; if they fail, represent the failure as `source_quality.missing_sources` / `missing_evidence` and continue partial evidence. The legacy stub still must not block Track Analysis, RCP, Weapon, or Login Logs.
+Legacy `archives_profile_readonly` / `archives_profile_runner` stub status must not be used to suppress the v1 Archives Center actions. In browser-backed fixed actions v1, `archives_user_profile` and `archives_user_analysis` are default ATO source-plan items; if they fail, Dennis represents the failure as local `source_quality.missing_sources` / `missing_evidence` and continues partial evidence. The legacy stub still must not block Track Analysis, RCP, Weapon, or Login Logs.
 
 ## Adapter Boundary
 
@@ -232,126 +322,76 @@ forbidden_input_keys:
   - secret
 ```
 
-## Response Modes
+## Response Mode
 
-`passthrough` is the Dennis target main chain and the default account-security browser-backed path. Dennis sends fixed typed params plus `response_mode: passthrough`, receives `upstream.body`, and owns parser / `normalized_observation` / evidence card construction.
+`passthrough` is the only target main-chain mode. Dennis sends fixed typed params and receives a safe transport envelope. The service does not provide `normalized_observation`, `source_card`, `source_quality`, `evidence_card_inputs`, or `compat_summary`.
 
-`compat_summary` is a legacy migration fallback. It remains available only when a caller explicitly uses `response_mode=compat_summary` or `allow_compat_fallback=true` in the account-security helper. It is not the long-term parallel architecture.
+Pure passthrough service responses are expected to contain the envelope fields defined above: action/source identity, platform, HTTP/content metadata, body presence and truncation, observed byte count, elapsed time, transport/platform/parameter/timeout/auth redirect signals, and raw body handling. Batch responses additionally contain `batch_status`, `source_results`, `transport_status_matrix`, and `missing_or_failed_sources`.
 
-Passthrough service responses are expected to contain:
+Dennis must not persist or display raw response full bodies. `output_scope` defaults to `internal_risk_review`; callers may request `external_share` when the evidence card is meant for sharing outside internal risk review.
 
-```yaml
-ok:
-action:
-response_mode: passthrough
-upstream:
-  status:
-  content_type:
-  body:
-meta:
-  latency_ms:
-safety:
-  credential_material_output: false
-```
+## Dennis-Generated Output
 
-Passthrough does not require `source_card` or `source_quality`. If those fields appear, Dennis marks `unexpected_summary_fields` but does not fail. If `safety.credential_material_output` is anything other than `false`, Dennis fails closed with `credential_material_violation`. If `upstream.body` is missing, Dennis marks `passthrough_body_missing`. The raw upstream body is never displayed or persisted as user-facing evidence; it is passed only to the Dennis parser, which emits `normalized_observation`.
-
-Current passthrough parser coverage is the first-batch Dennis main-chain parser path:
-
-- `track_analysis_summary`: recognizes `profile`, `getUseDuration`, `getDeviceIds`, and `getLastestDateTime`-style body shapes and emits counts, observed fields, sanitized samples, and `raw_body_suppressed=true`.
-- `login_logs_search`: recognizes `data.logSearchModels`, emits `records_count`, observed fields, sanitized log samples, and `raw_records_suppressed=true`.
-- `weapon_inventory`: recognizes graphData-style `pointInfoMap` / `relationEdgeList` and riskData-style label summaries; emits graph counts, related user/device counts, risk label counts, risk group names, readable label samples, `userLevel_observed`, and suppresses raw `labelInfo` / `originalLog`.
-- `rcp_snapshot`: recognizes `data.eventList` with optional pagination and table headers; emits event count, observed columns, first event shape keys, event/source/device/policy/time samples, and suppresses full raw eventList dumps.
-
-The short-term migration keeps legacy summary/compat logic as an explicit fallback to avoid breaking controlled pilot. The long-term target is passthrough-only: new actions should be passthrough-only, browser-backed service-side summary / `source_card` / `source_quality` / evidence summary logic should be removed after the deletion gates pass.
-
-Legacy deletion gates:
-
-1. Four-source passthrough dual-run has passed.
-2. `full_runtime` controlled pilot has passed.
-3. Dennis evidence card is fully usable from `normalized_observation`.
-4. Reference checks confirm no main-chain dependency remains on service summary logic.
-
-## Normalized Output
-
-Every passthrough service action result entering Dennis normalizes to:
+Every passthrough service action result entering Dennis is interpreted locally:
 
 ```yaml
-browser_backed_passthrough_source_result:
+dennis_browser_backed_source_result:
   source_name:
   action_name:
-  response_mode: passthrough
-  source_status:
-  failure_layer:
-  error_type:
-  latency_ms:
-  normalized_observation:
-  source_quality:
-    response_mode: passthrough
-    normalized_observation_present:
-    no_data_not_risk_exclusion:
-  raw_body_suppressed: true
-  sensitive_output: false
-  source_provenance: browser_backed_service
+  passthrough_envelope:
+    http_status:
+    content_type:
+    body_present:
+    body_truncated:
+    observed_bytes:
+    elapsed_ms:
+    transport_error:
+    platform_error:
+    invalid_params:
+    timeout:
+    auth_redirect_detected:
+    raw_body_handling:
+  dennis_observation:
+  dennis_source_quality:
+  missing_evidence:
+  raw_body_user_visible: false
 ```
 
-Legacy summary/compat service action result:
+Legacy service summary fields are historical only:
 
-```yaml
-browser_backed_source_result:
-  source_name:
-  action_name:
-  source_status:
-  failure_layer:
-  error_type:
-  latency_ms:
-  source_card:
-  source_quality:
-  output_scope: internal_risk_review | external_share
-  field_classification:
-    credential_secret: []
-    pii_strict: []
-    risk_entity_identifier: []
-    source_summary_metric: []
-  sensitive_output: false
-  source_provenance: browser_backed_service
-```
+- `normalized_observation`: Dennis-owned output when needed, not a service dependency.
+- `source_card`: historical service display artifact, not a runtime dependency.
+- `source_quality`: Dennis quality classification, not a service dependency.
+- `source_quality_matrix`: Dennis batch merge output, not a service dependency.
+- `evidence_card_inputs`: historical service selection artifact; Dennis now generates evidence cards directly.
+- `compat_summary`: historical label only, not a runtime fallback and not used by pure passthrough.
+- `risk_event_scan` / `feature_group_summary`: historical derived summary names; Dennis may infer limited observations, but service need not emit them.
 
-Required summary/compat service fields:
+## Passthrough Status Interpretation
 
-- `source_card`
-- `source_quality`
-- `source_status` or `status`
-- `error_type`
-- `latency_ms`
-- `sensitive_output=false`
-
-Dennis must not persist or display a raw response full body from the browser-backed service. `output_scope` defaults to `internal_risk_review`; callers may request `external_share` when the evidence card is meant for sharing outside internal risk review.
-
-## Status Normalization
-
-| Service status / error | Dennis source_status | failure_layer | Handling |
+| Passthrough signal | Dennis source_status | failure_layer | Handling |
 | --- | --- | --- | --- |
-| `ok` / `completed` | `completed` | `no_failure` | Enter completed source evidence. |
-| `blocked` | `blocked` | `same_origin_context` or `path_permission` | Enter source completion matrix with source quality. |
-| `auth_failed` | `auth_failed` | `auth_session` | Enter source completion matrix; do not start auth debug. |
-| `network_error` | `blocked` | `network` | Enter source completion matrix; do not retry through browser debug. |
-| `platform_error` | `platform_partial_available` | `platform_contract` | Enter source completion matrix as platform/source quality. |
-| `parameter_error` | `invalid_parameter` | `parameter_contract` | Record missing or invalid action input. |
-| `parse_error` | `parse_error` | `parser` | Record parser/source shape issue. |
-| `timeout` | `timeout` | `timeout` | Record timeout source quality. |
+| usable envelope with no error/timeout/auth redirect | `completed` | `no_failure` | Enter completed source evidence after Dennis interpretation. |
+| `body_truncated=true` or capped body | `partial` | `response_size_boundary` | Enter partial observation and avoid complete-detail claims. |
+| empty result metadata or `body_present=false` without error | `no_data` | `observed_empty_result` | Record no-data source quality; not no-risk evidence. |
+| `auth_redirect_detected=true` or `api_code=302` | `auth_failed` | `auth_session` | Record auth flow not completed in bounded context; do not start auth debug. |
+| `transport_error` | `blocked` | `network_or_runner` | Enter source completion matrix; do not retry through browser debug. |
+| `platform_error` | `blocked` or `partial` | `platform_contract` | Enter source quality / missing evidence depending on body availability. |
+| `invalid_params=true` | `invalid_parameter` | `parameter_contract` | Record missing or invalid action input. |
+| Dennis parser cannot interpret capped body | `parse_error` | `parser` | Record parser/source shape issue without blocking other sources. |
+| `timeout=true` | `timeout` | `timeout` | Record timeout source quality and missing evidence. |
 
 If the HTTP transport to `127.0.0.1:8787` itself is unavailable, the adapter records `source_status=tool_gap` with `failure_layer=runner_invocation` and continues partial evidence.
 
 ## Partial Evidence Card Rule
 
-Browser-backed action failures still produce a partial evidence card when any source result is standard:
+Browser-backed action failures still produce a partial evidence card when any passthrough envelope is usable:
 
 ```yaml
 partial_evidence_card:
   source_name: login_logs_search
-  source_status: auth_failed
-  source_quality:
+  dennis_source_status: auth_failed
+  dennis_source_quality:
     permission_status: auth_not_ready
     freshness_status: current_task_observation
     error_type: auth_redirect
@@ -441,14 +481,8 @@ fixed_fields:
 
 Output contract:
 
-- `source_status`
-- `source_card.track_analysis_check_data_ready_summary`
-- `source_quality.track_analysis_action_contract=track_analysis_check_data_ready`
-- `key_entities.device_id`
-- `missing_fields`
-- `next_action`
-- `sensitive_output=false`
-- `no_data_not_risk_exclusion=true`
+- Service returns pure passthrough envelope / transport metadata / capped body only.
+- Dennis generates `source_status`, readiness summary, `dennis_source_quality`, `key_entities.device_id`, `missing_fields`, `next_action`, and `no_data_not_risk_exclusion=true`.
 
 This action summarizes `data.dateStatus` presence/status and `trace_id_present=true/false` only. It must not output raw readiness body, trace ID value, caller-provided URL/path/header/cookie/token/session, or credential material. It is a readiness/source-quality helper and must not be counted as completed account-security evidence by itself.
 
@@ -544,16 +578,10 @@ typed_params:
 
 Output contract:
 
-- `source_status`
-- `source_card`
-- `source_quality`
-- `key_entities`
-- `missing_fields`
-- `next_action`
-- `sensitive_output=false`
-- `no_data_not_risk_exclusion=true`
+- Service returns pure passthrough envelope / transport metadata / capped body only.
+- Dennis generates source status, local source card if needed, source quality, key entity summary, missing fields, next action, and no-data boundary.
 
-The actions return derived summaries only: `risk_event_scan`, `photo_search_summary`, `profile_summary`, `related_users_summary`, `private_message_summary`, or `four_info_change_summary`. They must not return raw full body, full `requestParam`, full `extraParam`, raw report text, raw profile body, raw related-user profile, private message plaintext, old/new profile text, media URLs, token/tokenId/open_id/sig/refresh_token, or raw records.
+The actions return safe passthrough only. Dennis may derive limited summaries such as photo/profile/related-user/four-info context, but must not require service-side `risk_event_scan`, `photo_search_summary`, `profile_summary`, `related_users_summary`, `private_message_summary`, or `four_info_change_summary`. They must not return raw full body, full `requestParam`, full `extraParam`, raw report text, raw profile body, raw related-user profile, private message plaintext, old/new profile text, media URLs, token/tokenId/open_id/sig/refresh_token, or raw records.
 
 ## RCP / Tianshi Drill-Down Actions
 
@@ -675,16 +703,10 @@ typed_params:
 
 Output contract:
 
-- `source_status`
-- `source_card`
-- `source_quality`
-- `key_entities`
-- `missing_fields`
-- `next_action`
-- `sensitive_output=false`
-- `no_data_not_risk_exclusion=true`
+- Service returns pure passthrough envelope / transport metadata / capped body only.
+- Dennis generates source status, local source card if needed, source quality, key entity summary, missing fields, next action, and no-data boundary.
 
-The actions return derived `event_detail_summary`, `feature_snapshot_summary`, `policy_version_summary`, `policy_detail_summary`, `release_record_summary`, `policy_tree_summary`, `policy_attribution_summary`, and `node_binding_summary` only. They must not return raw full body, raw event detail body, raw feature values, raw policy version body, raw policy detail body, raw release records, operator identities, raw policy tree body, raw condition dumps, raw node-binding body/list, credential material, or policy configuration dumps. Strategy events, feature snapshots, policy versions/details/release records, policy-tree nodes, condition-level attribution, and node-binding attribution are evidence/provenance, not final risk judgement.
+The actions return safe passthrough only. Dennis may derive limited event, feature, policy, release, tree, attribution, or node-binding context, but must not require service-side summary fields. They must not return raw full body, raw event detail body, raw feature values, raw policy version body, raw policy detail body, raw release records, operator identities, raw policy tree body, raw condition dumps, raw node-binding body/list, credential material, or policy configuration dumps. Strategy events, feature snapshots, policy versions/details/release records, policy-tree nodes, condition-level attribution, and node-binding attribution are evidence/provenance, not final risk judgement.
 
 Fixture self-test:
 
@@ -694,33 +716,46 @@ python3 computer_use_poc/browser_backed_service_client.py --self-test
 
 The self-test does not require the browser-backed service to be running and does not call any live platform.
 
-## Executable Normalization
+## Executable Passthrough Interpretation
 
-The client reads these service fields when present:
+The client reads these pure passthrough service fields:
 
-- `source_status`
-- `error_type`
-- `latency_ms`
-- `source_card`
-- `source_quality`
-- `sensitive_output`
-- `status`
+- `action_name`
+- `source_id`
+- `platform`
+- `http_status`
+- `content_type`
+- `body_present`
+- `body_truncated`
+- `observed_bytes`
+- `elapsed_ms`
+- `transport_error`
+- `platform_error`
+- `invalid_params`
+- `timeout`
+- `auth_redirect_detected`
+- `raw_body_handling`
+- `batch_status`
+- `source_results`
+- `transport_status_matrix`
+- `missing_or_failed_sources`
 
-Normalization buckets:
+Dennis interpretation buckets:
 
-| Normalized Dennis bucket | Accepted service statuses / errors |
+| Dennis bucket | Passthrough signal |
 | --- | --- |
-| `completed_sources` | `completed`, `ok` |
-| `no_data_sources` | `no_data`, `completed_no_data`, `completed_no_hit_for_small_window` |
-| `auth_failed_sources` | `auth_failed`, `auth_redirect` |
-| `blocked_sources` | `blocked`, `network_error`, `platform_error`, connection refused, service HTTP error |
-| `timeout_sources` | `timeout`, service timeout |
-| `parse_error_sources` | `parse_error`, non-JSON service response |
-| `invalid_parameter_sources` | `parameter_error`, `invalid_parameter`, `wrong_request_body_shape` |
+| `completed_sources` | response envelope present, no timeout/error/auth redirect, usable body or explicit empty result metadata |
+| `partial_sources` | `body_truncated=true` or `raw_body_handling=capped` |
+| `no_data_sources` | empty result metadata or `body_present=false` without transport/platform error |
+| `auth_failed_sources` | `auth_redirect_detected=true`, `api_code=302`, or HTTP auth redirect |
+| `blocked_sources` | `transport_error`, `platform_error`, or service HTTP error |
+| `timeout_sources` | `timeout=true` |
+| `parse_error_sources` | invalid params, malformed passthrough envelope, or Dennis parser failure on capped body |
+| `invalid_parameter_sources` | `invalid_params=true` or missing typed params before action call |
 
-`sensitive_output` must be exactly `false`. If the service returns any other value, the adapter replaces the result with `source_status=blocked`, `error_type=sensitive_output_violation`, and `sensitive_output=false`.
+The service no longer needs to return `sensitive_output=false`; safe passthrough is enforced by raw-body suppression/capping and fixed typed actions. If a response contains credential material or an uncapped raw full body, Dennis treats it as `blocked` with a source contract gap and excludes the body from evidence.
 
-`sensitive_output=false` means no credential secret plaintext, no raw full body, no raw records full dump, and no raw `labelInfo` / `originalLog` full dump. It does not mean all risk entity identifiers were removed. Under `internal_risk_review`, evidence cards may display UID/user_id, DID/device_id, IP, eventId, sourceId, hitFusePolicyCode, login method, logSource, and timestamp. Under `external_share`, those risk entity identifiers must be masked.
+Safe passthrough means no credential secret plaintext, no raw full body, no raw records full dump, and no raw `labelInfo` / `originalLog` full dump. It does not mean all risk entity identifiers were removed. Under `internal_risk_review`, evidence cards may display UID/user_id, DID/device_id, IP, eventId, sourceId, hitFusePolicyCode, login method, logSource, and timestamp. Under `external_share`, those risk entity identifiers must be masked.
 
 Phone numbers are `pii_strict`: `internal_risk_review` may display `1381234****`, while `external_share` may display only `138********`; full phone numbers are never allowed. Full ID card numbers and real names are never displayed; only weak summaries such as `id_card_present=true`, `birth_year_present=true`, or `name_present=true` are allowed.
 
@@ -736,15 +771,15 @@ partial_evidence_card:
   completed_sources: []
   no_data_sources: []
   blocked_sources: []
-  source_quality: {}
+  dennis_generated_source_quality: {}
   no_data_not_risk_exclusion: true
 ```
 
-The adapter does not persist raw response full bodies, raw login records full dumps, raw `labelInfo`, or raw `originalLog`. It relies on `source_card`, `source_quality`, and service-provided summaries that are already sanitized by the browser-backed service. Compact risk entity identifiers follow `output_scope`.
+The adapter does not persist raw response full bodies, raw login records full dumps, raw `labelInfo`, or raw `originalLog`. It relies on pure passthrough envelope fields, transport metadata, capped body snippets, and Dennis-generated local observations/source quality. Compact risk entity identifiers follow `output_scope`.
 
 ## Evidence Display Summary
 
-`build_partial_evidence_card()` now extracts display-safe business summaries from `source_card` / `source_quality` instead of only reporting whether those objects exist.
+`build_partial_evidence_card()` extracts display-safe business summaries from Dennis-generated local observations and source quality instead of depending on service-provided `source_card` / `source_quality`.
 
 Source-specific summary fields:
 
@@ -812,7 +847,7 @@ Source-specific summary fields:
   - `login_window_summary.user_id_sample`
   - `login_window_summary.method_sample`
   - `login_window_summary.logSource_sample`
-  - `login_window_summary.standard_browser_backed_source_result`
+  - `login_window_summary.passthrough_envelope_interpreted`
   - Boundary: `no_data` means no visible rows in the observed window, not no-risk evidence.
 - `archives_photo_search`
   - `photo_search_summary.photo_count`
