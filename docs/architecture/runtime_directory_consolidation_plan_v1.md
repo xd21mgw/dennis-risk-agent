@@ -17,7 +17,6 @@ Related indexes and gates:
 - `computer_use_poc/platform_access/INDEX.md`
 - `computer_use_poc/bad_cases/INDEX.md`
 - `computer_use_poc/run_logs/INDEX.md`
-- `docs/archive/INDEX.md`
 
 ## 1. Current Directory Inventory
 

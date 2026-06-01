@@ -173,17 +173,18 @@ Candidates only; no migration is executed in this round.
 | `computer_use_poc/run_logs/INDEX.md` | Historical index only. | If committed, use `git add -f`; do not stage historical logs. |
 | Architecture-adjacent docs such as `dennis_agent_capability_architecture_v1.md` | Mostly explanatory docs. | First replace README/smoke references and run doc checks. |
 
-## Third-step Applied Low-risk Archive
+## Third-step Applied Low-risk Archive And Cleanup
 
 The following files were moved after active-reference scans found no AGENTS,
 manifest, builder, Python/YAML, smoke-test, or skills runtime references. The
 only remaining references were historical run logs, which are intentionally not
-rewritten.
+rewritten. In the first historical cleanup pass, both archived copies were
+deleted as obsolete duplicate POC notes. Historical run logs remain unchanged.
 
-| old_path | new_path | decision | notes |
+| old_path | archive_path | cleanup_decision | notes |
 |---|---|---|---|
-| `computer_use_poc/integration_notes.md` | `docs/archive/computer_use_poc_legacy/integration_notes.md` | safe_to_move_archive | Early Archives/computer-use POC note; historical-only. |
-| `computer_use_poc/failure_modes.md` | `docs/archive/computer_use_poc_legacy/failure_modes.md` | safe_to_move_archive | Early Archives/computer-use POC failure-mode note; historical-only. |
+| `computer_use_poc/integration_notes.md` | `docs/archive/computer_use_poc_legacy/integration_notes.md` | deleted_obsolete_historical_copy | Early Archives/computer-use POC note; active behavior is covered by current runtime guard, platform contracts, and validation. |
+| `computer_use_poc/failure_modes.md` | `docs/archive/computer_use_poc_legacy/failure_modes.md` | deleted_obsolete_historical_copy | Early Archives/computer-use POC failure-mode note; active behavior is covered by current source-quality and failure-boundary rules. |
 
 ## Current Boundary
 

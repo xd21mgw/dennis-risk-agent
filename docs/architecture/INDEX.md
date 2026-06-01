@@ -11,11 +11,6 @@ future migration plans. It does not define runtime behavior by itself.
 | `runtime_path_reference_report_v1.md` | Hardcoded path and runtime dependency risk report. | active migration pre-check |
 | `runtime_migration_checklist_v1.md` | Checklist for future physical path migrations. | active migration gate |
 
-Related archive:
-
-- `../archive/INDEX.md`: historical-only archive entry. Archive files are not
-  runtime source truth.
-
 ## Directory Governance Principles
 
 - Index first, migrate later.

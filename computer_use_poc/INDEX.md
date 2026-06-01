@@ -26,13 +26,15 @@ release support, bad cases, and historical run logs.
 | run logs / historical notes | `run_logs/` | Historical patch logs, validation summaries, run evidence. | historical_only | index_only | not runtime mainline |
 | bad cases / case learning | `bad_cases/`, `case_sets/`, `question_collection/` | Bad cases, curated case sets, learning notes, candidate queues. | regression_source or historical_only, depending on file | index_only now | do not infer runtime behavior from stale cases |
 
-## Archived Legacy Notes
+## Deleted Obsolete Legacy Notes
 
-- `integration_notes.md` moved to `docs/archive/computer_use_poc_legacy/integration_notes.md`.
-- `failure_modes.md` moved to `docs/archive/computer_use_poc_legacy/failure_modes.md`.
+- `integration_notes.md`: deleted after archive/reference audit.
+- `failure_modes.md`: deleted after archive/reference audit.
 
-Both are `historical_only`; current runtime boundaries live in the active guard,
-source orchestration, platform access contracts, and validation files.
+Both were early Archives/computer-use POC notes. Current runtime boundaries live
+in the active guard, source orchestration, platform access contracts, and
+validation files. Historical run logs that mention the old filenames are kept
+unchanged as historical evidence.
 
 ## Outputs Boundary
 
