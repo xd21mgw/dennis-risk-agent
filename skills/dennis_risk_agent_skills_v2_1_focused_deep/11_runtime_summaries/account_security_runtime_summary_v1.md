@@ -116,6 +116,34 @@
 
 明确 `user_id` 的 ATO 单案允许进入 `single_entity_execution_mode` 并查询只读平台，但必须按 source 编排，不能让后续高耗时 source 吞掉已完成证据。
 
+### 5.0A ATO 单案 suspicious anchor-first
+
+单 user_id 裸问“是不是被盗了 / 是否 ATO”时，first step 必须是 `suspicious_anchor_discovery`。不能在未完成锚点发现前，直接给“证据不足 / 倾向排除 / 不能确认”的松散结论。
+
+默认主动寻找这些锚点：
+
+- `recent_login_anchor`
+- `web_login_anchor`
+- `scan_or_oauth_anchor`
+- `token_or_session_anchor`
+- `password_reset_or_account_protection_anchor`
+- `abnormal_publish_anchor`
+- `live_anchor`
+- `comment_or_dm_anchor`
+- `profile_change_anchor`
+- `four_items_anchor`
+- `strategy_hit_anchor`
+
+每个 anchor 至少尝试提取：动作、时间、候选 device_id、机型、系统 / 版本、app 版本、UA、IP / 省市 / ASN、登录端、登录方式、browser fingerprint、session_id / request_id / event_id、content_id / photo_id / live_id / comment_id、source_name、source_status 和 source_quality。
+
+如果未找到 anchor，用户正文写“未完成可疑锚点发现”，再列关键缺口；不得泛化成“证据不足，所以无法判断”。
+
+ATO suspicious source priority：
+
+- P0 登录 / 控制链路：统一登录日志、离线 Hive 登录 registry 表、成功/失败登录、resetPwd / 改密、refreshToken / token issued、kick out / 保护账号、登录端、登录方式、设备、IP、UA、系统、机型、app 版本、browser fingerprint。
+- P0 条件内容 / 行为链路：发视频、直播、评论、私信、资料修改、四项信息、发布来源、发布设备、发布 IP / UA、photo_id / live_id / comment_id、内容发布时间、内容命中策略 / 审核 / 导流原因。
+- 辅助 source：Track、Weapon、RCP。Track 有活跃不能证明本人；Weapon 只做候选设备关系和设备风险补证；RCP / 策略命中只做行为风险 / 策略旁证。
+
 每个 source 查询结束后必须立即记录 checkpoint：
 
 - `source_name`
@@ -173,10 +201,18 @@ ATO / 登录异常推荐顺序：
 controlled parallel 编排口径：
 
 - ATO 单案 source plan 不再只表达线性顺序，必须表达 `execution_group`、`depends_on`、`timeout_class`、`failure_policy`、`source_priority` 和 `expected_observation`。
+- ATO 单案 first step 是 `suspicious_anchor_discovery`，之后才进入登录链路、内容动作链路、候选控制端提取、设备身份一致性和历史基线比较。
 - `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可作为 `independent_parallel` 组并行执行；三者分别覆盖登录侧、账号基线和 Track 数据可用性 / provenance。
 - `archives_user_analysis` 作为档案中心后续行为闭环 source，默认在 `archives_user_profile` 后走 `auth_sensitive_serial`；大 pageSize 或大响应时按 `large_response` timeout 处理，输出 partial 不等于完整时间线。
 - 合并时 `completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 必须进入 `source_quality_matrix`；completed / partial source 进入 `evidence_card_inputs`，失败或依赖缺口进入 `missing_evidence`。
 - 单 source timeout / auth_failed 不阻塞其他 source 的 partial answer；`no_data` / `partial` / `timeout` 不能作为排除 ATO 或低风险反证。
+
+device_identity_consistency：
+
+- 风险设备判断不能等同于 device_id 判断。
+- 对每个候选设备 / session，必须比较 device_id 是否历史常用、首次出现时间、近 30/90/180 天出现天数、机型、系统 / 版本、app 版本、UA、browser fingerprint、IP / 省市 / ASN、登录端和登录方式。
+- 如果 device_id 历史常用，但机型 / 系统 / UA / IP / 登录端 / 登录方式异常，不得输出“常用设备，风险较低”。应输出：“device_id 看似常用，但设备身份变量不一致，存在伪装常用设备或 session/token 接管嫌疑。”
+- 风险标签：`device_identity_inconsistency`、`possible_device_id_spoofing`、`common_device_id_but_abnormal_fingerprint`、`common_device_id_not_sufficient_to_exclude_ato`。
 
 档案中心规则：
 
@@ -287,3 +323,10 @@ no_data_interpretation:
 - `dwd_risk_usr_accnt_login_orign_info` 中 `finalloginresult is null` 是流程未完成 / 状态不确定，不得简单写成失败。
 - Web RCP 超过 30 天、App RCP 超过 50 天时，必须标记 `source_gap`，不得作为无风险反证。
 - DataAgent 只作为 Hive / 数仓取数分析能力，不是万能风控执行器。
+
+在线登录日志 wrapper 边界：
+
+- `response_too_large` 只能说明 wrapper 无法解析 / 传输，不是“登录很多”，也不是 completed 登录证据。
+- 人工 UI 无数据但 wrapper 返回 `response_too_large` 时，标记 `wrapper_response_mismatch`、`source_contract_gap`、`actual_ui_no_data_unverified_by_wrapper`、`login_log_evidence_unusable`。
+- 有 anchor_time 时，优先缩到前后 2-6 小时补查；无 anchor_time 时，先做 `suspicious_anchor_discovery`，不要盲目扩大窗口。
+- 在线窗口不足、wrapper 失败或 UI/wrapper 不一致时，生成基于 `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md` 的 Hive query plan；真实 DataAgent/Hive 调用仍需用户逐次授权。

@@ -458,7 +458,7 @@ checkpoint 字段：
 - RCP / 档案中心 / track-analysis browser timeout 进入 `timeout_sources`，IP 白名单 / auth blocked 进入 `blocked_sources` 或 `auth_failed_sources`。
 - parse error 进入 `parse_error_sources`。
 
-总预算默认 180s。只要任一 P0/P1 source completed，在 120s 或 150s checkpoint 时必须停止扩展 P2 browser source 并开始输出 partial evidence card。P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。接近 timeout 时，无论 source 完成多少，都必须输出 partial evidence card、source_quality、missing_evidence、next_action 和 routing_metadata。
+总预算默认 180s。只要任一 P0/P1 source completed，在 120s 或 150s checkpoint 时必须停止扩展 P2 browser source 并开始输出 partial evidence card。P2 browser source 不得阻塞 P0/P1 已完成 evidence 输出。接近 timeout 时，无论 source 完成多少，用户正文必须输出 partial evidence card、source_quality 摘要、missing_evidence 和 next_action；完整 routing_metadata 只写入 internal observation log / debug / validation output，默认不贴到用户正文。
 
 source 优先级：
 
@@ -627,7 +627,16 @@ timeout / no_data / blocked 不等于无风险。
 
 ## routing_metadata 输出块
 
-所有正式回答末尾必须追加一个机器可读的 `routing_metadata` YAML block，供 main agent / 观测日志 / 验收测试读取本轮内部路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
+默认用户可见正文，包括业务研判答复、partial evidence card、本地修复完成报告和 Codex final summary style answer，均不得输出完整 `routing_metadata` / `source_quality` YAML / `boundary_flags` / debug 字段。
+
+`routing_metadata` 只能出现在：
+
+- internal observation log；
+- validation fixture / regression output；
+- debug 模式；
+- 用户明确要求“给我 routing_metadata / 输出内部过程字段 / debug YAML / run log YAML”。
+
+当允许输出时，机器可读 `routing_metadata` YAML block 供 main agent / 观测日志 / 验收测试读取本轮内部路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
 
 必填字段：
 
@@ -663,11 +672,12 @@ routing_metadata:
 
 约束：
 
+- 未显式进入 debug / internal / validation 场景时，不得在用户正文末尾追加该 block；只用自然语言说明执行状态、证据边界和下一步。
 - `route` 必须使用 `computer_use_poc/scene_to_capability_routing.md` 中的正式 route 名。
 - `capability` 必须使用 `computer_use_poc/capability_registry.md` 中的正式 capability 名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
-- `routing_metadata` 必须是 YAML block，不得输出 JSON metadata。
+- 允许输出完整 metadata 时，`routing_metadata` 必须是 YAML block，不得输出 JSON metadata。
 - 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
 - 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。

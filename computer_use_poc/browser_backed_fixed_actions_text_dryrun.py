@@ -137,9 +137,15 @@ FULL_METADATA_NEGATION_PATTERNS = [
     "不要输出完整 routing_metadata",
     "不输出完整 routing_metadata",
     "不得输出完整 routing_metadata",
+    "不要输出 routing_metadata",
+    "不输出 routing_metadata",
+    "不得输出 routing_metadata",
+    "默认不要输出 routing_metadata",
     "默认不输出完整 routing_metadata",
     "不要默认输出 routing_metadata",
     "不得默认输出 routing_metadata",
+    "不要输出 source_quality",
+    "不要输出 boundary_flags",
     "不要 dump boundary_flags yaml",
     "不要 dump",
     "不要输出 yaml",
@@ -168,6 +174,12 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "controlled_parallel_plan_only": "本轮只验证受控并行编排计划，不执行真实平台 source",
     "source_quality_matrix_merge_required": "completed/no_data/partial/auth_failed/blocked/timeout/parse_error 必须分类合并进 source_quality_matrix",
     "service_batch_contract_aligned": "source_plan 字段与 browser-backed service batch contract 对齐",
+    "suspicious_anchor_discovery_required": "ATO 裸问必须先找可疑登录/内容/行为锚点",
+    "device_identity_consistency_required": "设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id",
+    "common_device_id_not_sufficient_to_exclude_ato": "历史常用 device_id 不能单独排除 ATO",
+    "track_activity_not_owner_proof": "Track 活跃只能做辅助信号，不能证明本人操作",
+    "response_too_large_not_login_evidence": "登录日志 response_too_large 是 wrapper/source contract gap，不是登录证据",
+    "wrapper_response_mismatch_requires_source_contract_gap": "UI 无数据但 wrapper 返回过大时必须标 source contract gap 和登录日志不可用",
 }
 
 DEMO_CASES = [
@@ -545,7 +557,7 @@ def user_visible_status_summary(flags: list[str], full_metadata_allowed: bool) -
     if not explanations:
         explanations = ["本轮只生成 source plan 和回答边界，不把未执行 source 写成已完成证据"]
     boundary_text = "；".join(explanations[:4])
-    metadata_text = "已按请求附完整 routing_metadata" if full_metadata_allowed else "默认不展示完整 routing_metadata YAML"
+    metadata_text = "已按请求附完整内部过程 YAML" if full_metadata_allowed else "默认只展示自然语言执行状态，不展示内部过程 YAML"
     return (
         "执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。"
         f"证据边界：{boundary_text}。"
@@ -690,7 +702,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         flags += scenario_flags(plan, "account_spread_same_device")
         orchestration = "same-device relation is an expansion clue with cross-source validation"
 
-    if has_any(text, ["异常发布", "色导", "色情导流", "作品", "举报", "photo_search", "非本人发布"]):
+    if has_any(text, ["异常发布", "色导", "色情导流", "导流视频", "发导流视频", "发布导流", "作品", "举报", "photo_search", "非本人发布"]):
         actions += scenario_actions(plan, "abnormal_publish_content_handoff")
         flags += scenario_flags(plan, "abnormal_publish_content_handoff")
         orchestration = "archives_photo_search -> archives_user_profile -> archives_user_analysis"
@@ -705,8 +717,8 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         flags += ["large_response_limited_enters_source_quality", "partial_observation_available"]
         orchestration = "archives_user_analysis with bounded window/page and partial boundary when capped"
 
-    if has_any(text, ["登录日志", "login", "ato", "疑似 ato", "登录有没有异常", "客诉时间"]):
-        if has_any(text, ["疑似 ato", "判断", "ato", "异常但档案中心", "多 source", "多source"]):
+    if has_any(text, ["登录日志", "登录", "login", "ato", "疑似 ato", "登录有没有异常", "客诉时间", "被盗", "盗号", "账号是不是被盗"]):
+        if has_any(text, ["疑似 ato", "判断", "ato", "被盗", "盗号", "是不是被盗", "web 登录", "导流视频", "异常发布", "非本人", "异常但档案中心", "多 source", "多source"]):
             actions += scenario_actions(plan, "ato_login_anomaly")
             flags += scenario_flags(plan, "ato_login_anomaly")
             flags += ["single_source_not_enough_for_ato"]

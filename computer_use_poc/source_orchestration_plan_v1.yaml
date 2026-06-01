@@ -219,22 +219,208 @@
       "scenario_source_plans": {
         "ato_login_anomaly": {
           "actions": [
+            "suspicious_anchor_discovery",
             "login_logs_search",
             "archives_user_profile",
             "archives_user_analysis",
+            "content_action_deep_dive",
+            "candidate_control_endpoint_extraction",
+            "device_identity_consistency",
+            "historical_baseline_comparison",
             "track_analysis_check_data_ready"
           ],
+          "first_step": "suspicious_anchor_discovery",
+          "anchor_first_required": true,
+          "loose_conclusion_before_anchor_discovery_forbidden": true,
+          "primary_brain_chain": [
+            "user_id",
+            "suspicious_anchor_discovery",
+            "login_control_chain_evidence",
+            "content_action_deep_dive_if_discovered_or_suspected",
+            "candidate_control_endpoint_extraction",
+            "device_identity_consistency",
+            "historical_baseline_comparison",
+            "business_evidence_card"
+          ],
+          "suspicious_anchor_discovery_contract": {
+            "anchors_to_seek": [
+              "recent_login_anchor",
+              "web_login_anchor",
+              "scan_or_oauth_anchor",
+              "token_or_session_anchor",
+              "password_reset_or_account_protection_anchor",
+              "abnormal_publish_anchor",
+              "live_anchor",
+              "comment_or_dm_anchor",
+              "profile_change_anchor",
+              "four_items_anchor",
+              "strategy_hit_anchor"
+            ],
+            "anchor_fields": [
+              "anchor_action",
+              "anchor_time",
+              "candidate_device_id",
+              "device_model",
+              "os",
+              "os_version",
+              "app_version",
+              "UA",
+              "IP",
+              "province",
+              "city",
+              "ASN",
+              "login_source",
+              "login_type",
+              "browser_fingerprint",
+              "session_id",
+              "request_id",
+              "event_id",
+              "content_id",
+              "photo_id",
+              "live_id",
+              "comment_id",
+              "source_name",
+              "source_status",
+              "source_quality"
+            ],
+            "not_found_output": "未完成可疑锚点发现",
+            "generic_insufficient_evidence_before_anchor_forbidden": true
+          },
+          "source_priority_reframe": {
+            "P0": [
+              "suspicious_anchor_discovery",
+              "login_control_chain_evidence",
+              "content_action_audit_if_suspected_or_discoverable",
+              "candidate_control_endpoint_extraction",
+              "device_identity_consistency",
+              "historical_baseline_comparison"
+            ],
+            "auxiliary_only": [
+              "track_analysis_check_data_ready",
+              "weapon_graphData_or_riskData",
+              "rcp_or_strategy_hit"
+            ],
+            "track_boundary": "Track activity present is not owner proof; Track absent plus backend action present marks front_backend_activity_mismatch.",
+            "weapon_boundary": "Weapon graphData/riskData is candidate device relation/risk support, not login or publish action chain.",
+            "rcp_boundary": "RCP/strategy hit is behavior risk support, not ATO source discovery replacement."
+          },
+          "device_identity_consistency_contract": {
+            "identity_fields": [
+              "device_id_historical_common",
+              "device_id_first_seen_time",
+              "device_id_30d_90d_180d_active_days",
+              "device_model_consistency",
+              "os_consistency",
+              "os_version_consistency",
+              "app_version_consistency",
+              "UA_consistency",
+              "browser_fingerprint_consistency",
+              "IP_province_city_ASN_consistency",
+              "login_source_consistency",
+              "login_type_consistency"
+            ],
+            "drift_signals": [
+              "same_device_id_model_drift",
+              "same_device_id_os_drift",
+              "same_device_id_UA_drift",
+              "same_device_id_ip_or_asn_switch",
+              "same_device_id_login_source_or_type_switch"
+            ],
+            "risk_tags": [
+              "device_identity_inconsistency",
+              "possible_device_id_spoofing",
+              "common_device_id_but_abnormal_fingerprint",
+              "common_device_id_not_sufficient_to_exclude_ato"
+            ],
+            "hard_rule": "common device_id cannot exclude ATO when model/os/UA/IP/login_source/login_type is abnormal"
+          },
+          "content_action_deep_dive_contract": {
+            "trigger": "abnormal_publish_anchor_or_web_publish_or_diversion_video_or_user_claim_or_recent_action_discovery",
+            "fields": [
+              "photo_id",
+              "content_id",
+              "publish_time",
+              "publish_source",
+              "publish_device",
+              "publish_ip",
+              "publish_UA",
+              "audit_or_strategy_reason",
+              "four_items",
+              "time_delta_to_login_anchor",
+              "candidate_session_or_request_id",
+              "historical_publish_baseline"
+            ],
+            "missing_photo_id_rule": "try_recent_content_action_discovery_before_asking_user",
+            "alignment_rule": "align publish/live/comment/profile/four_items action with login/control-chain candidate session"
+          },
+          "login_logs_search_contract_patch": {
+            "response_too_large_status": "source_contract_gap",
+            "response_too_large_not_login_evidence": true,
+            "response_too_large_not_login_volume_evidence": true,
+            "ui_no_data_wrapper_large_flags": [
+              "wrapper_response_mismatch",
+              "source_contract_gap",
+              "actual_ui_no_data_unverified_by_wrapper",
+              "login_log_evidence_unusable"
+            ],
+            "diagnostic_metadata_internal_only": [
+              "request_window_start",
+              "request_window_end",
+              "recallSource",
+              "filter_params",
+              "http_status",
+              "response_bytes",
+              "totalCount_if_available",
+              "result_array_path",
+              "result_array_length",
+              "is_html_or_auth_page",
+              "is_error_envelope",
+              "is_large_non_result_envelope",
+              "pagination_applied",
+              "field_projection_applied"
+            ],
+            "fallback_rule": "if anchor_time exists, retry anchor_time +/- 2-6h bounded window; without anchor_time, do suspicious_anchor_discovery first",
+            "completed_evidence_rule": "response_too_large cannot enter completed login evidence"
+          },
+          "offline_hive_registry_preflight": {
+            "registry": "computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md",
+            "query_template": "computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md",
+            "required_before_dataagent_or_hive": true,
+            "free_table_guessing_forbidden": true,
+            "plan_fields": [
+              "recommended_table",
+              "purpose",
+              "time_window",
+              "partition_filters",
+              "key_fields",
+              "no_data_interpretation",
+              "online_api_vs_offline_hive_boundary"
+            ]
+          },
           "source_plan": [
+            {
+              "source_id": "ato_suspicious_anchor_discovery",
+              "action": "suspicious_anchor_discovery",
+              "execution_group": "dependency_serial",
+              "depends_on": [],
+              "dependency": "user_id_required_anchor_discovery_before_any_loose_conclusion",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "candidate recent/web/scan/oauth/token/reset/publish/live/comment/profile/four_items/strategy anchors with control endpoint fields"
+            },
             {
               "source_id": "ato_login_logs_search",
               "action": "login_logs_search",
               "execution_group": "independent_parallel",
-              "depends_on": [],
-              "dependency": "none",
+              "depends_on": [
+                "ato_suspicious_anchor_discovery"
+              ],
+              "dependency": "bounded login/control-chain source selected by suspicious_anchor_discovery; shrink to anchor_time +/- 2-6h when possible",
               "timeout_class": "standard_readonly",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
-              "expected_observation": "recent_login_window_summary_and_control_change_signals"
+              "expected_observation": "login/control-chain evidence with login_source/login_type/device/IP/UA/session/request fields; response_too_large only source_contract_gap"
             },
             {
               "source_id": "ato_archives_user_profile",
@@ -255,25 +441,91 @@
               "dependency": "none",
               "timeout_class": "short_readiness",
               "failure_policy": "non_blocking_partial",
-              "source_priority": "P1",
-              "expected_observation": "track_data_readiness_and_provenance_only"
+              "source_priority": "P2",
+              "expected_observation": "track_data_readiness_and_provenance_only; activity_present_not_owner_proof; absent_plus_backend_action_marks_front_backend_activity_mismatch"
             },
             {
               "source_id": "ato_archives_user_analysis",
               "action": "archives_user_analysis",
               "execution_group": "auth_sensitive_serial",
               "depends_on": [
+                "ato_suspicious_anchor_discovery",
                 "ato_archives_user_profile"
               ],
               "dependency": "follow_archives_profile_when_available_or_record_profile_gap",
               "timeout_class": "large_response",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0",
-              "expected_observation": "bounded_operation_and_risk_timeline_for_behavior_closure"
+              "expected_observation": "bounded operation/action timeline for publish/live/comment/profile/four_items anchors and behavior closure"
+            },
+            {
+              "source_id": "ato_content_action_deep_dive",
+              "action": "content_action_deep_dive",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "ato_suspicious_anchor_discovery",
+                "ato_archives_user_analysis"
+              ],
+              "dependency": "trigger when abnormal publish/web publish/diversion content/live/comment/profile/four_items anchor is discovered or suspected",
+              "timeout_class": "large_response",
+              "failure_policy": "dependent_only_block",
+              "source_priority": "P0-conditional",
+              "expected_observation": "photo_id/content_id/publish_time/publish_source/publish_device/IP/UA/audit_reason/four_items aligned to login/control session"
+            },
+            {
+              "source_id": "ato_candidate_control_endpoint_extraction",
+              "action": "candidate_control_endpoint_extraction",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "ato_login_logs_search",
+                "ato_archives_user_analysis"
+              ],
+              "dependency": "extract candidate control endpoint from login/control-chain and content/action anchors",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "candidate device/session/request/content endpoints with device_id/model/os/UA/IP/login_source/login_type"
+            },
+            {
+              "source_id": "ato_device_identity_consistency",
+              "action": "device_identity_consistency",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "ato_candidate_control_endpoint_extraction"
+              ],
+              "dependency": "compare candidate device/session identity variables against historical baseline",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "device_identity_inconsistency/possible_device_id_spoofing/common_device_id_not_sufficient_to_exclude_ato"
+            },
+            {
+              "source_id": "ato_historical_baseline_comparison",
+              "action": "historical_baseline_comparison",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "ato_device_identity_consistency",
+                "ato_content_action_deep_dive"
+              ],
+              "dependency": "compare login/content/profile/four_items behavior against historical baseline; missing dependent content source records gap",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "historical login/device/IP/UA/content behavior baseline and deviation summary"
             }
           ],
-          "orchestration": "login_logs_search + archives_user_profile + track_analysis_check_data_ready independent_parallel; archives_user_analysis auth_sensitive_serial follow-up after archives_user_profile",
+          "orchestration": "user_id -> suspicious_anchor_discovery -> login/control-chain and content/action anchor discovery -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card",
           "boundary_flags": [
+            "suspicious_anchor_discovery_required",
+            "anchor_not_found_must_be_explicit",
+            "content_action_deep_dive_if_web_publish_or_diversion_content",
+            "device_identity_consistency_required",
+            "common_device_id_not_sufficient_to_exclude_ato",
+            "track_activity_not_owner_proof",
+            "weapon_not_login_or_publish_chain_replacement",
+            "rcp_strategy_hit_not_anchor_replacement",
+            "response_too_large_not_login_evidence",
+            "wrapper_response_mismatch_requires_source_contract_gap",
             "login_no_data_or_window_gap_not_ato_exclusion",
             "archives_required_for_behavior_closure_non_blocking",
             "archives_failure_enters_partial_evidence",
@@ -530,148 +782,228 @@
       "clean_full_runtime_source_policy": {
         "primary_access_method": "browser_backed_service",
         "browser_backed_fixed_actions_v1_source_plan": [
+          "suspicious_anchor_discovery",
           "login_logs_search",
+          "archives_photo_search",
           "archives_user_profile",
           "archives_user_analysis",
           "track_analysis_check_data_ready"
         ],
         "archives_center_policy": "key_evidence_in_default_source_plan_but_failure_is_non_blocking_and_enters_source_quality_missing_evidence_partial_evidence",
         "fixed_actions_first": [
-          "track_analysis_summary",
-          "rcp_snapshot",
-          "weapon_inventory",
-          "login_logs_search"
+          "suspicious_anchor_discovery",
+          "login_logs_search",
+          "archives_photo_search",
+          "archives_user_profile",
+          "archives_user_analysis"
         ],
+        "track_weapon_rcp_role": "auxiliary_after_anchor_discovery_only_not_suspicious_source_discovery_mainline",
         "old_runner_attempt_policy": "do_not_attempt_missing_sso_session_runner_or_track_analysis_runner_in_clean_full_runtime",
         "archives_stub_policy": "archives_profile_runner_stub_enters_missing_evidence_optional_source_gap_not_default_four_source_matrix_and_does_not_block_browser_backed_sources",
         "final_risk_judgement_made": false
       },
       "required_p0_sources": [
         {
-          "source_name": "time_window_inference",
+          "source_name": "ato_suspicious_anchor_discovery",
           "source_priority": "P0",
-          "source_type": "planning_pre_step",
+          "source_type": "brain_orchestration_step",
           "required": true,
+          "first_step": true,
+          "action": "suspicious_anchor_discovery",
           "anchor_sources": [
-            "user_report_time",
-            "archive_user_analysis_time",
-            "audit_log_time",
-            "publish_time",
-            "publish_device_time",
-            "strategy_hit_time",
-            "login_event_time",
-            "device_first_seen_time",
-            "frontend_activity_time"
+            "recent_login_anchor",
+            "web_login_anchor",
+            "scan_or_oauth_anchor",
+            "token_or_session_anchor",
+            "password_reset_or_account_protection_anchor",
+            "abnormal_publish_anchor",
+            "live_anchor",
+            "comment_or_dm_anchor",
+            "profile_change_anchor",
+            "four_items_anchor",
+            "strategy_hit_anchor"
           ],
-          "rule": "do_not_use_latest_7_days_as_only_window_when_event_time_missing"
+          "output_fields": [
+            "anchor_action",
+            "anchor_time",
+            "candidate_device_id",
+            "device_model",
+            "os",
+            "os_version",
+            "app_version",
+            "UA",
+            "IP",
+            "province",
+            "city",
+            "ASN",
+            "login_source",
+            "login_type",
+            "browser_fingerprint",
+            "session_id",
+            "request_id",
+            "event_id",
+            "content_id",
+            "photo_id",
+            "live_id",
+            "comment_id",
+            "source_name",
+            "source_status",
+            "source_quality"
+          ],
+          "rule": "do_not_output_loose_insufficient_evidence_or_low_risk_before_anchor_discovery"
         },
         {
-          "source_name": "track_analysis_account_security_bundle",
-          "source_priority": "P0",
-          "source_type": "browser_backed_service",
-          "access_method": "browser_backed_service",
-          "browser_backed_action_name": "track_analysis_summary",
-          "required": true,
-          "typed_params_contract": {
-            "user_id": "{userId}",
-            "appName": "KUAISHOU",
-            "mode": "account_security_bundle",
-            "sub_interfaces": [
-              "profile",
-              "getUseDuration",
-              "getDeviceIds",
-              "getLastestDateTime"
-            ]
-          },
-          "execution_contract": {
-            "client_helper": "BrowserBackedServiceClient.call_account_security_sources",
-            "expanded_sub_interface_calls_required": true,
-            "single_call_with_sub_interfaces_list_is_plan_only_not_complete_bundle": true,
-            "per_call_typed_params": {
-              "mode": "account_security_bundle",
-              "sub_interface": "profile|getUseDuration|getDeviceIds|getLastestDateTime",
-              "sub_interfaces": [
-                "{single_sub_interface}"
-              ]
-            },
-            "merge_policy": "merge four standard track_analysis_summary results into one track_analysis_account_security_bundle source result"
-          },
-          "required_sub_interfaces": [
-            "profile",
-            "getUseDuration",
-            "getDeviceIds",
-            "getLastestDateTime"
-          ],
-          "output_summary": [
-            "profile_card",
-            "device_ids_summary",
-            "daily_duration_summary",
-            "latest_timestamp_summary",
-            "event_day_activity_alignment_if_time_anchor_available"
-          ],
-          "fallback_status": "each_sub_interface_blocked_auth_failed_timeout_parse_error_enters_source_quality",
-          "boundary": "frontend_activity_signal_not_final_judgement_no_data_parse_error_source_gap_not_risk_exclusion"
-        },
-        {
-          "source_name": "rcp_strategy_hit_entry",
-          "source_priority": "P0",
-          "source_type": "browser_backed_service",
-          "access_method": "browser_backed_service",
-          "browser_backed_action_name": "rcp_snapshot",
-          "required": true,
-          "typed_params_contract": {
-            "entity_type": "user_id",
-            "entity_id": "{userId}",
-            "mode": "account_security_strategy_event_entry"
-          },
-          "output_summary": [
-            "event_count",
-            "hit_policy_or_chaining_key_presence",
-            "risk_decision_distribution_if_available"
-          ],
-          "fallback_status": "blocked_auth_failed_timeout_parse_error_enter_source_quality",
-          "boundary": "strategy_event_entry_not_final_risk_judgement_no_hit_not_risk_exclusion"
-        },
-        {
-          "source_name": "weapon_user_to_device_graph",
-          "source_priority": "P0",
-          "source_type": "browser_backed_service",
-          "access_method": "browser_backed_service",
-          "browser_backed_action_name": "weapon_inventory",
-          "required": true,
-          "required_path_contains": "/apiv2/graphData",
-          "expected_query_shape": "product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2",
-          "typed_params_contract": {
-            "user_id": "{userId}",
-            "mode": "account_security_user_device_graph_with_conditional_riskData",
-            "riskData_trigger_device_prefix": [
-              "ANDROID_",
-              "IOS_"
-            ]
-          },
-          "riskData_execution_rule": "execute_riskData_only_when_graphData_retains_raw_ANDROID_or_IOS_device_id_checkpoint",
-          "riskData_missing_rule": "raw_device_id_checkpoint_missing_enters_source_quality_not_completed_riskData",
-          "riskData_chaining_allowed": true,
-          "boundary": "graphData_no_device_not_no_risk_riskData_no_label_not_no_risk"
-        },
-        {
-          "source_name": "user_login_unified_log",
+          "source_name": "ato_login_control_chain_evidence",
           "source_priority": "P0",
           "source_type": "browser_backed_service",
           "access_method": "browser_backed_service",
           "browser_backed_action_name": "login_logs_search",
           "required": true,
+          "depends_on": [
+            "ato_suspicious_anchor_discovery"
+          ],
           "typed_params_contract": {
             "user_id": "{userId}",
-            "window": "last_7d",
+            "window": "anchor_time_2_to_6h_when_available_else_bounded_recent_window",
             "recallSource": "2,0,1,3",
-            "fallback_on_status": [
-              "parse_error"
-            ],
-            "fallback_window": "last_24h"
+            "filter": "login/control-chain events: success/failure/resetPwd/refreshToken/kick_out/protection/login_type/reset_login_type"
           },
-          "fallback_status": "login_logs_7d_parse_error_preserved_and_24h_fallback_added_as_standard_browser_backed_source_result",
-          "boundary": "no_data_parse_error_timeout_blocked_are_source_quality_not_no_risk_evidence"
+          "output_summary": [
+            "login_event_time",
+            "login_source",
+            "login_type",
+            "device_id",
+            "device_model",
+            "os",
+            "UA",
+            "IP",
+            "province_city_ASN",
+            "browser_fingerprint",
+            "session_or_request_id_if_available"
+          ],
+          "fallback_status": "blocked_auth_failed_timeout_parse_error_response_too_large_enter_source_quality_not_counter_evidence",
+          "boundary": "response_too_large_is_source_contract_gap_not_login_evidence; online_gap_requires_registry_based_hive_query_plan_only"
+        },
+        {
+          "source_name": "ato_content_action_deep_dive",
+          "source_priority": "P0",
+          "source_type": "browser_backed_service",
+          "access_method": "browser_backed_service",
+          "browser_backed_action_name": "archives_user_analysis",
+          "required": true,
+          "depends_on": [
+            "ato_suspicious_anchor_discovery"
+          ],
+          "trigger": "naked_ato_question_or_abnormal_publish_live_comment_dm_profile_four_items_anchor_suspected_or_discoverable",
+          "typed_params_contract": {
+            "user_id": "{userId}",
+            "mode": "recent_content_action_audit_and_four_items",
+            "action_types": [
+              "publish_video",
+              "live",
+              "comment",
+              "dm",
+              "profile_change",
+              "four_items"
+            ]
+          },
+          "output_summary": [
+            "photo_id_or_content_id",
+            "publish_or_action_time",
+            "publish_source",
+            "publish_device",
+            "publish_ip_or_UA",
+            "audit_or_strategy_reason",
+            "four_items",
+            "time_delta_to_login_anchor",
+            "candidate_session_alignment"
+          ],
+          "fallback_status": "no_data_partial_blocked_auth_failed_timeout_parse_error_enter_source_quality_not_counter_evidence",
+          "boundary": "content_action_chain_is_required_for_web_publish_or_diversion_video_ato; missing_photo_id_requires_recent_action_discovery_first"
+        },
+        {
+          "source_name": "ato_candidate_control_endpoint_extraction",
+          "source_priority": "P0",
+          "source_type": "evidence_synthesis_step",
+          "required": true,
+          "depends_on": [
+            "ato_login_control_chain_evidence",
+            "ato_content_action_deep_dive"
+          ],
+          "extract_fields": [
+            "device_id",
+            "device_model",
+            "os",
+            "os_version",
+            "app_version",
+            "UA",
+            "IP",
+            "province",
+            "city",
+            "ASN",
+            "login_source",
+            "login_type",
+            "browser_fingerprint",
+            "session_id",
+            "request_id",
+            "event_id",
+            "content_id",
+            "photo_id",
+            "live_id",
+            "comment_id"
+          ],
+          "boundary": "raw risk entity handles may be retained internally; credential/session/header/token/password values never retained or output"
+        },
+        {
+          "source_name": "ato_device_identity_consistency",
+          "source_priority": "P0",
+          "source_type": "evidence_synthesis_step",
+          "required": true,
+          "depends_on": [
+            "ato_candidate_control_endpoint_extraction"
+          ],
+          "compare_fields": [
+            "device_id_first_seen",
+            "device_id_seen_days_30_90_180",
+            "device_model",
+            "os",
+            "os_version",
+            "app_version",
+            "UA",
+            "browser_fingerprint",
+            "IP",
+            "province_city_ASN",
+            "login_source",
+            "login_type"
+          ],
+          "risk_tags": [
+            "device_identity_inconsistency",
+            "possible_device_id_spoofing",
+            "common_device_id_but_abnormal_fingerprint",
+            "common_device_id_not_sufficient_to_exclude_ato"
+          ],
+          "boundary": "common_device_id_cannot_exclude_ato_when_model_os_UA_IP_login_source_or_login_type_drift"
+        },
+        {
+          "source_name": "ato_historical_baseline_comparison",
+          "source_priority": "P0",
+          "source_type": "evidence_synthesis_step",
+          "required": true,
+          "depends_on": [
+            "ato_device_identity_consistency",
+            "ato_content_action_deep_dive"
+          ],
+          "baseline_dimensions": [
+            "usual_login_source",
+            "usual_login_type",
+            "usual_device_identity",
+            "usual_IP_region_ASN",
+            "usual_publish_frequency",
+            "usual_publish_source",
+            "usual_live_comment_dm_profile_change_pattern",
+            "usual_four_items_pattern"
+          ],
+          "boundary": "baseline_gap_is_missing_evidence_not_low_risk_counter_evidence"
         }
       ],
       "optional_source_gaps": [
@@ -691,14 +1023,47 @@
       ],
       "conditional_sources": [
         {
+          "source_name": "track_analysis_auxiliary_if_anchor_available",
+          "source_priority": "P2-auxiliary",
+          "source_type": "browser_backed_service",
+          "access_method": "browser_backed_service",
+          "browser_backed_action_name": "track_analysis_check_data_ready",
+          "condition": "after_suspicious_anchor_discovery_when_frontend_activity_alignment_is_needed",
+          "required": false,
+          "output_summary": [
+            "frontend_activity_presence",
+            "event_day_activity_alignment",
+            "front_backend_activity_mismatch"
+          ],
+          "fallback_status": "blocked_auth_failed_timeout_parse_error_enter_source_quality",
+          "boundary": "Track activity present is not owner proof; Track absent plus backend action present marks front_backend_activity_mismatch"
+        },
+        {
+          "source_name": "rcp_strategy_auxiliary_if_strategy_or_content_anchor_available",
+          "source_priority": "P1-auxiliary",
+          "source_type": "browser_backed_service",
+          "access_method": "browser_backed_service",
+          "browser_backed_action_name": "rcp_snapshot",
+          "condition": "after_suspicious_anchor_discovery_when_strategy_hit_or_content_audit_context_is_available",
+          "required": false,
+          "output_summary": [
+            "event_count",
+            "hit_policy_or_chaining_key_presence",
+            "risk_decision_distribution_if_available"
+          ],
+          "fallback_status": "blocked_auth_failed_timeout_parse_error_enter_source_quality",
+          "boundary": "RCP strategy hit is behavioral support evidence, not ATO anchor replacement or standalone ATO classification"
+        },
+        {
           "source_name": "weapon_device_risk_if_device_id_available",
-          "source_priority": "P0-conditional",
+          "source_priority": "P1-auxiliary",
           "source_type": "realtime_readonly_api",
-          "condition": "suspicious_device_id_from_graphData_or_login_log_or_publish_chain_or_track_analysis",
+          "condition": "candidate_device_id_from_login_control_chain_or_publish_chain_or_device_identity_consistency",
           "required": false,
           "required_path_contains": "/apiv2/riskData",
           "expected_query_shape": "product=KUAISHOU&deviceIds={deviceId}",
-          "fallback_status": "missing_device_reference"
+          "fallback_status": "missing_device_reference",
+          "boundary": "Weapon graphData/riskData supports candidate device risk and historical relation only; it cannot replace login or publish action chain"
         },
         {
           "source_name": "publish_chain_if_abnormal_publish_or_content_operation",
@@ -827,114 +1192,69 @@
         },
         "single_user_account_security_default_sequence": [
           {
-            "source_name": "track_analysis_account_security_bundle",
-            "action_name": "track_analysis_summary",
-            "execution_contract": "expanded_sub_interface_calls_required",
+            "source_name": "ato_suspicious_anchor_discovery",
+            "action_name": "suspicious_anchor_discovery",
+            "execution_contract": "dennis_brain_orchestration_step_not_browser_backed_action",
             "typed_params": {
-              "user_id": "{userId}",
-              "appName": "KUAISHOU",
-              "mode": "account_security_bundle",
-              "sub_interfaces": [
-                "profile",
-                "getUseDuration",
-                "getDeviceIds",
-                "getLastestDateTime"
-              ]
-            },
-            "expanded_sub_interface_calls": {
-              "required": true,
-              "calls": [
-                {
-                  "action_name": "track_analysis_summary",
-                  "typed_params": {
-                    "user_id": "{userId}",
-                    "appName": "KUAISHOU",
-                    "mode": "account_security_bundle",
-                    "sub_interface": "profile",
-                    "sub_interfaces": [
-                      "profile"
-                    ]
-                  }
-                },
-                {
-                  "action_name": "track_analysis_summary",
-                  "typed_params": {
-                    "user_id": "{userId}",
-                    "appName": "KUAISHOU",
-                    "mode": "account_security_bundle",
-                    "sub_interface": "getUseDuration",
-                    "sub_interfaces": [
-                      "getUseDuration"
-                    ]
-                  }
-                },
-                {
-                  "action_name": "track_analysis_summary",
-                  "typed_params": {
-                    "user_id": "{userId}",
-                    "appName": "KUAISHOU",
-                    "mode": "account_security_bundle",
-                    "sub_interface": "getDeviceIds",
-                    "sub_interfaces": [
-                      "getDeviceIds"
-                    ]
-                  }
-                },
-                {
-                  "action_name": "track_analysis_summary",
-                  "typed_params": {
-                    "user_id": "{userId}",
-                    "appName": "KUAISHOU",
-                    "mode": "account_security_bundle",
-                    "sub_interface": "getLastestDateTime",
-                    "sub_interfaces": [
-                      "getLastestDateTime"
-                    ]
-                  }
-                }
-              ],
-              "completion_rule": "all sub-interface statuses enter merged source_quality; wrong sub-interface response remains missing, not completed"
+              "user_id": "{userId}"
             }
           },
           {
-            "source_name": "rcp_strategy_hit_entry",
-            "action_name": "rcp_snapshot",
-            "typed_params": {
-              "entity_type": "user_id",
-              "entity_id": "{userId}",
-              "mode": "account_security_strategy_event_entry"
-            }
-          },
-          {
-            "source_name": "weapon_user_to_device_graph",
-            "action_name": "weapon_inventory",
-            "typed_params": {
-              "user_id": "{userId}",
-              "mode": "account_security_user_device_graph_with_conditional_riskData",
-              "riskData_trigger_device_prefix": [
-                "ANDROID_",
-                "IOS_"
-              ]
-            }
-          },
-          {
-            "source_name": "user_login_unified_log",
+            "source_name": "ato_login_control_chain_evidence",
             "action_name": "login_logs_search",
+            "depends_on": [
+              "ato_suspicious_anchor_discovery"
+            ],
             "typed_params": {
               "user_id": "{userId}",
-              "window": "last_7d",
+              "window": "anchor_time_2_to_6h_when_available_else_bounded_recent_window",
               "recallSource": "2,0,1,3"
-            },
-            "fallback_on_parse_error": {
-              "source_name": "user_login_unified_log_24h_fallback",
-              "action_name": "login_logs_search",
-              "typed_params": {
-                "user_id": "{userId}",
-                "window": "last_24h",
-                "recallSource": "2,0,1,3"
-              },
-              "preserve_primary_parse_error_in_source_quality": true,
-              "fallback_result_must_be_standard_browser_backed_source_result": true
+            }
+          },
+          {
+            "source_name": "ato_content_action_deep_dive",
+            "action_name": "archives_user_analysis",
+            "depends_on": [
+              "ato_suspicious_anchor_discovery"
+            ],
+            "typed_params": {
+              "user_id": "{userId}",
+              "mode": "recent_content_action_audit_and_four_items"
+            }
+          },
+          {
+            "source_name": "ato_candidate_control_endpoint_extraction",
+            "action_name": "candidate_control_endpoint_extraction",
+            "execution_contract": "dennis_evidence_synthesis_step_not_browser_backed_action",
+            "depends_on": [
+              "ato_login_control_chain_evidence",
+              "ato_content_action_deep_dive"
+            ],
+            "typed_params": {
+              "user_id": "{userId}"
+            }
+          },
+          {
+            "source_name": "ato_device_identity_consistency",
+            "action_name": "device_identity_consistency",
+            "execution_contract": "dennis_evidence_synthesis_step_not_browser_backed_action",
+            "depends_on": [
+              "ato_candidate_control_endpoint_extraction"
+            ],
+            "typed_params": {
+              "user_id": "{userId}"
+            }
+          },
+          {
+            "source_name": "ato_historical_baseline_comparison",
+            "action_name": "historical_baseline_comparison",
+            "execution_contract": "dennis_evidence_synthesis_step_not_browser_backed_action",
+            "depends_on": [
+              "ato_device_identity_consistency",
+              "ato_content_action_deep_dive"
+            ],
+            "typed_params": {
+              "user_id": "{userId}"
             }
           }
         ],

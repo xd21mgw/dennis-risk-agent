@@ -325,6 +325,28 @@
   - policyTree 不当 event hit path。
   - `default_runtime_routing=false`。
 
+## 42B. ATO suspicious anchor discovery bad case regression
+
+- 输入：`2892617234 这个账号是不是被盗了？` 或等价 ATO 单案裸问。
+- 场景：bad case 中 runtime 平铺 Track/RCP/Weapon/登录日志/档案中心 source 状态，未先找 WEB 登录 / 导流视频等可疑锚点。
+- 预期关键词必须存在：
+  - `suspicious_anchor_discovery`
+  - `content_action_deep_dive`
+  - `device_identity_consistency`
+  - `possible_device_id_spoofing`
+  - `common_device_id_not_sufficient_to_exclude_ato`
+  - `wrapper_response_mismatch`
+  - `login_log_evidence_unusable`
+  - `front_backend_activity_mismatch`
+  - `USER-FACING-NO-ROUTING-METADATA`
+  - `ATO-LOGIN-HIVE-REGISTRY-FIRST`
+- 输出边界：
+  - ATO 单案 first step 是可疑锚点发现。
+  - 用户正文不输出 `routing_metadata` / `source_quality` YAML / `boundary_flags`。
+  - Track 有活跃不能证明本人；后端 WEB 发布存在但 Track 无活跃时标 `front_backend_activity_mismatch`。
+  - `response_too_large` 不得作为登录证据。
+  - 常用 `device_id` 不足以排除 ATO，必须比较机型、系统、UA、IP、登录端、登录方式和历史基线。
+
 ## 42. asset policy 文件存在性
 
 - 输入：本地文档检查。
@@ -2204,6 +2226,20 @@
 - 输入：任意正式回答模板。
 - 场景：main agent / 观测日志 / 验收测试读取子 agent 内部路由。
 - 预期：普通用户可见回答末尾不默认展示完整 `routing_metadata` YAML；只展示自然语言执行状态摘要，说明是否查平台、是否调用 DataAgent/Hive、关键边界和下一步。
+- 状态：guardrail added。
+
+## 191-CB-1. local patch report no runtime YAML by default
+
+- 输入：本地修复完成报告 / Codex final summary style answer。
+- 场景：用户可见本地改动收口报告。
+- 预期：默认不得包含 `routing_metadata:`、`source_quality:`、`boundary_flags:`、`execution_mode:`、validator/debug YAML；只输出修改文件、核心规则、验证结果和未做事项。
+- 状态：guardrail added。
+
+## 191-CB-2. user-facing answer no source-quality or boundary YAML by default
+
+- 输入：ATO 单案业务答复 / partial evidence card / 普通专家问答。
+- 场景：用户可见正文。
+- 预期：source-quality 和 boundary 信息必须翻译成自然语言摘要；不得默认输出 `source_quality` YAML 或 `boundary_flags` YAML。完整内部过程字段只允许 internal observation log、validation fixture、debug 模式或用户明确要求内部过程字段时出现。
 - 状态：guardrail added。
 
 ## 191-CC. full routing_metadata required fields when debug/run-log requested

@@ -2767,30 +2767,32 @@ platform_access_execution_v0_1_regression:
   - case_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
     input: "clean full_runtime 单用户账号安全 evidence card，user_id 已给出。"
     expected_output_boundary:
-      - browser_backed_service_primary_chain
-      - track_analysis_summary
-      - rcp_snapshot
-      - weapon_inventory
-      - login_logs_search
-      - archives_stub_missing_evidence_optional_source_gap
-      - source_completion_matrix_contains_four_browser_backed_sources
+      - ato_suspicious_anchor_discovery_first
+      - login_control_chain_evidence
+      - content_action_deep_dive_if_discoverable
+      - candidate_control_endpoint_extraction
+      - device_identity_consistency
+      - historical_baseline_comparison
+      - track_weapon_rcp_auxiliary_only
       - final_risk_judgement_made_false
-    pass_fail_criteria: "账号安全单用户默认优先走 browser-backed 四源 fixed actions：track_analysis_summary、rcp_snapshot、weapon_inventory、login_logs_search；Archives stub 只能作为 missing_evidence optional gap，不进入主链路；不做最终风险定性。"
+    pass_fail_criteria: "账号安全 / ATO 单用户默认先走 suspicious_anchor_discovery，再闭合登录/控制链、内容动作链、候选控制端、device_identity_consistency 和历史基线；Track / Weapon / RCP 只能作辅助补证，不得平铺四源后输出证据不足。"
   - case_id: ACCOUNT-SECURITY-BROWSER-BACKED-FOUR-SOURCE-001
     input: "single_user_account_security evidence card 使用 browser-backed source template。"
     expected_output_boundary:
-      - default_four_sources_track_rcp_weapon_login
+      - default_anchor_first_source_plan
+      - suspicious_anchor_discovery_first
+      - login_control_chain_before_loose_conclusion
+      - content_action_deep_dive_if_discoverable
+      - device_identity_consistency_required
       - default_response_mode_passthrough
       - normalized_observation_present_for_passthrough
-      - track_analysis_summary_first
-      - rcp_snapshot_included_by_default
-      - weapon_inventory_included_by_default
-      - login_logs_search_included_by_default
-      - archives_profile_readonly_not_in_default_four_source_main_chain_when_stub
+      - track_analysis_auxiliary_not_owner_proof
+      - rcp_snapshot_auxiliary_not_anchor_replacement
+      - weapon_inventory_auxiliary_not_login_or_publish_chain
       - dennis_source_quality_latency_sensitive_output_required_for_each_source
       - compat_summary_only_legacy_explicit_fallback
       - final_risk_judgement_made_false
-    pass_fail_criteria: "默认 source_completion_matrix 必须包含四个 browser-backed source，且 Dennis 默认显式请求 passthrough 并消费 normalized_observation；不得 silent fallback 到 compat_summary；Archives stub 只能作为 optional source gap。"
+    pass_fail_criteria: "默认 source plan 必须围绕 suspicious anchor / control-chain / action-chain / device_identity_consistency / baseline 输出；不得以 Track、RCP、Weapon、Login 四源平铺替代 ATO 主线；Dennis 默认显式请求 passthrough 并消费可用 observation，不 silent fallback 到 compat_summary。"
   - case_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
     input: "track_analysis_summary 被用于账号安全单用户 evidence card。"
     expected_output_boundary:
@@ -2840,12 +2842,12 @@ platform_access_execution_v0_1_regression:
   - case_id: RCP-SNAPSHOT-IN-ACCOUNT-SECURITY-MATRIX-001
     input: "single_user_account_security evidence card 没有显式策略问题。"
     expected_output_boundary:
-      - rcp_snapshot_default_source
-      - rcp_strategy_hit_entry_in_source_completion_matrix
+      - rcp_snapshot_auxiliary_after_anchor_discovery
+      - strategy_hit_anchor_or_support_enters_source_quality
       - rcp_source_status_preserved
       - strategy_event_entry_not_final_risk_judgement
       - no_hit_not_risk_exclusion
-    pass_fail_criteria: "RCP snapshot 必须默认进入账号安全四源 matrix，作为策略事件入口 source；失败、空命中或无命中只能作为 source_quality，不做最终风险定性。"
+    pass_fail_criteria: "RCP snapshot 只能作为策略/行为旁证或 strategy_hit_anchor 补证；不能替代登录链路、内容动作链路或 suspicious_anchor_discovery；失败、空命中或无命中只能作为 source_quality，不做最终风险定性。"
   - case_id: LOGIN-LOGS-STANDARD-BROWSER-BACKED-RESULT-001
     input: "login_logs_search 7d 或 24h fallback 返回 no_data / parse_error / blocked。"
     expected_output_boundary:
@@ -2875,25 +2877,24 @@ platform_access_execution_v0_1_regression:
       - archives_profile_readonly_source_gap
       - source_quality_records_stub
       - missing_evidence_optional_source_gap
-      - not_in_default_four_source_main_chain
+      - not_blocking_anchor_first_mainline
       - continue_login_logs_search
-      - continue_weapon_inventory
-      - continue_track_analysis_summary
+      - continue_content_action_deep_dive_when_available
+      - continue_device_identity_consistency_from_available_anchors
       - no_auth_repair
       - no_low_risk_from_source_gap
-    pass_fail_criteria: "Archives stub 进入 missing_evidence / optional source gap；不进入默认四源主链路，不阻塞 browser-backed P0/P1 source。"
+    pass_fail_criteria: "Archives stub 进入 missing_evidence / optional source gap；不得阻塞 anchor-first ATO 主线，也不得把 stub/source_gap 当低风险反证。"
   - case_id: ARCHIVES-STUB-OPTIONAL-GAP-NOT-BLOCKING-001
     input: "clean full_runtime 中 archives_profile_runner 仍是 stub。"
     expected_output_boundary:
       - archives_profile_readonly_missing_evidence_optional_source_gap
-      - archives_stub_not_in_default_four_source_matrix
-      - continue_track_analysis_summary
-      - continue_rcp_snapshot
-      - continue_weapon_inventory
+      - archives_stub_not_blocking_anchor_first_mainline
+      - continue_suspicious_anchor_discovery
       - continue_login_logs_search
+      - continue_device_identity_consistency_from_available_anchors
       - no_auth_repair
       - source_gap_not_no_risk
-    pass_fail_criteria: "Archives stub 不属于默认 browser-backed 四源主链路；只能进入 missing_evidence / optional_source_gap，不阻塞主链路。"
+    pass_fail_criteria: "Archives stub 只能进入 missing_evidence / optional_source_gap；不阻塞 suspicious_anchor_discovery、登录控制链和设备身份一致性主线。"
   - case_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
     input: "login_logs_search 默认 7d 返回 parse_error。"
     expected_output_boundary:
@@ -2937,3 +2938,125 @@ platform_access_execution_v0_1_regression:
       - credential_secret_not_output
       - raw_body_records_labelInfo_originalLog_not_output
     pass_fail_criteria: "external_share 不得暴露完整 user_id；允许 `用户 U1（user_***1837）` / `用户 U2（user_***9791）` 或用户 A/B；deviceId/eventId/sourceId/IP 等风险实体字段必须 masked。"
+  - case_id: ATO-SINGLE-NAKED-QUESTION-ANCHOR-FIRST-001
+    input: "<user_id> 这个账号是不是被盗了？"
+    expected_output_boundary:
+      - suspicious_anchor_discovery_first
+      - no_loose_insufficient_evidence_before_anchor_discovery
+      - anchor_not_found_must_say_未完成可疑锚点发现
+      - business_evidence_card_not_flat_source_summary
+    pass_fail_criteria: "ATO 单案裸问必须先进入 suspicious_anchor_discovery，输出是否找到候选异常动作 / 控制端锚点；不得先平铺 source 状态后说证据不足。"
+  - case_id: ATO-NAKED-QUESTION-ACTION-DISCOVERY-001
+    input: "<user_id> 这个账号是不是被盗了？"
+    expected_output_boundary:
+      - discover_recent_login_anchor
+      - discover_publish_live_comment_dm_profile_change_four_items_anchor
+      - discover_strategy_hit_anchor
+      - user_did_not_provide_action_but_runtime_searches_action_anchor
+    pass_fail_criteria: "即使用户未补异常动作，也要主动寻找近期登录、发视频、直播、评论、私信、资料修改、四项信息等动作锚点。"
+  - case_id: ATO-WEB-PUBLISH-DEEP-DIVE-001
+    input: "账号疑似 WEB 登录后发导流视频。"
+    expected_output_boundary:
+      - content_action_deep_dive_triggered
+      - login_control_chain_evidence_required
+      - publish_audit_required
+      - candidate_control_endpoint_extraction_required
+      - historical_publish_baseline_required
+    pass_fail_criteria: "发现 WEB 登录 / WEB 发布 / 导流视频时，自动查登录链路 + 发布审计 + 设备/IP/UA/session + 历史发布基线。"
+  - case_id: ATO-PUBLISH-VIDEO-ANCHOR-001
+    input: "用户被盗后疑似发导流视频。"
+    expected_output_boundary:
+      - query_recent_video_or_publish_action_chain
+      - extract_photo_id
+      - extract_publish_time_source_device_ip_ua
+      - extract_four_items_if_available
+      - align_publish_action_with_login_logs
+    pass_fail_criteria: "必须查询视频 / 发布动作链路，提取 photo_id、发布时间、发布来源、发布设备、IP/UA、四项信息，并与登录日志对齐。"
+  - case_id: ATO-COMMON-DEVICE-ID-SPOOFING-001
+    input: "登录日志中 device_id 是用户历史常用设备，但 device_model / os / UA / IP 异常。"
+    expected_output_boundary:
+      - device_identity_consistency_required
+      - possible_device_id_spoofing
+      - device_identity_inconsistency
+      - common_device_id_not_sufficient_to_exclude_ato
+    pass_fail_criteria: "不得判定为常用设备安全；必须标记 possible_device_id_spoofing / device_identity_inconsistency。"
+  - case_id: ATO-DEVICE-ID-NOT-SOLE-IDENTITY-001
+    input: "ATO 单案只拿到 device_id。"
+    expected_output_boundary:
+      - device_id_not_sole_identity
+      - require_device_model_os_ua_ip_login_source_login_type
+      - require_historical_baseline_comparison
+      - no_conclusion_from_device_id_only
+    pass_fail_criteria: "必须继续补机型、系统、UA、IP、登录端、登录方式、历史基线，不能只基于 device_id 下结论。"
+  - case_id: ATO-COMMON-DEVICE-NOT-EXCLUSION-001
+    input: "候选设备 ID 历史常用，但异常窗口有 WEB 发布导流视频。"
+    expected_output_boundary:
+      - common_device_id_not_sufficient_to_exclude_ato
+      - content_action_deep_dive_required
+      - device_identity_consistency_required
+      - session_or_token_takeover_suspicion_preserved
+    pass_fail_criteria: "常用 device_id 不能作为排除 ATO 的强反证，必须结合设备身份一致性和内容动作链路判断。"
+  - case_id: TRACK-NOT-PROOF-OF-OWNER-001
+    input: "Track 有活跃。"
+    expected_output_boundary:
+      - track_activity_present_not_owner_proof
+      - track_auxiliary_only
+      - no_ato_exclusion_from_track_activity
+    pass_fail_criteria: "不得说本人操作；Track 只能作为辅助活跃信号。"
+  - case_id: TRACK-BACKEND-MISMATCH-001
+    input: "后端 WEB 发布存在但 Track 当天无前端活跃。"
+    expected_output_boundary:
+      - front_backend_activity_mismatch
+      - protocol_or_session_api_control_suspicion
+      - not_standalone_final_judgement
+    pass_fail_criteria: "标记 front_backend_activity_mismatch，可作为 WEB/session/API/另一控制端线索，但不单独定性。"
+  - case_id: LOGIN-RESPONSE-TOO-LARGE-NOT-EVIDENCE-001
+    input: "login_logs_search response_too_large。"
+    expected_output_boundary:
+      - response_too_large_not_login_evidence
+      - source_contract_gap
+      - login_log_evidence_unusable
+      - no_login_volume_inference
+    pass_fail_criteria: "response_too_large 只能表示 wrapper 无法解析 / 传输，不得解释成登录很多或登录无异常。"
+  - case_id: LOGIN-UI-NODATA-WRAPPER-LARGE-MISMATCH-001
+    input: "人工 UI 无数据，wrapper response_too_large。"
+    expected_output_boundary:
+      - wrapper_response_mismatch
+      - source_contract_gap
+      - actual_ui_no_data_unverified_by_wrapper
+      - login_log_evidence_unusable
+    pass_fail_criteria: "必须标记 wrapper_response_mismatch，登录日志证据不可用；不得把 wrapper 结果作为 completed login evidence。"
+  - case_id: ATO-LOGIN-HIVE-REGISTRY-FIRST-001
+    input: "在线登录日志不可用或窗口不足。"
+    expected_output_boundary:
+      - account_security_hive_source_registry_read_first
+      - recommended_table_present
+      - partition_filters_present
+      - key_fields_present
+      - no_free_table_guessing
+      - dataagent_requires_per_call_authorization
+    pass_fail_criteria: "生成 Hive query plan 时必须使用已登记账号安全常用表，不得自由猜表；真实调用仍需用户逐次授权。"
+  - case_id: USER-FACING-NO-ROUTING-METADATA-001
+    input: "ATO 单案业务答复、partial evidence card、本地修复完成报告、Codex final summary style answer。"
+    expected_output_boundary:
+      - no_routing_metadata_in_user_body
+      - no_source_quality_yaml_in_user_body
+      - no_boundary_flags_in_user_body
+      - no_debug_or_validator_yaml_in_user_body
+      - business_evidence_card_template
+      - partial_evidence_card_uses_natural_language_source_quality_summary
+      - local_patch_completion_report_no_runtime_yaml_by_default
+      - codex_final_summary_no_runtime_yaml_by_default
+      - routing_metadata_allowed_only_internal_debug_validation_or_explicit_user_request
+      - answer_gate_fails_when_user_facing_text_contains_routing_metadata_colon
+    pass_fail_criteria: "默认用户正文不得包含 routing_metadata/source_quality YAML/boundary_flags/execution_mode/validator 过程字段；覆盖 ATO 单案、partial evidence card、本地修复完成报告和 Codex final summary。只有 internal observation log、validation fixture、debug 模式或用户明确要求内部过程字段时才允许完整 metadata。"
+  - case_id: SOURCE-PLAN-NOT-FLAT-SOURCE-SUMMARY-001
+    input: "ATO 单案。"
+    expected_output_boundary:
+      - suspicious_anchor_discovery
+      - candidate_control_endpoint_extraction
+      - device_identity_consistency
+      - content_action_or_login_control_chain
+      - historical_baseline_comparison
+      - not_flat_track_rcp_weapon_login_archive_summary
+    pass_fail_criteria: "不能只按 Track/RCP/Weapon/Login/Archive 平铺 source 状态，必须围绕 anchor/control-chain/action-chain/baseline 输出。"

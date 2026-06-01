@@ -300,10 +300,25 @@ cases:
     should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_show_full_metadata_without_debug_request]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
     expected_metadata_visibility: "user_visible_summary"
+  - id: BBFA-ATO-ANCHOR-001
+    user_query: "2892617234 这个账号是不是被盗了？"
+    expected_route_or_actions: [suspicious_anchor_discovery, login_logs_search, content_action_deep_dive, candidate_control_endpoint_extraction, device_identity_consistency, historical_baseline_comparison]
+    expected_orchestration: "Naked ATO question starts from suspicious_anchor_discovery, then login/control chain, content/action chain, candidate control endpoint, device identity consistency, and historical baseline."
+    expected_boundary_flags: [suspicious_anchor_discovery_required, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, response_too_large_not_login_evidence]
+    should_not_do: [do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality, do_not_emit_full_routing_metadata_by_default]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+  - id: BBFA-ATO-ANCHOR-002
+    user_query: "账号疑似 WEB 登录后发导流视频，Track 有活跃但登录日志 response_too_large"
+    expected_route_or_actions: [suspicious_anchor_discovery, login_logs_search, archives_photo_search, archives_user_analysis, content_action_deep_dive, device_identity_consistency]
+    expected_orchestration: "WEB publish ATO branch uses login/control chain plus content_action_deep_dive and device_identity_consistency; Track is auxiliary and response_too_large is not login evidence."
+    expected_boundary_flags: [content_action_deep_dive_if_web_publish_or_diversion_content, track_activity_not_owner_proof, response_too_large_not_login_evidence]
+    should_not_do: [do_not_use_login_no_data_as_no_risk, do_not_output_no_abnormal_publish_from_photo_no_data, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
     expected_full_metadata_allowed: false
     expected_internal_metadata_retained: true
-    expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive, 默认不展示完整 routing_metadata YAML]
-    expected_user_visible_absent: [routing_metadata:]
+    expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive, 默认只展示自然语言执行状态]
+    expected_user_visible_absent: ["routing_metadata:"]
   - id: BBFA-V1-042
     user_query: "先给 plan_mode，不要执行平台，说明是否查平台和 DataAgent"
     expected_route_or_actions: [source_plan_only_no_action_selected]
@@ -315,7 +330,7 @@ cases:
     expected_full_metadata_allowed: false
     expected_internal_metadata_retained: true
     expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive]
-    expected_user_visible_absent: [routing_metadata:]
+    expected_user_visible_absent: ["routing_metadata:"]
   - id: BBFA-V1-043
     user_query: "登录日志 no_data 和 feature partial 怎么给用户解释，不要 dump boundary_flags YAML"
     expected_route_or_actions: [login_logs_search, rcp_event_detail, rcp_event_feature_list]
@@ -326,7 +341,7 @@ cases:
     expected_metadata_visibility: "user_visible_summary"
     expected_full_metadata_allowed: false
     expected_user_visible_contains: [no_data 只代表当前条件下无结果, partial 观察可用于部分判断]
-    expected_user_visible_absent: [boundary_flags:, routing_metadata:]
+    expected_user_visible_absent: ["boundary_flags:", "routing_metadata:"]
   - id: BBFA-V1-044
     user_query: "给我 routing_metadata debug run log YAML"
     expected_route_or_actions: [source_plan_only_no_action_selected]
@@ -337,7 +352,7 @@ cases:
     expected_metadata_visibility: "full_routing_metadata"
     expected_full_metadata_allowed: true
     expected_internal_metadata_retained: true
-    expected_user_visible_contains: [routing_metadata:, platform_called: false, dataagent_called: false]
+    expected_user_visible_contains: ["routing_metadata:", "platform_called: false", "dataagent_called: false"]
   - id: BBFA-V1-045
     user_query: "内部 regression/run log 还能保留完整 metadata 吗，用户可见不要默认展示"
     expected_route_or_actions: [source_plan_only_no_action_selected]
@@ -348,8 +363,20 @@ cases:
     expected_metadata_visibility: "user_visible_summary"
     expected_full_metadata_allowed: false
     expected_internal_metadata_retained: true
-    expected_user_visible_contains: [默认不展示完整 routing_metadata YAML]
-    expected_user_visible_absent: [routing_metadata:]
+    expected_user_visible_contains: [默认只展示自然语言执行状态]
+    expected_user_visible_absent: ["routing_metadata:"]
+  - id: BBFA-V1-046
+    user_query: "本地修复完成报告默认不要输出 routing_metadata/source_quality YAML/boundary_flags，只给修改文件和验证结果"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Local patch completion report is user-facing by default; internal process YAML stays out unless explicitly requested."
+    expected_boundary_flags: [missing_explicit_source_plan]
+    should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_dump_boundary_flags_yaml_by_default, do_not_show_full_metadata_without_debug_request]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+    expected_metadata_visibility: "user_visible_summary"
+    expected_full_metadata_allowed: false
+    expected_internal_metadata_retained: true
+    expected_user_visible_contains: [本轮未访问真实平台, 未调用 DataAgent/Hive, 默认只展示自然语言执行状态]
+    expected_user_visible_absent: ["routing_metadata:", "source_quality:", "boundary_flags:"]
   - id: BBFA-CP-001
     user_query: "controlled parallel：帮我判断这个 user_id 是否疑似 ATO，login/profile/track 并行，archives_user_analysis 后续串行"
     expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]

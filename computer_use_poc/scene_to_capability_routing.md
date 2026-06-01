@@ -132,6 +132,18 @@ Controlled parallel 编排补丁：
 - 单 source `auth_failed` / `blocked` / `timeout` / `parse_error` 只影响该 source 和显式依赖它的后续 source，不阻塞其他已完成 source 进入 partial evidence card。
 - `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial source 进入 `evidence_card_inputs`。
 
+ATO 单案 anchor-first 路由补丁：
+
+- 单 user_id 裸问“是不是被盗 / 是否 ATO / 账号是否异常”时，first step 必须是 `suspicious_anchor_discovery`，不是平铺 Track / RCP / Weapon / 登录日志 / 档案中心状态。
+- 在 `suspicious_anchor_discovery` 未完成前，不允许直接输出“证据不足 / 倾向排除 / 不能确认”的松散结论；若未找到锚点，正文必须写“未完成可疑锚点发现”并列出缺口。
+- anchor discovery 默认寻找：`recent_login_anchor`、`web_login_anchor`、`scan_or_oauth_anchor`、`token_or_session_anchor`、`password_reset_or_account_protection_anchor`、`abnormal_publish_anchor`、`live_anchor`、`comment_or_dm_anchor`、`profile_change_anchor`、`four_items_anchor`、`strategy_hit_anchor`。
+- ATO 可疑来源主线分两条：登录 / 控制链路优先，其次内容 / 行为链路。登录链路包括统一登录日志和账号安全 Hive registry 表；内容链路包括发视频、直播、评论、私信、资料修改、四项信息、发布来源、发布设备、发布 IP / UA 和内容命中策略 / 审核原因。
+- 如果用户没有提供异常动作，也要从近期动作源里主动找动作锚点；发现 WEB 登录、WEB 发布、导流视频或异常内容时，自动进入 `content_action_deep_dive`。
+- 风险设备判断升级为 `device_identity_consistency`：不能只看 `device_id`，必须比较机型、系统、UA、IP/省市/ASN、登录端、登录方式、browser fingerprint、app 版本与历史基线。常用 `device_id` 不能排除 ATO。
+- Track 只能作为前端活跃辅助信号：`track_activity_present` 不能证明本人操作，后端 WEB/session/API 发布存在但 Track 无对应活跃时标 `front_backend_activity_mismatch`。
+- Weapon graphData/riskData 只做候选设备关系和设备风险补证，不能替代登录链路或发布动作链路。
+- RCP / 策略命中只做行为风险 / 策略旁证，不能替代动作锚点，也不能单独定性 ATO。
+
 档案中心编排规则：
 
 - ATO / 登录异常单案默认 source plan 必须包含 `archives_user_profile` 和 `archives_user_analysis`，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等后置行为闭环；`login_logs_search` 只覆盖登录侧，不能单源强判或排除 ATO。

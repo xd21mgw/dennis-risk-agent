@@ -47,6 +47,39 @@ CONTROLLED_PARALLEL_EXECUTION_GROUPS = {
     "large_response_serial",
     "auth_sensitive_serial",
 }
+ATO_ANCHOR_REQUIRED_ACTIONS = {
+    "suspicious_anchor_discovery",
+    "candidate_control_endpoint_extraction",
+    "device_identity_consistency",
+    "historical_baseline_comparison",
+}
+ATO_DEVICE_IDENTITY_FIELDS = {
+    "device_model",
+    "os",
+    "UA",
+    "IP",
+    "login_source",
+    "login_type",
+}
+USER_FACING_RUNTIME_YAML_MARKERS = {
+    "routing_metadata:",
+    "source_quality:",
+    "boundary_flags:",
+    "execution_mode:",
+    "validator:",
+    "validation_pass:",
+    "debug_metadata:",
+    "platform_debug:",
+    "platform_call_summary:",
+    "source_completion_matrix:",
+}
+USER_FACING_CONTEXTS = {
+    "ato_single_case_business_answer",
+    "partial_evidence_card",
+    "local_patch_completion_report",
+    "codex_final_summary",
+    "generic_user_facing_answer",
+}
 FORBIDDEN_ACCESS_METHODS = {"curl_cookie", "manual_cookie", "main_agent_direct_exec", "arbitrary_url"}
 NO_DATA_STATUSES = {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "tool_gap", "auth_bridge_gap"}
 NON_ENDPOINT_STATUSES = {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"}
@@ -205,6 +238,58 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                     {
                         "rule": "source_plan_depends_on_list_required",
                         "reason": f"scenario {scenario_name} item {idx} depends_on must be a list",
+                    }
+                )
+
+        if scenario_name == "ato_login_anomaly":
+            item_actions = {str(item.get("action")) for item in source_plan if isinstance(item, dict)}
+            missing_actions = sorted(ATO_ANCHOR_REQUIRED_ACTIONS - item_actions)
+            if missing_actions:
+                failures.append(
+                    {
+                        "rule": "ato_single_case_anchor_first_plan_required",
+                        "reason": f"ATO source_plan missing anchor-first brain actions {missing_actions}",
+                    }
+                )
+            if scenario.get("first_step") != "suspicious_anchor_discovery" or scenario.get("anchor_first_required") is not True:
+                failures.append(
+                    {
+                        "rule": "ato_single_case_anchor_first_plan_required",
+                        "reason": "ATO scenario must declare first_step=suspicious_anchor_discovery and anchor_first_required=true",
+                    }
+                )
+            identity_fields = set(
+                scenario.get("device_identity_consistency_contract", {}).get("identity_fields", [])
+            )
+            expected_identity_markers = {
+                "device_model_consistency",
+                "os_consistency",
+                "UA_consistency",
+                "IP_province_city_ASN_consistency",
+                "login_source_consistency",
+                "login_type_consistency",
+            }
+            if not expected_identity_markers.issubset(identity_fields):
+                failures.append(
+                    {
+                        "rule": "device_identity_consistency_fields_required",
+                        "reason": "ATO device identity consistency must cover model/os/UA/IP/login_source/login_type",
+                    }
+                )
+            login_patch = scenario.get("login_logs_search_contract_patch", {})
+            if login_patch.get("response_too_large_status") != "source_contract_gap" or login_patch.get("response_too_large_not_login_evidence") is not True:
+                failures.append(
+                    {
+                        "rule": "login_response_too_large_not_evidence",
+                        "reason": "ATO login_logs_search must classify response_too_large as source_contract_gap, not login evidence",
+                    }
+                )
+            hive_preflight = scenario.get("offline_hive_registry_preflight", {})
+            if hive_preflight.get("required_before_dataagent_or_hive") is not True or "account_security_hive_source_registry_v1.md" not in str(hive_preflight.get("registry", "")):
+                failures.append(
+                    {
+                        "rule": "ato_hive_registry_first_required",
+                        "reason": "ATO Hive/DataAgent plan must reference account_security_hive_source_registry_v1.md before execution",
                     }
                 )
 
@@ -839,6 +924,119 @@ def validate_matrix(
     return failures
 
 
+def validate_user_facing_answer(answer_text: str, *, output_context: str = "generic_user_facing_answer") -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    text = answer_text.lower()
+
+    for marker in USER_FACING_RUNTIME_YAML_MARKERS:
+        if marker in text:
+            failures.append(
+                {
+                    "rule": "user_facing_no_runtime_yaml",
+                    "case_id": "USER-FACING-NO-ROUTING-METADATA-001",
+                    "output_context": output_context,
+                    "reason": f"user-facing output contains runtime marker {marker}",
+                }
+            )
+
+    return failures
+
+
+def validate_ato_user_facing_answer(answer_text: str) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = validate_user_facing_answer(
+        answer_text,
+        output_context="ato_single_case_business_answer",
+    )
+    text = answer_text.lower()
+    raw_text = answer_text
+
+    anchor_markers = ["suspicious_anchor_discovery", "可疑动作锚点", "可疑锚点"]
+    if not any(marker in raw_text for marker in anchor_markers):
+        failures.append(
+            {
+                "rule": "ato_single_case_suspicious_anchor_required",
+                "case_id": "ATO-SINGLE-NAKED-QUESTION-ANCHOR-FIRST-001",
+                "reason": "ATO single-case answer must start from suspicious_anchor_discovery / 可疑动作锚点",
+            }
+        )
+
+    if "未完成可疑锚点发现" not in raw_text and "可疑动作锚点" not in raw_text and "suspicious_anchor_discovery" not in raw_text:
+        failures.append(
+            {
+                "rule": "ato_anchor_not_found_must_be_explicit",
+                "reason": "when anchor is not established, answer must explicitly say 未完成可疑锚点发现",
+            }
+        )
+
+    flat_markers = ["track", "rcp", "weapon", "登录日志", "档案中心"]
+    if all(marker in text for marker in flat_markers) and not any(marker in raw_text for marker in ["可疑动作锚点", "可疑控制端", "设备身份一致性", "suspicious_anchor_discovery"]):
+        failures.append(
+            {
+                "rule": "source_plan_not_flat_source_summary",
+                "case_id": "SOURCE-PLAN-NOT-FLAT-SOURCE-SUMMARY-001",
+                "reason": "ATO answer cannot be a flat Track/RCP/Weapon/Login/Archives source summary",
+            }
+        )
+
+    if "device_identity_consistency" not in text and "设备身份一致性" not in raw_text:
+        failures.append(
+            {
+                "rule": "device_identity_consistency_required",
+                "reason": "ATO answer must include device_identity_consistency / 设备身份一致性",
+            }
+        )
+    else:
+        missing_fields = [field for field in ATO_DEVICE_IDENTITY_FIELDS if field.lower() not in text and field not in raw_text]
+        chinese_field_present = all(marker in raw_text for marker in ["机型", "系统", "UA", "IP", "登录端", "登录方式"])
+        if missing_fields and not chinese_field_present:
+            failures.append(
+                {
+                    "rule": "device_identity_consistency_fields_required",
+                    "reason": "device identity consistency must cover model/os/UA/IP/login_source/login_type",
+                }
+            )
+
+    owner_proof_phrases = ["track 证明本人", "track证明本人", "track 可以证明本人", "track可证明本人", "track 有活跃所以本人", "track有活跃所以本人"]
+    if any(phrase in text for phrase in owner_proof_phrases):
+        failures.append(
+            {
+                "rule": "track_not_proof_of_owner",
+                "case_id": "TRACK-NOT-PROOF-OF-OWNER-001",
+                "reason": "Track activity cannot prove owner operation",
+            }
+        )
+
+    if "response_too_large" in text and any(phrase in raw_text for phrase in ["登录很多", "登录较多", "大量登录", "登录证据", "completed login"]):
+        failures.append(
+            {
+                "rule": "login_response_too_large_not_evidence",
+                "case_id": "LOGIN-RESPONSE-TOO-LARGE-NOT-EVIDENCE-001",
+                "reason": "response_too_large is source_contract_gap, not login evidence or login volume evidence",
+            }
+        )
+
+    if "常用" in raw_text and "device_id" in text and any(phrase in raw_text for phrase in ["风险较低", "排除 ATO", "排除被盗", "无风险"]):
+        if "common_device_id_not_sufficient_to_exclude_ato" not in text and "伪装常用设备" not in raw_text:
+            failures.append(
+                {
+                    "rule": "common_device_id_not_ato_exclusion",
+                    "case_id": "ATO-COMMON-DEVICE-NOT-EXCLUSION-001",
+                    "reason": "common device_id cannot be used as strong no-ATO counter evidence",
+                }
+            )
+
+    if "wrapper_response_mismatch" in text and "login_log_evidence_unusable" not in text:
+        failures.append(
+            {
+                "rule": "wrapper_response_mismatch_requires_unusable_login_evidence",
+                "case_id": "LOGIN-UI-NODATA-WRAPPER-LARGE-MISMATCH-001",
+                "reason": "UI no_data / wrapper response mismatch must mark login_log_evidence_unusable",
+            }
+        )
+
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Dennis source orchestration plan usage.")
     parser.add_argument("--task-type", default="single_user_account_security")
@@ -846,6 +1044,19 @@ def main() -> int:
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--source-completion-matrix", default=None)
     parser.add_argument("--final-conclusion", default=None)
+    parser.add_argument("--answer-text", default=None, help="Optional user-facing answer text for response-time contract validation.")
+    parser.add_argument("--ato-single-case", action="store_true", help="Validate ATO single-case answer hard gates.")
+    parser.add_argument(
+        "--output-context",
+        choices=sorted(USER_FACING_CONTEXTS),
+        default="generic_user_facing_answer",
+        help="User-facing answer context for runtime YAML visibility checks.",
+    )
+    parser.add_argument(
+        "--allow-runtime-yaml",
+        action="store_true",
+        help="Allow runtime YAML markers for explicit debug/internal validation fixtures.",
+    )
     parser.add_argument("--format", choices=["json"], default="json")
     args = parser.parse_args()
 
@@ -859,6 +1070,13 @@ def main() -> int:
         else []
     )
     failures = static_failures + failures
+    answer_failures: list[dict[str, str]] = []
+    if args.answer_text and not args.allow_runtime_yaml:
+        if args.ato_single_case:
+            answer_failures = validate_ato_user_facing_answer(args.answer_text)
+        else:
+            answer_failures = validate_user_facing_answer(args.answer_text, output_context=args.output_context)
+    failures += answer_failures
 
     result = {
         "schema_version": "source_orchestration_check_v1",
@@ -872,6 +1090,10 @@ def main() -> int:
         "conditional_sources": selected.get("conditional_sources", []) if selected else [],
         "stop_conditions": selected.get("stop_conditions", {}) if selected else {},
         "source_completion_matrix_present": bool(matrix),
+        "answer_text_validated": bool(args.answer_text),
+        "ato_single_case_answer_validated": bool(args.ato_single_case and args.answer_text),
+        "output_context": args.output_context,
+        "runtime_yaml_allowed": args.allow_runtime_yaml,
         "validation_pass": not failures,
         "failures": failures,
         "real_platform_called": False,

@@ -102,6 +102,25 @@ final_risk_conclusion_generated_by_service: false
 
 `completed` and usable `partial` sources can enter `evidence_card_inputs`. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
 
+## ATO Anchor-First And Login Log Contract Patch
+
+For ATO single-case questions, Dennis must use the browser-backed fixed actions to discover suspicious anchors, not to print a flat source-status list. The business chain is:
+
+```text
+user_id -> suspicious_anchor_discovery -> login/control-chain or content/action anchor
+-> candidate_control_endpoint_extraction -> device_identity_consistency
+-> historical_baseline_comparison -> business evidence card
+```
+
+`login_logs_search` response boundary:
+
+- `response_too_large` means the wrapper could not parse or transport the bounded result. It is not evidence that there were many logins, and it is not completed login evidence.
+- If manual UI observation says no data while the wrapper returns `response_too_large`, Dennis marks `wrapper_response_mismatch`, `source_contract_gap`, `actual_ui_no_data_unverified_by_wrapper`, and `login_log_evidence_unusable`.
+- Wrapper diagnostic metadata is internal-only: `request_window_start`, `request_window_end`, `recallSource`, `filter_params`, `http_status`, `response_bytes`, `totalCount`, `result_array_path`, `result_array_length`, `is_html_or_auth_page`, `is_error_envelope`, `is_large_non_result_envelope`, `pagination_applied`, and `field_projection_applied`.
+- When an `anchor_time` exists, the next plan should shrink to `anchor_time +/- 2-6h`; without anchor time, do `suspicious_anchor_discovery` first instead of widening the login window.
+
+The local service remains a safe passthrough + transport envelope. Dennis may use model understanding of passthrough/capped body/transport metadata for ATO, and should only standardize high-value observation builders incrementally. Do not move generic risk normalizer responsibility into the local browser-backed service.
+
 ## Browser-Backed Fixed Actions v1 Closure Status
 
 | action_name | routing status | source-quality boundary |

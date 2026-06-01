@@ -4,7 +4,7 @@
 
 ## 0.0A Plan-only Diagnostic / Failure Triage Output
 
-Plan-only diagnostic responses default to a short user-visible execution-status summary, not a full `routing_metadata` YAML block. When no platform is called, translate the status into natural language: whether a platform was called, whether DataAgent/Hive was called, why execution did not happen, and which source-quality boundaries matter. Full `routing_metadata` is reserved for debug / run log / explicit metadata requests and internal regression.
+Plan-only diagnostic responses and local patch completion reports default to a short user-visible execution-status summary, not a full `routing_metadata` YAML block. When no platform is called, translate the status into natural language: whether a platform was called, whether DataAgent/Hive was called, why execution did not happen, and which source-quality boundaries matter. Full `routing_metadata` is reserved for debug / explicit metadata requests, internal observation logs, validation fixtures, and regression output.
 
 ```yaml
 plan_only_diagnostic_summary:
@@ -29,9 +29,10 @@ plan_only_diagnostic_summary:
 
 Hard gate:
 
-- plan-only 默认必须有自然语言执行状态摘要，不默认展示完整 `routing_metadata`。
-- execution 输出必须有 `evidence_card` / `source_quality` / 用户可读执行状态摘要。
-- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或内部 run log / regression 场景，才输出完整 `routing_metadata` YAML。
+- plan-only 和本地修复完成报告默认必须有自然语言执行状态摘要，不默认展示完整 `routing_metadata`。
+- execution 输出必须有 `evidence_card` / source-quality 自然语言摘要 / 用户可读执行状态摘要。
+- 用户可见正文默认不得输出 `routing_metadata` / `source_quality` YAML / `boundary_flags` / debug 字段。
+- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或 internal observation log / validation fixture / regression 场景，才输出完整 `routing_metadata` YAML。
 - blocked / no_data / timeout / auth_failed 不得写成 low risk / no risk。
 - 策略命中不能写成 final judgement。
 - source_quality 缺失时判定为 `output_contract` failure。
@@ -227,10 +228,53 @@ missing_evidence: failed_or_missing_or_dependent_skipped_sources
 
 裸问表达保持原模板，但正文主线要收敛：
 
-- ATO / 登录异常：先讲控制权变化，再讲异常行为闭环，最后讲扩散 / 策略 / Track 活跃与数据可用性佐证。
+- ATO / 登录异常：先做 `suspicious_anchor_discovery`，再讲控制权变化和候选控制端，然后讲异常行为闭环，最后讲历史基线、扩散 / 策略 / Track 活跃与数据可用性佐证。
 - 异常发布 / 导流：先讲内容动作与承接链路，再讲账号状态和发布前后操作。
 - 账号扩散 / 同设备：只写候选关联和交叉验证，不写团伙结论。
 - 避免把日常裸问写成接口说明书；action 名保留在 `source_plan` / `actions`，正文优先解释证据用途和边界。
+
+### ATO Single Case User-Facing Template
+
+ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAML。禁止在用户正文展示：
+
+- `routing_metadata`
+- `source_quality` YAML
+- `boundary_flags`
+- `execution_mode`
+- validator 过程字段
+- 平台调用 debug YAML
+
+固定结构：
+
+```text
+1. 结论
+2. 可疑动作锚点
+3. 可疑控制端 / 设备身份一致性
+   - device_id 是否常用
+   - 机型 / 系统 / UA / IP / 登录方式 / 登录端是否一致
+   - 是否存在伪装常用设备嫌疑
+4. 登录链路证据
+5. 内容 / 四项 / 后置动作证据
+6. 历史基线
+7. 证据缺口
+8. 下一步补证 / 处置建议
+```
+
+正文规则：
+
+- 裸问“这个账号是不是被盗了”时，第一段必须说明是否完成 `suspicious_anchor_discovery`；未完成时写“未完成可疑锚点发现”，不能只写“证据不足”。
+- 可疑锚点包括 recent login、WEB 登录、扫码 / OAuth、token/session、改密 / 保护账号、异常发视频、直播、评论 / 私信、资料修改、四项信息和策略命中。
+- 发现 WEB 登录、WEB 发布、导流视频或异常内容，必须进入 `content_action_deep_dive`，对齐 photo_id / content_id、发布时间、发布来源端、发布设备、发布 IP / UA、审核 / 策略 / 导流原因、四项信息和登录链路时间差。
+- 设备判断必须写 `device_identity_consistency`。`device_id` 常用只能说明一个变量一致；如果机型 / 系统 / UA / IP / 登录端 / 登录方式异常，应写“device_id 看似常用，但设备身份变量不一致，存在伪装常用设备或 session/token 接管嫌疑”。
+- Track 有活跃不能写成本人操作；Track 无活跃但后端有 WEB/session/API 内容动作时，写 `front_backend_activity_mismatch`。
+- `response_too_large` 只能写 wrapper/source contract gap，不能写成“登录很多”或登录证据；UI 无数据但 wrapper 过大时写 `wrapper_response_mismatch`、`source_contract_gap`、`actual_ui_no_data_unverified_by_wrapper`、`login_log_evidence_unusable`。
+
+短期 observation builder 方向：
+
+- 本地 browser-backed service 只负责安全 passthrough + transport envelope，不承担泛化风险 normalizer。
+- Dennis 先用模型理解 passthrough / capped body / transport metadata；只对 ATO 高价值 source 沉淀最小 observation fields。
+- 最小 source 类型：`login_control_source`、`publish_action_audit_source`、`candidate_control_endpoint_source`、`device_identity_consistency_source`、`historical_baseline_source`、`wrapper_diagnostic_source`。
+- 不把 normalizer 作为本地 service 默认责任，不新增泛化 observation normalizer 路线。
 
 账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action，默认请求 `response_mode=passthrough`。短期保留 `compat_summary` 作为显式 legacy fallback；长期只保留 passthrough 单模式，新 action 一律 passthrough-only。
 
@@ -788,17 +832,18 @@ Routing Summary:
 
 适用范围：
 
-- dennis-risk-agent 的正式用户可见回答、半开放内部模式、debug / run log / regression。
+- dennis-risk-agent 的正式用户可见回答、本地修复完成报告、半开放内部模式、debug / run log / regression。
 - main agent / 观测日志 / runtime validation 需要读取内部路由结果的场景。
 - 不依赖跨 session history，不要求额外平台调用。
 
 输出规则：
 
 - 自然语言回答可以照常先输出。
-- 默认用户回答不展示完整 `routing_metadata` YAML。
+- 默认用户回答和本地修复完成报告不展示完整 `routing_metadata` YAML。
+- 默认用户正文不得展示 `source_quality` YAML、`boundary_flags` YAML、execution/debug/validator 过程字段；只可用自然语言摘要解释 source-quality 边界。
 - 默认只输出短的执行状态和证据边界：本次是否查平台、是否调用 DataAgent/Hive、关键 source_quality 边界、缺失字段和下一步。
 - 半开放内部模式可输出简版 metadata：`execution_mode`、`platform_called`、`dataagent_called`、boundary flag 的自然语言解释、`missing_required_fields`。
-- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或内部 run log / regression 场景，才输出完整 `routing_metadata` YAML block，顶层 key 固定为 `routing_metadata`。
+- 只有用户明确要求 debug / `routing_metadata` / run log / YAML / 原始执行元数据，或 internal observation log / validation fixture / regression 场景，才输出完整 `routing_metadata` YAML block，顶层 key 固定为 `routing_metadata`。
 - metadata 只描述本轮路由、能力、执行边界和敏感输出状态，不替代业务结论；默认不要把它暴露给普通用户。
 - `route` 必须使用 `scene_to_capability_routing.md` 中的正式 route 名，禁止写成 `dennis-risk-agent` 等 agent 名。
 - `capability` 必须使用 `capability_registry.md` 中的正式 capability 名，禁止自创 `strategy_attribution`、`user_risk_profile` 等未注册名。
