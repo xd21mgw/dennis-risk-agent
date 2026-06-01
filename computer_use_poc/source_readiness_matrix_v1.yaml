@@ -14,6 +14,8 @@ status_enum:
   - dry_run_contract_ready
   - candidate_runner
   - planned_or_minimal_stub
+  - browser_backed_batch_ready
+  - debug_only_runner_ready
 
 global_boundaries:
   no_data_not_risk_exclusion: true
@@ -21,13 +23,16 @@ global_boundaries:
   access_method_is_collection_path_only: true
   no_live_auth_repair_in_business_case: true
   no_cookie_token_session_header_output: true
+  runtime_case_execution_entry: computer_use_poc/runtime_case_execution_runner.py
+  case_execution_uses_controlled_batch: true
+  legacy_runner_fallback_forbidden_in_case_execution: true
+  browser_backed_single_action_freeform_forbidden_by_default: true
 
 sources:
   user_login_unified_log:
     source_priority: P0
     readiness_status:
-      - runner_ready
-      - health_check_verified
+      - browser_backed_batch_ready
       - playbook_ready
     supported_input:
       - user_id
@@ -41,12 +46,13 @@ sources:
     boundary:
       - online_window_limited
       - no_data_not_risk_exclusion
+      - case_execution_access_method_browser_backed_batch
+      - no_sso_session_runner_fallback
 
   weapon_graphData:
     source_priority: P0
     readiness_status:
-      - runner_ready
-      - health_check_verified
+      - browser_backed_batch_ready
       - playbook_ready
     supported_input:
       - user_id
@@ -57,12 +63,13 @@ sources:
     boundary:
       - graphData_empty_not_no_device
       - raw_device_id_internal_only
+      - case_execution_conditional_only
+      - no_legacy_weapon_runner_fallback
 
   weapon_riskData:
     source_priority: P0-conditional
     readiness_status:
-      - runner_ready
-      - health_check_verified
+      - browser_backed_batch_ready
       - playbook_ready
     supported_input:
       - device_id
@@ -77,13 +84,14 @@ sources:
     boundary:
       - missing_device_reference_when_no_device_id
       - device_risk_not_standalone_judgement
+      - case_execution_conditional_only
+      - no_legacy_weapon_runner_fallback
 
   archives_profile_readonly:
     source_priority: P0
     readiness_status:
+      - browser_backed_batch_ready
       - playbook_ready
-      - planned_or_minimal_stub
-      - candidate_runner
     supported_input:
       - user_id
     access_method:
@@ -104,7 +112,8 @@ sources:
       - no_auth_repair_in_business_case
       - auth_failed_marks_archives_auth_gap
       - no_publish_device_id_means_cannot_judge_publish_device_anomaly
-      - stub_not_live_execution_until_connected
+      - browser_backed_body_missing_enters_source_quality
+      - no_archives_profile_runner_fallback
 
   archives_publish_device_trace:
     source_priority: P0-conditional
@@ -168,6 +177,7 @@ sources:
   track_analysis_activity_profile:
     source_priority: P0_or_P1_by_case
     readiness_status:
+      - browser_backed_batch_ready
       - endpoint_verified_not_runner_ready
       - playbook_ready
     supported_input:
@@ -184,6 +194,8 @@ sources:
       - endpoint_verified_but_no_runner
       - activity_signal_not_final_judgement
       - no_data_not_risk_exclusion
+      - readiness_check_only_in_ato_default_plan
+      - no_track_runner_fallback
 
   dataagent_hive:
     source_priority: P2

@@ -382,7 +382,7 @@ cases:
     expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
     expected_orchestration: "ATO uses login_logs_search + archives_user_profile + track_analysis_check_data_ready as independent_parallel; archives_user_analysis follows as auth_sensitive_serial."
     expected_boundary_flags: [controlled_parallel_plan_only, source_quality_matrix_merge_required, service_batch_contract_aligned, single_source_not_enough_for_ato]
-    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    expected_execution_groups: [independent_parallel]
     should_not_do: [do_not_access_real_platform, do_not_call_dataagent, do_not_only_query_login_logs, do_not_set_default_runtime_routing_true]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-CP-002
@@ -688,3 +688,19 @@ cases:
     expected_full_metadata_allowed: false
     expected_user_visible_contains: ["本轮未访问真实平台", "未调用 DataAgent/Hive"]
     expected_user_visible_absent: ["routing_metadata:"]
+  - id: CONTROLLED-CASE-HARNESS-ATO-DRYRUN-001
+    user_query: "2892617234 这个账号是不是被盗了？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, track_analysis_check_data_ready, archives_user_analysis]
+    expected_orchestration: "Execution context must enter runtime_case_execution_runner and build a controlled /actions/batch payload; it must not scatter direct single-action calls."
+    expected_boundary_flags: [controlled_case_execution_harness_required, default_runtime_routing_false, no_legacy_runner_fallback]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_call_sso_session_runner, do_not_call_archives_profile_runner, do_not_call_weapon_runner_as_fallback, do_not_direct_curl_platform, do_not_call_single_action_freeform]
+    expected_answer_contract: [source_plan, execution_groups, batch_payload, source_quality_matrix, evidence_card, missing_evidence, final_answer_boundary]
+  - id: CONTROLLED-CASE-NO-FALLBACK-ON-SOURCE-GAP-001
+    user_query: "登录日志 response_too_large，档案中心 body_missing，Weapon 没启用时怎么办？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Browser-backed source gaps must be merged by Dennis as source_quality and missing_evidence, not repaired with old runners."
+    expected_boundary_flags: [response_too_large_not_login_evidence, body_missing_enters_source_quality, platform_not_enabled_enters_missing_evidence, no_legacy_runner_fallback]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_fallback_sso_session_runner, do_not_fallback_archives_profile_runner, do_not_fallback_weapon_runner, do_not_treat_source_gap_as_low_risk]
+    expected_answer_contract: [transport_status_matrix, source_quality_matrix, missing_evidence, partial_evidence, final_answer_boundary]

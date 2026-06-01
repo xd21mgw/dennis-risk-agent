@@ -54,6 +54,40 @@
 
 若当前只完成部分 source，先输出 partial evidence card，而不是空研判或裸 timeout。
 
+## 4A. controlled_case_execution_entry
+
+Execution-class risk cases in the mother repo and in `full_runtime` must use the
+same controlled harness:
+
+```bash
+python3 computer_use_poc/runtime_case_execution_runner.py \
+  --task ato_single_case \
+  --user-id <user_id> \
+  --mode dry_run \
+  --format json
+```
+
+Live execution, when explicitly allowed, still uses the same harness and only a
+local browser-backed batch endpoint:
+
+```bash
+python3 computer_use_poc/runtime_case_execution_runner.py \
+  --task ato_single_case \
+  --user-id <user_id> \
+  --mode live \
+  --browser-backed-base http://127.0.0.1:8787 \
+  --format json
+```
+
+The required chain is `source_orchestration_check -> source_plan -> controlled
+batch -> passthrough envelope -> Dennis-generated source_quality_matrix /
+evidence_card / missing_evidence`.
+
+`sso_session_runner`, `archives_profile_runner`, Weapon runner, freeform
+`browser_backed_service_client --action`, arbitrary curl, and ad-hoc browser
+fetch are debug/manual diagnostic tools only. They are not runtime case
+execution fallback paths.
+
 ## 5. source_failure_policy
 
 source 失败必须进入 `source_quality`：

@@ -1,19 +1,30 @@
 schema_version: runner_registry_v1
 purpose: >
-  Register controlled bin runners that dennis-risk-agent may execute directly
-  through workspace/dennis-risk-agent/bin. Runners are source adapters, not
-  free-form platform clients.
+  Register legacy/manual diagnostic bin runners for config and adapter
+  troubleshooting. Runtime case execution must not use these runners as
+  fallback; it must use runtime_case_execution_runner.py and browser-backed
+  controlled batch endpoints.
 
 global_contract:
   executor_agent: dennis-risk-agent
   main_agent_may_execute_runner: false
+  case_execution_default_runner_allowed: false
+  browser_backed_gap_fallback_allowed: false
+  replacement_runtime_entry: computer_use_poc/runtime_case_execution_runner.py
+  live_case_execution_batch_endpoint:
+    - /actions/batch
+    - /actions/multi_source_plan
   arbitrary_url_allowed: false
   arbitrary_header_allowed: false
   arbitrary_cookie_allowed: false
   curl_cookie_allowed: false
   uv_run_allowed: false
   direct_python_runner_allowed: false
-  required_output_fields:
+  runtime_case_execution_boundary:
+    - not_for_case_execution
+    - debug_only
+    - manual_diagnostic_only
+  diagnostic_output_fields_historical_only:
     - source_card
     - source_quality
     - source_checkpoint_private
@@ -27,11 +38,17 @@ global_contract:
 runners:
   - runner_name: sso_session_runner
     binary_path: bin/sso_session_runner
+    case_execution_scope: not_for_case_execution
+    allowed_usage:
+      - manual_diagnostic_only
+      - config_ops_only
+    browser_backed_gap_fallback_allowed: false
+    replacement_runtime_entry: computer_use_poc/runtime_case_execution_runner.py
     source_capability:
       - login_log_read
       - user_device_resolution
       - device_risk_read
-    readiness_status: runner_ready
+    readiness_status: debug_only_runner_ready
     allowed_actions:
       - login_log.query_user_login_log
       - weapon.graph_data
@@ -54,7 +71,7 @@ runners:
           - device_id
         optional:
           - timeout
-    output_schema:
+    output_schema_historical_only:
       - source_card
       - source_quality
       - source_checkpoint_private
@@ -79,6 +96,11 @@ runners:
 
   - runner_name: archives_profile_runner
     binary_path: bin/archives_profile_runner
+    case_execution_scope: not_for_case_execution
+    allowed_usage:
+      - legacy_manual_diagnostic_only
+    browser_backed_gap_fallback_allowed: false
+    replacement_runtime_entry: computer_use_poc/runtime_case_execution_runner.py
     source_capability:
       - archives_profile_readonly
       - user_profile_read
@@ -92,7 +114,7 @@ runners:
         optional:
           - timeout
           - format
-    output_schema:
+    output_schema_historical_only:
       - archives_profile_source_status
       - same_origin_fetch_ready
       - available_fields
@@ -133,6 +155,12 @@ runners:
 
   - runner_name: tianshi_rcp_runner
     binary_path: bin/tianshi_rcp_runner
+    case_execution_scope: not_for_case_execution
+    allowed_usage:
+      - dry_run_contract_only
+      - manual_diagnostic_only
+    browser_backed_gap_fallback_allowed: false
+    replacement_runtime_entry: computer_use_poc/runtime_case_execution_runner.py
     source_capability:
       - strategy_hit_read
       - tianshi_strategy_hit_inventory
@@ -154,7 +182,7 @@ runners:
           - event_type
           - time_window_inferred
           - entity_type_inferred
-    output_schema:
+    output_schema_historical_only:
       - source_status
       - records_count
       - hit_summary
@@ -188,6 +216,12 @@ runners:
 
   - runner_name: track_analysis_runner
     binary_path: bin/track_analysis_runner
+    case_execution_scope: not_for_case_execution
+    allowed_usage:
+      - future_contract_only
+      - manual_diagnostic_only
+    browser_backed_gap_fallback_allowed: false
+    replacement_runtime_entry: computer_use_poc/runtime_case_execution_runner.py
     source_capability:
       - track_analysis_activity_profile_api_direct
     readiness_status: endpoint_verified_not_runner_ready
@@ -202,7 +236,7 @@ runners:
           - device_id
           - appName
           - time_window
-    output_schema:
+    output_schema_historical_only:
       - source_card
       - source_quality
       - source_checkpoint_private

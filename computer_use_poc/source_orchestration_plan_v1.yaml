@@ -204,10 +204,14 @@
       "controlled_parallel_batch_contract": {
         "service_batch_endpoint": "/actions/batch",
         "service_plan_endpoint": "/actions/multi_source_plan",
+        "runtime_case_execution_entry": "computer_use_poc/runtime_case_execution_runner.py",
         "contract_name": "controlled_parallel_executable",
         "default_runtime_routing": false,
         "service_output_mode": "pure_passthrough_transport_envelope",
         "source_plan_required": true,
+        "legacy_runner_fallback_allowed": false,
+        "browser_backed_single_action_freeform_allowed": false,
+        "direct_platform_curl_allowed": false,
         "service_single_source_envelope_fields": [
           "action_name",
           "source_id",
@@ -975,10 +979,16 @@
         "browser_backed_fixed_actions_v1_source_plan": [
           "suspicious_anchor_discovery",
           "login_logs_search",
-          "archives_photo_search",
           "archives_user_profile",
           "archives_user_analysis",
           "track_analysis_check_data_ready"
+        ],
+        "conditional_fixed_actions": [
+          "archives_photo_search",
+          "archives_related_users",
+          "weapon_inventory",
+          "rcp_event_detail",
+          "rcp_event_feature_list"
         ],
         "archives_center_policy": "key_evidence_in_default_source_plan_but_failure_is_non_blocking_and_enters_source_quality_missing_evidence_partial_evidence",
         "fixed_actions_first": [
@@ -990,7 +1000,7 @@
         ],
         "track_weapon_rcp_role": "auxiliary_after_anchor_discovery_only_not_suspicious_source_discovery_mainline",
         "old_runner_attempt_policy": "do_not_attempt_missing_sso_session_runner_or_track_analysis_runner_in_clean_full_runtime",
-        "archives_stub_policy": "archives_profile_runner_stub_enters_missing_evidence_optional_source_gap_not_default_four_source_matrix_and_does_not_block_browser_backed_sources",
+        "archives_stub_policy": "archives_profile_runner_is_legacy_manual_diagnostic_only_not_case_execution_fallback",
         "final_risk_judgement_made": false
       },
       "required_p0_sources": [
@@ -1316,15 +1326,12 @@
           "tool_troubleshooting_instead_of_source_observation"
         ],
         "allowed_source_call_methods": [
-          "task_authorized_browser_same_origin",
-          "browser_backed_service",
-          "registered_controlled_runner",
-          "registered_readonly_api_playbook",
-          "task_prompt_explicit_fallback"
+          "runtime_case_execution_runner",
+          "browser_backed_service_batch_endpoint"
         ],
         "attempt_limit_per_source": {
           "primary_path": 1,
-          "fallback_path": 1
+          "fallback_path": 0
         },
         "failure_statuses": [
           "tool_gap",

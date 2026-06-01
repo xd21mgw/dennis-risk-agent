@@ -36,6 +36,7 @@ full_runtime_required:
     - computer_use_poc/bin_runner_contract_v1.md
     - computer_use_poc/browser_backed_service_client.py
     - computer_use_poc/browser_backed_service_adapter_v1.md
+    - computer_use_poc/runtime_case_execution_runner.py
     - computer_use_poc/har_platform_interface_inventory_v1.md
     - computer_use_poc/browser_backed_live_smoke_readiness_v1.md
     - computer_use_poc/browser_backed_fixed_actions_v1_integration_closure.md
@@ -43,11 +44,6 @@ full_runtime_required:
     - computer_use_poc/browser_backed_fixed_actions_text_dryrun.py
     - computer_use_poc/browser_backed_fixed_actions_text_demo_v1.md
     - computer_use_poc/platform_access/observation_schema_v0_1.yaml
-    - bin/archives_profile_runner
-    - computer_use_poc/archives_profile_runner.py
-    - bin/tianshi_rcp_runner
-    - computer_use_poc/tianshi_rcp_runner.py
-    - computer_use_poc/tianshi_rcp_runner_contract_v1.md
     - computer_use_poc/failure_triage_card_template_v1.md
     - computer_use_poc/plan_mode_capability_v1.md
     - computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md

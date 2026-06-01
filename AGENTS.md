@@ -199,12 +199,13 @@ Guard marker: `DENNIS_ROUTING_GUARD_V1`.
 - 临场 auth repair。
 - 用工具排障替代 source observation。
 
-允许的 source 调用方式只包括：
+执行类 case 的 source 调用方式只允许走统一 harness：
 
-- task prompt 明确授权的 `browser_same_origin`。
-- 已登记 controlled runner。
-- 已登记只读 API playbook。
-- task prompt 明确列出的 fallback。
+- `python3 computer_use_poc/runtime_case_execution_runner.py --task <task> ... --mode dry_run|live`
+- live mode 只能调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`。
+- `sso_session_runner`、`archives_profile_runner`、Weapon runner、单独 `browser_backed_service_client --action` 和任意 curl 平台 URL 只允许 explicit debug / config / unit test，不得作为 case execution fallback。
+
+task prompt 明确授权的 `browser_same_origin`、已登记只读 API playbook或 fallback，只能在非 case execution 的诊断 / discovery 任务或 harness 内部受控使用；不得绕过 source_plan -> controlled batch -> passthrough envelope -> Dennis evidence card。
 
 每个 source 最多允许 1 条 primary path 和 1 条 fallback path。失败后必须记录 `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`，在 `source_quality` 写明原因，继续下一个 source，并最终输出 partial evidence card。`tool_gap` / `auth_bridge_gap` / `no_data` / `timeout` 不得作为低风险或无风险反证。
 

@@ -52,6 +52,13 @@ FULL_RUNTIME_AGENTS = """# Dennis Risk Agent Full Runtime
 - `no_data` / `blocked` / `timeout` / `auth_failed` / `parse_error` / `tool_gap` 不能作为无风险反证。
 - source 失败后输出 partial evidence card 和 next_action，不裸 timeout。
 
+## Controlled Case Execution
+
+- 执行类风险 case 必须使用 `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id <user_id> --mode dry_run|live --format json`。
+- live mode 只能调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`，不得直接调用平台 URL。
+- `sso_session_runner`、`archives_profile_runner`、Weapon runner、单独 `browser_backed_service_client --action`、curl 和 ad-hoc browser fetch 只允许 debug / manual diagnostic / unit test，不得作为 case execution fallback。
+- `body_missing`、`body_truncated`、`response_too_large`、`platform_not_enabled`、`auth_failed`、`timeout`、`platform_error`、`parse_error`、`service_unavailable` 进入 Dennis-generated source_quality_matrix / missing_evidence，不触发旧 runner fallback。
+
 ## Safety Boundary
 
 - 不读取 source repo 的 `run_logs/**`。
@@ -66,14 +73,16 @@ FULL_RUNTIME_AGENTS = """# Dennis Risk Agent Full Runtime
 - 不访问未登记 source。
 - DataAgent / Hive 仍需逐次授权；没有本次明确授权时只输出 query plan。
 
-## Output Order
+## Output Policy
 
 1. 先输出用户可读的一句话判断或当前状态。
 2. 再输出 evidence card。
 3. 再输出 source_completion_matrix / source_quality。
-4. 最后输出 routing_metadata。
+4. 普通用户回答默认不输出完整 `routing_metadata` YAML。
 
-`routing_metadata` 必须继续遵守 route / capability / execution_mode / evidence_mode / source_quality / sensitive_output / direct_tool_bypass 等字段约束。
+完整 `routing_metadata` 只允许在 debug / run log / regression / 用户明确要求内部过程字段时输出。
+内部记录仍可保留 route / capability / execution_mode / evidence_mode / source_quality /
+sensitive_output / direct_tool_bypass 等字段约束，但不得污染普通用户正文。
 """
 
 

@@ -155,8 +155,9 @@ Dennis source execution guard:
 
 - In real case / source observation / evidence card execution, `dennis-risk-agent` must treat SSO / cookie / runner troubleshooting details in AGENTS.md, TOOLS.md, SOUL.md, USER.md, IDENTITY.md, or session-memory as `main_agent_config_ops_only`, `deprecated_for_dennis_subagent`, and `not_for_case_execution`.
 - Hard forbid during case execution: read `.ks_sso/sso-state.json`, manually build Cookie/Header, use curl / urllib / requests with Cookie, debug `SmartSSOSession`, debug `sso_session_runner.py` / `sso_session.py`, import or inspect auth bridge implementation, perform live auth repair, or replace source observation with tool troubleshooting.
-- Allowed source calls are only: task-authorized `browser_same_origin`, registered controlled runner, registered readonly API playbook, or a fallback explicitly listed in the task prompt.
-- Each source may attempt at most one primary path and one fallback path. Repeated runner debugging, auth probing, or endpoint exploration is a source execution guard violation.
+- Case execution calls must enter through `computer_use_poc/runtime_case_execution_runner.py`, which builds the source plan and uses browser-backed `/actions/batch` or `/actions/multi_source_plan` in live mode.
+- Legacy runners (`sso_session_runner`, `archives_profile_runner`, Weapon runner), freeform `browser_backed_service_client --action`, task-local curl, and ad-hoc browser fetch are `debug_only` / `manual_diagnostic_only` / `not_for_case_execution`; they are not fallback paths after browser-backed source gaps.
+- Each source may attempt only the harness-managed batch path. Repeated runner debugging, auth probing, single-action fallback, or endpoint exploration is a source execution guard violation.
 - When a source path fails, emit `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`, fill `source_quality`, continue the next source, and produce partial evidence card if the matrix is incomplete.
 - `tool_gap`, `auth_bridge_gap`, `no_data`, `timeout`, `blocked`, and `parse_error` are not low-risk / no-risk counter evidence.
 

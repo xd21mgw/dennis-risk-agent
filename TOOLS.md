@@ -48,7 +48,7 @@ Classification for auth / runner troubleshooting text in this file:
 
 During real case evidence-card execution, `dennis-risk-agent` must not read `.ks_sso/sso-state.json`, manually build Cookie/Header values, run curl/urllib/requests with Cookie, debug `SmartSSOSession`, debug `sso_session_runner.py` / `sso_session.py`, inspect auth bridge implementation, or perform live auth repair. Those actions belong only to explicit config / overlay / health-check tasks, not case source execution.
 
-Allowed source execution paths are limited to a registered controlled runner, a registered readonly API playbook, task-authorized `browser_same_origin`, or a fallback explicitly listed in the task prompt. Each source gets at most one primary path and one fallback path. Failure must become `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`, then execution continues to the next source and ends with a partial evidence card when needed.
+Case evidence execution must use `computer_use_poc/runtime_case_execution_runner.py`, which builds the source plan and calls only the local browser-backed `/actions/batch` or `/actions/multi_source_plan` endpoint in live mode. Legacy registered runners, task-local curl, urllib, one-off browser fetches, and direct single-action calls are debug/config/unit-test tools only and are not case execution fallbacks. Each source failure must become `source_status=tool_gap | auth_bridge_gap | blocked | timeout | parse_error | no_data`, then Dennis continues with source quality and partial evidence.
 
 ## Required Platform Preflight
 

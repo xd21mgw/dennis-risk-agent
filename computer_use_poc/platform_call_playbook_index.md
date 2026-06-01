@@ -174,7 +174,8 @@ Every platform hand should return `platform_access_observation` or a source-spec
 Reference:
 
 - `computer_use_poc/user_login_log_api_readonly_internal_agent_playbook_v2_4_10.md`
-- `computer_use_poc/sso_session_runner.py`
+- `computer_use_poc/runtime_case_execution_runner.py`
+- `computer_use_poc/sso_session_runner.py` (manual diagnostic only; not runtime case execution)
 
 Input:
 
@@ -183,20 +184,18 @@ Input:
 
 Preferred path:
 
-1. Use controlled runner:
-   `python3 computer_use_poc/sso_session_runner.py --platform login_log --action query_user_login_log --user-id <user_id> --timeout 30 --format json`
-2. If the first request returns HTTP 302, HTML login page, SSO login URL, access-proxy redirect, or `auth_failed`, the runner performs one controlled SSO refresh with its internally built whitelist URL.
-3. After refresh, retry the same runner request once.
-4. If refresh fails or the retry still returns auth failure, return structured `auth_failed`.
-5. If SSO executor is unavailable, return structured `blocked`.
-6. If timeout, return `timeout`.
+1. Runtime case execution uses the controlled harness:
+   `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id <user_id> --mode dry_run --format json`
+2. Live case execution, when explicitly allowed, uses the same harness with local browser-backed batch only:
+   `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id <user_id> --mode live --browser-backed-base http://127.0.0.1:8787 --format json`
+3. The harness builds `source_plan`, `execution_groups`, and `/actions/batch` payload, then Dennis generates `source_quality_matrix`, `evidence_card`, and `missing_evidence`.
+4. `response_too_large`, `body_missing`, `auth_failed`, `timeout`, `platform_error`, `parse_error`, or service unavailable must not fall back to `sso_session_runner`; they enter source quality and partial evidence.
+5. `sso_session_runner.py` may be used only for explicit config/manual diagnostics outside case evidence execution.
 
 Common errors:
 
-- Missing `SmartSSOSession`: `blocked / sso_executor_unavailable`
+- Missing browser-backed service or batch endpoint: `blocked / service_unavailable`
 - HTTP redirect / login page: `auth_failed / auth_session_issue`
-- auth expired before refresh: `auth_failed_before_refresh`, then one controlled refresh and retry
-- refresh script missing / failed: `auth_failed` or `blocked` with `auth_refresh_status=failed`
 - JSON parse failure: `parse_error`
 - Online window gap: `login_log_window_incomplete`
 
@@ -204,6 +203,7 @@ Fallback:
 
 - Do not use curl+cookie.
 - Do not let main agent take over.
+- Do not fall back to `sso_session_runner` during case execution.
 - For long historical windows, generate Hive / DataAgent query plan only.
 
 Source status mapping:
@@ -213,7 +213,7 @@ Source status mapping:
 - SSO blocked or runner unavailable: `blocked` or `auth_failed`
 - Request timeout: `timeout`
 - Non-JSON response: `parse_error` or `auth_failed` if HTML/login-like.
-- `auth_refresh_attempted`, `auth_refresh_status`, `retry_after_refresh`, and `source_status_before_refresh` must be present in runner output.
+- Batch transport metadata must be mapped into Dennis-generated source quality. Service-side `source_quality`, `source_card`, or `compat_summary` is not required.
 
 Capability status: `api_direct_confirmed`.
 
@@ -231,18 +231,16 @@ Input:
 
 Preferred path:
 
-1. For Dennis runtime execution, use the controlled runner when available:
-   - `python3 computer_use_poc/sso_session_runner.py --platform weapon --action graph_data --user-id {userId} --timeout 30 --format json`
-   - `python3 computer_use_poc/sso_session_runner.py --platform weapon --action risk_data --device-id {deviceId} --timeout 30 --format json`
-2. USER_ID to DEVICE_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={userId}&groupKey=USER_ID&dimKey=DEVICE_ID&searchLevel=2`.
-3. DEVICE_ID to USER_ID graph: `/apiv2/graphData?product=KUAISHOU&productName=KUAISHOU&groupValue={deviceId}&groupKey=DEVICE_ID&dimKey=USER_ID&searchLevel=2`.
-4. Device risk uses `/apiv2/riskData?product=KUAISHOU&deviceIds={deviceId}` only after a device id is available.
+1. Runtime case execution must start from `runtime_case_execution_runner.py` and browser-backed `/actions/batch` or `/actions/multi_source_plan`.
+2. Weapon is conditional in ATO execution: only include `weapon_inventory` when browser-backed exposes the platform and current evidence has a `device_id` or explicit device clue.
+3. If Weapon is not enabled, `platform_not_enabled`, `missing_device_id`, `auth_failed`, `timeout`, or `parse_error` becomes `missing_evidence`; do not fall back to the legacy Weapon runner.
+4. Historical/manual API paths remain reference only: `/apiv2/graphData` for graph resolution and `/apiv2/riskData` only after a device id is available.
 
 Hard rules:
 
 - `/apiv2/graphData` and `/apiv2/riskData` are the default readonly API paths.
-- The runner must not accept arbitrary URL input and must not open the Weapon frontend.
-- Runner output must include `source_card`, `source_quality`, `response_type`, `records_count`, `real_platform_request_executed`, and redaction markers.
+- Legacy/manual runners must not accept arbitrary URL input and must not open the Weapon frontend.
+- Runtime evidence cards use Dennis-generated source quality from browser-backed passthrough metadata; legacy runner `source_card` / `source_quality` fields are historical diagnostics only.
 - Do not use `/api/graphData` as default execution guidance.
 - Do not strip mobile device prefixes such as `ANDROID_` or `IOS_` before calling Weapon riskData. Preserve the observed device id string unless a validated platform contract explicitly says otherwise.
 - Do not switch to arbitrary frontend or guessed API paths when `/apiv2/*` returns `auth_failed`, `blocked`, or `timeout`; record the source status and continue the evidence card.
@@ -260,6 +258,7 @@ Fallback:
 - If graphData blocked, mark `blocked_sources`.
 - If device id missing, mark `missing_required_fields`.
 - If `/apiv2/*` auth fails, times out, or is blocked, mark `auth_failed_sources`, `timeout_sources`, or `blocked_sources`; do not silently replace it with `/api/graphData`.
+- If browser-backed returns `platform_not_enabled`, mark source gap and do not invoke `sso_session_runner`.
 
 Source status mapping:
 

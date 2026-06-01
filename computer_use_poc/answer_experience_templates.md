@@ -389,13 +389,13 @@ account_security_browser_backed_source_plan:
       response_mode: passthrough
     fallback: 7d_parse_error_auto_add_24h_passthrough_retry_and_preserve_primary_transport_status
   - source_name: archives_profile_readonly
-    access_method: optional_controlled_runner_only_when_live_connected
-    runner_name: archives_profile_runner
-    default_when_stub: missing_evidence.optional_source_gap
-    fallback: stub_source_gap_does_not_block_or_enter_default_four_source_matrix
+    access_method: browser_backed_batch_via_runtime_case_execution_runner
+    action_name: archives_user_profile
+    default_when_source_gap: missing_evidence.source_gap
+    fallback: no_legacy_archives_profile_runner_fallback
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` 在 clean `full_runtime` 中不存在时不得尝试；只要 browser-backed service 是目标 runtime 入口，就按四个固定 action 获取 pure passthrough envelope。默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`。登录日志失败 / 空结果必须由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`。Archives stub 只放 `missing_evidence.optional_source_gap`，且 evidence card 默认 `final_risk_judgement_made=false`。
+`bin/sso_session_runner` / `bin/track_analysis_runner` / `bin/archives_profile_runner` 在 case execution 中不得尝试；执行类 case 必须经 `computer_use_poc/runtime_case_execution_runner.py` 生成 controlled batch payload。ATO 单案默认 source_quality_matrix 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`archives_user_analysis` 依赖 profile 串行执行。登录日志失败 / 空结果、档案中心 `body_missing`、Track 缺 device_id 或 readiness gap，均由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，也不得 fallback 旧 runner。
 
 迁移边界：
 
@@ -432,11 +432,11 @@ source_plan:
   - source_name: 档案中心用户分析
     source_priority: P0
     trigger_condition: ATO 单案默认需要
-    access_method: optional_controlled_runner_when_live_connected
+    access_method: browser_backed_batch_via_runtime_case_execution_runner
     purpose: 账号状态、注册/实名/基础画像、账号历史风险、当前状态
-    fallback: stub/source_gap/auth_failed/blocked 进入 source_quality，不得静默跳过；clean full_runtime 中不阻塞 browser-backed 主链路
-    readiness_status: planned_or_minimal_stub
-    runner_name: archives_profile_runner
+    fallback: body_missing/source_gap/auth_failed/blocked 进入 source_quality，不得静默跳过；不得 fallback archives_profile_runner
+    readiness_status: browser_backed_passthrough_source
+    runner_name: not_for_case_execution
     output_if_completed:
       archives_profile_source_status: completed
       fields:
@@ -533,10 +533,10 @@ time_window_reasoning:
 ```yaml
 source_readiness_summary:
   - source_name: archives_profile_readonly
-    readiness_status: planned_or_minimal_stub
-    runner_name: archives_profile_runner
+    readiness_status: browser_backed_passthrough_source
+    runner_name: not_for_case_execution
     source_priority: P0
-    expected_behavior: auth gap 或 runner gap 进入 source_quality；不阻塞已完成 P0 evidence card
+    expected_behavior: body_missing / auth gap / source gap 进入 source_quality；不阻塞已完成 P0 evidence card；不 fallback legacy runner
   - source_name: tianshi_strategy_hit_inventory
     readiness_status: playbook_ready_not_runner_ready
     source_priority: P0-explicit when user asks policy hit

@@ -24,7 +24,12 @@ DEMO_DOC_PATH = REPO_ROOT / "computer_use_poc" / "browser_backed_fixed_actions_t
 GLOBAL_ANSWER_CONTRACT = [
     "source_plan",
     "actions",
+    "execution_groups",
+    "batch_payload",
+    "transport_status_matrix",
     "source_quality_matrix",
+    "evidence_card",
+    "partial_evidence",
     "missing_evidence",
     "evidence_strength",
     "final_answer_boundary",
@@ -132,6 +137,15 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_treat_device_protocol_similarity_as_final_conclusion",
     "do_not_skip_offline_device_request_behavior_plan",
     "do_not_execute_platform_when_user_asks_analysis_only",
+    "do_not_call_sso_session_runner",
+    "do_not_call_archives_profile_runner",
+    "do_not_call_weapon_runner_as_fallback",
+    "do_not_direct_curl_platform",
+    "do_not_call_single_action_freeform",
+    "do_not_fallback_sso_session_runner",
+    "do_not_fallback_archives_profile_runner",
+    "do_not_fallback_weapon_runner",
+    "do_not_treat_source_gap_as_low_risk",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -1229,8 +1243,13 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         if has_any(text, ["疑似 ato", "判断", "ato", "被盗", "盗号", "是不是被盗", "web 登录", "导流视频", "异常发布", "非本人", "异常但档案中心", "多 source", "多source"]):
             actions += scenario_actions(plan, "ato_login_anomaly")
             flags += scenario_flags(plan, "ato_login_anomaly")
-            flags += ["single_source_not_enough_for_ato"]
-            orchestration = "ATO multi-source plan, not login logs only"
+            flags += [
+                "single_source_not_enough_for_ato",
+                "controlled_case_execution_harness_required",
+                "default_runtime_routing_false",
+                "no_legacy_runner_fallback",
+            ]
+            orchestration = "ATO multi-source plan via runtime_case_execution_runner controlled batch, not login logs only"
         else:
             actions += ["login_logs_search"]
         flags += [
@@ -1259,6 +1278,17 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         if not actions:
             actions += scenario_actions(plan, "rcp_event_attribution")
         flags += ["strategy_hit_not_final_judgement"]
+
+    if has_any(text, ["body_missing", "platform_not_enabled", "service_unavailable"]):
+        flags += [
+            "body_missing_enters_source_quality",
+            "platform_not_enabled_enters_missing_evidence",
+            "no_legacy_runner_fallback",
+        ]
+        orchestration = "browser-backed source gap becomes Dennis source_quality and missing_evidence without old runner fallback"
+
+    if has_any(text, ["response_too_large"]):
+        flags += ["response_too_large_not_login_evidence"]
 
     if has_any(text, ["冲突", "不一致", "登录日志没异常但", "登录没异常但", "登录没异常，但", "登录无异常但"]):
         flags += ["conflicting_sources_require_source_quality", "final_judgement_boundary_required"]

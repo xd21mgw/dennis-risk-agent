@@ -7507,15 +7507,15 @@
 
 - test_id: RUNNER-REGISTRY-EXISTS-001
 - input: 检查受控 bin runner registry。
-- expected_runtime_behavior: runner_registry_loaded
-- expected_output_boundary: `runner_registry_v1.yaml` 存在并登记 `sso_session_runner`、`archives_profile_runner`、`tianshi_rcp_runner`、`track_analysis_runner`；包含 readiness、allowed_actions、input_schema、output_schema、敏感输出策略、固定 endpoint / domain。
+- expected_runtime_behavior: runner_registry_loaded_debug_only
+- expected_output_boundary: `runner_registry_v1.yaml` 存在并登记 `sso_session_runner`、`archives_profile_runner`、`tianshi_rcp_runner`、`track_analysis_runner`；必须标注 `not_for_case_execution` / `manual_diagnostic_only` / `debug_only`，并指向 `computer_use_poc/runtime_case_execution_runner.py` 作为执行类 case 入口。
 
 ## 779. Bin runner no uv run
 
 - test_id: BIN-RUNNER-NO-UV-RUN-001
 - input: dennis 子 agent 调平台 source。
-- expected_runtime_behavior: bin_runner_only
-- expected_output_boundary: 必须调用 `bin/<runner_name>`；禁止 `uv run runner`、`python3 runner.py`、curl+cookie；main 不得代跑 runner。
+- expected_runtime_behavior: bin_runner_not_case_execution
+- expected_output_boundary: 执行类 case 不得调用 `bin/<runner_name>`、`uv run runner`、`python3 runner.py` 或 curl+cookie；旧 bin runner 仅可用于 explicit manual diagnostic/config ops，不是 browser-backed gap fallback。
 
 ## 780. Archives profile runner contract
 
@@ -7612,8 +7612,8 @@
 
 - test_id: WEAPON-GRAPHDATA-WRAPPER-SMOKE-001
 - input: Weapon graphData 受控调用。
-- expected_runtime_behavior: sso_session_runner_wrapper_used
-- expected_output_boundary: 使用 `computer_use_poc/bin/sso_session_runner`；固定 `/apiv2/graphData`；不默认 `/api/graphData`；runner 调用错误先标 `runner_invocation_error` / `runner_dependency_error`。
+- expected_runtime_behavior: weapon_runner_debug_only_case_uses_harness
+- expected_output_boundary: 执行类 case 只能经 `runtime_case_execution_runner.py` 和 browser-backed batch；Weapon 仅在 platform enabled 且有 device_id/设备线索时作为条件 source。`computer_use_poc/bin/sso_session_runner` 只允许 manual diagnostic；不得作为 ATO fallback。
 
 ## 791. Weapon riskData direct deviceId
 
@@ -8340,15 +8340,15 @@
 
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
 - input: clean `outputs/full_runtime` account-security single-user evidence card。
-- expected_runtime_behavior: browser_backed_fixed_actions_first
-- expected_output_boundary: source plan 默认四源为 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；`archives_profile_runner` stub 只进入 `missing_evidence.optional_source_gap`，不进入四源主链路；四源进入 `source_completion_matrix`；`final_risk_judgement_made=false`。
+- expected_runtime_behavior: runtime_case_execution_runner_first
+- expected_output_boundary: clean full-runtime 必须包含 `computer_use_poc/runtime_case_execution_runner.py`；ATO 单案默认四源为 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`，通过 controlled batch payload 进入 `source_quality_matrix`；旧 runner / 单 action 不进入默认主链；`final_risk_judgement_made=false`。
 
 ## 876A. Account-security browser-backed four source
 
 - test_id: ACCOUNT-SECURITY-BROWSER-BACKED-FOUR-SOURCE-001
 - input: single-user account-security evidence card source template。
-- expected_runtime_behavior: browser_backed_four_source_default_matrix
-- expected_output_boundary: 默认 `source_completion_matrix` 必须包含 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；不得回退为旧三源加 conditional rcp；Archives stub 只作为 optional source gap；不做最终风险定性。
+- expected_runtime_behavior: ato_single_case_controlled_batch_four_source_default
+- expected_output_boundary: ATO 单案默认 `source_quality_matrix` 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`archives_user_analysis` 串行依赖 profile；Track readiness 不是 owner proof；Weapon / RCP 仅按 device_id 或 eventId 条件触发；不做最终风险定性。
 
 ## 877. Track Analysis account-security bundle
 
@@ -8375,8 +8375,8 @@
 
 - test_id: WEAPON-RISKDATA-CHAINING-SAFE-HANDLE-PRESERVED
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
-- expected_runtime_behavior: weapon_private_safe_handle_preserved
-- expected_output_boundary: normalizer 必须保留 `source_checkpoint_private.raw_references` 中的 current-task device safe handle 供 riskData chaining；evidence card / display summary 不输出 raw `labelInfo` 或 raw `originalLog`；deviceId 展示按 `output_scope` 控制。
+- expected_runtime_behavior: dennis_side_safe_handle_preserved_when_available
+- expected_output_boundary: service 不提供 normalizer 或 `source_checkpoint_private` 依赖；Dennis 只能从当前 batch passthrough metadata / capped body 中保留任务内 device safe handle 供后续条件 source 使用；evidence card / display summary 不输出 raw `labelInfo` 或 raw `originalLog`；deviceId 展示按 `output_scope` 控制。
 
 ## 877D. RCP snapshot in account-security matrix
 
@@ -8389,15 +8389,15 @@
 
 - test_id: ARCHIVES-STUB-DOES-NOT-BLOCK-BROWSER-BACKED-SOURCES-001
 - input: `archives_profile_runner` 返回 `planned_or_minimal_stub` / `source_gap`。
-- expected_runtime_behavior: archives_stub_source_gap_non_blocking
-- expected_output_boundary: Archives source gap 写入 `missing_evidence.optional_source_gap` / `source_quality.missing_sources`；不进入默认四源主链路；继续执行/保留 Track Analysis、RCP、Weapon、Login Logs sources；不得认证修复；source_gap 不得作为无风险反证。
+- expected_runtime_behavior: archives_body_missing_no_runner_fallback
+- expected_output_boundary: 档案中心通过 browser-backed batch source 进入 ATO 默认主链；`body_missing`、`auth_failed`、`blocked`、`timeout`、`parse_error` 写入 `missing_evidence` / Dennis-generated `source_quality_matrix`；不得 fallback `archives_profile_runner`；source gap 不得作为无风险反证。
 
 ## 878A. Archives stub optional gap not blocking
 
 - test_id: ARCHIVES-STUB-OPTIONAL-GAP-NOT-BLOCKING-001
 - input: clean full_runtime 中 `archives_profile_runner` 仍是 stub。
-- expected_runtime_behavior: archives_stub_optional_gap_not_main_chain
-- expected_output_boundary: `archives_profile_readonly` 只能作为 optional source gap / missing evidence；不得阻断 `track_analysis_summary`、`rcp_snapshot`、`weapon_inventory`、`login_logs_search`；不得因 stub gap 输出低风险或无风险。
+- expected_runtime_behavior: archives_legacy_stub_not_packaged_as_case_fallback
+- expected_output_boundary: clean full_runtime 不依赖 `archives_profile_runner` 作为 case fallback；档案中心 source gap 来自 browser-backed batch transport/status matrix，并进入 `missing_evidence`；不得因 stub gap 输出低风险或无风险。
 
 ## 879. Login logs 7d parse error 24h fallback
 
@@ -8545,3 +8545,30 @@ Text gate checks:
 - 批量 / 举一反三必须输出共性分簇维度和代表样本边界，不默认逐个在线查。
 - ATO / 账号接管分簇必须覆盖控制权入口、设备、IP / 网络、时间序列、行为承接、前端活跃、策略信号、用户反馈 / 反证。
 - 策略命中不能单独定性，用户反馈被盗不能单独当强证据，Track mismatch 只能作为线索。
+
+## 890. Controlled runtime case execution harness
+
+- test_id: CONTROLLED-RUNTIME-CASE-EXECUTION-HARNESS-001
+- input: `2892617234 这个账号是不是被盗了？`
+- expected_runtime_behavior: controlled_case_execution_harness_required
+- expected_output_boundary: 执行类 case 必须通过 `computer_use_poc/runtime_case_execution_runner.py` 生成 `source_plan`、`execution_groups`、`/actions/batch` payload、Dennis-generated `source_quality_matrix`、`evidence_card` 和 `missing_evidence`；不得散跑 `sso_session_runner`、`archives_profile_runner`、Weapon runner、curl、单独 `/actions/<action>` 或 ad-hoc browser fetch。
+
+- test_id: CONTROLLED-RUNTIME-ATO-DRY-RUN-BATCH-PAYLOAD-001
+- command: `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id 2892617234 --mode dry_run --format json`
+- expected_runtime_behavior: dry_run_no_platform_access
+- expected_output_boundary: 输出包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`independent_parallel` 在前，`archives_user_analysis` 通过 `auth_sensitive_serial` 依赖 `archives_user_profile`；`default_runtime_routing=false`；不访问真实平台、不调用 DataAgent/Hive。
+
+- test_id: CONTROLLED-RUNTIME-NO-LEGACY-FALLBACK-AFTER-BROWSER-BACKED-GAP-001
+- input: `login_logs_search response_too_large / archives body_missing / weapon platform_not_enabled / service_unavailable`
+- expected_runtime_behavior: no_legacy_runner_fallback_after_browser_backed_gap
+- expected_output_boundary: 这些状态进入 `transport_status_matrix`、Dennis-generated `source_quality_matrix` 和 `missing_evidence`，输出 partial evidence；不得调用 `sso_session_runner`、`archives_profile_runner` 或 Weapon runner；不得把 source gap 当低风险反证。
+
+- test_id: CONTROLLED-RUNTIME-LOCAL-BATCH-ONLY-001
+- input: case execution 中尝试直接 `curl https://...` 或直接调用平台 URL。
+- expected_runtime_behavior: direct_platform_curl_forbidden
+- expected_output_boundary: 只能由 harness 在 live mode 调用本机 browser-backed `/actions/batch` 或 `/actions/multi_source_plan`；任意平台 URL curl、cookie/header 拼接、单 action freeform 调用都不是默认执行路径。
+
+- test_id: CONTROLLED-RUNTIME-FULL-RUNTIME-SHARED-HARNESS-001
+- input: `outputs/full_runtime/computer_use_poc/runtime_case_execution_runner.py`
+- expected_runtime_behavior: full_runtime_shared_controlled_entry
+- expected_output_boundary: full-runtime 作为测试包包含同一 harness，可运行 dry-run；不包含旧 runner fallback 主链；不把 `outputs/full_runtime` 当开发源头。
