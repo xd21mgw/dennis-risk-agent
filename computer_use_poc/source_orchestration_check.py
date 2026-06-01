@@ -41,6 +41,12 @@ FIXED_BROWSER_BACKED_ACTIONS = {
     "rcp_event_feature_list",
     "rcp_policy_tree_lookup",
 }
+CONTROLLED_PARALLEL_EXECUTION_GROUPS = {
+    "independent_parallel",
+    "dependency_serial",
+    "large_response_serial",
+    "auth_sensitive_serial",
+}
 FORBIDDEN_ACCESS_METHODS = {"curl_cookie", "manual_cookie", "main_agent_direct_exec", "arbitrary_url"}
 NO_DATA_STATUSES = {"no_data", "blocked", "auth_failed", "timeout", "parse_error", "tool_gap", "auth_bridge_gap"}
 NON_ENDPOINT_STATUSES = {"skipped", "missing_required_fields", "not_checked", "blocked", "auth_failed", "timeout", "tool_gap", "auth_bridge_gap"}
@@ -108,6 +114,101 @@ def select_plan(plan: dict[str, Any], task_type: str, entity_count: int) -> dict
         ):
             return candidate
     return None
+
+
+def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    fixed = plan.get("plans", {}).get("browser_backed_fixed_actions_v1", {})
+    batch_contract = fixed.get("controlled_parallel_batch_contract", {})
+    required_fields = batch_contract.get("source_plan_item_required_fields", [])
+
+    if fixed.get("default_runtime_routing") is not False:
+        failures.append(
+            {
+                "rule": "default_runtime_routing_false_required",
+                "reason": "browser_backed_fixed_actions_v1 must keep default_runtime_routing=false",
+            }
+        )
+    for action_name, action in fixed.get("registered_actions", {}).items():
+        if action.get("default_runtime_routing") is not False:
+            failures.append(
+                {
+                    "rule": "default_runtime_routing_false_required",
+                    "reason": f"registered action {action_name} must keep default_runtime_routing=false",
+                }
+            )
+
+    for endpoint_key in ["service_batch_endpoint", "service_plan_endpoint"]:
+        if not str(batch_contract.get(endpoint_key, "")).startswith("/actions/"):
+            failures.append(
+                {
+                    "rule": "controlled_parallel_batch_contract_required",
+                    "reason": f"controlled parallel contract missing {endpoint_key}",
+                }
+            )
+
+    supported_groups = set(batch_contract.get("execution_groups_supported", []))
+    if not CONTROLLED_PARALLEL_EXECUTION_GROUPS.issubset(supported_groups):
+        failures.append(
+            {
+                "rule": "controlled_parallel_execution_groups_missing",
+                "reason": "controlled parallel contract must list all supported execution groups",
+            }
+        )
+
+    for scenario_name, scenario in fixed.get("scenario_source_plans", {}).items():
+        source_plan = scenario.get("source_plan", [])
+        if not isinstance(source_plan, list) or not source_plan:
+            failures.append(
+                {
+                    "rule": "source_plan_items_required",
+                    "reason": f"scenario {scenario_name} must define source_plan items",
+                }
+            )
+            continue
+        actions = set(scenario.get("actions", []))
+        item_actions = {str(item.get("action")) for item in source_plan if isinstance(item, dict)}
+        if actions and not actions.issubset(item_actions):
+            failures.append(
+                {
+                    "rule": "source_plan_actions_mismatch",
+                    "reason": f"scenario {scenario_name} source_plan missing actions {sorted(actions - item_actions)}",
+                }
+            )
+        for idx, item in enumerate(source_plan):
+            if not isinstance(item, dict):
+                failures.append(
+                    {
+                        "rule": "source_plan_item_shape",
+                        "reason": f"scenario {scenario_name} item {idx} must be an object",
+                    }
+                )
+                continue
+            for field in required_fields:
+                if field not in item:
+                    failures.append(
+                        {
+                            "rule": "source_plan_item_required_fields",
+                            "reason": f"scenario {scenario_name} item {idx} missing {field}",
+                        }
+                    )
+            execution_group = str(item.get("execution_group", ""))
+            if execution_group and execution_group not in CONTROLLED_PARALLEL_EXECUTION_GROUPS:
+                failures.append(
+                    {
+                        "rule": "source_plan_execution_group_unknown",
+                        "reason": f"scenario {scenario_name} item {idx} uses unknown execution_group {execution_group}",
+                    }
+                )
+            if not isinstance(item.get("depends_on", []), list):
+                failures.append(
+                    {
+                        "rule": "source_plan_depends_on_list_required",
+                        "reason": f"scenario {scenario_name} item {idx} depends_on must be a list",
+                    }
+                )
+
+    return failures
 
 
 def source_names(matrix: list[dict[str, Any]]) -> set[str]:
@@ -751,11 +852,13 @@ def main() -> int:
     plan = load_plan()
     selected = select_plan(plan, args.task_type, args.entity_count)
     matrix = parse_matrix(args.source_completion_matrix)
+    static_failures = validate_static_plan_contract(plan)
     failures = (
         validate_matrix(selected, matrix, no_cache=args.no_cache, final_conclusion=args.final_conclusion)
         if selected and matrix
         else []
     )
+    failures = static_failures + failures
 
     result = {
         "schema_version": "source_orchestration_check_v1",
@@ -763,6 +866,8 @@ def main() -> int:
         "entity_count": args.entity_count,
         "no_cache": args.no_cache,
         "plan_selected": selected is not None,
+        "static_plan_contract_valid": not static_failures,
+        "controlled_parallel_groups_supported": sorted(CONTROLLED_PARALLEL_EXECUTION_GROUPS),
         "required_p0_sources": selected.get("required_p0_sources", []) if selected else [],
         "conditional_sources": selected.get("conditional_sources", []) if selected else [],
         "stop_conditions": selected.get("stop_conditions", {}) if selected else {},

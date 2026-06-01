@@ -125,6 +125,7 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 - 在线登录日志窗口不足时必须标记 `login_log_window_incomplete`，不能把 online no_data / 超窗 no_data 当作“无登录异常”或“无 ATO 风险”反证。
 - 账号安全 Hive 取数计划必须按目标选表：成功登录查 `ks_rc_bs.ks_account_login_basic_info`；登录失败 / 撞库 / 暴力破解 / 改密查 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`；Web RCP 查 `ks_rc_arch.antispam_feature_map_default_partitioned`；App RCP 查 `ks_raw_log_v2.antispam_feature_map_partitioned`。
 - App / Web RCP plan 必须限制 `p_date + p_hourmin + p_action_type`；DataAgent 只作为 Hive / 数仓取数分析能力。
+- browser-backed controlled parallel 只用于显式 source plan：ATO 可将 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 放入 `independent_parallel`，再让 `archives_user_analysis` 走 `auth_sensitive_serial`；RCP 归因保持 `rcp_event_detail -> rcp_event_feature_list` 依赖；大响应 source 走 `large_response_serial`；任何 `no_data` / `partial` / `timeout` 不作为低风险反证。
 
 ## 8. 数据调用边界
 

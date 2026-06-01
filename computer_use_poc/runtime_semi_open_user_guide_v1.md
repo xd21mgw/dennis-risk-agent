@@ -82,6 +82,8 @@ Browser-backed fixed actions v1 output boundary:
 - Policy-tree explanation uses:
   `rcp_policy_tree_lookup` only.
 - Every such answer must preserve `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
+- Controlled parallel source plans must preserve per-item `source_id`, `action`, `execution_group`, `depends_on`, `timeout_class`, `failure_policy`, `source_priority`, and `expected_observation`.
+- ATO uses `login_logs_search` + `archives_user_profile` + `track_analysis_check_data_ready` as `independent_parallel`, then `archives_user_analysis` as `auth_sensitive_serial` follow-up. RCP uses `rcp_event_detail -> rcp_event_feature_list` as dependency-aware serial; large feature/user-analysis responses use `large_response_serial`.
 - `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk conclusions.
 - Risk entity identifiers can appear in internal risk review when necessary; credential secrets and strict PII remain forbidden.
 

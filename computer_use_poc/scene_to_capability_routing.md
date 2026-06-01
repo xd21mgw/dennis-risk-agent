@@ -121,6 +121,17 @@ Rules:
 | RCP 事件归因 / 为什么这个 event 被打 | `single_event_policy_attribution` | `rcp_event_detail` -> `rcp_event_feature_list` | partial feature list 只能做 feature-group 摘要，不声称完整 |
 | 策略资产治理 / 策略树解释 | `policy_tree_asset_lookup` | `rcp_policy_tree_lookup` | policy tree 是策略资产治理，不是 event hit path |
 
+Controlled parallel 编排补丁：
+
+- browser-backed fixed actions v1 仍只服务 explicit source plan，`default_runtime_routing=false` 不变。
+- source plan item 必须表达 `source_id`、`action`、`execution_group`、`depends_on` / `dependency`、`timeout_class`、`failure_policy`、`source_priority`、`expected_observation`。
+- `independent_parallel` 只用于无上游依赖、互不共享敏感串行上下文的 source；ATO 中 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可并行。
+- `dependency_serial` 用于 RCP `rcp_event_detail -> rcp_event_feature_list`、同设备 `archives_related_users -> profile/login/track` 这类需要上游实体或事件锚点的 source。
+- `large_response_serial` 用于 `archives_user_analysis` / `rcp_event_feature_list` 大 pageSize、partial 或分页场景；partial 只支持部分观察，不升级强证据。
+- `auth_sensitive_serial` 用于 Archives 同源 / 共享认证上下文 source，例如异常发布 `archives_photo_search -> archives_user_profile -> archives_user_analysis`。
+- 单 source `auth_failed` / `blocked` / `timeout` / `parse_error` 只影响该 source 和显式依赖它的后续 source，不阻塞其他已完成 source 进入 partial evidence card。
+- `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial source 进入 `evidence_card_inputs`。
+
 档案中心编排规则：
 
 - ATO / 登录异常单案默认 source plan 必须包含 `archives_user_profile` 和 `archives_user_analysis`，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等后置行为闭环；`login_logs_search` 只覆盖登录侧，不能单源强判或排除 ATO。

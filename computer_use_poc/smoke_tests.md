@@ -298,6 +298,33 @@
   - 输出 cookie / token / session / header / authorization / password
   - 输出完整手机号 / 身份证 / 姓名 / 详细地址
 
+## 42A. browser-backed controlled parallel text regression
+
+- 输入：controlled parallel / batch / execution_group 相关自然语言 dry-run case。
+- 回归文件：`computer_use_poc/browser_backed_fixed_actions_text_regression_cases_v1.yaml`，case id 前缀 `BBFA-CP-`。
+- 预期：只做 text-level source_plan 编排校验，不访问平台、不调用 DataAgent/Hive、不启动 browser-backed service。
+- 必须输出或验证：
+  - `expected_execution_groups`
+  - `actual_execution_groups`
+  - `source_plan_items`
+  - `execution_group`
+  - `depends_on`
+  - `timeout_class`
+  - `failure_policy`
+  - `source_priority`
+  - `expected_observation`
+- 必须覆盖：
+  - ATO `independent_parallel` + `auth_sensitive_serial` follow-up。
+  - RCP `rcp_event_detail -> rcp_event_feature_list` `dependency_serial`。
+  - Archives `auth_sensitive_serial`。
+  - `large_response_serial`。
+  - 单 source timeout 不阻塞 partial answer。
+  - `no_data` 不当反证。
+  - partial observation 可用但不完整。
+  - same-device 不定团伙。
+  - policyTree 不当 event hit path。
+  - `default_runtime_routing=false`。
+
 ## 42. asset policy 文件存在性
 
 - 输入：本地文档检查。

@@ -8,6 +8,7 @@ required_fields_per_case:
   - expected_route_or_actions
   - expected_orchestration
   - expected_boundary_flags
+  - expected_execution_groups
   - should_not_do
   - expected_answer_contract
 cases:
@@ -349,3 +350,83 @@ cases:
     expected_internal_metadata_retained: true
     expected_user_visible_contains: [默认不展示完整 routing_metadata YAML]
     expected_user_visible_absent: [routing_metadata:]
+  - id: BBFA-CP-001
+    user_query: "controlled parallel：帮我判断这个 user_id 是否疑似 ATO，login/profile/track 并行，archives_user_analysis 后续串行"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "ATO uses login_logs_search + archives_user_profile + track_analysis_check_data_ready as independent_parallel; archives_user_analysis follows as auth_sensitive_serial."
+    expected_boundary_flags: [controlled_parallel_plan_only, source_quality_matrix_merge_required, service_batch_contract_aligned, single_source_not_enough_for_ato]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_access_real_platform, do_not_call_dataagent, do_not_only_query_login_logs, do_not_set_default_runtime_routing_true]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-002
+    user_query: "controlled parallel：RCP event_detail 后才能查 feature_list，验证 dependency_serial"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "rcp_event_detail -> rcp_event_feature_list dependency_serial; feature list requires event detail upstream keys."
+    expected_boundary_flags: [controlled_parallel_plan_only, event_detail_not_policy_tree_asset_lookup, strategy_hit_not_final_judgement]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_skip_event_detail_to_policy_tree, do_not_make_final_judgement_from_strategy_hit_only]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-003
+    user_query: "controlled parallel：异常发布场景 Archives 三个 source 共用认证上下文，按 auth_sensitive_serial 编排"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "archives_photo_search -> archives_user_profile -> archives_user_analysis in auth_sensitive_serial."
+    expected_boundary_flags: [controlled_parallel_plan_only, photo_search_no_data_not_abnormal_publish_exclusion, archives_failure_enters_partial_evidence]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_output_no_abnormal_publish_from_photo_no_data, do_not_auth_repair, do_not_set_default_runtime_routing_true]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-004
+    user_query: "controlled parallel：archives_user_analysis pageSize 太大或 rcp_event_feature_list 返回 partial 时走 large_response_serial"
+    expected_route_or_actions: [archives_user_analysis, rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Large response sources run as large_response_serial and only support partial evidence when capped."
+    expected_boundary_flags: [controlled_parallel_plan_only, large_response_limited_enters_source_quality, partial_observation_available]
+    expected_execution_groups: [large_response_serial]
+    should_not_do: [do_not_dump_raw_body, do_not_claim_complete_timeline, do_not_claim_complete_feature_coverage]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: BBFA-CP-005
+    user_query: "controlled parallel：ATO 多源里单 source timeout，其他 completed source 仍然输出 partial answer"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Single source timeout enters source_quality_matrix/missing_evidence and does not block completed source evidence_card_inputs."
+    expected_boundary_flags: [controlled_parallel_plan_only, source_timeout_non_blocking_partial, partial_evidence_required, source_quality_matrix_merge_required]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_discard_completed_source, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-006
+    user_query: "controlled parallel：login_logs_search no_data 和 archives_photo_search no_data 都不能当低风险反证"
+    expected_route_or_actions: [login_logs_search, archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "no_data sources are completed source-quality states, not low-risk/no-risk counter evidence."
+    expected_boundary_flags: [controlled_parallel_plan_only, no_data_not_risk_exclusion, photo_search_no_data_not_abnormal_publish_exclusion]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_output_low_risk_from_no_data, do_not_use_login_no_data_as_no_risk, do_not_output_no_abnormal_publish_from_photo_no_data]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-007
+    user_query: "controlled parallel：partial observation 可用但不完整，feature partial 不能升级成强证据"
+    expected_route_or_actions: [rcp_event_detail, rcp_event_feature_list]
+    expected_orchestration: "Partial observation is usable as partial context only; missing feature coverage remains missing_evidence."
+    expected_boundary_flags: [controlled_parallel_plan_only, partial_observation_available, feature_list_partial_only_feature_group_summary]
+    expected_execution_groups: [large_response_serial]
+    should_not_do: [do_not_upgrade_partial_to_strong_evidence, do_not_claim_complete_feature_coverage, do_not_output_raw_feature_values]
+    expected_answer_contract: [source_quality_matrix, evidence_strength, missing_evidence, final_answer_boundary]
+  - id: BBFA-CP-008
+    user_query: "controlled parallel：同设备扩散 source_plan 后接 profile/login/track，但不能定团伙"
+    expected_route_or_actions: [archives_related_users, archives_user_profile, login_logs_search, track_analysis_check_data_ready]
+    expected_orchestration: "archives_related_users runs first, then profile/login/track follow-up validates the clue; same-device is not gang conclusion."
+    expected_boundary_flags: [controlled_parallel_plan_only, related_users_not_gang_conclusion, archives_related_users_spread_clue_not_gang]
+    expected_execution_groups: [auth_sensitive_serial, dependency_serial]
+    should_not_do: [do_not_label_gang_from_same_device_only, do_not_claim_archives_related_users_gang]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BBFA-CP-009
+    user_query: "controlled parallel：policyTree lookup 只做资产治理，不当 event hit path"
+    expected_route_or_actions: [rcp_policy_tree_lookup]
+    expected_orchestration: "Policy tree lookup remains governance-only and must not replace event detail/feature list."
+    expected_boundary_flags: [controlled_parallel_plan_only, policy_tree_asset_not_event_hit_path]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_treat_policy_tree_as_event_hit, do_not_use_policy_tree_as_single_case_hit_evidence]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, final_answer_boundary]
+  - id: BBFA-CP-010
+    user_query: "controlled parallel：确认 default_runtime_routing=false，只生成 explicit source plan，不执行平台"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Controlled parallel remains explicit source-plan only; no platform execution and no default routing."
+    expected_boundary_flags: [controlled_parallel_plan_only, default_runtime_routing_false]
+    expected_execution_groups: []
+    should_not_do: [do_not_access_real_platform, do_not_call_dataagent, do_not_set_default_runtime_routing_true, do_not_add_action]
+    expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]

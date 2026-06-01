@@ -43,6 +43,13 @@ GLOBAL_SAFETY_FLAGS = [
     "do_not_add_browser_backed_action",
 ]
 
+CONTROLLED_PARALLEL_EXECUTION_GROUPS = [
+    "independent_parallel",
+    "dependency_serial",
+    "large_response_serial",
+    "auth_sensitive_serial",
+]
+
 ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_use_login_no_data_as_no_risk",
     "do_not_make_final_risk_judgement_from_profile_only",
@@ -157,6 +164,10 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "feature_list_partial_only_feature_group_summary": "feature list partial 只能做特征组摘要",
     "unstable_source_not_default_verified": "未稳定 source 只能作为 follow-up，不默认必跑",
     "default_runtime_routing_false": "browser-backed source 仍需显式 source plan，不自动默认路由",
+    "source_timeout_non_blocking_partial": "单 source timeout 进入 source_quality，不阻塞已完成 source 的 partial answer",
+    "controlled_parallel_plan_only": "本轮只验证受控并行编排计划，不执行真实平台 source",
+    "source_quality_matrix_merge_required": "completed/no_data/partial/auth_failed/blocked/timeout/parse_error 必须分类合并进 source_quality_matrix",
+    "service_batch_contract_aligned": "source_plan 字段与 browser-backed service batch contract 对齐",
 }
 
 DEMO_CASES = [
@@ -437,6 +448,93 @@ def scenario_flags(plan: dict[str, Any], scenario: str) -> list[str]:
     return list(fixed.get("scenario_source_plans", {}).get(scenario, {}).get("boundary_flags", []))
 
 
+def scenario_source_plan(plan: dict[str, Any], scenario: str) -> list[dict[str, Any]]:
+    fixed = plan.get("plans", {}).get("browser_backed_fixed_actions_v1", {})
+    source_plan = fixed.get("scenario_source_plans", {}).get(scenario, {}).get("source_plan", [])
+    return [dict(item) for item in source_plan if isinstance(item, dict)]
+
+
+def large_response_actions_from_text(text: str) -> set[str]:
+    large_response_actions: set[str] = set()
+    if has_any(text, ["large", "大响应", "太大", "pageSize", "完整覆盖", "feature partial", "返回 partial"]):
+        large_response_actions.update({"archives_user_analysis", "rcp_event_feature_list"})
+    return large_response_actions
+
+
+def source_plan_for_actions(plan: dict[str, Any], actions: list[str], text: str) -> list[dict[str, Any]]:
+    if actions == ["source_plan_only_no_action_selected"]:
+        return []
+
+    action_set = set(actions)
+    scenario_order: list[str] = []
+    if "archives_photo_search" in action_set:
+        scenario_order.append("abnormal_publish_content_handoff")
+    if "archives_related_users" in action_set:
+        scenario_order.append("account_spread_same_device")
+    if {"login_logs_search", "archives_user_profile", "archives_user_analysis", "track_analysis_check_data_ready"}.issubset(action_set):
+        scenario_order.append("ato_login_anomaly")
+    if {"rcp_event_detail", "rcp_event_feature_list"} & action_set:
+        scenario_order.append("rcp_event_attribution")
+    if "rcp_policy_tree_lookup" in action_set:
+        scenario_order.append("policy_asset_governance")
+
+    scenarios = [
+        "ato_login_anomaly",
+        "abnormal_publish_content_handoff",
+        "account_spread_same_device",
+        "rcp_event_attribution",
+        "policy_asset_governance",
+    ]
+    ordered_scenarios = unique(scenario_order + scenarios)
+    catalog: list[dict[str, Any]] = []
+    for scenario in ordered_scenarios:
+        catalog.extend(scenario_source_plan(plan, scenario))
+
+    by_action: dict[str, dict[str, Any]] = {}
+    for item in catalog:
+        by_action.setdefault(str(item.get("action")), item)
+
+    large_actions = large_response_actions_from_text(text)
+    result: list[dict[str, Any]] = []
+    for action in actions:
+        if action == "source_plan_only_no_action_selected":
+            continue
+        item = dict(by_action.get(action, {
+            "source_id": action,
+            "action": action,
+            "execution_group": "dependency_serial",
+            "depends_on": [],
+            "dependency": "explicit_source_plan_required",
+            "timeout_class": "standard_readonly",
+            "failure_policy": "non_blocking_partial",
+            "source_priority": "conditional",
+            "expected_observation": "explicit_source_observation",
+        }))
+        if action in large_actions:
+            item["execution_group"] = "large_response_serial"
+            item["timeout_class"] = "large_response"
+            item["failure_policy"] = "non_blocking_partial"
+        result.append(item)
+    return result
+
+
+def execution_groups_for(source_plan_items: list[dict[str, Any]]) -> list[str]:
+    return unique([
+        str(item.get("execution_group"))
+        for item in source_plan_items
+        if item.get("execution_group")
+    ])
+
+
+def finalize_route(plan: dict[str, Any], text: str, routed: dict[str, Any]) -> dict[str, Any]:
+    routed = apply_output_metadata_policy(text, routed)
+    source_plan_items = source_plan_for_actions(plan, list(routed.get("actions", [])), text)
+    routed["source_plan_items"] = source_plan_items
+    routed["actual_execution_groups"] = execution_groups_for(source_plan_items)
+    routed["controlled_parallel_groups_supported"] = list(CONTROLLED_PARALLEL_EXECUTION_GROUPS)
+    return routed
+
+
 def explain_boundary_flags(flags: list[str]) -> list[str]:
     explanations = [BOUNDARY_FLAG_EXPLANATIONS[flag] for flag in flags if flag in BOUNDARY_FLAG_EXPLANATIONS]
     return unique(explanations)
@@ -474,7 +572,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     orchestration = "explicit_source_plan_only"
 
     if has_any(text, ["cookie", "token", "session", "header", "password", "raw login records", "raw labelinfo", "raw body"]):
-        return apply_output_metadata_policy(text, {
+        return finalize_route(plan, text, {
             "actions": [],
             "orchestration": "deny raw secret/raw dump request; offer sanitized source summary only",
             "boundary_flags": [
@@ -491,7 +589,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         })
 
     if has_any(text, ["未验证的新 action", "新 action", "接进主链"]):
-        return apply_output_metadata_policy(text, {
+        return finalize_route(plan, text, {
             "actions": [],
             "orchestration": "reject default routing; require registry/readiness/live-smoke evidence first",
             "boundary_flags": ["disabled_or_unverified_action_not_default_route"],
@@ -504,7 +602,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         })
 
     if has_any(text, ["私信", "private message", "资料四件套", "四件套", "过往四项", "past four", "related_devices", "关联设备"]):
-        return apply_output_metadata_policy(text, {
+        return finalize_route(plan, text, {
             "actions": [],
             "orchestration": "unstable or not-default source stays follow-up only; use only when a stable interface or user-provided clue exists",
             "boundary_flags": [
@@ -522,6 +620,23 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     if has_any(text, ["先给计划", "先给 plan", "plan_mode", "plan mode", "不要执行", "不查平台"]):
         flags += ["plan_mode_no_platform_execution", "default_runtime_routing_false"]
         orchestration = "plan mode only; translate platform_called=false and dataagent_called=false into natural language"
+
+    if has_any(text, ["controlled parallel", "受控并行", "parallel", "batch", "execution_group", "multi_source_plan", "多 source", "多源"]):
+        flags += [
+            "controlled_parallel_plan_only",
+            "source_quality_matrix_merge_required",
+            "service_batch_contract_aligned",
+            "default_runtime_routing_false",
+        ]
+
+    if has_any(text, ["timeout", "超时"]):
+        flags += ["source_timeout_non_blocking_partial", "partial_evidence_required"]
+
+    if has_any(text, ["no_data", "无数据", "没查到"]):
+        flags += ["no_data_not_risk_exclusion"]
+
+    if has_any(text, ["partial", "部分观察", "不完整"]):
+        flags += ["partial_observation_available"]
 
     if has_any(text, ["302", "auth_failed", "登录态", "账号域"]):
         actions += ["archives_user_profile", "archives_user_analysis"]
@@ -541,8 +656,9 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         ]
         orchestration = "archives no_data is source quality and missing evidence, not low-risk counter-evidence"
 
+    policy_tree_governance_only = has_any(text, ["只做资产治理", "不当 event hit path", "不是 event hit path", "不替代 event hit path"])
     if has_any(text, ["policytree", "策略树", "资产路径", "树结构"]):
-        if has_any(text, ["event", "事件", "两个都要", "不要混"]):
+        if has_any(text, ["event", "事件", "两个都要", "不要混"]) and not policy_tree_governance_only:
             actions += ["rcp_event_detail", "rcp_event_feature_list", "rcp_policy_tree_lookup"]
             flags += ["event_detail_not_policy_tree_asset_lookup", "policy_tree_asset_not_event_hit_path"]
             orchestration = "produce separate event attribution and policy asset branches"
@@ -559,7 +675,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             flags += scenario_flags(plan, "policy_asset_governance")
             orchestration = "policy asset governance only"
 
-    if has_any(text, ["event", "eventid", "事件详情", "被拦", "feature", "特征"]):
+    if has_any(text, ["event", "eventid", "事件详情", "被拦", "feature", "特征"]) and not policy_tree_governance_only:
         if "rcp_policy_tree_lookup" not in actions or has_any(text, ["命中归因", "详情", "feature", "特征"]):
             actions += scenario_actions(plan, "rcp_event_attribution")
             flags += scenario_flags(plan, "rcp_event_attribution")
@@ -637,7 +753,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         actions = ["source_plan_only_no_action_selected"]
         flags += ["missing_explicit_source_plan"]
 
-    return apply_output_metadata_policy(text, {
+    return finalize_route(plan, text, {
         "actions": unique(actions),
         "orchestration": orchestration,
         "boundary_flags": unique(flags),
@@ -651,6 +767,7 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     expected_actions = list(case.get("expected_route_or_actions", []))
     expected_flags = list(case.get("expected_boundary_flags", []))
     expected_contract = list(case.get("expected_answer_contract", []))
+    expected_execution_groups = list(case.get("expected_execution_groups", []))
     should_not_do = list(case.get("should_not_do", []))
     expected_metadata_visibility = case.get("expected_metadata_visibility")
     expected_full_metadata_allowed = case.get("expected_full_metadata_allowed")
@@ -659,6 +776,7 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     expected_user_visible_absent = list(case.get("expected_user_visible_absent", []))
 
     actual_actions = actual["actions"]
+    actual_execution_groups = list(actual.get("actual_execution_groups", []))
     if expected_actions:
         actions_ok = all(action in actual_actions for action in expected_actions)
     else:
@@ -666,6 +784,7 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
 
     flags_ok = all(flag in actual["boundary_flags"] for flag in expected_flags)
     contract_ok = all(field in actual["answer_contract"] for field in expected_contract)
+    execution_groups_ok = all(group in actual_execution_groups for group in expected_execution_groups)
     safety_ok = all(flag in actual["safety_flags"] for flag in should_not_do)
     default_routing_ok = default_runtime_routing_ok(plan)
     metadata_visibility_ok = (
@@ -695,6 +814,9 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
     if not contract_ok:
         missing = [field for field in expected_contract if field not in actual["answer_contract"]]
         issues.append(f"expected answer contract missing: {missing}")
+    if not execution_groups_ok:
+        missing = [group for group in expected_execution_groups if group not in actual_execution_groups]
+        issues.append(f"expected execution groups missing: {missing}; actual={actual_execution_groups}")
     if not safety_ok:
         missing = [flag for flag in should_not_do if flag not in actual["safety_flags"]]
         issues.append(f"should_not_do not enforced: {missing}")
@@ -729,11 +851,14 @@ def evaluate_case(plan: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
             "actions": expected_actions,
             "orchestration": case.get("expected_orchestration"),
         },
+        "expected_execution_groups": expected_execution_groups,
         "actual_source_plan_or_template": {
             "actions": actual_actions,
             "orchestration": actual["orchestration"],
             "answer_contract": actual["answer_contract"],
+            "source_plan_items": actual.get("source_plan_items", []),
         },
+        "actual_execution_groups": actual_execution_groups,
         "expected_boundary_flags": expected_flags,
         "actual_boundary_flags": actual["boundary_flags"],
         "actual_output_metadata": {
@@ -894,6 +1019,7 @@ def demo_result(plan: dict[str, Any]) -> dict[str, Any]:
         "cases_passed": len(cases) - len(failed),
         "cases_failed": len(failed),
         "default_runtime_routing_false": default_runtime_routing_ok(plan),
+        "controlled_parallel_groups_supported": list(CONTROLLED_PARALLEL_EXECUTION_GROUPS),
         "real_platform_called": False,
         "dataagent_called": False,
         "hive_called": False,
@@ -911,6 +1037,7 @@ def render_demo_markdown(result: dict[str, Any]) -> str:
         f"- cases_passed: `{result['cases_passed']}`",
         f"- cases_failed: `{result['cases_failed']}`",
         f"- default_runtime_routing_false: `{str(result['default_runtime_routing_false']).lower()}`",
+        f"- controlled_parallel_groups_supported: `{', '.join(result['controlled_parallel_groups_supported'])}`",
         f"- real_platform_called: `{str(result['real_platform_called']).lower()}`",
         f"- dataagent_called: `{str(result['dataagent_called']).lower()}`",
         f"- hive_called: `{str(result['hive_called']).lower()}`",
@@ -919,6 +1046,8 @@ def render_demo_markdown(result: dict[str, Any]) -> str:
     for case in result["cases"]:
         expected_plan = " -> ".join(case["expected_source_plan"]["actions"]) or "(none)"
         actual_plan = " -> ".join(case["actual_source_plan_or_template"]["actions"]) or "(none)"
+        expected_groups = ", ".join(case.get("expected_execution_groups", [])) or "(none)"
+        actual_groups = ", ".join(case.get("actual_execution_groups", [])) or "(none)"
         lines.extend(
             [
                 f"## {case['id']}",
@@ -927,6 +1056,8 @@ def render_demo_markdown(result: dict[str, Any]) -> str:
                 f"- expected_source_plan: `{expected_plan}`",
                 f"- expected_orchestration: {case['expected_source_plan']['orchestration']}",
                 f"- actual_source_plan_or_template: `{actual_plan}`",
+                f"- expected_execution_groups: `{expected_groups}`",
+                f"- actual_execution_groups: `{actual_groups}`",
                 f"- expected_boundary_flags: `{', '.join(case['expected_boundary_flags'])}`",
                 f"- actual_boundary_flags: `{', '.join(case['actual_boundary_flags'])}`",
                 f"- metadata_visibility: `{case['metadata_visibility']}`",
@@ -954,24 +1085,29 @@ def render_markdown(result: dict[str, Any]) -> str:
         f"- cases_passed: `{result['cases_passed']}`",
         f"- cases_failed: `{result['cases_failed']}`",
         f"- default_runtime_routing_false: `{str(result['default_runtime_routing_false']).lower()}`",
+        f"- controlled_parallel_groups_supported: `{', '.join(result['controlled_parallel_groups_supported'])}`",
         f"- real_platform_called: `{str(result['real_platform_called']).lower()}`",
         f"- dataagent_called: `{str(result['dataagent_called']).lower()}`",
         f"- hive_called: `{str(result['hive_called']).lower()}`",
         "",
-        "| id | pass | expected_source_plan | actual_source_plan_or_template | expected_boundary_flags | actual_boundary_flags | issue_if_failed | fix_applied |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| id | pass | expected_source_plan | actual_source_plan_or_template | expected_execution_groups | actual_execution_groups | expected_boundary_flags | actual_boundary_flags | issue_if_failed | fix_applied |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for case in result["cases"]:
         expected_plan = ",".join(case["expected_source_plan"]["actions"])
         actual_plan = ",".join(case["actual_source_plan_or_template"]["actions"])
+        expected_groups = ",".join(case.get("expected_execution_groups", []))
+        actual_groups = ",".join(case.get("actual_execution_groups", []))
         expected_flags = ",".join(case["expected_boundary_flags"])
         actual_flags = ",".join(case["actual_boundary_flags"])
         lines.append(
-            "| {id} | {passed} | {expected} | {actual} | {expected_flags} | {actual_flags} | {issue} | {fix} |".format(
+            "| {id} | {passed} | {expected} | {actual} | {expected_groups} | {actual_groups} | {expected_flags} | {actual_flags} | {issue} | {fix} |".format(
                 id=case["id"],
                 passed=str(case["pass"]).lower(),
                 expected=expected_plan,
                 actual=actual_plan,
+                expected_groups=expected_groups,
+                actual_groups=actual_groups,
                 expected_flags=expected_flags,
                 actual_flags=actual_flags,
                 issue=case["issue_if_failed"].replace("|", "/"),
@@ -1015,6 +1151,7 @@ def main() -> int:
         "cases_passed": len(evaluated) - len(failed),
         "cases_failed": len(failed),
         "default_runtime_routing_false": default_runtime_routing_ok(plan),
+        "controlled_parallel_groups_supported": list(CONTROLLED_PARALLEL_EXECUTION_GROUPS),
         "real_platform_called": False,
         "dataagent_called": False,
         "hive_called": False,

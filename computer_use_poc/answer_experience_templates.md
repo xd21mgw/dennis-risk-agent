@@ -175,6 +175,48 @@ browser_backed_fixed_actions_v1_routing:
       - policy_tree_lookup_not_single_case_risk_evidence
 ```
 
+### Controlled Parallel Source Plan Output
+
+browser-backed service 已支持 `/actions/batch` 和 `/actions/multi_source_plan` 的 controlled parallel 编排，但 Dennis 用户回答仍只在显式 source plan 场景使用，不改变 `default_runtime_routing=false`。Dennis 输出 source plan 时，每个 item 至少包含：
+
+```yaml
+source_plan_item:
+  source_id:
+  action:
+  execution_group: independent_parallel | dependency_serial | large_response_serial | auth_sensitive_serial
+  depends_on: []
+  dependency:
+  timeout_class: short_readiness | standard_readonly | auth_sensitive | large_response
+  failure_policy: non_blocking_partial | dependent_only_block
+  source_priority: P0 | P0-conditional | P0-explicit | P1 | P2 | conditional
+  expected_observation:
+```
+
+典型编排：
+
+- ATO / 登录异常：`login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 使用 `independent_parallel`；`archives_user_analysis` 在 `archives_user_profile` 后使用 `auth_sensitive_serial`，大响应时按 `large_response` timeout 处理。
+- 异常发布 / 内容承接：`archives_photo_search -> archives_user_profile -> archives_user_analysis` 使用 `auth_sensitive_serial`。
+- 同设备扩散：`archives_related_users` 先产出候选关系，再对代表用户/种子用户补 `archives_user_profile`、`login_logs_search`、`track_analysis_check_data_ready`，后续项带 `depends_on`，不能仅凭同设备定团伙。
+- RCP 归因：`rcp_event_detail -> rcp_event_feature_list` 使用 `dependency_serial`；`rcp_event_feature_list` 大 pageSize 或 partial 时标 `large_response_serial`。
+- 策略树：`rcp_policy_tree_lookup` 只做资产治理，不替代 event hit path。
+
+合并规则：
+
+```yaml
+source_quality_matrix:
+  completed: []
+  no_data: []
+  partial: []
+  auth_failed: []
+  blocked: []
+  timeout: []
+  parse_error: []
+evidence_card_inputs: completed_or_partial_sources_only
+missing_evidence: failed_or_missing_or_dependent_skipped_sources
+```
+
+`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error` 都是 source-quality 状态：不阻塞 partial answer，也不能作为低风险 / 无风险反证。service 输出 `batch_result`、`source_results`、`source_quality_matrix`、`evidence_card_inputs`、`missing_evidence`；Dennis 负责 evidence card 和最终业务研判，不展示 raw upstream body。
+
 展示层必须保留 source-quality 语义：
 
 - `no_data` / `completed_no_data`: 当前 source 条件下无记录，不是低风险或无风险反证。

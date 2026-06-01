@@ -128,6 +128,8 @@ Browser-backed fixed actions v1 guard:
 - RCP event attribution source plan: `rcp_event_detail -> rcp_event_feature_list`.
 - Policy asset governance source plan: `rcp_policy_tree_lookup` only.
 - Source output must include `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
+- Controlled parallel source output must keep per-item `source_id`, `action`, `execution_group`, `depends_on`, `timeout_class`, `failure_policy`, `source_priority`, and `expected_observation`; supported groups are `independent_parallel`, `dependency_serial`, `large_response_serial`, and `auth_sensitive_serial`.
+- `/actions/batch` and `/actions/multi_source_plan` are explicit source-plan execution paths only. They do not change `default_runtime_routing=false`, do not authorize new actions, and do not allow caller-provided URL/path/header/cookie/token/session fields.
 - `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk evidence.
 - Archives 302 / redirect is `auth_flow_not_completed_in_bound_context`; do not label it as generic no permission unless the source explicitly returns permission denial.
 - `track_analysis_check_data_ready` is readiness/provenance only, not completed risk evidence.

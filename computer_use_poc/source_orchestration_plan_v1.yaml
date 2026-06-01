@@ -96,6 +96,73 @@
           "default_runtime_routing": false
         }
       },
+      "controlled_parallel_batch_contract": {
+        "service_batch_endpoint": "/actions/batch",
+        "service_plan_endpoint": "/actions/multi_source_plan",
+        "contract_name": "controlled_parallel_executable",
+        "default_runtime_routing": false,
+        "source_plan_required": true,
+        "execution_groups_supported": [
+          "independent_parallel",
+          "dependency_serial",
+          "large_response_serial",
+          "auth_sensitive_serial"
+        ],
+        "source_plan_item_required_fields": [
+          "source_id",
+          "action",
+          "execution_group",
+          "depends_on",
+          "dependency",
+          "timeout_class",
+          "failure_policy",
+          "source_priority",
+          "expected_observation"
+        ],
+        "execution_group_semantics": {
+          "independent_parallel": "Sources with no required upstream entity can run concurrently; each source has independent timeout/status/source_quality.",
+          "dependency_serial": "Source waits for explicit upstream source_id or required entity fields; upstream failure blocks only dependent source, not unrelated sources.",
+          "large_response_serial": "Large or paginated source runs serially to avoid response pressure; partial/limited output is usable partial evidence.",
+          "auth_sensitive_serial": "Sources sharing an auth-sensitive origin or SPA context run serially; auth_failed/blocked/timeout enters source_quality and does not trigger auth repair."
+        },
+        "timeout_classes": {
+          "short_readiness": "Low-cost readiness/provenance checks.",
+          "standard_readonly": "Normal fixed readonly action timeout.",
+          "auth_sensitive": "Shared-auth-context source timeout; no repeated auth probing.",
+          "large_response": "Large response or high pageSize source timeout; partial output allowed."
+        },
+        "failure_policies": {
+          "non_blocking_partial": "completed/no_data/partial/auth_failed/blocked/timeout/parse_error all enter source_quality_matrix; failed sources enter missing_evidence; partial answer remains allowed.",
+          "dependent_only_block": "Missing upstream fields skip or block only the dependent source with missing_upstream_id/missing_required_fields.",
+          "do_not_use_as_counter_evidence": "no_data/partial/auth_failed/timeout/blocked/parse_error cannot support low-risk/no-risk counter evidence.",
+          "preserve_completed_sources": "Any completed source must remain in evidence_card_inputs even if a later source fails.",
+          "raw_body_suppressed": "Service batch result must not expose raw upstream body to the user-visible answer."
+        },
+        "merge_contract": {
+          "service_output_fields": [
+            "batch_result",
+            "source_results",
+            "source_quality_matrix",
+            "evidence_card_inputs",
+            "missing_evidence"
+          ],
+          "status_buckets": [
+            "completed",
+            "no_data",
+            "partial",
+            "auth_failed",
+            "blocked",
+            "timeout",
+            "parse_error"
+          ],
+          "completed_or_partial_enters": "evidence_card_inputs",
+          "failed_or_missing_enters": "missing_evidence",
+          "no_data_boundary": "no_data_not_risk_exclusion",
+          "partial_boundary": "partial_observation_available_is_usable_partial",
+          "final_risk_conclusion_generated_by_service": false,
+          "raw_upstream_body_user_visible": false
+        }
+      },
       "archives_center_orchestration_policy": {
         "default_in_source_plan_for": [
           "ATO",
@@ -157,7 +224,55 @@
             "archives_user_analysis",
             "track_analysis_check_data_ready"
           ],
-          "orchestration": "login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready",
+          "source_plan": [
+            {
+              "source_id": "ato_login_logs_search",
+              "action": "login_logs_search",
+              "execution_group": "independent_parallel",
+              "depends_on": [],
+              "dependency": "none",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "recent_login_window_summary_and_control_change_signals"
+            },
+            {
+              "source_id": "ato_archives_user_profile",
+              "action": "archives_user_profile",
+              "execution_group": "independent_parallel",
+              "depends_on": [],
+              "dependency": "none",
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "account_baseline_status_profile_and_risk_context"
+            },
+            {
+              "source_id": "ato_track_analysis_check_data_ready",
+              "action": "track_analysis_check_data_ready",
+              "execution_group": "independent_parallel",
+              "depends_on": [],
+              "dependency": "none",
+              "timeout_class": "short_readiness",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P1",
+              "expected_observation": "track_data_readiness_and_provenance_only"
+            },
+            {
+              "source_id": "ato_archives_user_analysis",
+              "action": "archives_user_analysis",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "ato_archives_user_profile"
+              ],
+              "dependency": "follow_archives_profile_when_available_or_record_profile_gap",
+              "timeout_class": "large_response",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "bounded_operation_and_risk_timeline_for_behavior_closure"
+            }
+          ],
+          "orchestration": "login_logs_search + archives_user_profile + track_analysis_check_data_ready independent_parallel; archives_user_analysis auth_sensitive_serial follow-up after archives_user_profile",
           "boundary_flags": [
             "login_no_data_or_window_gap_not_ato_exclusion",
             "archives_required_for_behavior_closure_non_blocking",
@@ -172,7 +287,46 @@
             "archives_user_profile",
             "archives_user_analysis"
           ],
-          "orchestration": "archives_photo_search -> archives_user_profile -> archives_user_analysis",
+          "source_plan": [
+            {
+              "source_id": "publish_archives_photo_search",
+              "action": "archives_photo_search",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [],
+              "dependency": "none",
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-conditional",
+              "expected_observation": "publish_or_reported_photo_clues_with_no_data_boundary"
+            },
+            {
+              "source_id": "publish_archives_user_profile",
+              "action": "archives_user_profile",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "publish_archives_photo_search"
+              ],
+              "dependency": "serial_same_archives_origin_after_photo_search",
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "account_baseline_status_profile_for_publish_context"
+            },
+            {
+              "source_id": "publish_archives_user_analysis",
+              "action": "archives_user_analysis",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "publish_archives_user_profile"
+              ],
+              "dependency": "serial_same_archives_origin_after_profile",
+              "timeout_class": "large_response",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0",
+              "expected_observation": "publish_related_operation_timeline_and_behavior_closure"
+            }
+          ],
+          "orchestration": "archives_photo_search -> archives_user_profile -> archives_user_analysis, auth_sensitive_serial",
           "boundary_flags": [
             "photo_search_no_data_not_abnormal_publish_exclusion",
             "archives_failure_enters_partial_evidence",
@@ -186,7 +340,59 @@
             "login_logs_search",
             "track_analysis_check_data_ready"
           ],
-          "orchestration": "archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready",
+          "source_plan": [
+            {
+              "source_id": "spread_archives_related_users",
+              "action": "archives_related_users",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [],
+              "dependency": "none",
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-conditional",
+              "expected_observation": "candidate_same_device_or_related_user_edges"
+            },
+            {
+              "source_id": "spread_archives_user_profile",
+              "action": "archives_user_profile",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "spread_archives_related_users"
+              ],
+              "dependency": "representative_related_user_or_seed_user_profile_follow_up",
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "dependent_only_block",
+              "source_priority": "P1",
+              "expected_observation": "profile_context_for_seed_or_representative_related_users"
+            },
+            {
+              "source_id": "spread_login_logs_search",
+              "action": "login_logs_search",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "spread_archives_related_users"
+              ],
+              "dependency": "requires_seed_or_related_user_id_from_related_users_or_current_input",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "dependent_only_block",
+              "source_priority": "P1",
+              "expected_observation": "login_timeline_cross_check_for_related_or_seed_users"
+            },
+            {
+              "source_id": "spread_track_analysis_check_data_ready",
+              "action": "track_analysis_check_data_ready",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "spread_archives_related_users"
+              ],
+              "dependency": "requires_seed_or_related_user_or_device_reference",
+              "timeout_class": "short_readiness",
+              "failure_policy": "dependent_only_block",
+              "source_priority": "P2",
+              "expected_observation": "track_readiness_for_cross_source_validation_not_gang_conclusion"
+            }
+          ],
+          "orchestration": "archives_related_users first; archives_user_profile/login_logs_search/track_analysis_check_data_ready dependency_serial follow-up",
           "boundary_flags": [
             "related_users_not_gang_conclusion",
             "archives_related_users_spread_clue_not_gang",
@@ -199,7 +405,42 @@
             "rcp_event_detail",
             "rcp_event_feature_list"
           ],
-          "orchestration": "rcp_event_detail -> rcp_event_feature_list",
+          "source_plan": [
+            {
+              "source_id": "rcp_event_detail",
+              "action": "rcp_event_detail",
+              "execution_group": "dependency_serial",
+              "depends_on": [],
+              "dependency": "requires_event_id_event_type_query_time_from_input_or_upstream_hit",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-explicit",
+              "expected_observation": "event_level_decision_entities_and_feature_query_keys"
+            },
+            {
+              "source_id": "rcp_event_feature_list",
+              "action": "rcp_event_feature_list",
+              "execution_group": "dependency_serial",
+              "depends_on": [
+                "rcp_event_detail"
+              ],
+              "dependency": "requires_event_detail_upstream_keys",
+              "timeout_class": "large_response",
+              "failure_policy": "dependent_only_block",
+              "source_priority": "P1",
+              "expected_observation": "feature_group_or_partial_feature_context"
+            }
+          ],
+          "large_response_variant": {
+            "actions": [
+              "rcp_event_feature_list"
+            ],
+            "execution_group": "large_response_serial",
+            "trigger": "large_pageSize_or_feature_list_partial_observation_available",
+            "timeout_class": "large_response",
+            "failure_policy": "non_blocking_partial"
+          },
+          "orchestration": "rcp_event_detail -> rcp_event_feature_list dependency_serial; feature_list large pageSize uses large_response_serial",
           "boundary_flags": [
             "event_detail_not_policy_tree_asset_lookup",
             "feature_list_partial_only_feature_group_summary",
@@ -210,7 +451,20 @@
           "actions": [
             "rcp_policy_tree_lookup"
           ],
-          "orchestration": "rcp_policy_tree_lookup",
+          "source_plan": [
+            {
+              "source_id": "policy_tree_asset_lookup",
+              "action": "rcp_policy_tree_lookup",
+              "execution_group": "dependency_serial",
+              "depends_on": [],
+              "dependency": "requires_policyTreeCode_or_policyCode_context_not_event_hit_path",
+              "timeout_class": "standard_readonly",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-explicit",
+              "expected_observation": "policy_tree_asset_structure_and_node_context"
+            }
+          ],
+          "orchestration": "rcp_policy_tree_lookup only; dependency_serial single-source governance branch",
           "boundary_flags": [
             "policy_tree_asset_not_event_hit_path",
             "policy_tree_lookup_not_single_case_risk_evidence"

@@ -51,6 +51,57 @@ The HAR inventory also tracks auxiliary candidates that are intentionally not in
 
 Current `browser-backed-api-poc` parity note: the adjacent service action registry now registers the v1 routing-closure batch with fixed action names: `login_logs_search`, `track_analysis_check_data_ready`, `archives_user_profile`, `archives_user_analysis`, `archives_photo_search`, `archives_related_users`, `rcp_event_detail`, `rcp_event_feature_list`, and `rcp_policy_tree_lookup`. The Dennis Python client exposes the same action endpoints. Registration parity does not imply default routing: every action still requires an explicit source plan, and no caller-provided URL/path/header/cookie/token/session input is accepted.
 
+## Controlled Parallel Batch Contract
+
+The browser-backed service exposes controlled batch entrypoints:
+
+- `POST /actions/multi_source_plan`: plan/contract shape for explicit multi-source orchestration.
+- `POST /actions/batch`: execution entry for a caller-provided explicit source plan.
+
+Dennis must not add browser-backed actions through this adapter. Batch mode only combines already registered fixed actions and preserves `default_runtime_routing=false`.
+
+Each source plan item must carry:
+
+```yaml
+source_id:
+action:
+execution_group: independent_parallel | dependency_serial | large_response_serial | auth_sensitive_serial
+depends_on: []
+dependency:
+timeout_class: short_readiness | standard_readonly | auth_sensitive | large_response
+failure_policy: non_blocking_partial | dependent_only_block
+source_priority:
+expected_observation:
+```
+
+Execution group mapping:
+
+- `independent_parallel`: `login_logs_search`, `archives_user_profile`, and `track_analysis_check_data_ready` in ATO/login-anomaly plans when no upstream entity is required.
+- `dependency_serial`: `rcp_event_detail -> rcp_event_feature_list`, and `archives_related_users -> profile/login/track` follow-up validation.
+- `large_response_serial`: `rcp_event_feature_list` or `archives_user_analysis` when page size, feature scope, or partial response pressure is large.
+- `auth_sensitive_serial`: Archives same-origin chains such as `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
+
+Batch service results align to Dennis merging:
+
+```yaml
+batch_result:
+source_results: []
+source_quality_matrix:
+  completed: []
+  no_data: []
+  partial: []
+  auth_failed: []
+  blocked: []
+  timeout: []
+  parse_error: []
+evidence_card_inputs: []
+missing_evidence: []
+raw_upstream_body_user_visible: false
+final_risk_conclusion_generated_by_service: false
+```
+
+`completed` and usable `partial` sources can enter `evidence_card_inputs`. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
+
 ## Browser-Backed Fixed Actions v1 Closure Status
 
 | action_name | routing status | source-quality boundary |

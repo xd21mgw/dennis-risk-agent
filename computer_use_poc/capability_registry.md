@@ -107,6 +107,9 @@
   - 档案中心是关键证据项但非硬阻塞项：`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 必须进入 `source_quality` / `missing_evidence` / partial evidence，不能中断回答，也不能作为低风险或无风险反证。
   - 扩散边界：`archives_related_users` / 同设备关系只说明候选扩散链路，不能直接定性团伙；必须再看行为、策略、设备和时间线一致性。
   - 策略命中 / 策略树 / 事件详情 / feature list 不能混用：策略命中只是辅助线索，`rcp_policy_tree_lookup` 只解释策略资产，不证明单案命中路径。
+  - controlled parallel 编排：Dennis source plan 可显式下发 `/actions/batch` / `/actions/multi_source_plan` 所需的 `execution_group`、`depends_on`、`timeout_class`、`failure_policy`、`source_priority` 和 `expected_observation`。支持组为 `independent_parallel`、`dependency_serial`、`large_response_serial`、`auth_sensitive_serial`；这只是显式编排能力，不改变任一 action 的 `default_runtime_routing=false`。
+  - controlled parallel 典型场景：ATO 中 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可 `independent_parallel`，`archives_user_analysis` 后续 `auth_sensitive_serial`；RCP `rcp_event_detail -> rcp_event_feature_list` 是 `dependency_serial`；`archives_user_analysis` / `rcp_event_feature_list` 大响应进入 `large_response_serial`；Archives 同源链路进入 `auth_sensitive_serial`。
+  - controlled parallel 合并边界：`completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 分类进入 `source_quality_matrix`；completed 或 partial source 进入 `evidence_card_inputs`，失败或依赖缺口进入 `missing_evidence`。单 source 失败不阻塞其他 source，且 no_data / partial / timeout 不得当低风险反证。
   - Track 表述：当前 v1 裸问优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；历史 `track_analysis_summary` 只作为 Track 活跃画像泛化能力描述，避免混成当前 action 名。
   - 未稳定 source：private message、资料四件套 / 过往四项、related_devices 等不作为默认已验证 source；只有已有稳定接口、显式 source plan 或用户补充线索时，才写“可进一步查看”。
   - 风控实体字段 `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 可在内部研判和 source chaining 保留；cookie/token/session/header/password、手机号、身份证、姓名、地址严禁输出或保存。
