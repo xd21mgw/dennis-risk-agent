@@ -83,7 +83,9 @@ Browser-backed fixed actions v1 output boundary:
   `rcp_policy_tree_lookup` only.
 - Every such answer must preserve `source_plan`, `actions`, `source_quality_matrix`, `missing_evidence`, `evidence_strength`, and `final_answer_boundary`.
 - Controlled parallel source plans must preserve per-item `source_id`, `action`, `execution_group`, `depends_on`, `timeout_class`, `failure_policy`, `source_priority`, and `expected_observation`.
-- ATO uses `login_logs_search` + `archives_user_profile` + `track_analysis_check_data_ready` as `independent_parallel`, then `archives_user_analysis` as `auth_sensitive_serial` follow-up. RCP uses `rcp_event_detail -> rcp_event_feature_list` as dependency-aware serial; large feature/user-analysis responses use `large_response_serial`.
+- ATO uses `login_logs_search` + `archives_user_profile` + `track_analysis_check_data_ready` as `independent_parallel`, then `archives_photo_search` + `archives_user_analysis` as `auth_sensitive_serial` follow-up. RCP uses `rcp_event_detail -> rcp_event_feature_list` as dependency-aware serial; large feature/user-analysis responses use `large_response_serial`.
+- ATO single-case naked questions must collect realtime P0 sources first, then derive suspicious anchors, extract candidate control endpoint fields, and run `device_identity_consistency`; Track checkDataReady is P0 auxiliary for front/backend activity alignment, while Weapon / RCP remain conditional support sources.
+- `response_too_large` from `login_logs_search` is `source_contract_gap`, not login evidence and not proof of high login volume. If UI no_data conflicts with wrapper large response, mark `wrapper_response_mismatch` and `login_log_evidence_unusable`.
 - `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, `partial_observation_available`, and `large_response_limited` are source-quality states, not low-risk or no-risk conclusions.
 - Risk entity identifiers can appear in internal risk review when necessary; credential secrets and strict PII remain forbidden.
 

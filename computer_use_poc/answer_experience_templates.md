@@ -102,7 +102,7 @@ Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`
 
 ```yaml
 browser_backed_passthrough_envelope:
-  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_summary | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
+  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
   source_id:
   platform:
   http_status:
@@ -294,7 +294,7 @@ evidence_card:
 
 裸问表达保持原模板，但正文主线要收敛：
 
-- ATO / 登录异常：先做 `suspicious_anchor_discovery`，再讲控制权变化和候选控制端，然后讲异常行为闭环，最后讲历史基线、扩散 / 策略 / Track 活跃与数据可用性佐证。
+- ATO / 登录异常：先收集实时 P0 多源（`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`），从这些 source 共同定位可疑动作锚点，再讲控制权变化、候选控制端、异常行为闭环、历史基线和扩散 / 策略佐证。
 - 异常发布 / 导流：先讲内容动作与承接链路，再讲账号状态和发布前后操作。
 - 账号扩散 / 同设备：只写候选关联和交叉验证，不写团伙结论。
 - 避免把日常裸问写成接口说明书；action 名保留在 `source_plan` / `actions`，正文优先解释证据用途和边界。
@@ -328,7 +328,7 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 
 正文规则：
 
-- 裸问“这个账号是不是被盗了”时，第一段必须说明是否完成 `suspicious_anchor_discovery`；未完成时写“未完成可疑锚点发现”，不能只写“证据不足”。
+- 裸问“这个账号是不是被盗了”时，第一段必须说明是否从实时 P0 多源完成可疑锚点定位；未完成时写“未完成可疑锚点发现”，不能只写“证据不足”。`suspicious_anchor_discovery` 不是独立前置 source。
 - 可疑锚点包括 recent login、WEB 登录、扫码 / OAuth、token/session、改密 / 保护账号、异常发视频、直播、评论 / 私信、资料修改、四项信息和策略命中。
 - 发现 WEB 登录、WEB 发布、导流视频或异常内容，必须进入 `content_action_deep_dive`，对齐 photo_id / content_id、发布时间、发布来源端、发布设备、发布 IP / UA、审核 / 策略 / 导流原因、四项信息和登录链路时间差。
 - 设备判断必须写 `device_identity_consistency`。`device_id` 常用只能说明一个变量一致；如果机型 / 系统 / UA / IP / 登录端 / 登录方式异常，应写“device_id 看似常用，但设备身份变量不一致，存在伪装常用设备或 session/token 接管嫌疑”。
@@ -342,18 +342,17 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - 最小 source 类型：`login_control_source`、`publish_action_audit_source`、`candidate_control_endpoint_source`、`device_identity_consistency_source`、`historical_baseline_source`、`wrapper_diagnostic_source`。
 - 不把 normalizer 作为本地 service 默认责任，不新增泛化 observation normalizer 路线。
 
-账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed 四个固定 action，默认请求 `response_mode=passthrough`。pure passthrough 是主链路；`compat_summary` 只保留为历史迁移说明，不作为默认 fallback 或 service 依赖，新 action 一律 passthrough-only。
+账号安全单用户在 clean `full_runtime` 中优先使用 browser-backed realtime P0 固定 action，默认请求 `response_mode=passthrough`。pure passthrough 是主链路；`compat_summary` 只保留为历史迁移说明，不作为默认 fallback 或 service 依赖，新 action 一律 passthrough-only。
 
 ```yaml
 account_security_browser_backed_source_plan:
-  - source_name: track_analysis_account_security_bundle
+  - source_name: track_analysis_frontend_backend_alignment
     access_method: browser_backed_service
-    action_name: track_analysis_summary
+    action_name: track_analysis_check_data_ready
     typed_params:
       user_id: "{user_id}"
       appName: KUAISHOU
-      mode: account_security_bundle
-      sub_interfaces: [profile, getUseDuration, getDeviceIds, getLastestDateTime]
+      mode: track_analysis_data_readiness_precheck
     request_options:
       response_mode: passthrough
     fallback: sub_interface_failures_enter_source_completion_matrix
@@ -393,9 +392,14 @@ account_security_browser_backed_source_plan:
     action_name: archives_user_profile
     default_when_source_gap: missing_evidence.source_gap
     fallback: no_legacy_archives_profile_runner_fallback
+  - source_name: archives_photo_search_default_p0
+    access_method: browser_backed_batch_via_runtime_case_execution_runner
+    action_name: archives_photo_search
+    default_when_source_gap: missing_evidence.source_gap
+    boundary: photo_search_no_data_not_ato_or_abnormal_publish_exclusion
 ```
 
-`bin/sso_session_runner` / `bin/track_analysis_runner` / `bin/archives_profile_runner` 在 case execution 中不得尝试；执行类 case 必须经 `computer_use_poc/runtime_case_execution_runner.py` 生成 controlled batch payload。ATO 单案默认 source_quality_matrix 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`archives_user_analysis` 依赖 profile 串行执行。登录日志失败 / 空结果、档案中心 `body_missing`、Track 缺 device_id 或 readiness gap，均由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，也不得 fallback 旧 runner。
+`bin/sso_session_runner` / `bin/track_analysis_runner` / `bin/archives_profile_runner` 在 case execution 中不得尝试；执行类 case 必须经 `computer_use_poc/runtime_case_execution_runner.py` 生成 controlled batch payload。ATO 单案默认 source_quality_matrix 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；`archives_photo_search` 和 `archives_user_analysis` 依赖 profile 在 Archives auth-sensitive 组中执行。登录日志失败 / 空结果、档案中心 `body_missing`、Track 缺 device_id 或 readiness gap，均由 Dennis 从 passthrough envelope / transport metadata 归入本地 `source_quality`、`missing_evidence` 和 evidence card，不得要求 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，也不得 fallback 旧 runner。
 
 迁移边界：
 
@@ -496,17 +500,16 @@ source_plan:
       - final answer / evidence card / run log 不输出完整 labelInfo 原文
       - labelInfo 为空时标 `risk_label_summary.empty=true` 和 `no_risk_label_not_no_risk_proof=true`
       - 设备风险标签是设备侧证据，不单独定性 ATO / 垃圾注册 / 群控
-  - source_name: Track Analysis 账号安全 bundle
-    source_priority: P0_or_P1_by_case
-    trigger_condition: ATO / 账号安全单用户默认需要
+  - source_name: Track Analysis 前后端活跃对齐
+    source_priority: P0_auxiliary
+    trigger_condition: ATO / 账号安全单用户默认需要；缺 device_id 时进入 blocked/missing_required_fields，不导致 batch 失败
     access_method: browser_backed_service
-    action_name: track_analysis_summary
+    action_name: track_analysis_check_data_ready
     typed_params:
-      mode: account_security_bundle
+      mode: track_analysis_data_readiness_precheck
       appName: KUAISHOU
-      sub_interfaces: [profile, getUseDuration, getDeviceIds, getLastestDateTime]
-    purpose: 画像、设备列表、使用时长、latest timestamp 和事件日活跃对齐补证
-    fallback: 任一 sub_interface no_data/blocked/parse_error 进入 source_quality，不做无风险反证
+    purpose: 事件日前端活跃与后端登录/发布对齐补证；不是本人操作证明
+    fallback: no_data/blocked/missing_required_fields/parse_error 进入 source_quality，不做无风险反证
 ```
 
 ATO 输出必须包含 `time_window_reasoning`：

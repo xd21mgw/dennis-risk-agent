@@ -319,8 +319,8 @@ sources:
       - mode=account_security_bundle
       - sub_interfaces=profile,getUseDuration,getDeviceIds,getLastestDateTime
     allowed_actions:
-      - track_analysis_summary
-      - expand_sub_interface_calls_profile_getUseDuration_getDeviceIds_getLastestDateTime
+      - track_analysis_check_data_ready
+      - track_analysis_summary_legacy_client_unit_only
     forbidden_actions:
       - track_analysis_runner_execution_in_clean_full_runtime
       - raw_event_sequence_export
@@ -352,9 +352,9 @@ sources:
       - source_quality
     sensitive_output_policy: aggregate_profile_duration_and_device_counts_only
     notes:
-      - "Account-security single-user evidence cards must call track_analysis_summary with account_security_bundle mode or equivalent expanded sub_interface coverage for profile/getUseDuration/getDeviceIds/getLastestDateTime."
-      - "The browser-backed client helper expands the bundle into four sub-interface calls and merges them into one Track Analysis source card."
-      - "Calling track_analysis_summary with only user_id/appName is insufficient for the account-security bundle."
+      - "Account-security single-user evidence cards default to track_analysis_check_data_ready for readiness/provenance and front/backend activity alignment."
+      - "Historical track_analysis_summary bundle behavior is retained only as a browser-backed client unit / legacy alias, not the current ATO case execution default."
+      - "Missing device_id for track_analysis_check_data_ready enters source_quality blocked/missing_required_fields and must not fail the full batch."
 
   - source_name: track_analysis_profile
     capability: track_analysis_activity_profile_api_direct

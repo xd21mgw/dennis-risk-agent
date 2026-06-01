@@ -141,6 +141,9 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_call_archives_profile_runner",
     "do_not_call_weapon_runner_as_fallback",
     "do_not_direct_curl_platform",
+    "do_not_browser_click_for_case_execution",
+    "do_not_dom_parse_for_case_execution",
+    "do_not_ad_hoc_fetch_for_case_execution",
     "do_not_call_single_action_freeform",
     "do_not_fallback_sso_session_runner",
     "do_not_fallback_archives_profile_runner",
@@ -203,7 +206,8 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "controlled_parallel_plan_only": "本轮只验证受控并行编排计划，不执行真实平台 source",
     "source_quality_matrix_merge_required": "completed/no_data/partial/auth_failed/blocked/timeout/parse_error 必须分类合并进 source_quality_matrix",
     "service_batch_contract_aligned": "source_plan 字段与 browser-backed service batch contract 对齐",
-    "suspicious_anchor_discovery_required": "ATO 裸问必须先找可疑登录/内容/行为锚点",
+    "suspicious_anchor_derived_from_realtime_p0_sources": "ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source",
+    "archives_photo_search_default_p0": "ATO 单案默认纳入作品/发布承接检查",
     "device_identity_consistency_required": "设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id",
     "common_device_id_not_sufficient_to_exclude_ato": "历史常用 device_id 不能单独排除 ATO",
     "track_activity_not_owner_proof": "Track 活跃只能做辅助信号，不能证明本人操作",
@@ -236,6 +240,10 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "service_source_card_not_required": "service 不再输出 source_card",
     "compat_summary_legacy_only": "compat_summary 仅历史说明，不作为 pure passthrough fallback",
     "transport_status_matrix_merge_required": "batch 只有 transport_status_matrix/source_results 时，Dennis 仍需合并质量矩阵",
+    "transport_status_matrix_dict_list_compatible": "harness 兼容 transport_status_matrix 的 dict/list 两种返回形态",
+    "missing_or_failed_sources_dict_list_compatible": "harness 兼容 missing_or_failed_sources 的 dict/list 两种返回形态",
+    "track_missing_device_id_blocked_not_batch_failure": "Track 缺 device_id 只标 blocked/missing_required_fields，不导致整个 batch 失败",
+    "archives_photo_search_default_for_representative_ato": "批量 ATO 代表样本默认沿用单案 P0 的 archives_photo_search",
     "body_truncated_means_partial_observation": "body_truncated=true 只能支持 partial_observation_available",
     "raw_body_capped_limited_observation_only": "raw body suppressed/capped 时只能做有限观察，不声称完整明细",
     "timeout_platform_error_parse_error_missing_evidence": "timeout/platform_error/parse_error 进入 missing_evidence，不阻塞 partial answer",
@@ -254,6 +262,7 @@ DEMO_CASES = [
             "login_logs_search",
             "archives_user_profile",
             "archives_user_analysis",
+            "archives_photo_search",
             "track_analysis_check_data_ready",
         ],
         "expected_orchestration": "ATO multi-source plan, not login logs only.",
@@ -458,6 +467,7 @@ DEMO_CASES = [
             "login_logs_search",
             "archives_user_profile",
             "archives_user_analysis",
+            "archives_photo_search",
             "track_analysis_check_data_ready",
         ],
         "expected_orchestration": "ATO multi-source plan, not login logs only.",
@@ -800,12 +810,12 @@ def source_plan_for_actions(plan: dict[str, Any], actions: list[str], text: str)
 
     action_set = set(actions)
     scenario_order: list[str] = []
+    if {"login_logs_search", "archives_user_profile", "archives_user_analysis", "track_analysis_check_data_ready"}.issubset(action_set):
+        scenario_order.append("ato_login_anomaly")
     if "archives_photo_search" in action_set:
         scenario_order.append("abnormal_publish_content_handoff")
     if "archives_related_users" in action_set:
         scenario_order.append("account_spread_same_device")
-    if {"login_logs_search", "archives_user_profile", "archives_user_analysis", "track_analysis_check_data_ready"}.issubset(action_set):
-        scenario_order.append("ato_login_anomaly")
     if {"rcp_event_detail", "rcp_event_feature_list"} & action_set:
         scenario_order.append("rcp_event_attribution")
     if "rcp_policy_tree_lookup" in action_set:
@@ -991,6 +1001,11 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         ]
         if has_any(text, ["transport_status_matrix", "source_results", "batch result", "batch"]):
             passthrough_flags += ["transport_status_matrix_merge_required", "source_quality_matrix_merge_required"]
+        if has_any(text, ["dict/list", "dict list", "list/dict", "列表", "字典"]):
+            passthrough_flags += [
+                "transport_status_matrix_dict_list_compatible",
+                "missing_or_failed_sources_dict_list_compatible",
+            ]
         if has_any(text, ["body_truncated", "capped body", "raw body", "截断", "partial"]):
             passthrough_flags += [
                 "body_truncated_means_partial_observation",
@@ -1006,6 +1021,8 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             ]
         if has_any(text, ["no_data", "empty result", "无数据"]):
             passthrough_flags += ["no_data_not_risk_exclusion"]
+        if has_any(text, ["缺 device_id", "missing device_id", "missing_required_fields"]):
+            passthrough_flags += ["track_missing_device_id_blocked_not_batch_failure"]
         if has_any(text, ["auth_redirect_detected", "api_code=302", "302"]):
             passthrough_flags += ["auth_flow_not_completed_in_bound_context"]
         return finalize_route(plan, text, {
@@ -1074,6 +1091,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "device_identity_inconsistency_cluster",
                 "compromised_account_cluster_detection",
                 "representative_ato_single_case_deep_dive",
+                "archives_photo_search_default_for_representative_ato",
                 "cluster_level_backfill",
                 "representative_sample_not_global_proof",
                 "batch_login_gap_not_low_risk",
@@ -1146,6 +1164,18 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "service_batch_contract_aligned",
             "default_runtime_routing_false",
         ]
+
+    if has_any(text, ["runtime_case_execution_runner", "真实 case", "case 执行", "browser click", "dom parsing", "ad-hoc fetch", "direct curl", "旧 runner", "old runner"]):
+        actions = ["source_plan_only_no_action_selected"]
+        flags += [
+            "controlled_case_execution_harness_required",
+            "no_legacy_runner_fallback",
+            "default_runtime_routing_false",
+        ]
+        orchestration = (
+            "case execution must use runtime_case_execution_runner -> controlled batch -> "
+            "passthrough envelope; no browser click, DOM parsing, ad-hoc fetch, direct curl, or old runner fallback"
+        )
 
     if has_any(text, ["timeout", "超时"]):
         flags += ["source_timeout_non_blocking_partial", "partial_evidence_required"]
@@ -1264,6 +1294,9 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         actions += ["track_analysis_check_data_ready"]
         flags += ["track_check_data_ready_not_risk_conclusion"]
         orchestration = "track_analysis_check_data_ready is readiness/provenance only"
+
+    if has_any(text, ["缺 device_id", "missing device_id", "missing_required_fields"]):
+        flags += ["track_missing_device_id_blocked_not_batch_failure", "source_quality_matrix_merge_required"]
 
     if has_any(text, ["track summary", "track_analysis_summary", "track 命名", "track能力", "track 能力", "track 活跃", "数据可用性"]):
         actions += ["track_analysis_check_data_ready"]
@@ -1473,8 +1506,8 @@ def answer_draft_for(case: dict[str, Any], actual: dict[str, Any]) -> str:
     drafts = {
         "ato": (
             f"我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：{plan_label}。"
-            "先看登录链路是否有新设备、异地、验证或 token 变化；再用档案用户分析对齐改密、发布、关注等后置动作；"
-            "最后只把 Track 活跃与数据可用性、策略命中当旁证。no_data 只进 source_quality，不能排除 ATO。"
+            "先看登录链路是否有新设备、异地、验证或 token 变化；再用档案画像、用户分析和作品/发布承接对齐改密、发布、关注等后置动作；"
+            "Track 活跃与数据可用性用于前后端活动对齐，不证明本人操作。no_data 只进 source_quality，不能排除 ATO。"
             "档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。"
         ),
         "login_no_data": (

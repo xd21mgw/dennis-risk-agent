@@ -330,7 +330,8 @@
 - 输入：`2892617234 这个账号是不是被盗了？` 或等价 ATO 单案裸问。
 - 场景：bad case 中 runtime 平铺 Track/RCP/Weapon/登录日志/档案中心 source 状态，未先找 WEB 登录 / 导流视频等可疑锚点。
 - 预期关键词必须存在：
-  - `suspicious_anchor_discovery`
+  - `suspicious_anchor_derived_from_realtime_p0_sources`
+  - `archives_photo_search_default_p0`
   - `content_action_deep_dive`
   - `device_identity_consistency`
   - `possible_device_id_spoofing`
@@ -8061,7 +8062,7 @@
 - test_id: BROWSER-BACKED-SERVICE-ADAPTER-001
 - input: Dennis 需要读取 RCP / Weapon / Login Logs / Track Analysis source。
 - expected_runtime_behavior: browser_backed_service_fixed_action_mapping
-- expected_output_boundary: 只调用 `rcp_snapshot` / `weapon_inventory` / `login_logs_search` / `track_analysis_summary`；Dennis 不启动浏览器、不读取认证材料、不扩 action。
+- expected_output_boundary: case execution 只通过 `runtime_case_execution_runner` 生成 controlled batch；ATO 默认 P0 使用 `login_logs_search` / `archives_user_profile` / `archives_user_analysis` / `archives_photo_search` / `track_analysis_check_data_ready`，RCP / Weapon 仅按 eventId 或 device_id 条件进入；Dennis 不启动浏览器、不读取认证材料、不扩 action。
 
 ## 850. Browser-backed blocked action is source quality
 
@@ -8094,7 +8095,7 @@
 ## 854. Browser-backed service adapter dry-run
 
 - test_id: BROWSER-BACKED-SERVICE-ADAPTER-DRY-RUN-001
-- input: 模拟 `rcp_snapshot=blocked/platform_error`、`weapon_inventory=blocked/network_error`、`login_logs_search=auth_redirect_detected`、`track_analysis_summary=completed/body_present=false`，且四个结果只有 passthrough envelope / transport metadata。
+- input: 模拟 `rcp_snapshot=blocked/platform_error`、`weapon_inventory=blocked/network_error`、`login_logs_search=auth_redirect_detected`、`track_analysis_check_data_ready=completed/body_present=false`，且结果只有 passthrough envelope / transport metadata。
 - expected_runtime_behavior: browser_backed_passthrough_results_interpreted_offline
 - expected_output_boundary: Dennis 输出 4-source `source_completion_matrix` 和 partial evidence card；失败 source 不算 Dennis runtime failure；不 browser debug、不读取 `.ks_sso`、不调用 `sso_session_runner`、不读取或输出 cookie/token/session/header；`no_data` / `auth_failed` / `blocked` / `timeout` 不作为无风险反证。
 
@@ -8278,7 +8279,7 @@
 - test_id: FULL-RUNTIME-HAR-INVENTORY-BROWSER-BACKED-SERVICE-PARITY-001
 - input: `browser-backed-api-poc` action allowlist and `computer_use_poc/har_platform_interface_inventory_v1.md`。
 - expected_runtime_behavior: service_live_actions_not_overclaimed
-- expected_output_boundary: 如果 `browser-backed-api-poc` 只暴露 `rcp_snapshot`、`weapon_inventory`、`login_logs_search`、`track_analysis_summary`，则 Track Analysis readiness helper、Archives optional actions 和 RCP drill-down / governance actions 只能描述为 Dennis-side `implemented_mock_only` contracts，不得标 live_verified / service-live / default runtime source；必须 `needs_explicit_action_call=true`。
+- expected_output_boundary: `track_analysis_summary` 只能作为 legacy alias / historical client unit；当前 ATO 默认执行 action 是 `track_analysis_check_data_ready`。若 service 未暴露 Archives/RCP drill-down/governance actions，只能标为 Dennis-side mock/readiness contract，不得标 live_verified 或 default runtime source；必须 `needs_explicit_action_call=true`。
 
 ## 875. Browser-backed evidence card display summary
 
@@ -8341,28 +8342,28 @@
 - test_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
 - input: clean `outputs/full_runtime` account-security single-user evidence card。
 - expected_runtime_behavior: runtime_case_execution_runner_first
-- expected_output_boundary: clean full-runtime 必须包含 `computer_use_poc/runtime_case_execution_runner.py`；ATO 单案默认四源为 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`，通过 controlled batch payload 进入 `source_quality_matrix`；旧 runner / 单 action 不进入默认主链；`final_risk_judgement_made=false`。
+- expected_output_boundary: clean full-runtime 必须包含 `computer_use_poc/runtime_case_execution_runner.py`；ATO 单案默认五个实时 P0 source 为 `login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`，通过 controlled batch payload 进入 `source_quality_matrix`；旧 runner / 单 action 不进入默认主链；`final_risk_judgement_made=false`。
 
-## 876A. Account-security browser-backed four source
+## 876A. Account-security browser-backed five source
 
-- test_id: ACCOUNT-SECURITY-BROWSER-BACKED-FOUR-SOURCE-001
+- test_id: ACCOUNT-SECURITY-BROWSER-BACKED-FIVE-SOURCE-001
 - input: single-user account-security evidence card source template。
-- expected_runtime_behavior: ato_single_case_controlled_batch_four_source_default
-- expected_output_boundary: ATO 单案默认 `source_quality_matrix` 必须包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`archives_user_analysis` 串行依赖 profile；Track readiness 不是 owner proof；Weapon / RCP 仅按 device_id 或 eventId 条件触发；不做最终风险定性。
+- expected_runtime_behavior: ato_single_case_controlled_batch_five_source_default
+- expected_output_boundary: ATO 单案默认 `source_quality_matrix` 必须包含 `login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`；`archives_user_analysis` 和 `archives_photo_search` 串行依赖 profile / 同认证上下文；Track readiness 不是 owner proof；Weapon / RCP 仅按 device_id 或 eventId 条件触发；不做最终风险定性。
 
-## 877. Track Analysis account-security bundle
+## 877. Track Analysis account-security readiness default
 
-- test_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
-- input: `track_analysis_summary` 用于账号安全单用户 evidence card。
-- expected_runtime_behavior: account_security_bundle_typed_params_required
-- expected_output_boundary: typed params 必须包含 `mode=account_security_bundle` 和 `sub_interfaces=[profile,getUseDuration,getDeviceIds,getLastestDateTime]`，或等价逐项 sub_interface 调用；只传 `user_id/appName` 或只跑 latest timestamp 不满足账号安全 bundle；活跃信号不得单独最终定性。
+- test_id: TRACK-ANALYSIS-CHECK-DATA-READY-ATO-P0-001
+- input: `track_analysis_check_data_ready` 用于账号安全单用户 evidence card。
+- expected_runtime_behavior: track_check_data_ready_p0_auxiliary
+- expected_output_boundary: `track_analysis_check_data_ready` 是 ATO 实时 P0 辅助 source，用于前后端活跃对齐和数据可用性判断；缺 `device_id` 时进入 `source_quality_matrix.blocked/missing_required_fields`，不得导致整个 batch fail；Track 活跃不得单独最终定性。
 
-## 877A. Track Analysis bundle expands four sub-interfaces
+## 877A. Track Analysis summary legacy unit only
 
 - test_id: ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES
 - input: `python3 computer_use_poc/browser_backed_service_client.py --self-test`。
-- expected_runtime_behavior: track_analysis_bundle_expanded_and_merged
-- expected_output_boundary: account-security helper 默认展开 `track_analysis_summary` 四个子调用：`profile`、`getUseDuration`、`getDeviceIds`、`getLastestDateTime`；合并后的 evidence card 必须展示 profile/useDuration/deviceIds/latest 摘要；如果 observed sub-interface 与 requested 不一致，requested sub-interface 仍标 missing，不能伪装 completed。
+- expected_runtime_behavior: track_analysis_summary_legacy_client_unit_only
+- expected_output_boundary: `track_analysis_summary` 只作为 browser-backed client 历史单测 / legacy alias，可验证 profile/useDuration/deviceIds/latest passthrough 兼容；不得作为当前 ATO case execution 默认 action，当前默认 action 是 `track_analysis_check_data_ready`。
 
 ## 877B. Weapon riskData chaining in evidence card
 
@@ -8556,7 +8557,12 @@ Text gate checks:
 - test_id: CONTROLLED-RUNTIME-ATO-DRY-RUN-BATCH-PAYLOAD-001
 - command: `python3 computer_use_poc/runtime_case_execution_runner.py --task ato_single_case --user-id 2892617234 --mode dry_run --format json`
 - expected_runtime_behavior: dry_run_no_platform_access
-- expected_output_boundary: 输出包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_user_analysis`；`independent_parallel` 在前，`archives_user_analysis` 通过 `auth_sensitive_serial` 依赖 `archives_user_profile`；`default_runtime_routing=false`；不访问真实平台、不调用 DataAgent/Hive。
+- expected_output_boundary: 输出包含 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready`、`archives_photo_search`、`archives_user_analysis`；`independent_parallel` 在前，`archives_photo_search` 和 `archives_user_analysis` 通过 `auth_sensitive_serial` 依赖 `archives_user_profile`；`default_runtime_routing=false`；不访问真实平台、不调用 DataAgent/Hive。
+
+- test_id: CONTROLLED-RUNTIME-HARNESS-MERGE-COMPAT-001
+- input: `/actions/batch` 返回 `transport_status_matrix` 或 `missing_or_failed_sources` 为 dict/list 任一形态，或 Track 缺 `device_id`。
+- expected_runtime_behavior: harness_merge_dict_list_and_missing_required_fields_compatible
+- expected_output_boundary: harness 仍合并 Dennis-generated `source_quality_matrix`；Track 缺 `device_id` 只进入 blocked / missing_required_fields，不导致整个 batch 失败；不得 fallback 旧 runner。
 
 - test_id: CONTROLLED-RUNTIME-NO-LEGACY-FALLBACK-AFTER-BROWSER-BACKED-GAP-001
 - input: `login_logs_search response_too_large / archives body_missing / weapon platform_not_enabled / service_unavailable`

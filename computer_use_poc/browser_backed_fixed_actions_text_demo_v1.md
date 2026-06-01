@@ -14,16 +14,16 @@ This is an offline text demo. It does not start the browser-backed service, acce
 ## BBFA-DEMO-001
 
 - user_query: 帮我判断 user_id=2871834924 是否疑似 ATO
-- expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`
+- expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready`
 - expected_orchestration: ATO multi-source plan, not login logs only.
-- actual_source_plan_or_template: `suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready`
+- actual_source_plan_or_template: `login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready`
 - expected_execution_groups: `(none)`
-- actual_execution_groups: `dependency_serial, independent_parallel, auth_sensitive_serial`
+- actual_execution_groups: `independent_parallel, auth_sensitive_serial`
 - expected_boundary_flags: `single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking`
-- actual_boundary_flags: `suspicious_anchor_discovery_required, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
+- actual_boundary_flags: `suspicious_anchor_derived_from_realtime_p0_sources, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, archives_photo_search_default_p0, photo_search_no_data_not_abnormal_publish_exclusion, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, controlled_case_execution_harness_required, default_runtime_routing_false, no_legacy_runner_fallback, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
 - metadata_visibility: `user_visible_summary`
 - routing_metadata_yaml_visible: `false`
-- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 - should_not_do: `do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality`
 - pass: `true`
 - issue_if_failed: none
@@ -31,9 +31,9 @@ This is an offline text demo. It does not start the browser-backed service, acce
 
 Dennis_answer_draft:
 
-我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready。先看登录链路是否有新设备、异地、验证或 token 变化；再用档案用户分析对齐改密、发布、关注等后置动作；最后只把 Track 活跃与数据可用性、策略命中当旁证。no_data 只进 source_quality，不能排除 ATO。档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。
+我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready。先看登录链路是否有新设备、异地、验证或 token 变化；再用档案画像、用户分析和作品/发布承接对齐改密、发布、关注等后置动作；Track 活跃与数据可用性用于前后端活动对齐，不证明本人操作。no_data 只进 source_quality，不能排除 ATO。档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。
 
-执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 
 ## BBFA-DEMO-002
 
@@ -376,16 +376,16 @@ Dennis_answer_draft:
 ## BBFA-NATURAL-001
 
 - user_query: 帮我判断 user_id=2871834924 是否疑似 ATO
-- expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`
+- expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready`
 - expected_orchestration: ATO multi-source plan, not login logs only.
-- actual_source_plan_or_template: `suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready`
+- actual_source_plan_or_template: `login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready`
 - expected_execution_groups: `(none)`
-- actual_execution_groups: `dependency_serial, independent_parallel, auth_sensitive_serial`
+- actual_execution_groups: `independent_parallel, auth_sensitive_serial`
 - expected_boundary_flags: `single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking`
-- actual_boundary_flags: `suspicious_anchor_discovery_required, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
+- actual_boundary_flags: `suspicious_anchor_derived_from_realtime_p0_sources, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, archives_photo_search_default_p0, photo_search_no_data_not_abnormal_publish_exclusion, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, controlled_case_execution_harness_required, default_runtime_routing_false, no_legacy_runner_fallback, no_data_not_risk_exclusion, login_log_window_incomplete_possible, source_quality_required`
 - metadata_visibility: `user_visible_summary`
 - routing_metadata_yaml_visible: `false`
-- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 - should_not_do: `do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality`
 - pass: `true`
 - issue_if_failed: none
@@ -393,9 +393,9 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready。先看登录链路是否有新设备、异地、验证或 token 变化；再用档案用户分析对齐改密、发布、关注等后置动作；最后只把 Track 活跃与数据可用性、策略命中当旁证。no_data 只进 source_quality，不能排除 ATO。档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。
+我会按“控制权变化 -> 异常行为闭环 -> 扩散/策略佐证”收敛，不自动查平台。source_plan：login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready。先看登录链路是否有新设备、异地、验证或 token 变化；再用档案画像、用户分析和作品/发布承接对齐改密、发布、关注等后置动作；Track 活跃与数据可用性用于前后端活动对齐，不证明本人操作。no_data 只进 source_quality，不能排除 ATO。档案中心若 auth_failed/no_data/timeout，也只降级为 partial evidence，不能跳过行为闭环。
 
-执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 
 ## BBFA-NATURAL-002
 
@@ -598,7 +598,7 @@ Dennis_answer_draft:
 - expected_execution_groups: `(none)`
 - actual_execution_groups: `(none)`
 - expected_boundary_flags: `batch_ato_cluster_lens_required, existing_cluster_plus_ato_lens, compromised_account_cluster_detection, representative_ato_single_case_deep_dive, cluster_level_backfill, representative_sample_not_global_proof`
-- actual_boundary_flags: `batch_ato_cluster_lens_required, existing_cluster_plus_ato_lens, web_untrusted_login_cluster, login_to_action_delta_required, device_identity_inconsistency_cluster, compromised_account_cluster_detection, representative_ato_single_case_deep_dive, cluster_level_backfill, representative_sample_not_global_proof, batch_login_gap_not_low_risk, hive_required_hint, offline_hive_required, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, hive_registry_first_query_plan, batch_user_facing_no_runtime_yaml, default_runtime_routing_false`
+- actual_boundary_flags: `batch_ato_cluster_lens_required, existing_cluster_plus_ato_lens, web_untrusted_login_cluster, login_to_action_delta_required, device_identity_inconsistency_cluster, compromised_account_cluster_detection, representative_ato_single_case_deep_dive, archives_photo_search_default_for_representative_ato, cluster_level_backfill, representative_sample_not_global_proof, batch_login_gap_not_low_risk, hive_required_hint, offline_hive_required, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, hive_registry_first_query_plan, batch_user_facing_no_runtime_yaml, default_runtime_routing_false`
 - metadata_visibility: `user_visible_summary`
 - routing_metadata_yaml_visible: `false`
 - user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：批量 ATO 要在已有分簇上叠加 ATO lens，不是从零分簇或逐用户 for-loop；保留内容/设备/策略/时间等已有簇，再判断是否叠加 ATO 盗号投放嫌疑；多个账号存在 WEB/H5/PC 非可信登录或登录端从 APP 偏移；需要提取 WEB/控制链登录到发视频/评论/直播/私信等后置动作的时间差。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
@@ -618,14 +618,14 @@ Dennis_answer_draft:
 - user_query: 登录没异常，但档案中心操作很可疑，怎么判断？
 - expected_source_plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`
 - expected_orchestration: Conflicting login and Archives observations require source_quality and missing evidence, not forced conclusion.
-- actual_source_plan_or_template: `suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready`
+- actual_source_plan_or_template: `login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready`
 - expected_execution_groups: `(none)`
-- actual_execution_groups: `dependency_serial, independent_parallel, auth_sensitive_serial`
+- actual_execution_groups: `independent_parallel, auth_sensitive_serial`
 - expected_boundary_flags: `conflicting_sources_require_source_quality, final_judgement_boundary_required, single_source_not_enough_for_ato`
-- actual_boundary_flags: `suspicious_anchor_discovery_required, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, no_data_not_risk_exclusion, login_log_window_incomplete_possible, conflicting_sources_require_source_quality, final_judgement_boundary_required, source_quality_required`
+- actual_boundary_flags: `suspicious_anchor_derived_from_realtime_p0_sources, anchor_not_found_must_be_explicit, content_action_deep_dive_if_web_publish_or_diversion_content, archives_photo_search_default_p0, photo_search_no_data_not_abnormal_publish_exclusion, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, track_activity_not_owner_proof, weapon_not_login_or_publish_chain_replacement, rcp_strategy_hit_not_anchor_replacement, response_too_large_not_login_evidence, wrapper_response_mismatch_requires_source_contract_gap, login_no_data_or_window_gap_not_ato_exclusion, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, track_check_data_ready_not_risk_conclusion, large_response_limited_enters_source_quality, single_source_not_enough_for_ato, controlled_case_execution_harness_required, default_runtime_routing_false, no_legacy_runner_fallback, no_data_not_risk_exclusion, login_log_window_incomplete_possible, conflicting_sources_require_source_quality, final_judgement_boundary_required, source_quality_required`
 - metadata_visibility: `user_visible_summary`
 - routing_metadata_yaml_visible: `false`
-- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+- user_visible_status_summary: 执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 - should_not_do: `do_not_discard_conflicting_source, do_not_force_conclusion, do_not_make_final_judgement_without_source_quality`
 - pass: `true`
 - issue_if_failed: none
@@ -633,9 +633,9 @@ Dennis_answer_draft:
 
 Dennis_answer_draft:
 
-这类冲突不能二选一强判，source_plan：suspicious_anchor_discovery -> login_logs_search -> archives_user_profile -> archives_user_analysis -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> track_analysis_check_data_ready。登录无异常只说明可见登录链路暂未发现问题；档案中心操作可疑要继续对齐动作时间、来源端、设备/IP/UA 和历史基线。最终用 source_quality 标出哪个来源完成、哪个来源缺口，missing_evidence 写清未闭合控制链。
+这类冲突不能二选一强判，source_plan：login_logs_search -> archives_user_profile -> archives_user_analysis -> archives_photo_search -> track_analysis_check_data_ready。登录无异常只说明可见登录链路暂未发现问题；档案中心操作可疑要继续对齐动作时间、来源端、设备/IP/UA 和历史基线。最终用 source_quality 标出哪个来源完成、哪个来源缺口，missing_evidence 写清未闭合控制链。
 
-执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 裸问必须先找可疑登录/内容/行为锚点；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO；Track 活跃只能做辅助信号，不能证明本人操作。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
+执行状态：本轮未访问真实平台，未调用 DataAgent/Hive。证据边界：ATO 可疑锚点由登录、档案、发布和 Track P0 多源共同定位，不是独立前置 source；ATO 单案默认纳入作品/发布承接检查；设备判断要比较机型、系统、UA、IP、登录端和登录方式，不只看 device_id；历史常用 device_id 不能单独排除 ATO。缺失字段/下一步：如需执行，先补齐明确实体、时间窗口和显式 source plan。默认只展示自然语言执行状态，不展示内部过程 YAML。
 
 ## BBFA-NATURAL-012
 

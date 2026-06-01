@@ -151,16 +151,16 @@ Controlled parallel 编排补丁：
 - `independent_parallel` 只用于无上游依赖、互不共享敏感串行上下文的 source；ATO 中 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可并行。
 - `dependency_serial` 用于 RCP `rcp_event_detail -> rcp_event_feature_list`、同设备 `archives_related_users -> profile/login/track` 这类需要上游实体或事件锚点的 source。
 - `large_response_serial` 用于 `archives_user_analysis` / `rcp_event_feature_list` 大 pageSize、partial 或分页场景；partial 只支持部分观察，不升级强证据。
-- `auth_sensitive_serial` 用于 Archives 同源 / 共享认证上下文 source，例如异常发布 `archives_photo_search -> archives_user_profile -> archives_user_analysis`。
+- `auth_sensitive_serial` 用于 Archives 同源 / 共享认证上下文 source，例如 ATO / 异常发布中的 `archives_photo_search`、`archives_user_analysis` 在 profile 后串行补证。
 - 单 source `auth_failed` / `blocked` / `timeout` / `parse_error` 只影响该 source 和显式依赖它的后续 source，不阻塞其他已完成 source 进入 partial evidence card。
 - browser-backed service 采用 pure passthrough：service 只输出 passthrough envelope、transport metadata、capped body、`source_results`、`transport_status_matrix` 和 `missing_or_failed_sources`；Dennis 负责生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和 `final_answer_boundary`。
 - `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial passthrough observation 进入 Dennis evidence card。
 
-ATO 单案 anchor-first 路由补丁：
+ATO 单案 realtime P0 路由补丁：
 
-- 单 user_id 裸问“是不是被盗 / 是否 ATO / 账号是否异常”时，first step 必须是 `suspicious_anchor_discovery`，不是平铺 Track / RCP / Weapon / 登录日志 / 档案中心状态。
-- 在 `suspicious_anchor_discovery` 未完成前，不允许直接输出“证据不足 / 倾向排除 / 不能确认”的松散结论；若未找到锚点，正文必须写“未完成可疑锚点发现”并列出缺口。
-- anchor discovery 默认寻找：`recent_login_anchor`、`web_login_anchor`、`scan_or_oauth_anchor`、`token_or_session_anchor`、`password_reset_or_account_protection_anchor`、`abnormal_publish_anchor`、`live_anchor`、`comment_or_dm_anchor`、`profile_change_anchor`、`four_items_anchor`、`strategy_hit_anchor`。
+- 单 user_id 裸问“是不是被盗 / 是否 ATO / 账号是否异常”时，first step 是实时 P0 source collection：`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`。`suspicious_anchor_discovery` 不是独立前置 source。
+- 在实时 P0 多源未完成或缺口未说明前，不允许直接输出“证据不足 / 倾向排除 / 不能确认”的松散结论；若未从多源定位锚点，正文必须写“未完成可疑锚点发现”并列出缺口。
+- anchor discovery 从 P0 观察中推导，默认寻找：`recent_login_anchor`、`web_login_anchor`、`scan_or_oauth_anchor`、`token_or_session_anchor`、`password_reset_or_account_protection_anchor`、`abnormal_publish_anchor`、`live_anchor`、`comment_or_dm_anchor`、`profile_change_anchor`、`four_items_anchor`、`strategy_hit_anchor`。
 - ATO 可疑来源主线分两条：登录 / 控制链路优先，其次内容 / 行为链路。登录链路包括统一登录日志和账号安全 Hive registry 表；内容链路包括发视频、直播、评论、私信、资料修改、四项信息、发布来源、发布设备、发布 IP / UA 和内容命中策略 / 审核原因。
 - 如果用户没有提供异常动作，也要从近期动作源里主动找动作锚点；发现 WEB 登录、WEB 发布、导流视频或异常内容时，自动进入 `content_action_deep_dive`。
 - 风险设备判断升级为 `device_identity_consistency`：不能只看 `device_id`，必须比较机型、系统、UA、IP/省市/ASN、登录端、登录方式、browser fingerprint、app 版本与历史基线。常用 `device_id` 不能排除 ATO。
@@ -170,7 +170,7 @@ ATO 单案 anchor-first 路由补丁：
 
 档案中心编排规则：
 
-- ATO / 登录异常单案默认 source plan 必须包含 `archives_user_profile` 和 `archives_user_analysis`，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等后置行为闭环；`login_logs_search` 只覆盖登录侧，不能单源强判或排除 ATO。
+- ATO / 登录异常单案默认 source plan 必须包含 `archives_user_profile`、`archives_user_analysis` 和 `archives_photo_search`，用于补账号状态、改密 / 保护账号、发布、关注、资料变更和作品 / 发布承接闭环；`login_logs_search` 只覆盖登录侧，不能单源强判或排除 ATO。
 - 异常发布 / 色导 / 导流 / 内容承接默认优先计划 `archives_photo_search`、`archives_user_profile`、`archives_user_analysis`；`archives_photo_search no_data` 只代表当前查询条件下未见结果，不代表无异常发布。
 - 黑产账号 / 扩散 / 同设备分析默认计划 `archives_related_users` 和 `archives_user_profile`，再与 `login_logs_search`、`track_analysis_check_data_ready` 交叉；同设备只是一层扩散线索，不是团伙结论。
 - 档案中心是关键证据项，但不是失败即阻塞的硬必跑项。`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 必须进入 `source_quality` 和 `missing_evidence`，输出 partial evidence，不得当低风险 / 无风险反证。

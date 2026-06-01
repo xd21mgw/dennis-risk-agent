@@ -147,9 +147,8 @@ Selection priorities:
 Each selected representative sample runs the current ATO single-case chain:
 
 ```text
-suspicious_anchor_discovery
--> login/control-chain evidence
--> content_action_deep_dive
+login_logs_search + archives_user_profile + archives_user_analysis + archives_photo_search + track_analysis_check_data_ready
+-> multi-source suspicious anchor derivation
 -> candidate_control_endpoint_extraction
 -> device_identity_consistency
 -> historical_baseline_comparison

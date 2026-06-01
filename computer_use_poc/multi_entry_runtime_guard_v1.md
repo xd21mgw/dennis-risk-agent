@@ -132,9 +132,9 @@ Browser-backed fixed actions v1 guard:
 
 - The v1 fixed action batch is registered for explicit source plans only; `default_runtime_routing=false` remains mandatory.
 - Before any browser-backed action call, the source plan must name the exact action and typed params. Caller-provided URL, path, header, cookie, token, session, secret, raw body, or raw query is forbidden.
-- ATO single-case explicit source plan must start with `suspicious_anchor_discovery`; runtime must not flatten Track/RCP/Weapon/Login/Archives states into the user-facing ATO judgement before finding login/control-chain or content/action anchors.
+- ATO single-case explicit source plan must start with realtime P0 source collection: login/control chain, Archives profile, Archives user analysis, Archives photo search, and Track checkDataReady. Suspicious anchors are derived from those observations; `suspicious_anchor_discovery` is not an executable standalone source.
 - User-facing ATO answer must use the business evidence-card template: conclusion, suspicious anchors, candidate control endpoint / `device_identity_consistency`, login-chain evidence, content/four-items/post-action evidence, historical baseline, evidence gaps, next actions. It must not display `routing_metadata`, `source_quality` YAML, `boundary_flags`, `execution_mode`, validator fields, or platform debug YAML.
-- ATO / login anomaly source plan: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- ATO / login anomaly source plan: `login_logs_search + archives_user_profile + track_analysis_check_data_ready` in `independent_parallel`; `archives_photo_search + archives_user_analysis` in Archives `auth_sensitive_serial`.
 - Abnormal publish / content handoff source plan: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
 - Account spread source plan: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
 - RCP event attribution source plan: `rcp_event_detail -> rcp_event_feature_list`.

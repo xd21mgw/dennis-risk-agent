@@ -93,7 +93,7 @@ Mapping rules:
 | RCP strategy hit entry | `rcp_snapshot` | `POST /actions/rcp_snapshot` |
 | Weapon device relation / risk | `weapon_inventory` | `POST /actions/weapon_inventory` |
 | Login log online source | `login_logs_search` | `POST /actions/login_logs_search` |
-| Track-analysis activity / profile | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
+| Track-analysis activity / profile (legacy alias, not current default case execution) | `track_analysis_summary` | `POST /actions/track_analysis_summary` |
 | Track-analysis data readiness precheck | `track_analysis_check_data_ready` | `POST /actions/track_analysis_check_data_ready` |
 | Archives Center user-analysis core logs | `archives_user_analysis` | `POST /actions/archives_user_analysis` |
 | Archives Center photo report search | `archives_photo_search` | `POST /actions/archives_photo_search` |
@@ -110,15 +110,15 @@ Mapping rules:
 | RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
 | RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
 
-For clean `full_runtime` single-user ATO/account-security execution, the primary path is `runtime_case_execution_runner.py` building an explicit controlled batch payload. The default ATO batch sources are `login_logs_search`, `archives_user_profile`, `track_analysis_check_data_ready`, and dependent `archives_user_analysis`; Weapon and RCP/Tianshi are conditional follow-ups when device or event identifiers exist. Dennis requests passthrough envelopes and then creates Dennis-owned observations, source quality, evidence summaries, and missing-evidence rows. Dennis must not try legacy runners such as `bin/sso_session_runner`, `bin/track_analysis_runner`, or `bin/archives_profile_runner` after browser-backed source gaps. These additions do not change `default_runtime_routing=false`.
+For clean `full_runtime` single-user ATO/account-security execution, the primary path is `runtime_case_execution_runner.py` building an explicit controlled batch payload. The default ATO realtime P0 sources are `login_logs_search`, `archives_user_profile`, `track_analysis_check_data_ready`, `archives_photo_search`, and dependent `archives_user_analysis`; suspicious anchors are derived from those observations, not requested as a standalone source. Weapon and RCP/Tianshi are conditional follow-ups when device or event identifiers exist. Dennis requests passthrough envelopes and then creates Dennis-owned observations, source quality, evidence summaries, and missing-evidence rows. Dennis must not try legacy runners such as `bin/sso_session_runner`, `bin/track_analysis_runner`, or `bin/archives_profile_runner` after browser-backed source gaps. These additions do not change `default_runtime_routing=false`.
 
-`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. In browser-backed fixed actions v1 source plans, Archives Center is key evidence but not a hard blocker: ATO / login anomaly includes `archives_user_profile` and `archives_user_analysis`; abnormal publish / traffic diversion includes `archives_photo_search`, profile, and analysis; black-market spread / same-device analysis includes `archives_related_users` and profile. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, and `parse_error` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
+`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. In browser-backed fixed actions v1 source plans, Archives Center is key evidence but not a hard blocker: ATO / login anomaly includes `archives_user_profile`, `archives_user_analysis`, and `archives_photo_search`; abnormal publish / traffic diversion also uses photo search, profile, and analysis; black-market spread / same-device analysis includes `archives_related_users` and profile. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, and `parse_error` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
 
 `rcp_event_detail`, `rcp_event_feature_list`, `rcp_policy_version_lookup`, `rcp_policy_detail_lookup`, `rcp_policy_release_record_lookup`, `rcp_policy_tree_lookup`, `rcp_node_policy_attribution`, and `rcp_node_bind_policy_attribution` are explicit RCP/Tianshi drill-down sources. They require upstream event, policy, or policy-tree identifiers; they are not part of the default four-source account-security main chain. `rcp_event_detail -> rcp_event_feature_list` is the v1 event-attribution chain. `rcp_policy_tree_lookup` is strategy asset governance only and must not be used as a single-case event-hit path.
 
-The HAR inventory also tracks auxiliary candidates that are intentionally not in the default four-source runtime chain:
+The HAR inventory also tracks auxiliary candidates that are intentionally not in the default ATO realtime P0 runtime chain:
 
-- `track_analysis_check_data_ready`: live-smoke verified readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`, not account-security evidence by itself.
+- `track_analysis_check_data_ready`: live-smoke verified readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`; it is default ATO P0 auxiliary for front/backend activity alignment but not account-security evidence by itself.
 - `track_analysis_config_lookup`: config helper only; not evidence and not default runtime.
 - `rcp_event_type_list` / `rcp_realtime_op_list` / `rcp_event_feature_key_lookup` / `rcp_event_tree_or_decision_lookup`: RCP helper candidates only; not default runtime and not implemented in this adapter pass.
 - `login_log_detail_lookup`: UI modal key extraction has validation evidence, but no fixed API path/body or row identifier contract has been confirmed.
@@ -177,13 +177,14 @@ final_risk_conclusion_generated_by_service: false
 
 Dennis converts `transport_status_matrix` and `source_results` into `source_quality_matrix`, evidence card inputs, and missing evidence. `completed` and usable `partial` sources can enter Dennis evidence cards. `no_data`, `auth_failed`, `blocked`, `timeout`, `parse_error`, missing upstream IDs, and dependent skips enter Dennis `source_quality_matrix` and `missing_evidence`; they do not block partial answers and cannot be used as low-risk counter-evidence.
 
-## ATO Anchor-First And Login Log Contract Patch
+## ATO Realtime P0 And Login Log Contract Patch
 
-For ATO single-case questions, Dennis must use the browser-backed fixed actions to discover suspicious anchors, not to print a flat source-status list. The business chain is:
+For ATO single-case questions, Dennis must use the browser-backed fixed actions to collect realtime P0 evidence and derive suspicious anchors, not to print a flat source-status list or call a standalone suspicious-anchor source. The business chain is:
 
 ```text
-user_id -> suspicious_anchor_discovery -> login/control-chain or content/action anchor
--> candidate_control_endpoint_extraction -> device_identity_consistency
+user_id -> realtime P0 source collection (login/profile/analysis/photo/Track)
+-> multi-source suspicious anchor derivation -> candidate_control_endpoint_extraction
+-> device_identity_consistency
 -> historical_baseline_comparison -> business evidence card
 ```
 
@@ -192,7 +193,7 @@ user_id -> suspicious_anchor_discovery -> login/control-chain or content/action 
 - `response_too_large` means the wrapper could not parse or transport the bounded result. It is not evidence that there were many logins, and it is not completed login evidence.
 - If manual UI observation says no data while the wrapper returns `response_too_large`, Dennis marks `wrapper_response_mismatch`, `source_contract_gap`, `actual_ui_no_data_unverified_by_wrapper`, and `login_log_evidence_unusable`.
 - Wrapper diagnostic metadata is internal-only: `request_window_start`, `request_window_end`, `recallSource`, `filter_params`, `http_status`, `response_bytes`, `totalCount`, `result_array_path`, `result_array_length`, `is_html_or_auth_page`, `is_error_envelope`, `is_large_non_result_envelope`, `pagination_applied`, and `field_projection_applied`.
-- When an `anchor_time` exists, the next plan should shrink to `anchor_time +/- 2-6h`; without anchor time, do `suspicious_anchor_discovery` first instead of widening the login window.
+- When an `anchor_time` is derived from realtime P0 sources, the next plan should shrink to `anchor_time +/- 2-6h`; without anchor time, keep source gaps explicit and do not blindly widen the login window.
 
 The local service remains a safe passthrough + transport envelope. Dennis may use model understanding of passthrough/capped body/transport metadata for ATO, and should only standardize high-value observation builders incrementally. Do not move generic risk normalizer responsibility into the local browser-backed service.
 
@@ -231,20 +232,16 @@ Default single-user account-security orchestration uses these typed params. The 
 
 ```yaml
 account_security_browser_backed_sequence:
-  - source_name: track_analysis_account_security_bundle
-    action_name: track_analysis_summary
+  - source_name: track_analysis_frontend_backend_alignment
+    action_name: track_analysis_check_data_ready
     typed_params:
-      user_id: "{user_id}"
+      device_id: "{candidate_device_id_if_available}"
       appName: KUAISHOU
-      mode: account_security_bundle
-      sub_interfaces:
-        - profile
-        - getUseDuration
-        - getDeviceIds
-        - getLastestDateTime
+      mode: track_analysis_data_readiness_precheck
     boundary:
-      - 只传 user_id/appName 不满足账号安全 bundle
-      - profile / getUseDuration / getDeviceIds / getLastestDateTime 的完成、no_data、blocked、parse_error 必须分层进入 source_completion_matrix
+      - 缺 device_id 标 missing_required_fields / blocked，不导致 batch fail
+      - readiness / no_data / blocked / parse_error 必须分层进入 source_completion_matrix
+      - Track readiness 不是本人操作证明
   - source_name: rcp_strategy_hit_entry
     action_name: rcp_snapshot
     typed_params:
@@ -410,7 +407,6 @@ The executable client is intentionally narrow:
 - Default `base_url`: `http://127.0.0.1:8787`.
 - Default timeout: `10s`.
 - Fixed action allowlist only:
-  - `track_analysis_summary`
   - `track_analysis_check_data_ready`
   - `rcp_snapshot`
   - `weapon_inventory`
@@ -783,26 +779,10 @@ The adapter does not persist raw response full bodies, raw login records full du
 
 Source-specific summary fields:
 
-- `track_analysis_summary`
-  - `bundle_summary.mode`
-  - `bundle_summary.sub_interfaces`
-  - `bundle_summary.sub_interfaces_completed`
-  - `bundle_summary.sub_interfaces_missing`
-  - `latest_timestamp_summary.latest_datetime_present`
-  - `latest_timestamp_summary.uid_did_relation_latest_datetime_present`
-  - `profile_summary.register_time_present`
-  - `profile_summary.fan_distribution_present`
-  - `profile_summary.active_days_bucket_present`
-  - `profile_summary.device_ids_count`
-  - `use_duration_summary.rows_count`
-  - `use_duration_summary.nonzero_days_count`
-  - `use_duration_summary.total_duration`
-  - `use_duration_summary.peak_date`
-  - `device_ids_summary.device_ids_count`
-  - `device_ids_summary.device_id_sample`
-  - `device_ids_summary.device_model_fields_present`
-  - `device_ids_summary.last_active_fields_present`
 - `track_analysis_check_data_ready`
+  - `readiness_status`
+  - `missing_required_fields`
+  - `front_backend_activity_alignment`
   - `readiness_summary.readiness_status`
   - `readiness_summary.date_status_present`
   - `readiness_summary.trace_id_present`

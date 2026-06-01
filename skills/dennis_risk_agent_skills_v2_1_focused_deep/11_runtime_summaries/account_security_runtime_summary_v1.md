@@ -203,9 +203,9 @@ IP / 网络共性：
 
 明确 `user_id` 的 ATO 单案允许进入 `single_entity_execution_mode` 并查询只读平台，但必须按 source 编排，不能让后续高耗时 source 吞掉已完成证据。
 
-### 5.0A ATO 单案 suspicious anchor-first
+### 5.0A ATO 单案 realtime P0 anchor derivation
 
-单 user_id 裸问“是不是被盗了 / 是否 ATO”时，first step 必须是 `suspicious_anchor_discovery`。不能在未完成锚点发现前，直接给“证据不足 / 倾向排除 / 不能确认”的松散结论。
+单 user_id 裸问“是不是被盗了 / 是否 ATO”时，first step 是实时 P0 多源收集：`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`。可疑锚点从这些 source 共同定位；`suspicious_anchor_discovery` 不是独立前置 source。不能在未完成 P0 多源收集和缺口说明前，直接给“证据不足 / 倾向排除 / 不能确认”的松散结论。
 
 默认主动寻找这些锚点：
 
@@ -228,8 +228,9 @@ IP / 网络共性：
 ATO suspicious source priority：
 
 - P0 登录 / 控制链路：统一登录日志、离线 Hive 登录 registry 表、成功/失败登录、resetPwd / 改密、refreshToken / token issued、kick out / 保护账号、登录端、登录方式、设备、IP、UA、系统、机型、app 版本、browser fingerprint。
-- P0 条件内容 / 行为链路：发视频、直播、评论、私信、资料修改、四项信息、发布来源、发布设备、发布 IP / UA、photo_id / live_id / comment_id、内容发布时间、内容命中策略 / 审核 / 导流原因。
-- 辅助 source：Track、Weapon、RCP。Track 有活跃不能证明本人；Weapon 只做候选设备关系和设备风险补证；RCP / 策略命中只做行为风险 / 策略旁证。
+- P0 内容 / 行为链路：默认纳入 `archives_photo_search` 和 `archives_user_analysis`，覆盖发视频、直播、评论、私信、资料修改、四项信息、发布来源、发布设备、发布 IP / UA、photo_id / live_id / comment_id、内容发布时间、内容命中策略 / 审核 / 导流原因。
+- P0 辅助对齐：`track_analysis_check_data_ready` 用于前后端活跃对齐、协议上号 / token 使用 / 非真实客户端线索，不证明本人操作。
+- 条件补证：Weapon 只做候选设备关系和设备风险补证；RCP / 策略命中只做行为风险 / 策略旁证。
 
 每个 source 查询结束后必须立即记录 checkpoint：
 
@@ -246,8 +247,8 @@ ATO suspicious source priority：
 
 source 优先级：
 
-- P0：统一登录日志、档案中心 `archives_user_profile` / `archives_user_analysis`、Weapon graphData、用户明确问策略命中时的天师策略命中摘要。
-- P1：Weapon riskData（已解析出可疑 deviceId 后）、track-analysis stats-first、设备 SDK 深层补证。
+- P0：统一登录日志、档案中心 `archives_user_profile` / `archives_user_analysis` / `archives_photo_search`、`track_analysis_check_data_ready`。
+- P1：Weapon graphData / riskData（已解析出可疑 deviceId 后）、用户明确问策略命中时的天师策略命中摘要、设备 SDK 深层补证。
 - P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
 
 Track-analysis low-cost补证：
@@ -283,15 +284,16 @@ ATO / 登录异常推荐顺序：
 1. `login_logs_search`
 2. `archives_user_profile`
 3. `archives_user_analysis`
-4. `track_analysis_check_data_ready`
+4. `archives_photo_search`
+5. `track_analysis_check_data_ready`
 
 controlled parallel 编排口径：
 
 - browser-backed service 是 pure passthrough：只提供 action envelope、transport metadata、capped body 和 batch `transport_status_matrix` / `source_results`。Dennis 不依赖 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，必须自行生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和最终边界。
 - ATO 单案 source plan 不再只表达线性顺序，必须表达 `execution_group`、`depends_on`、`timeout_class`、`failure_policy`、`source_priority` 和 `expected_observation`。
-- ATO 单案 first step 是 `suspicious_anchor_discovery`，之后才进入登录链路、内容动作链路、候选控制端提取、设备身份一致性和历史基线比较。
+- ATO 单案 first step 是 realtime P0 source collection；Dennis 从登录链路、档案画像、用户分析、作品/发布承接和 Track readiness 共同推导可疑锚点，再进入候选控制端提取、设备身份一致性和历史基线比较。
 - `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可作为 `independent_parallel` 组并行执行；三者分别覆盖登录侧、账号基线和 Track 数据可用性 / provenance。
-- `archives_user_analysis` 作为档案中心后续行为闭环 source，默认在 `archives_user_profile` 后走 `auth_sensitive_serial`；大 pageSize 或大响应时按 `large_response` timeout 处理，输出 partial 不等于完整时间线。
+- `archives_photo_search` 作为默认 P0 内容/发布承接 source，`archives_user_analysis` 作为档案中心后续行为闭环 source，默认在 `archives_user_profile` 后走 `auth_sensitive_serial`；大 pageSize 或大响应时按 `large_response` timeout 处理，输出 partial 不等于完整时间线。
 - 合并时 `completed` / `no_data` / `partial` / `auth_failed` / `blocked` / `timeout` / `parse_error` 必须进入 Dennis 生成的 `source_quality_matrix`；completed / partial passthrough observation 可进入 Dennis evidence card，失败或依赖缺口进入 `missing_evidence`。
 - 单 source timeout / auth_failed 不阻塞其他 source 的 partial answer；`no_data` / `partial` / `timeout` 不能作为排除 ATO 或低风险反证。
 
@@ -304,7 +306,7 @@ device_identity_consistency：
 
 档案中心规则：
 
-- 档案中心是 ATO / 登录异常 / 黑产详情分析的关键证据项，用于补账号状态、改密 / 保护账号、发布、关注、资料变更等登录日志看不到的后置行为闭环。
+- 档案中心是 ATO / 登录异常 / 黑产详情分析的关键证据项，用于补账号状态、改密 / 保护账号、发布、关注、资料变更和作品/发布承接等登录日志看不到的后置行为闭环。
 - 档案中心不是失败即阻塞的硬必跑项。`auth_failed`、`no_data`、`partial_observation_available`、`timeout`、`blocked`、`parse_error` 进入 `source_quality` 和 `missing_evidence`，输出 partial evidence。
 - 没有档案中心时，只能说“当前为登录侧或其他已完成 source 的部分观察”，不能只基于登录日志强判或排除 ATO。
 
@@ -435,5 +437,5 @@ no_data_interpretation:
 
 - `response_too_large` 只能说明 wrapper 无法解析 / 传输，不是“登录很多”，也不是 completed 登录证据。
 - 人工 UI 无数据但 wrapper 返回 `response_too_large` 时，标记 `wrapper_response_mismatch`、`source_contract_gap`、`actual_ui_no_data_unverified_by_wrapper`、`login_log_evidence_unusable`。
-- 有 anchor_time 时，优先缩到前后 2-6 小时补查；无 anchor_time 时，先做 `suspicious_anchor_discovery`，不要盲目扩大窗口。
+- 有由实时 P0 source 推导出的 anchor_time 时，优先缩到前后 2-6 小时补查；无 anchor_time 时，保持 P0 source gap 明确，不要盲目扩大窗口。
 - 在线窗口不足、wrapper 失败或 UI/wrapper 不一致时，生成基于 `computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md` 的 Hive query plan；真实 DataAgent/Hive 调用仍需用户逐次授权。

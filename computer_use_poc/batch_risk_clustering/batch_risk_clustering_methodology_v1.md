@@ -221,7 +221,7 @@ Required ATO lens checks:
 Representative deep dive:
 
 - For every suspected ATO cluster, select 2-3 high-suspicion, 1-2 medium-suspicion, 1 boundary and 1 counter-example sample when available.
-- Representative samples run the current ATO single-case chain: `suspicious_anchor_discovery -> login/control-chain evidence -> content_action_deep_dive -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card`.
+- Representative samples run the current ATO single-case realtime P0 chain: `login_logs_search + archives_user_profile + archives_user_analysis + archives_photo_search + track_analysis_check_data_ready -> multi-source suspicious anchor derivation -> candidate_control_endpoint_extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card`.
 - Backfill single-case findings to cluster level as `cluster_level_backfill`: `login_to_action_delta` distribution, identity inconsistency coverage, possible spoofing coverage, shared infrastructure coverage, content similarity, historical behavior shift, strategy-hit combination, source quality and missing evidence.
 
 Boundary:

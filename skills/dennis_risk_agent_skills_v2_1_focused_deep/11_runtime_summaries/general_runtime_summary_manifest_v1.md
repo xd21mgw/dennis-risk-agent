@@ -171,8 +171,8 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 - 账号安全 Hive 取数计划必须按目标选表：成功登录查 `ks_rc_bs.ks_account_login_basic_info`；登录失败 / 撞库 / 暴力破解 / 改密查 `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info`；Web RCP 查 `ks_rc_arch.antispam_feature_map_default_partitioned`；App RCP 查 `ks_raw_log_v2.antispam_feature_map_partitioned`。
 - App / Web RCP plan 必须限制 `p_date + p_hourmin + p_action_type`；DataAgent 只作为 Hive / 数仓取数分析能力。
 - browser-backed service 是 pure passthrough 职责：service 只输出固定 action envelope、transport metadata、capped body 和 batch transport matrix；Dennis 生成 observation、source quality、evidence card、missing evidence 和 final answer boundary，不依赖 service-side `normalized_observation` / `source_card` / `compat_summary`。
-- browser-backed controlled parallel 只用于显式 source plan：ATO 可将 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 放入 `independent_parallel`，再让 `archives_user_analysis` 走 `auth_sensitive_serial`；RCP 归因保持 `rcp_event_detail -> rcp_event_feature_list` 依赖；大响应 source 走 `large_response_serial`；任何 `no_data` / `partial` / `timeout` 不作为低风险反证。
-- ATO 单案裸问必须先做 `suspicious_anchor_discovery`，再围绕登录 / 控制链路、内容 / 行为链路、候选控制端、`device_identity_consistency` 和历史基线输出业务 evidence card；Track / Weapon / RCP 只是补证 source，不能替代可疑锚点发现。
+- browser-backed controlled parallel 只用于显式 source plan：ATO 可将 `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 放入 `independent_parallel`，再让 `archives_photo_search` 和 `archives_user_analysis` 走 `auth_sensitive_serial`；RCP 归因保持 `rcp_event_detail -> rcp_event_feature_list` 依赖；大响应 source 走 `large_response_serial`；任何 `no_data` / `partial` / `timeout` 不作为低风险反证。
+- ATO 单案裸问必须先收集实时 P0 source（登录、档案画像、档案用户分析、作品发布、Track readiness），再由 Dennis 从多源观察推导可疑锚点、候选控制端、`device_identity_consistency` 和历史基线输出业务 evidence card；`suspicious_anchor_discovery` 不是独立 source，Weapon / RCP 只是补证 source。
 
 ## 8. 数据调用边界
 

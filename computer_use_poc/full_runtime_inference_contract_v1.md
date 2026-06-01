@@ -83,6 +83,12 @@ The required chain is `source_orchestration_check -> source_plan -> controlled
 batch -> passthrough envelope -> Dennis-generated source_quality_matrix /
 evidence_card / missing_evidence`.
 
+For ATO single-case execution the default realtime P0 source plan is
+`login_logs_search`, `archives_user_profile`, `archives_user_analysis`,
+`archives_photo_search`, and `track_analysis_check_data_ready`. Suspicious
+anchors are Dennis-side derivations from those P0 observations, not a
+standalone source action.
+
 `sso_session_runner`, `archives_profile_runner`, Weapon runner, freeform
 `browser_backed_service_client --action`, arbitrary curl, and ad-hoc browser
 fetch are debug/manual diagnostic tools only. They are not runtime case

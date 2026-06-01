@@ -154,9 +154,9 @@ cases:
     expected_answer_contract: [source_plan, evidence_strength, missing_evidence, final_answer_boundary]
   - id: BBFA-V1-021
     user_query: "帮我判断这个 user_id 是否疑似 ATO"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
-    expected_orchestration: "ATO uses multi-source plan, not login_logs_search only."
-    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO uses realtime P0 multi-source plan; suspicious anchors are derived from login/profile/analysis/photo/Track observations, not a standalone source."
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion, suspicious_anchor_derived_from_realtime_p0_sources, archives_photo_search_default_p0]
     should_not_do: [do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-V1-022
@@ -231,9 +231,9 @@ cases:
     expected_answer_contract: [final_answer_boundary, redaction_applied]
   - id: BBFA-V1-032
     user_query: "裸问帮我判断这个 user_id 是否 ATO，别写成接口说明书"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Use control-change -> abnormal-behavior-closure -> spread/strategy-support as the answer mainline."
-    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion]
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion, suspicious_anchor_derived_from_realtime_p0_sources, archives_photo_search_default_p0]
     should_not_do: [do_not_answer_like_interface_manual, do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-V1-033
@@ -252,9 +252,9 @@ cases:
     expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
   - id: BBFA-V1-035
     user_query: "ATO 单案不要只查 login_logs_search，必须纳入档案中心用户首页和用户分析"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
-    expected_orchestration: "ATO source plan includes login logs plus Archives profile/analysis and Track readiness; login logs alone cannot strong-judge or exclude ATO."
-    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO source plan includes login logs, Archives profile/analysis/photo search and Track readiness; login logs alone cannot strong-judge or exclude ATO."
+    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking, archives_failure_enters_partial_evidence, archives_photo_search_default_p0]
     should_not_do: [do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-V1-036
@@ -294,25 +294,25 @@ cases:
     expected_answer_contract: [source_plan, missing_evidence, final_answer_boundary]
   - id: BBFA-V1-041
     user_query: "普通裸问帮我判断这个 user_id 是否 ATO，默认不要输出完整 routing_metadata"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Default user-visible answer shows natural execution status, not full routing_metadata YAML."
-    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking]
+    expected_boundary_flags: [single_source_not_enough_for_ato, archives_required_for_behavior_closure_non_blocking, archives_photo_search_default_p0]
     should_not_do: [do_not_emit_full_routing_metadata_by_default, do_not_show_full_metadata_without_debug_request]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
     expected_metadata_visibility: "user_visible_summary"
   - id: BBFA-ATO-ANCHOR-001
     user_query: "2892617234 这个账号是不是被盗了？"
-    expected_route_or_actions: [suspicious_anchor_discovery, login_logs_search, content_action_deep_dive, candidate_control_endpoint_extraction, device_identity_consistency, historical_baseline_comparison]
-    expected_orchestration: "Naked ATO question starts from suspicious_anchor_discovery, then login/control chain, content/action chain, candidate control endpoint, device identity consistency, and historical baseline."
-    expected_boundary_flags: [suspicious_anchor_discovery_required, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, response_too_large_not_login_evidence]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "Naked ATO question collects realtime P0 sources first; suspicious anchors are derived from login/control, Archives profile/analysis/photo, and Track readiness observations."
+    expected_boundary_flags: [suspicious_anchor_derived_from_realtime_p0_sources, archives_photo_search_default_p0, device_identity_consistency_required, common_device_id_not_sufficient_to_exclude_ato, response_too_large_not_login_evidence]
     should_not_do: [do_not_only_query_login_logs, do_not_make_final_judgement_without_source_quality, do_not_emit_full_routing_metadata_by_default]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
     expected_metadata_visibility: "user_visible_summary"
   - id: BBFA-ATO-ANCHOR-002
     user_query: "账号疑似 WEB 登录后发导流视频，Track 有活跃但登录日志 response_too_large"
-    expected_route_or_actions: [suspicious_anchor_discovery, login_logs_search, archives_photo_search, archives_user_analysis, content_action_deep_dive, device_identity_consistency]
-    expected_orchestration: "WEB publish ATO branch uses login/control chain plus content_action_deep_dive and device_identity_consistency; Track is auxiliary and response_too_large is not login evidence."
-    expected_boundary_flags: [content_action_deep_dive_if_web_publish_or_diversion_content, track_activity_not_owner_proof, response_too_large_not_login_evidence]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "WEB publish ATO branch derives anchors from realtime P0 login/profile/analysis/photo/Track sources; Track is auxiliary and response_too_large is not login evidence."
+    expected_boundary_flags: [suspicious_anchor_derived_from_realtime_p0_sources, archives_photo_search_default_p0, content_action_deep_dive_if_web_publish_or_diversion_content, track_activity_not_owner_proof, response_too_large_not_login_evidence]
     should_not_do: [do_not_use_login_no_data_as_no_risk, do_not_output_no_abnormal_publish_from_photo_no_data, do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
     expected_full_metadata_allowed: false
@@ -379,9 +379,9 @@ cases:
     expected_user_visible_absent: ["routing_metadata:", "source_quality:", "boundary_flags:"]
   - id: BBFA-CP-001
     user_query: "controlled parallel：帮我判断这个 user_id 是否疑似 ATO，login/profile/track 并行，archives_user_analysis 后续串行"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
-    expected_orchestration: "ATO uses login_logs_search + archives_user_profile + track_analysis_check_data_ready as independent_parallel; archives_user_analysis follows as auth_sensitive_serial."
-    expected_boundary_flags: [controlled_parallel_plan_only, source_quality_matrix_merge_required, service_batch_contract_aligned, single_source_not_enough_for_ato]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO uses login_logs_search + archives_user_profile + track_analysis_check_data_ready as independent_parallel; archives_photo_search and archives_user_analysis follow as auth_sensitive_serial."
+    expected_boundary_flags: [controlled_parallel_plan_only, source_quality_matrix_merge_required, service_batch_contract_aligned, single_source_not_enough_for_ato, archives_photo_search_default_p0]
     expected_execution_groups: [independent_parallel]
     should_not_do: [do_not_access_real_platform, do_not_call_dataagent, do_not_only_query_login_logs, do_not_set_default_runtime_routing_true]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
@@ -411,7 +411,7 @@ cases:
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, final_answer_boundary]
   - id: BBFA-CP-005
     user_query: "controlled parallel：ATO 多源里单 source timeout，其他 completed source 仍然输出 partial answer"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Single source timeout enters source_quality_matrix/missing_evidence and does not block Dennis-generated evidence card."
     expected_boundary_flags: [controlled_parallel_plan_only, source_timeout_non_blocking_partial, partial_evidence_required, source_quality_matrix_merge_required]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
@@ -494,7 +494,7 @@ cases:
     expected_answer_contract: [source_plan, batch_conclusion, ato_lens_hits, missing_evidence, final_answer_boundary]
   - id: BBFA-ATO-HIVE-001
     user_query: "ATO 单案：统一登录日志 7 天外不可见，实时源无异常能否排除 ATO"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Realtime source incomplete; answer must strongly recommend registry-first Hive supplementation and not exclude ATO."
     expected_boundary_flags: [hive_required_hint, offline_hive_required, login_log_window_incomplete, admin_app_log_only_gap, web_control_chain_missing, hive_registry_first_query_plan, realtime_no_anomaly_not_ato_exclusion]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
@@ -502,7 +502,7 @@ cases:
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-ATO-HIVE-002
     user_query: "ATO 单案：admin 只有 APP 日志，但风险动作是 WEB 发视频，怎么输出证据缺口"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Admin APP-only log is a control-chain gap for WEB action and requires offline Hive hint."
     expected_boundary_flags: [admin_app_log_only_gap, web_control_chain_missing, offline_hive_required, hive_registry_first_query_plan, realtime_no_anomaly_not_ato_exclusion]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
@@ -510,7 +510,7 @@ cases:
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
   - id: BBFA-ATO-HIVE-003
     user_query: "ATO 单案：在线登录日志 no_data 且窗口不足，可以说低风险吗"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Online login no_data with incomplete window is not exclusion and must recommend Hive supplementation."
     expected_boundary_flags: [no_data_not_risk_exclusion, login_log_window_incomplete, offline_hive_required, hive_required_hint, hive_registry_first_query_plan]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
@@ -590,9 +590,9 @@ cases:
     expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
   - id: BBFA-NATURAL-001
     user_query: "帮我判断 user_id=2871834924 是否疑似 ATO"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
-    expected_orchestration: "ATO natural question must plan login, archives profile, archives analysis, and Track readiness."
-    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO natural question must plan login, archives profile, archives analysis, photo search, and Track readiness."
+    expected_boundary_flags: [single_source_not_enough_for_ato, no_data_not_risk_exclusion, archives_required_for_behavior_closure_non_blocking, archives_photo_search_default_p0]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_only_query_login_logs, do_not_skip_archives_for_ato, do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_plan, actions, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
@@ -670,7 +670,7 @@ cases:
     expected_answer_contract: [batch_conclusion, ato_lens_hits, risk_clusters, representative_single_case_summary, cluster_level_backfill_features, missing_evidence, final_answer_boundary]
   - id: BBFA-NATURAL-011
     user_query: "登录没异常，但档案中心操作很可疑，怎么判断？"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, track_analysis_check_data_ready]
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
     expected_orchestration: "Conflicting login and Archives evidence needs source_quality and missing_evidence."
     expected_boundary_flags: [conflicting_sources_require_source_quality, final_judgement_boundary_required, single_source_not_enough_for_ato]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
@@ -690,8 +690,8 @@ cases:
     expected_user_visible_absent: ["routing_metadata:"]
   - id: CONTROLLED-CASE-HARNESS-ATO-DRYRUN-001
     user_query: "2892617234 这个账号是不是被盗了？"
-    expected_route_or_actions: [login_logs_search, archives_user_profile, track_analysis_check_data_ready, archives_user_analysis]
-    expected_orchestration: "Execution context must enter runtime_case_execution_runner and build a controlled /actions/batch payload; it must not scatter direct single-action calls."
+    expected_route_or_actions: [login_logs_search, archives_user_profile, track_analysis_check_data_ready, archives_photo_search, archives_user_analysis]
+    expected_orchestration: "Execution context must enter runtime_case_execution_runner and build a controlled /actions/batch payload with the default ATO realtime P0 sources; it must not scatter direct single-action calls."
     expected_boundary_flags: [controlled_case_execution_harness_required, default_runtime_routing_false, no_legacy_runner_fallback]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_call_sso_session_runner, do_not_call_archives_profile_runner, do_not_call_weapon_runner_as_fallback, do_not_direct_curl_platform, do_not_call_single_action_freeform]
@@ -704,3 +704,51 @@ cases:
     expected_execution_groups: [independent_parallel]
     should_not_do: [do_not_fallback_sso_session_runner, do_not_fallback_archives_profile_runner, do_not_fallback_weapon_runner, do_not_treat_source_gap_as_low_risk]
     expected_answer_contract: [transport_status_matrix, source_quality_matrix, missing_evidence, partial_evidence, final_answer_boundary]
+  - id: ATO-REALTIME-P0-SOURCE-PLAN-001
+    user_query: "ATO 单案 source_plan 默认 P0 要包含登录、档案画像、用户分析、作品发布和 Track checkDataReady"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO single-case realtime P0 sources jointly locate suspicious anchors; suspicious_anchor_discovery is not a standalone source."
+    expected_boundary_flags: [suspicious_anchor_derived_from_realtime_p0_sources, archives_photo_search_default_p0, track_check_data_ready_not_risk_conclusion]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_only_query_login_logs, do_not_mix_track_summary_with_check_data_ready]
+    expected_answer_contract: [source_plan, actions, execution_groups, source_quality_matrix, evidence_card, missing_evidence, final_answer_boundary]
+  - id: ATO-PHOTO-SEARCH-DEFAULT-NODATA-NOT-EXCLUSION-001
+    user_query: "ATO 单案 archives_photo_search no_data 能不能排除被盗后异常发布或导流？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "Photo search is default ATO P0 content/publish handoff; no_data is source quality, not an exclusion."
+    expected_boundary_flags: [archives_photo_search_default_p0, photo_search_no_data_not_abnormal_publish_exclusion, no_data_not_risk_exclusion]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_output_no_abnormal_publish_from_photo_no_data, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, evidence_strength, final_answer_boundary]
+  - id: BATCH-ATO-REPRESENTATIVE-P0-SOURCES-001
+    user_query: "批量 ATO 先抽 3-5 个代表账号，再跑单案 P0；代表样本也要看 archives_photo_search"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Batch ATO selects representative users, runs the ATO realtime P0 source plan on representatives, then backfills cluster-level evidence."
+    expected_boundary_flags: [batch_ato_cluster_lens_required, representative_ato_single_case_deep_dive, archives_photo_search_default_for_representative_ato, cluster_level_backfill, representative_sample_not_global_proof]
+    expected_execution_groups: []
+    should_not_do: [do_not_globalize_representative_sample, do_not_skip_ato_cluster_lens, do_not_access_real_platform]
+    expected_answer_contract: [source_plan, batch_conclusion, representative_single_case_summary, cluster_level_backfill_features, missing_evidence, final_answer_boundary]
+  - id: HARNESS-MERGE-DICT-LIST-COMPAT-001
+    user_query: "passthrough batch transport_status_matrix dict/list、missing_or_failed_sources dict/list 都要能合并"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "runtime_case_execution_runner accepts dict/list forms for transport_status_matrix and missing_or_failed_sources and still builds source_quality_matrix."
+    expected_boundary_flags: [transport_status_matrix_merge_required, transport_status_matrix_dict_list_compatible, missing_or_failed_sources_dict_list_compatible]
+    expected_execution_groups: []
+    should_not_do: [do_not_require_service_source_card, do_not_access_real_platform, do_not_call_dataagent]
+    expected_answer_contract: [transport_status_matrix, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: HARNESS-TRACK-MISSING-DEVICE-NOT-BATCH-FAIL-001
+    user_query: "Track checkDataReady 缺 device_id 时，不能导致整个 batch fail"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Missing device_id becomes blocked/missing_required_fields in source_quality_matrix; other sources can still produce partial evidence."
+    expected_boundary_flags: [track_missing_device_id_blocked_not_batch_failure, track_check_data_ready_not_risk_conclusion, source_quality_matrix_merge_required]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_make_device_risk_judgement_from_readiness, do_not_fallback_sso_session_runner]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, partial_evidence, final_answer_boundary]
+  - id: CASE-EXECUTION-NO-BROWSER-DOM-CURL-001
+    user_query: "真实 case 执行时能不能 browser click、DOM parsing、ad-hoc fetch、direct curl 或旧 runner fallback"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Case execution must use runtime_case_execution_runner -> controlled batch -> passthrough envelope; freeform browser/DOM/curl/old runner paths are not default execution."
+    expected_boundary_flags: [controlled_case_execution_harness_required, no_legacy_runner_fallback, default_runtime_routing_false]
+    expected_execution_groups: []
+    should_not_do: [do_not_browser_click_for_case_execution, do_not_dom_parse_for_case_execution, do_not_ad_hoc_fetch_for_case_execution, do_not_direct_curl_platform, do_not_fallback_sso_session_runner, do_not_fallback_archives_profile_runner]
+    expected_answer_contract: [source_plan, batch_payload, source_quality_matrix, missing_evidence, final_answer_boundary]

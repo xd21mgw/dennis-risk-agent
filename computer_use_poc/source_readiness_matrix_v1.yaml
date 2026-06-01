@@ -175,7 +175,7 @@ sources:
       - not_general_user_id_lookup
 
   track_analysis_activity_profile:
-    source_priority: P0_or_P1_by_case
+    source_priority: P0_auxiliary_for_ato
     readiness_status:
       - browser_backed_batch_ready
       - endpoint_verified_not_runner_ready
@@ -196,6 +196,27 @@ sources:
       - no_data_not_risk_exclusion
       - readiness_check_only_in_ato_default_plan
       - no_track_runner_fallback
+
+  archives_photo_search:
+    source_priority: P0_for_ato_content_publish_handoff
+    readiness_status:
+      - browser_backed_batch_ready
+      - playbook_ready
+    supported_input:
+      - user_id
+      - time_window
+      - page
+      - count
+    output_summary:
+      - photo_id_or_content_id
+      - publish_time
+      - publish_source
+      - publish_device_or_ip_ua_if_available
+      - audit_or_strategy_reason
+    boundary:
+      - ato_default_p0_source
+      - no_data_not_abnormal_publish_or_ato_exclusion
+      - auth_failed_timeout_parse_error_enter_missing_evidence
 
   dataagent_hive:
     source_priority: P2

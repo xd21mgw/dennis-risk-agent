@@ -28,7 +28,6 @@ TRACK_ANALYSIS_REQUIRED_PATHS = {
 }
 TRACK_ANALYSIS_FORBIDDEN_PATHS = {"/api/profile", "/rest/profile", "/api/user/profile"}
 FIXED_BROWSER_BACKED_ACTIONS = {
-    "track_analysis_summary",
     "track_analysis_check_data_ready",
     "rcp_snapshot",
     "weapon_inventory",
@@ -41,17 +40,21 @@ FIXED_BROWSER_BACKED_ACTIONS = {
     "rcp_event_feature_list",
     "rcp_policy_tree_lookup",
 }
+LEGACY_BROWSER_BACKED_ACTIONS = {
+    "track_analysis_summary",  # legacy client unit only; not current ATO case execution default
+}
 CONTROLLED_PARALLEL_EXECUTION_GROUPS = {
     "independent_parallel",
     "dependency_serial",
     "large_response_serial",
     "auth_sensitive_serial",
 }
-ATO_ANCHOR_REQUIRED_ACTIONS = {
-    "suspicious_anchor_discovery",
-    "candidate_control_endpoint_extraction",
-    "device_identity_consistency",
-    "historical_baseline_comparison",
+ATO_REALTIME_P0_REQUIRED_ACTIONS = {
+    "login_logs_search",
+    "archives_user_profile",
+    "archives_user_analysis",
+    "archives_photo_search",
+    "track_analysis_check_data_ready",
 }
 ATO_DEVICE_IDENTITY_FIELDS = {
     "device_model",
@@ -528,19 +531,23 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
 
         if scenario_name == "ato_login_anomaly":
             item_actions = {str(item.get("action")) for item in source_plan if isinstance(item, dict)}
-            missing_actions = sorted(ATO_ANCHOR_REQUIRED_ACTIONS - item_actions)
+            missing_actions = sorted(ATO_REALTIME_P0_REQUIRED_ACTIONS - item_actions)
             if missing_actions:
                 failures.append(
                     {
-                        "rule": "ato_single_case_anchor_first_plan_required",
-                        "reason": f"ATO source_plan missing anchor-first brain actions {missing_actions}",
+                        "rule": "ato_single_case_realtime_p0_plan_required",
+                        "reason": f"ATO source_plan missing realtime P0 actions {missing_actions}",
                     }
                 )
-            if scenario.get("first_step") != "suspicious_anchor_discovery" or scenario.get("anchor_first_required") is not True:
+            if (
+                scenario.get("first_step") != "realtime_p0_source_collection"
+                or scenario.get("anchor_discovery_mode") != "derive_suspicious_anchor_from_realtime_p0_sources"
+                or scenario.get("standalone_suspicious_anchor_source_forbidden") is not True
+            ):
                 failures.append(
                     {
-                        "rule": "ato_single_case_anchor_first_plan_required",
-                        "reason": "ATO scenario must declare first_step=suspicious_anchor_discovery and anchor_first_required=true",
+                        "rule": "ato_single_case_realtime_p0_anchor_derivation_required",
+                        "reason": "ATO scenario must derive suspicious anchors from realtime P0 sources, not a standalone source action",
                     }
                 )
             identity_fields = set(
@@ -739,6 +746,7 @@ def is_browser_backed_item(item: dict[str, Any]) -> bool:
         item.get("access_method") == "browser_backed_service"
         or item.get("source_provenance") == "browser_backed_service"
         or action_name in FIXED_BROWSER_BACKED_ACTIONS
+        or action_name in LEGACY_BROWSER_BACKED_ACTIONS
     )
 
 
@@ -1345,17 +1353,17 @@ def validate_ato_user_facing_answer(answer_text: str) -> list[dict[str, str]]:
     text = answer_text.lower()
     raw_text = answer_text
 
-    anchor_markers = ["suspicious_anchor_discovery", "可疑动作锚点", "可疑锚点"]
+    anchor_markers = ["可疑动作锚点", "可疑锚点", "多源锚点", "P0 多源", "realtime P0"]
     if not any(marker in raw_text for marker in anchor_markers):
         failures.append(
             {
-                "rule": "ato_single_case_suspicious_anchor_required",
+                "rule": "ato_single_case_realtime_p0_anchor_required",
                 "case_id": "ATO-SINGLE-NAKED-QUESTION-ANCHOR-FIRST-001",
-                "reason": "ATO single-case answer must start from suspicious_anchor_discovery / 可疑动作锚点",
+                "reason": "ATO single-case answer must derive suspicious anchors from realtime P0 sources and state 可疑动作锚点",
             }
         )
 
-    if "未完成可疑锚点发现" not in raw_text and "可疑动作锚点" not in raw_text and "suspicious_anchor_discovery" not in raw_text:
+    if "未完成可疑锚点发现" not in raw_text and "可疑动作锚点" not in raw_text and "多源锚点" not in raw_text:
         failures.append(
             {
                 "rule": "ato_anchor_not_found_must_be_explicit",
@@ -1364,7 +1372,7 @@ def validate_ato_user_facing_answer(answer_text: str) -> list[dict[str, str]]:
         )
 
     flat_markers = ["track", "rcp", "weapon", "登录日志", "档案中心"]
-    if all(marker in text for marker in flat_markers) and not any(marker in raw_text for marker in ["可疑动作锚点", "可疑控制端", "设备身份一致性", "suspicious_anchor_discovery"]):
+    if all(marker in text for marker in flat_markers) and not any(marker in raw_text for marker in ["可疑动作锚点", "可疑控制端", "设备身份一致性", "多源锚点"]):
         failures.append(
             {
                 "rule": "source_plan_not_flat_source_summary",

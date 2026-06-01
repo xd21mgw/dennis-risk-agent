@@ -2706,7 +2706,7 @@ platform_access_execution_v0_1_regression:
       - rcp_snapshot
       - weapon_inventory
       - login_logs_search
-      - track_analysis_summary
+      - track_analysis_check_data_ready
       - no_dennis_browser_start
       - no_cookie_token_session_header_read
     pass_fail_criteria: "Dennis 只调用本地 browser-backed service 固定 action；不自行开浏览器，不读取认证材料。"
@@ -2753,7 +2753,7 @@ platform_access_execution_v0_1_regression:
       - rcp_snapshot_source_status_blocked
       - weapon_inventory_source_status_blocked
       - login_logs_search_source_status_auth_failed
-      - track_analysis_summary_source_status_completed
+      - track_analysis_check_data_ready_source_status_completed
       - source_card_present_for_all_sources
       - source_quality_present_for_all_sources
       - sensitive_output_false_for_all_sources
@@ -2767,54 +2767,49 @@ platform_access_execution_v0_1_regression:
   - case_id: FULL-RUNTIME-BROWSER-BACKED-PRIORITY-001
     input: "clean full_runtime 单用户账号安全 evidence card，user_id 已给出。"
     expected_output_boundary:
-      - ato_suspicious_anchor_discovery_first
+      - ato_realtime_p0_source_collection_first
+      - archives_photo_search_default_p0
       - login_control_chain_evidence
-      - content_action_deep_dive_if_discoverable
+      - content_publish_handoff_evidence
       - candidate_control_endpoint_extraction
       - device_identity_consistency
       - historical_baseline_comparison
       - track_weapon_rcp_auxiliary_only
       - final_risk_judgement_made_false
-    pass_fail_criteria: "账号安全 / ATO 单用户默认先走 suspicious_anchor_discovery，再闭合登录/控制链、内容动作链、候选控制端、device_identity_consistency 和历史基线；Track / Weapon / RCP 只能作辅助补证，不得平铺四源后输出证据不足。"
-  - case_id: ACCOUNT-SECURITY-BROWSER-BACKED-FOUR-SOURCE-001
+    pass_fail_criteria: "账号安全 / ATO 单用户默认先收集 login_logs_search、archives_user_profile、archives_user_analysis、archives_photo_search、track_analysis_check_data_ready 五类实时 P0 source，再从多源观察推导可疑锚点、候选控制端、device_identity_consistency 和历史基线；Weapon / RCP 只能作条件补证，不得平铺 source 状态后输出证据不足。"
+  - case_id: ACCOUNT-SECURITY-BROWSER-BACKED-FIVE-SOURCE-001
     input: "single_user_account_security evidence card 使用 browser-backed source template。"
     expected_output_boundary:
-      - default_anchor_first_source_plan
-      - suspicious_anchor_discovery_first
+      - default_realtime_p0_source_plan
+      - suspicious_anchor_derived_from_realtime_p0_sources
+      - archives_photo_search_default_p0
       - login_control_chain_before_loose_conclusion
-      - content_action_deep_dive_if_discoverable
+      - content_publish_handoff_evidence
       - device_identity_consistency_required
       - default_response_mode_passthrough
-      - normalized_observation_present_for_passthrough
+      - dennis_generates_observation_from_passthrough
       - track_analysis_auxiliary_not_owner_proof
       - rcp_snapshot_auxiliary_not_anchor_replacement
       - weapon_inventory_auxiliary_not_login_or_publish_chain
       - dennis_source_quality_latency_sensitive_output_required_for_each_source
       - compat_summary_only_legacy_explicit_fallback
       - final_risk_judgement_made_false
-    pass_fail_criteria: "默认 source plan 必须围绕 suspicious anchor / control-chain / action-chain / device_identity_consistency / baseline 输出；不得以 Track、RCP、Weapon、Login 四源平铺替代 ATO 主线；Dennis 默认显式请求 passthrough 并消费可用 observation，不 silent fallback 到 compat_summary。"
-  - case_id: TRACK-ANALYSIS-ACCOUNT-SECURITY-BUNDLE-001
-    input: "track_analysis_summary 被用于账号安全单用户 evidence card。"
+    pass_fail_criteria: "默认 source plan 必须围绕实时 P0 多源 / control-chain / content-publish handoff / device_identity_consistency / baseline 输出；不得以 Track、RCP、Weapon、Login 四源平铺替代 ATO 主线；Dennis 默认显式请求 passthrough 并生成 observation，不 silent fallback 到 compat_summary。"
+  - case_id: TRACK-ANALYSIS-CHECK-DATA-READY-ATO-P0-001
+    input: "track_analysis_check_data_ready 被用于账号安全单用户 evidence card。"
     expected_output_boundary:
-      - action_name_track_analysis_summary
-      - typed_params_mode_account_security_bundle
-      - sub_interface_profile_required
-      - sub_interface_getUseDuration_required
-      - sub_interface_getDeviceIds_required
-      - sub_interface_getLastestDateTime_required
-      - each_sub_interface_status_enters_source_completion_matrix
-      - user_id_appName_only_is_insufficient
+      - action_name_track_analysis_check_data_ready
+      - p0_auxiliary_front_backend_activity_alignment
+      - missing_device_id_enters_blocked_source_quality
       - activity_signal_not_final_judgement
-    pass_fail_criteria: "Track Analysis 不能只传 user_id/appName 或只跑 latest timestamp；必须传 account_security_bundle 或等价 profile/getUseDuration/getDeviceIds/getLastestDateTime sub_interface 覆盖。"
-  - case_id: ACCOUNT-SECURITY-TRACK-ANALYSIS-BUNDLE-EXPANDS-FOUR-SUBINTERFACES
-    input: "browser_backed_service_client account-security helper 执行 Track Analysis bundle。"
+    pass_fail_criteria: "Track checkDataReady 是 ATO 实时 P0 辅助 source，用于前后端活跃对齐；缺 device_id 只进入 blocked/missing_required_fields，不导致整个 batch fail，也不能证明本人操作。"
+  - case_id: ACCOUNT-SECURITY-TRACK-CHECK-DATA-READY-NOT-SUMMARY
+    input: "browser_backed_service_client account-security helper 执行 Track Analysis readiness。"
     expected_output_boundary:
-      - call_account_security_sources_expands_track_analysis_summary
+      - call_account_security_sources_uses_track_analysis_check_data_ready
       - each_track_action_request_has_response_mode_passthrough
-      - sub_interface_profile_called
-      - sub_interface_getUseDuration_called
-      - sub_interface_getDeviceIds_called
-      - sub_interface_getLastestDateTime_called
+      - missing_device_id_enters_blocked_source_quality
+      - track_summary_legacy_alias_not_current_default_action
       - four_sub_interface_results_merged_into_one_track_source
       - profile_useDuration_deviceIds_latest_summaries_visible_in_evidence_card
       - wrong_sub_interface_result_stays_missing_not_completed
@@ -2842,17 +2837,17 @@ platform_access_execution_v0_1_regression:
   - case_id: RCP-SNAPSHOT-IN-ACCOUNT-SECURITY-MATRIX-001
     input: "single_user_account_security evidence card 没有显式策略问题。"
     expected_output_boundary:
-      - rcp_snapshot_auxiliary_after_anchor_discovery
+      - rcp_snapshot_conditional_strategy_support
       - strategy_hit_anchor_or_support_enters_source_quality
       - rcp_source_status_preserved
       - strategy_event_entry_not_final_risk_judgement
       - no_hit_not_risk_exclusion
-    pass_fail_criteria: "RCP snapshot 只能作为策略/行为旁证或 strategy_hit_anchor 补证；不能替代登录链路、内容动作链路或 suspicious_anchor_discovery；失败、空命中或无命中只能作为 source_quality，不做最终风险定性。"
+    pass_fail_criteria: "RCP snapshot 只能作为策略/行为旁证或 strategy_hit_anchor 补证；不能替代登录链路、内容动作链路或 realtime P0 多源锚点推导；失败、空命中或无命中只能作为 source_quality，不做最终风险定性。"
   - case_id: LOGIN-LOGS-STANDARD-BROWSER-BACKED-RESULT-001
     input: "login_logs_search 7d 或 24h fallback 返回 no_data / parse_error / blocked。"
     expected_output_boundary:
       - standard_browser_backed_source_result
-      - normalized_observation_present_when_passthrough
+      - dennis_generates_observation_from_passthrough
       - source_quality_present
       - latency_ms_present
       - sensitive_output_false
@@ -2877,24 +2872,24 @@ platform_access_execution_v0_1_regression:
       - archives_profile_readonly_source_gap
       - source_quality_records_stub
       - missing_evidence_optional_source_gap
-      - not_blocking_anchor_first_mainline
+      - not_blocking_realtime_p0_mainline
       - continue_login_logs_search
       - continue_content_action_deep_dive_when_available
       - continue_device_identity_consistency_from_available_anchors
       - no_auth_repair
       - no_low_risk_from_source_gap
-    pass_fail_criteria: "Archives stub 进入 missing_evidence / optional source gap；不得阻塞 anchor-first ATO 主线，也不得把 stub/source_gap 当低风险反证。"
+    pass_fail_criteria: "Archives stub 进入 missing_evidence / optional source gap；不得阻塞 realtime P0 ATO 主线，也不得把 stub/source_gap 当低风险反证。"
   - case_id: ARCHIVES-STUB-OPTIONAL-GAP-NOT-BLOCKING-001
     input: "clean full_runtime 中 archives_profile_runner 仍是 stub。"
     expected_output_boundary:
       - archives_profile_readonly_missing_evidence_optional_source_gap
-      - archives_stub_not_blocking_anchor_first_mainline
-      - continue_suspicious_anchor_discovery
+      - archives_stub_not_blocking_realtime_p0_mainline
+      - continue_multi_source_anchor_derivation_when_p0_partial_available
       - continue_login_logs_search
       - continue_device_identity_consistency_from_available_anchors
       - no_auth_repair
       - source_gap_not_no_risk
-    pass_fail_criteria: "Archives stub 只能进入 missing_evidence / optional_source_gap；不阻塞 suspicious_anchor_discovery、登录控制链和设备身份一致性主线。"
+    pass_fail_criteria: "Archives stub 只能进入 missing_evidence / optional_source_gap；不阻塞 realtime P0 source collection、登录控制链和设备身份一致性主线。"
   - case_id: LOGIN-LOGS-7D-PARSE-ERROR-24H-FALLBACK-001
     input: "login_logs_search 默认 7d 返回 parse_error。"
     expected_output_boundary:
@@ -2941,11 +2936,13 @@ platform_access_execution_v0_1_regression:
   - case_id: ATO-SINGLE-NAKED-QUESTION-ANCHOR-FIRST-001
     input: "<user_id> 这个账号是不是被盗了？"
     expected_output_boundary:
-      - suspicious_anchor_discovery_first
-      - no_loose_insufficient_evidence_before_anchor_discovery
+      - realtime_p0_source_collection_first
+      - suspicious_anchor_derived_from_realtime_p0_sources
+      - archives_photo_search_default_p0
+      - no_loose_insufficient_evidence_before_p0_source_collection
       - anchor_not_found_must_say_未完成可疑锚点发现
       - business_evidence_card_not_flat_source_summary
-    pass_fail_criteria: "ATO 单案裸问必须先进入 suspicious_anchor_discovery，输出是否找到候选异常动作 / 控制端锚点；不得先平铺 source 状态后说证据不足。"
+    pass_fail_criteria: "ATO 单案裸问必须先规划 login_logs_search、archives_user_profile、archives_user_analysis、archives_photo_search、track_analysis_check_data_ready 五个实时 P0 source，再从多源观察推导候选异常动作 / 控制端锚点；不得先平铺 source 状态后说证据不足。"
   - case_id: ATO-NAKED-QUESTION-ACTION-DISCOVERY-001
     input: "<user_id> 这个账号是不是被盗了？"
     expected_output_boundary:
@@ -3053,7 +3050,8 @@ platform_access_execution_v0_1_regression:
   - case_id: SOURCE-PLAN-NOT-FLAT-SOURCE-SUMMARY-001
     input: "ATO 单案。"
     expected_output_boundary:
-      - suspicious_anchor_discovery
+      - suspicious_anchor_derived_from_realtime_p0_sources
+      - archives_photo_search_default_p0
       - candidate_control_endpoint_extraction
       - device_identity_consistency
       - content_action_or_login_control_chain

@@ -54,13 +54,14 @@ When multiple sources can answer the same question, select the lowest-cost, most
 1. `api_direct_confirmed`
 2. `same_origin_api_confirmed`
 3. `partial_api_direct` with precise required fields
-4. browser UI / DOM / selector observation
+4. browser UI / DOM / selector observation only for explicit diagnostics or auth activation tasks; not for case execution
 5. DataAgent / Hive for long-window, cross-table, offline history, or realtime window gaps
 
 Routing rules:
 
 - If API direct can answer, do not start with browser.
 - If same-origin fetch can answer, do not parse DOM.
+- Case execution must use `runtime_case_execution_runner -> controlled batch -> passthrough envelope`; it must not fall back to browser click, DOM parsing, ad-hoc fetch, direct curl, or old runners.
 - If precise `sourceId` / `eventId` / `deviceId` / `eventType` can answer, do not broad-scan a large time window.
 - If realtime readonly API can answer, do not call DataAgent / Hive first.
 - If completed low-cost sources can support a partial evidence card, do not block the main conclusion on P1/P2 browser sources.
@@ -104,7 +105,7 @@ Registered v1 action set:
 | `track_analysis_check_data_ready` | Track readiness/provenance | `live_smoke_verified` | `/dp/platform/app/analytics/v2/sequence/checkDataReady` |
 | `archives_user_profile` | Account baseline | `live_smoke_verified` | `/archives/user/home/info` |
 | `archives_user_analysis` | Account operation/risk timeline | `live_smoke_verified`; large response can be `partial_observation_available` | `/v3/user/log/coreLogs/fetch` |
-| `archives_photo_search` | Abnormal publish/content clue | path live with `no_data` case | `/v4/archives/report/photo/search` |
+| `archives_photo_search` | ATO default content/publish handoff and abnormal publish/content clue | path live with `no_data` case | `/v4/archives/report/photo/search` |
 | `archives_related_users` | Same-device/account-spread clue | `live_smoke_verified` | `/archives/user/search/device` |
 | `rcp_event_detail` | Event attribution detail | `live_smoke_verified` | `/v2/rest/event/rcpEventDetail` |
 | `rcp_event_feature_list` | Event feature-group summary | `partial_observation_available` | `/v2/rest/event/rcpEventFeatureList` |
@@ -112,7 +113,7 @@ Registered v1 action set:
 
 Scenario source plans:
 
-- ATO / login anomaly: `login_logs_search -> archives_user_profile -> archives_user_analysis -> track_analysis_check_data_ready`.
+- ATO / login anomaly: `login_logs_search + archives_user_profile + track_analysis_check_data_ready` in parallel, then `archives_photo_search + archives_user_analysis` in Archives auth-sensitive serial; suspicious anchors are derived from these P0 observations.
 - Abnormal publish / content handoff: `archives_photo_search -> archives_user_profile -> archives_user_analysis`.
 - Account spread / same device: `archives_related_users -> archives_user_profile/login_logs_search/track_analysis_check_data_ready`.
 - RCP attribution: `rcp_event_detail -> rcp_event_feature_list`.
@@ -397,13 +398,14 @@ Wrong entry boundary:
 - `/admin/search/user?keyword={userId}` can hit AMC/IP block.
 - `wrong_entry_amc_blocked_not_platform_unavailable`: wrong entry blocked does not prove preferred SPA entry is unavailable.
 
-SPA tab fallback:
+SPA tab fallback is a manual diagnostic / auth activation note, not a case execution path:
 
 - `.ks-tabs__item` click by agent-browser ref may not trigger Vue / ks-tabs state change.
 - Try accessible click once.
 - If selected state does not change, use DOM eval click by text content and call `HTMLElement.click()`.
 - If still failed, try URL hash / route navigation when the contract has a registered route.
 - If still failed, mark `tab_switch_failed`, not source unavailable.
+- During KNC, single-user, batch, ATO, or evidence-card case execution, do not perform these browser/DOM fallbacks; record the source gap in `source_quality` and continue partial evidence.
 - `publish_chain_visible=true` marks abnormal-publish P0-conditional source completed.
 - If publish device is not visible, mark `missing_evidence`; do not mark publish-chain unavailable.
 

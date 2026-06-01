@@ -171,7 +171,7 @@ def build_ato_single_case_source_plan(
             depends_on=[],
             timeout_class="short_readiness",
             failure_policy="non_blocking_partial",
-            source_priority="P2",
+            source_priority="P0",
             expected_observation=(
                 "front-end activity readiness/provenance; not owner proof and not a risk conclusion"
             ),
@@ -192,6 +192,28 @@ def build_ato_single_case_source_plan(
             },
             timeout_ms=15_000,
             required_fields=["device_id", "startTime", "endTime"],
+        ),
+        SourcePlanItem(
+            source_id="ato_archives_photo_search",
+            action="archives_photo_search",
+            execution_group="auth_sensitive_serial",
+            depends_on=["ato_archives_user_profile"],
+            timeout_class="auth_sensitive",
+            failure_policy="non_blocking_partial",
+            source_priority="P0",
+            expected_observation=(
+                "recent publish/content handoff, photo_id, publish time, source end, device/IP/UA, "
+                "and no_data boundary; photo no_data is not ATO or publish-risk exclusion"
+            ),
+            params={
+                "user_id": user_id,
+                "begin": window_start_ms,
+                "end": window_end_ms,
+                "page": 1,
+                "count": 20,
+            },
+            timeout_ms=30_000,
+            required_fields=["user_id"],
         ),
         SourcePlanItem(
             source_id="ato_archives_user_analysis",
@@ -217,32 +239,6 @@ def build_ato_single_case_source_plan(
             required_fields=["user_id"],
         ),
     ]
-
-    if include_abnormal_publish:
-        items.append(
-            SourcePlanItem(
-                source_id="ato_archives_photo_search",
-                action="archives_photo_search",
-                execution_group="auth_sensitive_serial",
-                depends_on=["ato_archives_user_profile"],
-                timeout_class="standard_readonly",
-                failure_policy="non_blocking_partial",
-                source_priority="P0-conditional",
-                expected_observation=(
-                    "recent publish/action anchors, photo_id, publish time, source end, device, IP/UA, "
-                    "and content-action closure"
-                ),
-                params={
-                    "user_id": user_id,
-                    "beginTime": window_start_ms,
-                    "endTime": window_end_ms,
-                    "pageIndex": 1,
-                    "pageSize": 50,
-                },
-                timeout_ms=30_000,
-                required_fields=["user_id"],
-            )
-        )
 
     if include_same_device:
         items.append(
@@ -435,8 +431,9 @@ def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[st
         headers={"content-type": "application/json"},
         method="POST",
     )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(request, timeout=35) as response:
+        with opener.open(request, timeout=35) as response:
             data = response.read()
     except urllib.error.URLError as exc:
         return {
@@ -508,17 +505,25 @@ def classify_source(row: dict[str, Any]) -> str:
 def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[str, Any]) -> dict[str, Any]:
     plan_by_id = {item.source_id: item for item in source_plan}
     rows = batch_result.get("transport_status_matrix") or []
+    if isinstance(rows, dict):
+        rows = list(rows.values())
     if not rows:
-        rows = [
-            {
-                "source_id": failed.get("source_id"),
-                "action": failed.get("action"),
-                "category": failed.get("category"),
-                "source_status": failed.get("source_status"),
-                "error_type": failed.get("error_type"),
-            }
-            for failed in batch_result.get("missing_or_failed_sources", [])
-        ]
+        failed_sources = batch_result.get("missing_or_failed_sources", [])
+        if isinstance(failed_sources, dict):
+            failed_sources = list(failed_sources.values())
+        rows = []
+        for failed in failed_sources:
+            if not isinstance(failed, dict):
+                continue
+            rows.append(
+                {
+                    "source_id": failed.get("source_id"),
+                    "action": failed.get("action"),
+                    "category": failed.get("category"),
+                    "source_status": failed.get("source_status"),
+                    "error_type": failed.get("error_type"),
+                }
+            )
 
     buckets: dict[str, list[str]] = {
         "completed": [],
