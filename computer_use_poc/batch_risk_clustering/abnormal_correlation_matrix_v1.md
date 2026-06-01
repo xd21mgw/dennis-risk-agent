@@ -120,6 +120,30 @@ Required cautions:
 - Event order matters. A must happen before B for attack-path explanation.
 - Strategy hit is evidence of control response, not final risk conclusion.
 
+### 3.4A ATO cluster lens correlation
+
+Relations:
+
+- existing content / strategy / device cluster -> ATO lens hit.
+- WEB / H5 / PC non-trusted login -> downstream diversion action.
+- suspicious login/control-chain event -> `login_to_action_delta`.
+- common `device_id` -> UA / model / IP / login_source drift.
+- representative single-case ATO proof -> cluster-level coverage and confidence backfill.
+
+Risk explanation:
+
+- 盗号后投放导流内容.
+- WEB/session/API 控制端接管.
+- 常用 `device_id` 下设备身份变量伪装.
+- 内容导流簇叠加 ATO 盗号投放嫌疑.
+
+Required cautions:
+
+- Existing cluster signals and `ato_cluster_lens` are additive, not mutually exclusive.
+- Content similarity, strategy hit or shared device cannot independently prove ATO.
+- Common `device_id` cannot lower ATO confidence unless device identity consistency is complete.
+- Representative single-case deep dive supports the represented cluster only after `cluster_level_backfill` checks coverage, similarity, source quality and counter examples.
+
 ### 3.5 business-arbitrage correlation
 
 Relations:
@@ -217,6 +241,15 @@ Each matrix row must evaluate:
 | relation_family | relation_direction | observed_pattern | evidence_basis | baseline_status | denominator_status | coverage_ratio | enrichment_signal | directionality | reverse_check_result | confounder_risk | false_positive_risk | relationship_strength | attack_path_hypothesis | required_followup | cannot_conclude_boundary |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | infrastructure / toolchain / entry-path / behavior-chain / business-arbitrage / strategy-feedback | A -> B | what was observed | raw / derived / model / claim / missing / blocked | historical_normal_baseline_available / same_period_control_group_available / strategy_population_baseline_available / only_current_batch_available / baseline_missing | denominator_available / denominator_required / denominator_partial | x/y or % | strong / medium / weak / batch_internal_concentration / none / unknown | one_way / two_way / unknown | reverse_holds / reverse_not_holds / reverse_not_checked | low / medium / high | low / medium / high | strong_abnormal_correlation / medium_abnormal_correlation / weak_signal / hypothesis_only / not_enough_evidence | candidate explanation | fields and source needed | what cannot be concluded now |
+
+## 7A. Batch ATO Lens Matrix Rows
+
+| relation_family | relation_direction | observed_pattern | relationship_strength | required_followup | cannot_conclude_boundary |
+|---|---|---|---|---|---|
+| `existing_cluster_plus_ato_lens` | content_diversion_cluster -> `web_untrusted_login_cluster` | content-similar accounts also show recent WEB/H5/PC non-trusted login | medium_to_high if baseline and coverage are available | login/control-chain evidence and `representative_ato_single_case_deep_dive` | content similarity alone is not ATO proof |
+| `login_to_action_cluster` | suspicious_login -> publish/comment/live/private_message | WEB/control-chain event followed by action within 0-30 minutes | high when repeated and source quality is good | publish audit, content IDs and candidate-session alignment | short delta is a clue until login identity and action source align |
+| `device_identity_inconsistency_cluster` | common_device_id -> abnormal UA/model/IP/login_source drift | `device_id` looks common but identity variables drift across cases | medium_to_high | device identity coverage and counter-example review | common `device_id` cannot reduce ATO confidence by itself |
+| `cluster_level_backfill` | representative_case_deep_dive -> cluster confidence | representative sample proves ATO mechanism and backfills coverage/similarity | depends_on_coverage | coverage, similarity, source gap and counter examples | representative sample cannot prove the full batch by itself |
 
 ## 8. Concrete Examples
 

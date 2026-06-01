@@ -13,6 +13,12 @@
 | `plan_only_diagnostic` | 对 plan-only 输出做 Codex 评分，区分 intent/routing、source plan、orchestration、evidence reasoning、output contract | diagnostic / no platform call | documented | 只能证明脑子 / 路由 / 编排设计是否合理，不能证明 runtime config、auth、safeBins 或 source wrapper 可用；默认输出自然语言执行状态摘要，完整 `routing_metadata` 仅在 debug / run log / regression 或用户明确要求时展示 |
 | `failure_triage_card` | 对失败 case 做分层归因：config/runtime、intent/routing、source_orchestration、evidence_reasoning、output_contract、no_issue | post-failure diagnostic | documented | 不调用平台，不调用 DataAgent；用于决定 fix owner 和 regression |
 
+通用风险研判能力：
+
+| capability | purpose | mode | status | key_boundary |
+|---|---|---|---|---|
+| `universal_risk_evidence_workflow` | 所有风险研判共用的工作模式：实时 readonly source 优先，实时能闭合就给 evidence-based 结论，不能闭合则输出 partial evidence / missing evidence / 分场景离线补证计划，批量问题再进入共性分簇 | orchestration contract | documented | 不是新平台手脚，不自动调用 DataAgent/Hive，不把离线计划伪装成已执行；每个 source 必须有 source_quality 和时间窗口边界 |
+
 全局输出字段分层：
 
 - 所有 capability 的输出必须遵守 `computer_use_poc/field_output_classification_policy_v1.md`。
@@ -39,6 +45,7 @@
 | `tianshi_anticrawl_family_candidate` | 解释 ANTICRAWL 家族候选 eventType 和反爬查询计划 | asset map + future hit sample required | candidate query plan only | candidate_only_query_plan_only | 不注册为可执行 runtime；缺真实命中 source_id / eventId 时只输出 query plan |
 | `real_name_feature_service_partial_contract` | 记录 EB_USER_REAL_NAME_VERILY__1 testCase bridge 调用方式、参数映射、字段可用性和脱敏输出边界 | `real_name_feature_service_partial_contract_v1.md` | partial contract / redaction schema / query plan | partial_contract_redaction_schema_only_query_plan_only | 不是完整实名画像能力，不是本人 / 盗号判断，不注册可执行 identity runtime |
 | `tianshi_strategy_governance_readonly` | 解释策略是什么、挂在哪、为什么命中、何时上线/终止 | `computer_use_poc/strategy_governance/` readonly governance docs | strategy governance readonly plan / observation | documented_ready_for_runtime | 不做最终作弊定性，不自动处置，不写操作、不上线、不审批 |
+| `universal_risk_evidence_workflow` | 把单案和批量风险研判统一到“实时 source 优先 -> 证据链闭合检查 -> partial/missing evidence -> 分场景离线补证计划 -> 必要时分簇扩展”的 Dennis 大脑工作模式 | `source_orchestration_plan_v1.yaml`、`multi_entry_runtime_guard_v1.md`、runtime summaries、answer templates | orchestration contract | documented | 不新增平台 action，不默认查 Hive/DataAgent，不把 ATO/Hive 登录表口径泛化成唯一补证路径；source_quality 边界适用于所有风险场景 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
 | `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 做分簇、异常相关性矩阵、代表样本抽样、证据缺口和策略建议 | `computer_use_poc/batch_risk_clustering/` templates | batch_plan_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙 |
@@ -368,6 +375,9 @@ Batch ATO cluster lens boundary:
 
 - `batch_ato_cluster_lens` 是 `batch_risk_clustering_analysis` 的 overlay，不推翻已有内容相似、设备共性、策略命中、时间聚集、账号画像和行为模式分簇。
 - 识别 `web_untrusted_login_cluster`、`login_to_action_cluster`、`device_identity_inconsistency_cluster`、`compromised_account_cluster`、`content_abuse_only_cluster`、`mixed_cluster` 和 `insufficient_evidence_cluster`。
+- ATO / 账号接管分簇特征库已注册维度：控制权入口、设备共性、IP / 网络、时间序列、行为承接、前端活跃、策略 / 风控信号、用户反馈 / 反证。
+- 控制权入口必须区分撞库 / 密码型 ATO、OAuth / 扫码 / 一键登录接管、token / session / 协议上号、异常发布 / 导流承接型 ATO、误伤 / 用户自身异常行为 / 灰色用户；HARMONY、OAuth、quickLogin、token issued、kickout、reset_login_type 等线索不能被简单归为撞库。
+- 分簇输出必须包含 `cluster_key`、`shared_features`、`representative_users`、`strong_evidence`、`weak_evidence`、`counter_evidence` 和 `missing_evidence`。
 - 每个疑似 ATO 簇抽代表样本做 `representative_ato_single_case_deep_dive`，再用 `cluster_level_backfill` 回填 coverage / similarity / confidence / source gap；不得默认全批账号都被盗。
 - Track 活跃、策略命中、内容命中、常用 `device_id`、在线登录 no_data / `response_too_large` / wrapper mismatch 都不能作为排除 ATO 的强反证。
 - 当批量 ATO 的实时登录 / 控制链不完整，或 admin 仅 APP 日志无法覆盖 WEB/H5/PC/token/OAuth/扫码链路时，必须提示 `offline_hive_required` 并使用账号安全 Hive registry-first query plan；未获用户逐次授权不得调用 DataAgent/Hive。

@@ -45,6 +45,20 @@ This contract is a query plan and schema contract only. It does not execute Hive
 | channel / campaign | channel, campaign_id, entry_source, reward_claim, retention bucket, conversion signal | arbitrage and channel fake traffic |
 | baseline / control | denominator_count, same_period_control_count, historical_normal_baseline_count, population_rate | enrichment and denominator protection |
 
+## ATO Cluster Lens L1 Fields
+
+When the batch may include compromised-account / stolen-account posting risk, request these ATO lens fields in addition to the generic L1 feature families. This is still a query plan and schema contract only; it does not call Hive or DataAgent.
+
+| lens family | fields | purpose |
+|---|---|---|
+| `web_untrusted_login_cluster` | recent_web_h5_pc_login, historical_login_source_distribution, login_source_shift, login_device_baseline_match, login_ip_ua_baseline_match | Identify WEB / H5 / PC control-chain commonality beyond generic login count. |
+| `abnormal_login_type_cluster` | login_type, login_method, token_issued, refreshToken, passToken, byToken, OAuth, scan_login, one_click_login, resetPwd, kick_out, account_protection | Separate credential stuffing, token/session takeover, OAuth/scan and one-click takeover paths. |
+| `login_to_action_delta` | suspicious_login_time, downstream_action_time, action_type, delta_minutes, anchor_source | Detect WEB/control-chain event followed by diversion publish/comment/live/private message/profile change. |
+| `content_action_deep_dive` | photo_id, live_id, comment_id, publish_time, publish_source, publish_device, publish_ip, publish_ua, audit_reason, strategy_reason, diversion_reason, four_items_available | Prove downstream content/action chain for representative samples. |
+| `device_identity_inconsistency_cluster` | device_id_commonness, first_seen_time, active_days_30_90_180, device_model_drift, os_drift, app_version_drift, ua_drift, browser_fingerprint_drift, ip_asn_drift, login_source_drift, login_type_drift | Avoid treating common device_id as owner proof; detect possible spoofing. |
+| `shared_infrastructure` | shared_ip, shared_ip24, shared_asn, shared_ua, shared_browser_fingerprint, shared_login_source, shared_login_type, shared_landing_page, shared_contact_info, shared_diversion_wording, publish_cadence | Backfill cluster-level infra coverage and confidence. |
+| `historical_behavior_shift` | historical_publish_category, current_publish_category, historical_web_login_rate, current_web_login_rate, historical_publish_device, current_publish_device, historical_action_baseline | Distinguish compromised normal accounts from content-abuse-only or fake-account clusters. |
+
 ## batch_feature_table Schema
 
 | field | type | required | description |
@@ -67,6 +81,7 @@ This contract is a query plan and schema contract only. It does not execute Hive
 | `channel_campaign_fields` | object | optional | Channel, campaign, reward, retention and conversion fields. |
 | `fake_account_fields` | object | optional | Fake account tags, downstream badness, audit labels. |
 | `baseline_fields` | object | recommended | Historical normal, same-period control, population denominator. |
+| `ato_cluster_lens_fields` | object | conditional | WEB login, login-to-action, content-action, device identity consistency, shared infrastructure and historical shift fields for compromised-account analysis. |
 | `source_metadata` | object | yes | Source table, partition, freshness, permission and reliability. |
 | `missing_fields` | list | yes | Fields requested but unavailable. |
 | `sensitivity_flags` | list | yes | phone, identity, credential, raw payload, high-sensitive personal fields. |
@@ -101,4 +116,3 @@ l1_query_plan:
 - Credential material, request headers, raw payloads, phone, identity number, and real-name fields are not output in plaintext.
 - IP may be bucketed as `ip24` or masked when shared broadly.
 - UID/DID can be kept as internal entity keys but should be safe_ref in user-facing summaries unless the audience and channel allow controlled internal identifiers.
-

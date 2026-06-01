@@ -34,6 +34,7 @@ Quality judgement:
 
 - The pack supports the expected multi-cluster output.
 - Key risk: response template should force “not one ATO batch” statement for mixed ATO samples.
+- Additional batch ATO lens check: preserve existing clusters, then apply `ato_cluster_lens`; if WEB non-trusted login plus downstream diversion is present, output `existing_cluster_plus_ato_lens`, `web_untrusted_login_cluster`, `login_to_action_delta`, `representative_ato_single_case_deep_dive` and `cluster_level_backfill`.
 
 ## Group 2 Dry Run: Protocol Downgrade / Forged Client
 

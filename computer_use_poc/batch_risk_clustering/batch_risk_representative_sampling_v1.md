@@ -65,9 +65,53 @@ Each representative sample must generate an evidence card with:
 - preliminary judgement.
 - required follow-up.
 
+## 4A. ATO Cluster Lens Representative Sampling
+
+For batch ATO / compromised-account cluster lens, sampling validates the attack mechanism of a representative cluster. It is not a one-by-one online lookup loop and it is not global proof for the full batch.
+
+Each suspected ATO cluster should select:
+
+- 2-3 high-suspicion samples.
+- 1-2 medium-suspicion samples.
+- 1 boundary / ambiguous sample.
+- 1 counter-example sample when available.
+
+Selection priorities:
+
+- WEB / H5 / PC non-trusted login is clearest.
+- `login_to_action_delta` is shortest.
+- `device_identity_inconsistency` is strongest.
+- diversion content is most typical.
+- source gap is smallest.
+- sample best represents the cluster pattern.
+
+Representative samples then run the single-case ATO chain:
+
+```text
+suspicious_anchor_discovery
+-> login/control-chain evidence
+-> content_action_deep_dive
+-> candidate_control_endpoint_extraction
+-> device_identity_consistency
+-> historical_baseline_comparison
+-> business evidence card
+```
+
+Backfill fields from representative deep dive to the cluster:
+
+- `login_to_action_delta` distribution.
+- `device_identity_inconsistency` coverage.
+- `possible_device_id_spoofing` coverage.
+- shared IP / UA / ASN / browser fingerprint coverage.
+- content similarity and diversion wording coverage.
+- historical behavior shift coverage.
+- strategy-hit combination coverage.
+- source quality and missing evidence coverage.
+
 ## 5. Boundary
 
 - Sampling is not proof that all cluster members are risky.
 - A sample can validate a hypothesis only for the represented cluster when common evidence is present.
 - If clusters are heterogeneous, each major cluster needs at least one representative sample.
 - If only one sample supports a cluster, output confidence limit and required follow-up.
+- ATO representative samples cannot be generalized to the full batch without coverage, similarity, source quality and counter-example checks.

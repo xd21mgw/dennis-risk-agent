@@ -35,6 +35,8 @@ These are text-level golden answers for user-facing Batch Risk Clustering Analys
 3. user_claim/source_gap 簇：只有用户反馈被盗，最多 weak user_claim，不能当 strong evidence。
 4. 正常换机/误报边界簇：稳定地理、可信设备迁移、无后置异常动作，应作为 false-positive 样本。
 
+ATO lens：在上述已有簇上叠加 ato_cluster_lens。如果出现 WEB/H5/PC 非可信登录后短时间发布导流内容，应标 existing_cluster_plus_ato_lens / web_untrusted_login_cluster / login_to_action_delta，并抽代表样本做 representative_ato_single_case_deep_dive；单案发现只能通过 cluster_level_backfill 回填到簇级 coverage / similarity / confidence，不能直接证明 12 个都被盗。
+
 异常相关性矩阵重点看三组：password_failure_burst -> new_device_login；login_method=Harmony/OAuth -> abnormal_action；stable_device_migration -> no_downstream_abnormal_action。当前多处 baseline_missing / denominator_required，只能写 batch_internal_concentration 或 medium hypothesis，不能 strong enrichment。
 
 代表样本建议抽 4 个：撞库候选 1 个、Harmony/OAuth 候选 1 个、user_claim-only 1 个、正常换机 1 个。每个样本输出 strong/medium/weak/counter/missing evidence。

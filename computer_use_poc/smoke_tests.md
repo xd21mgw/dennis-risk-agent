@@ -8522,3 +8522,26 @@ Text gate checks:
 - 单 source timeout 不阻塞整体 partial evidence。
 - 普通用户回答默认不 dump routing metadata。
 - `default_runtime_routing=false` 保持。
+
+## 889. Universal Dennis risk workflow and ATO clustering signal registry
+
+- test_id: UNIVERSAL-RISK-WORKFLOW-AND-ATO-CLUSTER-REGISTRY-001
+- input: 通用风险研判、实时源不闭合、批量 ATO / 账号接管分簇、策略命中边界、DataAgent/Hive 授权边界。
+- expected_runtime_behavior: realtime_first_evidence_workflow_then_scene_specific_offline_plan_and_cluster_expansion
+- expected_output_boundary: 必须包含 `universal_realtime_first_risk_workflow_v1`、`evidence_chain_closure_check`、`offline_supplement_plan_by_risk_scene`、`dataagent_hive_per_request_authorization`、`cluster_expansion_when_batch_or_similar`、`ato_account_takeover_cluster_signal_registry`、`control_entry_commonality`、`device_commonality`、`ip_network_commonality`、`temporal_sequence_commonality`、`behavior_handoff_commonality`、`frontend_activity_commonality`、`strategy_signal_commonality`、`user_claim_not_standalone_proof`；不得只输出 ATO/Hive 登录表口径；不得把 full_runtime 当开发对象；不得输出默认 `routing_metadata` YAML。
+
+Keyword check:
+
+```bash
+grep -R "universal_realtime_first_risk_workflow_v1\|evidence_chain_closure_check\|offline_supplement_plan_by_risk_scene\|dataagent_hive_per_request_authorization\|cluster_expansion_when_batch_or_similar\|ato_account_takeover_cluster_signal_registry\|control_entry_commonality\|device_commonality\|ip_network_commonality\|temporal_sequence_commonality\|behavior_handoff_commonality\|frontend_activity_commonality\|strategy_signal_commonality\|user_claim_not_standalone_proof" AGENTS.md computer_use_poc skills 2>/dev/null
+```
+
+Text gate checks:
+
+- 风险研判必须先走实时 readonly source plan；实时闭合才给 evidence-based 结论。
+- 实时不闭合时必须输出 partial evidence、missing evidence 和分场景离线补证计划。
+- 离线补证计划必须覆盖 ATO、反作弊、内容 / 导流、策略治理等场景，不得只写 Hive 登录表。
+- DataAgent/Hive 执行必须逐次授权，plan mode 不得伪装已经查过。
+- 批量 / 举一反三必须输出共性分簇维度和代表样本边界，不默认逐个在线查。
+- ATO / 账号接管分簇必须覆盖控制权入口、设备、IP / 网络、时间序列、行为承接、前端活跃、策略信号、用户反馈 / 反证。
+- 策略命中不能单独定性，用户反馈被盗不能单独当强证据，Track mismatch 只能作为线索。

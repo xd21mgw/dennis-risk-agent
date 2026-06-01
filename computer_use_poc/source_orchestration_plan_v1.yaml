@@ -1,6 +1,111 @@
 {
   "schema_version": "source_orchestration_plan_v1",
   "plans": {
+    "universal_realtime_first_risk_workflow_v1": {
+      "applies_to": [
+        "generic_risk_judgement",
+        "account_security",
+        "anti_cheating",
+        "traffic_diversion",
+        "traffic_anti_cheating",
+        "anti_crawler",
+        "group_control",
+        "activity_anti_cheating",
+        "strategy_governance",
+        "batch_risk_clustering"
+      ],
+      "primary_access_method": "orchestration_contract",
+      "default_runtime_routing": false,
+      "real_platform_access": false,
+      "dataagent_hive_execution": false,
+      "positioning": "Generic Dennis workflow: realtime readonly evidence first, offline supplement plan when realtime evidence cannot close, and cluster expansion when the user asks for batch/commonality.",
+      "workflow": [
+        "risk_hypothesis_and_source_plan",
+        "realtime_readonly_source_collection",
+        "evidence_chain_closure_check",
+        "partial_evidence_missing_evidence_when_not_closed",
+        "offline_supplement_plan_by_risk_scene",
+        "dataagent_hive_per_request_authorization",
+        "cluster_expansion_when_batch_or_similar"
+      ],
+      "required_outputs": [
+        "source_plan",
+        "evidence_chain",
+        "source_quality_matrix",
+        "missing_evidence",
+        "final_answer_boundary"
+      ],
+      "closure_rule": {
+        "evidence_based_conclusion_allowed_when": [
+          "risk_hypothesis_sources_completed_or_qualified",
+          "time_window_boundary_clear",
+          "source_quality_matrix_clear",
+          "counter_evidence_evaluated",
+          "missing_evidence_not_decisive_for_current_conclusion"
+        ],
+        "if_not_closed": "output partial evidence, missing_evidence, offline supplement plan, and no forced final risk judgement"
+      },
+      "source_quality_boundaries": [
+        "no_data_not_risk_exclusion",
+        "partial_observation_available_is_usable_partial",
+        "auth_failed_timeout_blocked_parse_error_enter_source_quality",
+        "source_window_gap_not_counter_evidence",
+        "strategy_hit_not_final_judgement",
+        "same_device_relation_not_gang_conclusion",
+        "archives_failure_non_blocking_when_relevant"
+      ],
+      "offline_supplement_by_risk_scene": {
+        "account_takeover": [
+          "login_success_failure_resetPwd_change_bind_kickout",
+          "OAuth_scan_token_session_refreshToken",
+          "publish_live_comment_dm_profile_change",
+          "device_identity_and_historical_baseline"
+        ],
+        "anti_cheating": [
+          "device_wide_table",
+          "request_behavior_detail",
+          "strategy_hit_feature_wide_table",
+          "group_concentration_aggregation"
+        ],
+        "traffic_diversion": [
+          "photo_comment_dm_profile_homepage_detail",
+          "landing_page_contact_info",
+          "audit_punish_strategy_hit",
+          "publish_interaction_time_sequence"
+        ],
+        "strategy_governance": [
+          "strategy_version_release_record",
+          "hit_sample_false_positive_sample",
+          "gray_rollout_metrics",
+          "denominator_and_recall_precision_monitoring"
+        ]
+      },
+      "cluster_commonality_dimensions": [
+        "time_window",
+        "device_ip_network",
+        "behavior_sequence",
+        "content_publish_interaction",
+        "strategy_hit",
+        "frontend_activity",
+        "account_profile",
+        "related_accounts"
+      ],
+      "cluster_output_required_fields": [
+        "cluster_key",
+        "shared_features",
+        "representative_users",
+        "strong_evidence",
+        "weak_evidence",
+        "counter_evidence",
+        "missing_evidence"
+      ],
+      "authorization_boundary": {
+        "query_plan_allowed_without_execution": true,
+        "dataagent_hive_requires_per_request_authorization": true,
+        "previous_authorization_not_reusable": true,
+        "plan_mode_must_not_claim_offline_data_checked": true
+      }
+    },
     "browser_backed_fixed_actions_v1": {
       "applies_to": [
         "ATO",
@@ -1587,6 +1692,87 @@
         "mixed_cluster",
         "insufficient_evidence_cluster"
       ],
+      "ato_account_takeover_cluster_signal_registry": {
+        "control_entry_commonality": [
+          "login_type",
+          "reset_login_type",
+          "quickLogin",
+          "OAuth",
+          "scan_login",
+          "token_issued",
+          "byToken",
+          "logined",
+          "password_verify_fail",
+          "change_password_or_bind",
+          "kickout",
+          "refresh_token_abnormal"
+        ],
+        "device_commonality": [
+          "new_device_first_seen",
+          "multi_device_switching",
+          "normal_device_vs_abnormal_did_mismatch",
+          "HARMONY_Android_iOS_Web_H5_SDK_device_type_shift",
+          "abnormal_mod_or_fake_model",
+          "version_downgrade_or_mixed_versions",
+          "device_id_multi_account_relation"
+        ],
+        "ip_network_commonality": [
+          "login_ip_segment_shift",
+          "shared_ip_or_ip24",
+          "shared_ASN_proxy_IDC",
+          "login_ip_vs_publish_action_ip_alignment",
+          "historical_ip_vs_abnormal_event_ip_split"
+        ],
+        "temporal_sequence_commonality": [
+          "login_success_token_oauth_scan_to_sensitive_action_delta",
+          "password_reset_bind_change_publish_dm_profile_within_window",
+          "punish_strategy_hit_order_against_abnormal_action",
+          "window_gap_not_counter_evidence"
+        ],
+        "behavior_handoff_commonality": [
+          "abnormal_publish_diversion_video",
+          "diversion_profile_or_four_items",
+          "dm_comment_live_handoff",
+          "non_owner_operation_after_control_change",
+          "content_action_and_login_chain_time_closure"
+        ],
+        "frontend_activity_commonality": [
+          "track_frontend_backend_alignment",
+          "event_day_user_or_device_duration_zero",
+          "backend_login_or_publish_without_frontend_activity",
+          "front_backend_activity_mismatch"
+        ],
+        "strategy_signal_commonality": [
+          "account_security_strategy_hit",
+          "publish_diversion_strategy_hit",
+          "anti_crawler_or_device_abnormal_strategy_hit",
+          "strategy_hit_support_only_not_standalone_ato"
+        ],
+        "user_claim_and_counter_evidence": [
+          "user_claim_non_owner_publish",
+          "user_claim_account_stolen",
+          "old_device_continued_normal_activity",
+          "usual_ip_continuity",
+          "user_confirmation_counter_evidence",
+          "user_claim_not_standalone_proof"
+        ],
+        "cluster_types": [
+          "credential_stuffing_or_password_ato",
+          "oauth_scan_one_click_takeover",
+          "token_session_protocol_login",
+          "abnormal_publish_diversion_handoff_ato",
+          "false_positive_or_user_self_abuse_or_gray_user"
+        ],
+        "required_output_fields": [
+          "cluster_key",
+          "shared_features",
+          "representative_users",
+          "strong_evidence",
+          "weak_evidence",
+          "counter_evidence",
+          "missing_evidence"
+        ]
+      },
       "device_identity_consistency_batch_fields": [
         "device_id_commonness",
         "first_seen_time",

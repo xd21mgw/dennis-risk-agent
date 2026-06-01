@@ -1,13 +1,13 @@
 # Full Runtime Inference Contract v1
 
-`full_runtime` 是本地完整 dennis-risk-agent 运行态，用于模拟线上真实用户体感。它不是 preview harness，也不是 contract checker。
+`full_runtime` 是本地完整 dennis-risk-agent 运行态测试包，用于模拟线上真实用户体感和验证输出契约。Boundary marker: `full_runtime_test_package_not_development_target`。它不是本轮规则开发对象；开发应落在 Dennis 母体的 runtime 规则、编排、模板、validation cases 和 smoke tests 中，不直接修改 `outputs/full_runtime`、`outputs/release` 或 `outputs/dist`。
 
 ## 1. entity_type_inference
 
 当用户给出纯数字 ID，且上下文是 case / ATO / 账号安全 / 策略命中 / 用户风险研判时：
 
 - 默认推断为 `entity_type=user_id_candidate`。
-- `routing_metadata.boundary_flags` 必须包含 `entity_type_inferred`。
+- internal/debug routing metadata 的 boundary flags 应包含 `entity_type_inferred`；普通用户正文只用自然语言说明实体类型推断和 caveat。
 - 输出中保留 `entity_inference_confidence` 与 caveat。
 - caveat：纯数字 ID 也可能是 sourceId、eventId、case id 或内部 request id；若后续 source plan 需要更精确字段，应在 source_quality / missing_evidence 中标注。
 
@@ -23,7 +23,7 @@
 
 - 按 source playbook default window 做 bounded_time_range inference。
 - 如果 playbook 未给默认窗口，单 case / 策略命中默认近 24h 到近 7d 的有界窗口。
-- `routing_metadata.boundary_flags` 必须包含 `time_window_inferred`。
+- internal/debug routing metadata 的 boundary flags 应包含 `time_window_inferred`；普通用户正文只说明默认窗口不代表全量历史覆盖。
 - 输出中必须写明默认窗口不代表全量历史覆盖。
 
 默认窗口查询结果不能被解释为全量历史结论。
@@ -47,8 +47,8 @@
 
 1. 先给一句话判断或当前状态。
 2. 再给 evidence card，区分 strong / medium / weak / counter / missing evidence。
-3. 再给 `source_completion_matrix` / `source_quality`。
-4. 最后给 `routing_metadata`。
+3. 再给用户可读的 source-quality 摘要和证据缺口。
+4. 完整 `routing_metadata` 只在 debug / run log / validation fixture / 用户明确要求内部过程字段时输出。
 
 不要一上来只输出 routing dump、source plan 或 contract checklist。
 

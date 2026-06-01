@@ -92,6 +92,31 @@ BATCH_ATO_REQUIRED_ANSWER_MARKERS = {
     "representative_ato_single_case_deep_dive",
     "cluster_level_backfill",
 }
+UNIVERSAL_WORKFLOW_REQUIRED_STEPS = {
+    "risk_hypothesis_and_source_plan",
+    "realtime_readonly_source_collection",
+    "evidence_chain_closure_check",
+    "partial_evidence_missing_evidence_when_not_closed",
+    "offline_supplement_plan_by_risk_scene",
+    "dataagent_hive_per_request_authorization",
+    "cluster_expansion_when_batch_or_similar",
+}
+UNIVERSAL_OFFLINE_SCENES = {
+    "account_takeover",
+    "anti_cheating",
+    "traffic_diversion",
+    "strategy_governance",
+}
+ATO_CLUSTER_SIGNAL_DIMENSIONS = {
+    "control_entry_commonality",
+    "device_commonality",
+    "ip_network_commonality",
+    "temporal_sequence_commonality",
+    "behavior_handoff_commonality",
+    "frontend_activity_commonality",
+    "strategy_signal_commonality",
+    "user_claim_and_counter_evidence",
+}
 PASSTHROUGH_ENVELOPE_REQUIRED_FIELDS = {
     "action_name",
     "source_id",
@@ -298,10 +323,61 @@ def select_plan(plan: dict[str, Any], task_type: str, entity_count: int) -> dict
 
 def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
     failures: list[dict[str, str]] = []
+    universal = plan.get("plans", {}).get("universal_realtime_first_risk_workflow_v1", {})
     fixed = plan.get("plans", {}).get("browser_backed_fixed_actions_v1", {})
     batch_ato = plan.get("plans", {}).get("batch_ato_cluster_lens_alignment_v1", {})
     batch_contract = fixed.get("controlled_parallel_batch_contract", {})
     required_fields = batch_contract.get("source_plan_item_required_fields", [])
+
+    if not universal:
+        failures.append(
+            {
+                "rule": "universal_realtime_first_workflow_required",
+                "reason": "source plan must register the generic realtime-first/offline-supplement/clusterable risk workflow",
+            }
+        )
+    else:
+        if universal.get("default_runtime_routing") is not False:
+            failures.append(
+                {
+                    "rule": "universal_workflow_default_runtime_routing_false_required",
+                    "reason": "universal workflow is an orchestration contract and must keep default_runtime_routing=false",
+                }
+            )
+        workflow = set(universal.get("workflow", []))
+        missing_workflow_steps = sorted(UNIVERSAL_WORKFLOW_REQUIRED_STEPS - workflow)
+        if missing_workflow_steps:
+            failures.append(
+                {
+                    "rule": "universal_realtime_first_workflow_steps_required",
+                    "reason": f"universal workflow missing steps {missing_workflow_steps}",
+                }
+            )
+        required_outputs = set(universal.get("required_outputs", []))
+        if not {"source_plan", "evidence_chain", "source_quality_matrix", "missing_evidence", "final_answer_boundary"}.issubset(required_outputs):
+            failures.append(
+                {
+                    "rule": "universal_workflow_required_outputs",
+                    "reason": "universal workflow must require source_plan/evidence_chain/source_quality_matrix/missing_evidence/final_answer_boundary",
+                }
+            )
+        offline_scenes = set(universal.get("offline_supplement_by_risk_scene", {}).keys())
+        missing_offline_scenes = sorted(UNIVERSAL_OFFLINE_SCENES - offline_scenes)
+        if missing_offline_scenes:
+            failures.append(
+                {
+                    "rule": "offline_supplement_by_risk_scene_required",
+                    "reason": f"offline supplement plan must cover generic risk scenes {missing_offline_scenes}, not only ATO login Hive",
+                }
+            )
+        auth_boundary = universal.get("authorization_boundary", {})
+        if auth_boundary.get("dataagent_hive_requires_per_request_authorization") is not True or auth_boundary.get("previous_authorization_not_reusable") is not True:
+            failures.append(
+                {
+                    "rule": "dataagent_hive_per_request_authorization_required",
+                    "reason": "DataAgent/Hive execution must require explicit per-request authorization in the universal workflow",
+                }
+            )
 
     if fixed.get("default_runtime_routing") is not False:
         failures.append(
@@ -556,6 +632,23 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                 {
                     "rule": "batch_ato_lens_labels_required",
                     "reason": f"batch ATO lens output labels missing {missing_labels}",
+                }
+            )
+        signal_registry = batch_ato.get("ato_account_takeover_cluster_signal_registry", {})
+        missing_signal_dimensions = sorted(ATO_CLUSTER_SIGNAL_DIMENSIONS - set(signal_registry.keys()))
+        if missing_signal_dimensions:
+            failures.append(
+                {
+                    "rule": "ato_account_takeover_cluster_signal_registry_required",
+                    "reason": f"batch ATO cluster lens must register signal dimensions {missing_signal_dimensions}",
+                }
+            )
+        registry_output_fields = set(signal_registry.get("required_output_fields", []))
+        if not {"cluster_key", "shared_features", "representative_users", "strong_evidence", "weak_evidence", "counter_evidence", "missing_evidence"}.issubset(registry_output_fields):
+            failures.append(
+                {
+                    "rule": "ato_cluster_output_fields_required",
+                    "reason": "ATO cluster signal registry must require cluster_key/shared_features/representative_users/evidence buckets/missing_evidence",
                 }
             )
         hive_preflight = batch_ato.get("hive_registry_preflight", {})

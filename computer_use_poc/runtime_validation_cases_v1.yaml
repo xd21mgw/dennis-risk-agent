@@ -3271,3 +3271,166 @@ platform_access_execution_v0_1_regression:
       - body_truncated_means_partial_observation
       - no_complete_feature_detail_claim
     pass_fail_criteria: "RCP feature list 大响应由 Dennis 解释为 partial，不声称完整特征明细。"
+
+generalized_workflow_validation_cases_v1:
+  real_platform_called: false
+  dataagent_called: false
+  default_runtime_routing: false
+  cases:
+    - case_id: GENERIC-REALTIME-EVIDENCE-CLOSED-CONCLUSION-001
+      input: "ATO 单案实时登录链路、内容动作链路、设备身份一致性和历史基线均闭合。"
+      expected_output_boundary:
+        - realtime_readonly_source_collection
+        - evidence_chain_closure_check
+        - evidence_based_conclusion_allowed
+        - source_quality_matrix_required
+      pass_fail_criteria: "实时证据闭合时可以给 evidence-based 结论，但仍要保留 source_quality 和时间窗口边界。"
+    - case_id: GENERIC-REALTIME-INCOMPLETE-OFFLINE-PLAN-001
+      input: "ATO 单案实时源不闭合。"
+      expected_output_boundary:
+        - partial_evidence_missing_evidence_when_not_closed
+        - offline_supplement_plan_by_risk_scene
+        - no_forced_final_conclusion
+      pass_fail_criteria: "实时不闭合时输出 partial evidence 和离线补证计划，不强判。"
+    - case_id: GENERIC-LOGIN-NODATA-NOT-ATO-EXCLUSION-001
+      input: "登录日志 no_data。"
+      expected_output_boundary:
+        - no_data_not_risk_exclusion
+        - source_window_gap_not_counter_evidence
+        - missing_evidence
+      pass_fail_criteria: "登录日志 no_data 不得排除 ATO。"
+    - case_id: GENERIC-PHOTO-NODATA-NOT-DIVERSION-EXCLUSION-001
+      input: "异常发布 photo search no_data。"
+      expected_output_boundary:
+        - photo_search_no_data_not_abnormal_publish_exclusion
+        - content_action_chain_missing_evidence
+        - no_low_risk_from_no_data
+      pass_fail_criteria: "异常发布 photo no_data 不得排除导流或内容动作风险。"
+    - case_id: GENERIC-ANTI-CHEATING-OFFLINE-SUPPLEMENT-001
+      input: "反作弊设备异常实时 source 不足。"
+      expected_output_boundary:
+        - offline_supplement_plan_by_risk_scene
+        - device_wide_table
+        - request_behavior_detail
+        - feature_wide_table
+      pass_fail_criteria: "反作弊实时不足时建议补设备 / 请求 / 行为 / 特征宽表，不写成 Hive 登录表。"
+    - case_id: GENERIC-CLUSTER-EXPANSION-FROM-SINGLE-CASE-001
+      input: "群控 / 黑产扩散从一个单案找共性。"
+      expected_output_boundary:
+        - cluster_expansion_when_batch_or_similar
+        - shared_time_device_ip_behavior_content_strategy_dimensions
+        - representative_sampling
+      pass_fail_criteria: "从单案抽共性维度和代表样本，不只输出单用户结论。"
+    - case_id: GENERIC-STRATEGY-HIT-SUPPORT-ONLY-001
+      input: "只有策略命中。"
+      expected_output_boundary:
+        - strategy_hit_not_final_judgement
+        - raw_evidence_required_for_final_conclusion
+        - missing_evidence
+      pass_fail_criteria: "策略命中只能辅助，不得单独定性。"
+    - case_id: GENERIC-STRATEGY-GOVERNANCE-OFFLINE-EVIDENCE-001
+      input: "策略治理需要评估误伤和灰度。"
+      expected_output_boundary:
+        - strategy_version_release_record
+        - hit_sample_false_positive_sample
+        - gray_rollout_metrics
+        - denominator_and_monitoring_required
+      pass_fail_criteria: "策略治理补版本、发布、命中、误伤、灰度样本，不只查单案。"
+    - case_id: GENERIC-EXPLICIT-CHECK-REALTIME-PLAN-DATAAGENT-AUTH-001
+      input: "帮我查这个用户风险。"
+      expected_output_boundary:
+        - realtime_source_plan_allowed
+        - dataagent_hive_per_request_authorization
+        - no_dataagent_auto_call
+      pass_fail_criteria: "明确查单案时可进实时 source_plan，但 DataAgent/Hive 仍需确认。"
+    - case_id: GENERIC-HOW-TO-ANALYZE-PLAN-ONLY-001
+      input: "应该怎么分析这类风险？"
+      expected_output_boundary:
+        - methodology_or_query_plan_only
+        - no_real_platform_call
+        - no_dataagent_hive_call
+      pass_fail_criteria: "方法论问题只输出 workflow / query plan，不实际调用平台。"
+    - case_id: GENERIC-OFFLINE-PLAN-BY-RISK-SCENE-001
+      input: "实时证据不足，需要离线补证。"
+      expected_output_boundary:
+        - account_takeover_offline_sources
+        - anti_cheating_offline_sources
+        - traffic_diversion_offline_sources
+        - strategy_governance_offline_sources
+        - not_only_hive_login_table
+      pass_fail_criteria: "离线补证计划按风险场景给表 / 字段 / 窗口 / 聚合维度，不得只写 Hive 登录表。"
+    - case_id: GENERIC-MULTI-SOURCE-CONFLICT-PARTIAL-001
+      input: "多 source 结果冲突。"
+      expected_output_boundary:
+        - source_quality_matrix
+        - missing_evidence
+        - conflict_reasoning
+        - no_forced_conclusion
+      pass_fail_criteria: "多 source 冲突时输出 source_quality + missing_evidence，不强行定论。"
+    - case_id: GENERIC-PURE-PASSTHROUGH-NO-SERVICE-NORMALIZER-001
+      input: "pure passthrough 架构。"
+      expected_output_boundary:
+        - service_normalized_observation_not_required
+        - service_source_quality_not_required
+        - service_evidence_card_inputs_not_required
+        - dennis_generates_source_quality_matrix
+      pass_fail_criteria: "Dennis 不依赖 service normalized_observation / source_quality / evidence_card_inputs。"
+    - case_id: GENERIC-FULL-RUNTIME-TEST-PACKAGE-ONLY-001
+      input: "full-runtime 是否是开发对象？"
+      expected_output_boundary:
+        - full_runtime_test_package_not_development_target
+        - do_not_modify_outputs_full_runtime_release_dist
+        - source_rules_develop_in_mother_repo
+      pass_fail_criteria: "full-runtime 只作为测试包 / 输出包，不作为本轮开发对象。"
+    - case_id: ATO-CLUSTER-SIGNAL-DIMENSIONS-REGISTERED-001
+      input: "ATO 批量分簇需要判断盗号投放。"
+      expected_output_boundary:
+        - ato_account_takeover_cluster_signal_registry
+        - control_entry_commonality
+        - device_commonality
+        - ip_network_commonality
+        - temporal_sequence_commonality
+        - behavior_handoff_commonality
+        - frontend_activity_commonality
+        - strategy_signal_commonality
+        - user_claim_and_counter_evidence
+      pass_fail_criteria: "ATO 批量分簇必须输出控制权入口、设备、IP、时间序列、行为承接、前端活跃、策略信号、用户反馈 / 反证等维度。"
+    - case_id: ATO-HARMONY-OAUTH-QUICKLOGIN-NOT-JUST-CREDENTIAL-STUFFING-001
+      input: "HARMONY / OAuth / quickLogin / token issued / kickout / reset_login_type 同时出现。"
+      expected_output_boundary:
+        - oauth_scan_one_click_takeover_candidate
+        - token_session_protocol_login_candidate
+        - not_simple_credential_stuffing
+      pass_fail_criteria: "这些线索不能被简单归为撞库。"
+    - case_id: ATO-FRONT-BACKEND-MISMATCH-CLUE-001
+      input: "后端登录 / 发布存在但 Track 当日无前端活跃。"
+      expected_output_boundary:
+        - front_backend_activity_mismatch
+        - protocol_or_token_session_clue
+        - not_standalone_final_judgement
+      pass_fail_criteria: "Track mismatch 是线索，但不能单独定性。"
+    - case_id: ATO-USER-CLAIM-NOT-STANDALONE-PROOF-001
+      input: "用户反馈被盗。"
+      expected_output_boundary:
+        - user_claim_not_standalone_proof
+        - login_device_behavior_cross_validation_required
+        - evidence_type_separation
+      pass_fail_criteria: "用户反馈被盗只能作为线索，需与登录、设备、行为承接交叉验证。"
+    - case_id: ATO-CLUSTER-EVIDENCE-BUCKETS-REQUIRED-001
+      input: "ATO 分簇输出。"
+      expected_output_boundary:
+        - cluster_key
+        - shared_features
+        - representative_users
+        - strong_evidence
+        - weak_evidence
+        - counter_evidence
+        - missing_evidence
+      pass_fail_criteria: "ATO 分簇输出必须包含 strong / weak / counter / missing evidence。"
+    - case_id: BATCH-STRATEGY-HIT-NOT-ATO-GANG-001
+      input: "一批账号命中同一策略。"
+      expected_output_boundary:
+        - strategy_hit_support_only_not_standalone_ato
+        - same_policy_hit_not_gang_conclusion
+        - cluster_evidence_chain_required
+      pass_fail_criteria: "策略命中不能单独把一批账号定性为 ATO 团伙。"

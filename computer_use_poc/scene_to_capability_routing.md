@@ -30,12 +30,34 @@ Rules:
 - 不把 observation 包装成最终风险定性。
 - 新手脚后续必须说明服务哪个体验 Case，或新增哪个体验 Case。
 
+## 0.0 Universal Risk Workflow Routing
+
+所有风险研判先走同一套大脑工作模式：
+
+1. 明确风险假设和最小区分点。
+2. 生成实时 readonly `source_plan`。
+3. 用实时证据检查 `evidence_chain_closure_check`。
+4. 证据闭合则输出 evidence-based 结论。
+5. 证据不闭合则输出 partial evidence、`source_quality_matrix`、`missing_evidence` 和分场景离线补证计划。
+6. DataAgent/Hive 只在用户逐次授权后执行；计划和字段说明不等于已查询。
+7. 用户问“一批 / 举一反三 / 同类攻击 / 黑产模式”时，按共性维度进入 batch clustering / representative sampling，而不是默认逐个在线查询。
+
+离线补证必须按风险场景选择数据，不得只写 Hive 登录表：
+
+- ATO / 账号接管：登录、注册、改密、换绑、扫码 / OAuth / token、发布、私信、资料修改和内容动作链路。
+- 反作弊 / 群控：设备、请求、行为、策略命中、特征宽表、群体聚集和对照分母。
+- 内容 / 导流：作品、评论、私信、主页、举报、处罚、策略命中、落地页和联系方式。
+- 策略治理：策略版本、发布记录、命中样本、误伤样本、灰度指标和线上回流。
+
+source-quality 边界跨场景通用：`no_data`、`partial_observation_available`、`auth_failed`、`timeout`、`blocked`、`parse_error` 和窗口不足都不是低风险反证；策略命中不能单独最终定性；同设备关联不是团伙结论。
+
 ## 0. Formal Scene to Capability Map
 
 本节按业务场景拆能力。平台是 capability 的适配器，不是用户侧路由入口。
 
 | scene | 用户体感目标 | capability sequence | adapters / sources | fallback | boundary |
 |---|---|---|---|---|---|
+| 通用风险研判 / 单案到批量共性 | 判断一个用户 / 设备 / 事件 / 批次是否有风险，或应该如何扩展分析 | `universal_risk_evidence_workflow` → scene-specific capability → realtime source plan → offline supplement plan when needed → batch clustering when commonality is requested | 已登记 readonly sources、browser-backed fixed actions、平台 playbook、分场景离线 query plan | 实时不闭合时输出 partial evidence 和离线补证计划；DataAgent/Hive 逐次授权 | 不堆 source、不强行定论、不把离线计划说成已执行、不输出完整 routing metadata |
 | 账号安全 / 单用户风险研判 | 快速判断用户是否有风险线索、证据强弱和缺口 | `user_profile_read` → `login_log_read` → `user_device_resolution` → conditional `device_risk_read` → explicit / conditional `strategy_hit_read` | 档案中心、统一登录日志、Weapon graphData、Device SDK、天狮 | 档案中心 API 302 时标 `auth_session_issue` 或走受控 cookie activation；登录日志超窗提示 Hive/offline required | source priority 由证据价值决定，不因非纯 API 降级；不因单一证据定性作弊/盗号 |
 | ATO / 盗号研判 | 解释是否更像盗号、token/OAuth 滥用、新设备接管或误操作 | `time_window_inference` → `user_profile_read` → `login_log_read` → `user_device_resolution` → conditional `device_risk_read` → explicit / conditional `strategy_hit_read` → conditional publish chain / frontend activity | 档案中心、统一登录日志、Weapon、Device SDK、天狮、发布链路、track-analysis | 在线登录日志超窗时标记 `login_log_window_incomplete` / `offline_hive_required`；admin 仅 APP 日志且 WEB/H5/PC/token/OAuth/扫码链路缺失时标 `admin_app_log_only_gap` / `web_control_chain_missing`；档案中心需要 cookie activation 时仍可为 P0 controlled source | 在线 no_data 不能作为无异常登录强反证；实时源不完整时必须提示 Hive registry-first 补证；异常发布场景必须看发布链路和发布设备 |
 | 风险用户综合研判 / E2E 多源研判 | 判断用户是否风险、为什么被阻止 / 验证，并给出证据强弱和缺口 | `multi_evidence_orchestration_contracts` → default three-source planner → C package when strategy detail needed | 天狮 fastQueryHbase、统一登录日志、档案中心；eventList 条件触发 | 任一 source blocked 时输出 partial evidence summary | 不因天狮命中、历史封禁或单一登录信号给 definitive conclusion |

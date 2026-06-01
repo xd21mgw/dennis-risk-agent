@@ -93,6 +93,63 @@ ATO lens 必看：
 - 代表样本单案支持 ATO，只能证明对应簇存在 ATO 模式，不能默认全批账号都被盗。
 - 长周期登录补证只生成基于 `account_security_hive_source_registry_v1.md` 的 registry-first query plan，不自由猜表，不实际调用 DataAgent/Hive。
 
+### 3.2 ATO / 账号接管分簇特征注册库
+
+该特征库是 `batch_ato_cluster_lens` 的场景专用 overlay，用于叠加在通用 batch clustering 之上。它不替代已有内容相似、设备共性、策略命中、时间聚集、账号画像和行为模式分簇。
+
+控制权入口共性：
+
+- `login_type` / `reset_login_type` / `quickLogin` / OAuth / 扫码 / token / `byToken` / `logined`。
+- 密码验证失败、改密、换绑、kickout、refresh token 异常。
+- 统一登录日志窗口不足、APP-only 日志或 WEB/H5/PC/token/OAuth/扫码链路缺失时，不得排除 ATO。
+
+设备共性：
+
+- 新设备首次出现、同一 user 多 device 切换、正常设备与异常设备 DID 不一致。
+- HARMONY / Android / iOS / Web/H5 / SDK 设备类型差异。
+- 异常 mod、非真实机型、版本降级、多版本混用。
+- `device_id` 关联多个账号，或常用 `device_id` 下机型 / 系统 / UA / IP / 登录端 / 登录方式漂移。
+
+IP / 网络共性：
+
+- 登录 IP 段突变，多账号共享 IP / ASN / proxy / IDC。
+- 登录 IP 与发布 / 操作 IP 是否一致。
+- 正常历史 IP 与异常事件 IP 是否割裂。
+
+时间序列共性：
+
+- 登录成功 / token issued / OAuth / 扫码后，紧跟改密、换绑、发布、私信、资料修改、关注、提现等行为。
+- 封禁 / 处罚 / 策略命中与异常操作的前后关系。
+- 窗口外事件标 `window_gap`，不得当反证。
+
+行为承接共性：
+
+- 异常发布、色导视频、导流资料、私信触达、关注关系变化。
+- 账号被接管后是否有明显非本人操作。
+- 内容承接和登录链路是否在时间上闭合。
+
+前端活跃共性：
+
+- Track 前端活跃与后端登录 / 发布是否对齐。
+- 事件当日 user/device duration=0 或无前端活跃，但后端存在登录 / 发布 / 策略命中时，标 `front_backend_activity_mismatch`。
+- 该信号可作为协议上号、token 使用、非真实客户端行为线索，但不能单独定性。
+
+策略 / 风控信号共性：
+
+- RCP / Tianshi 账号安全、发布、导流、反爬、设备异常相关策略命中。
+- 策略命中是辅助证据，不得单独定性 ATO。
+- 必须结合行为、设备、IP、用户反馈和档案中心后置行为。
+
+用户反馈 / 反证共性：
+
+- 用户 claim：非本人发布、被盗、无法登录、被踢出。
+- 老设备持续正常活跃、常用 IP 延续、用户本人确认等反证。
+- 用户反馈是线索，不是单独强证据。
+
+分簇输出必须包含 `cluster_key`、`shared_features`、`representative_users`、`strong_evidence`、`weak_evidence`、`counter_evidence` 和 `missing_evidence`。
+
+至少区分：撞库 / 密码型 ATO、OAuth / 扫码 / 一键登录接管、token / session / 协议上号、异常发布 / 导流承接型 ATO、误伤 / 用户自身异常行为 / 灰色用户。
+
 ## 4. 禁止结论跳跃
 
 禁止：

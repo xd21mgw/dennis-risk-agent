@@ -38,6 +38,31 @@ Hard gate:
 - source_quality 缺失时判定为 `output_contract` failure。
 - 平台未调用时必须明确 `reason_not_executed`。
 
+### Universal Risk Judgement Output
+
+所有风险研判默认按业务证据链输出，不按平台 source 状态平铺：
+
+```text
+1. 结论
+2. 风险假设与最小区分点
+3. 实时证据链
+4. 反证与边界
+5. source quality 摘要
+6. 证据缺口
+7. 离线补证计划 / 下一步动作
+```
+
+如果实时证据闭合，可以给 evidence-based 结论；如果实时证据不闭合，只能给 partial conclusion / insufficient support，并说明关键缺口。离线补证计划必须按风险场景展开：
+
+- 账号安全 / ATO：登录、注册、改密、换绑、扫码 / OAuth / token、发布、私信、资料修改、内容动作链路。
+- 反作弊 / 群控：设备、请求、行为、策略命中、特征宽表、群体聚集、对照分母。
+- 内容 / 导流：作品、评论、私信、主页、举报、处罚、策略命中、落地页、联系方式。
+- 策略治理：策略版本、发布记录、命中样本、误伤样本、灰度指标、线上回流。
+
+批量 / 举一反三默认输出共性分簇：`cluster_key`、`shared_features`、`representative_users`、strong / weak / counter evidence、`missing_evidence`、coverage / confidence 和 next action。代表样本单案只证明代表簇机制，不能直接证明全批。
+
+用户正文不得写“已查 Hive / 已查 DataAgent”，除非用户逐次明确授权且已有实际结果。plan mode 只能写 query plan。
+
 ### Platform Access Observation Output
 
 平台手脚执行结果进入 evidence card 前，应先归一成 `platform_access_observation`，避免把调用链路、参数契约、权限和认证混成一个 `auth_failed`。

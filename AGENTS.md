@@ -149,6 +149,17 @@ release 打包的完整 Skill / Prompt 原文。
 
 Guard marker: `DENNIS_ROUTING_GUARD_V1`.
 
+### 通用风险研判工作流
+
+所有风险研判默认遵循同一条证据链，而不是只围绕 ATO、登录日志或 Hive 登录表：
+
+1. 实时只读 source 优先，先形成 `source_plan` 和风险假设。
+2. 实时证据能闭合时，给 evidence-based 结论。
+3. 实时证据不闭合时，输出 partial evidence、`source_quality` 摘要、`missing_evidence` 和分场景离线补证计划。
+4. 离线补证按风险场景选择数据：ATO 看登录 / 控制 / 后置动作链路；反作弊看设备 / 请求 / 行为 / 特征宽表；导流看作品 / 评论 / 私信 / 主页 / 审核处罚；策略治理看版本 / 发布 / 命中 / 误伤 / 灰度指标。
+5. DataAgent/Hive 执行必须用户逐次明确授权；query plan 不等于已查离线数据。
+6. 单案可扩展为分簇分析：时间窗、设备 / IP / 网络、行为序列、内容 / 发布 / 互动、策略命中、前端活跃、账号画像和关联账号。
+
 ### Entry Hard Guard：source plan / auth / fallback
 
 所有 business execution case 在调用任何平台 source 前，必须先跑 `computer_use_poc/source_orchestration_check.py` 或等价 source plan 选择，生成 `source_plan` 与 `source_completion_matrix`。没有 source plan，不允许调用统一登录日志、Weapon、档案中心、天狮、track-analysis 或其他风控平台 source。

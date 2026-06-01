@@ -16,7 +16,7 @@ Plan 合格后进入 execution 前必须同时满足：
 - output contract 明确：execution 必须有 `evidence_card` / `source_quality` / 用户可读执行状态摘要。
 - plan-only 默认必须有自然语言执行状态摘要，说明未查平台、未调用 DataAgent/Hive 和 `reason_not_executed`；完整 `routing_metadata` 只在 debug / run log / explicit metadata request / regression 中展示。
 
-ATO source priority and access method must be separated:
+Source priority and access method must be separated across all risk scenes:
 
 - 证据价值决定 `source_priority`，执行方式决定 `access_method`。API direct first 是同等证据价值下的低成本 / 稳定采集路径优先，不是 P0 / P1 / P2 的唯一判定标准。
 - 每个 source plan item must separately declare `source_priority: P0 | P1 | P2 | conditional` and `access_method: api_direct | controlled_runner | browser_cookie_activation | same_origin_fetch | manual_gap | hive_authorized`.
@@ -86,6 +86,16 @@ General evidence reasoning hard gate:
 - Separate `raw_evidence`, `strategy_hit`, `model_score`, `inference`, `user_claim`, `counter_evidence`, and `missing_evidence`.
 - When new evidence arrives after an initial answer, recompute conclusion and mark `conclusion_recompute_after_new_evidence`.
 - Every source must expose time window and coverage boundary; out-of-window gaps become `required_offline_check` / `missing_evidence`.
+
+Universal realtime-first workflow:
+
+- For any risk judgement, first form `risk_hypothesis_and_source_plan`; do not flatten platform source status into a conclusion.
+- Prefer realtime readonly source plans when required fields are complete and the source is registered.
+- If realtime evidence closes the chain, output an evidence-based conclusion with source-quality and time-window boundaries.
+- If realtime evidence does not close the chain, output partial evidence, missing evidence, and an offline supplement plan by risk scene. Do not force a low-risk or high-risk conclusion from gaps.
+- Offline supplement plans must be scene-specific: account takeover uses login/control/action chains; anti-cheating uses device/request/behavior/feature tables; traffic diversion uses content/comment/DM/profile/audit/strategy sources; strategy governance uses version/release/hit/false-positive/gray metrics.
+- DataAgent/Hive execution requires explicit authorization for each query, table, time range, and evidence direction. A previous approval cannot be reused.
+- Batch/commonality questions use shared dimensions, representative samples and coverage backfill; representative single-case evidence cannot prove every entity in the batch.
 
 Release / overlay readiness gate:
 

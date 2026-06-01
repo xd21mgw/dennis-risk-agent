@@ -44,6 +44,7 @@ Core questions:
 - `batch_top_dimension_drilldown_template_v1.md`: TOP dimension drilldown and `top_dimension_summary` schema.
 - `batch_frequent_pattern_contribution_template_v1.md`: frequent pattern / contribution analysis template.
 - `batch_risk_clustering_methodology_v1.md`: clustering dimensions and workflow.
+- `batch_ato_cluster_lens_v1.md`: ATO / compromised-account cluster lens overlay on top of existing batch clustering.
 - `abnormal_correlation_matrix_v1.md`: 不可预测矩阵 / 异常相关性矩阵.
 - `batch_risk_representative_sampling_v1.md`: representative sampling rules.
 - `batch_risk_evidence_card_template_v1.md`: evidence card template with evidence type separation.
@@ -72,11 +73,12 @@ DataAgent is only a future Hive / warehouse query planning path when batch scale
 6. Run frequent pattern / contribution analysis.
 7. Build abnormal A -> B correlation matrix.
 8. Convert L1 results into cluster hints.
-9. Select representative samples.
-10. Produce cluster evidence cards for representative samples.
-11. Produce pattern summary and attack-path hypotheses.
-12. Produce missing evidence, source gap and follow-up plan.
-13. Produce expansion, strategy, monitoring, grey release and manual review suggestions.
+9. Apply domain lens overlays when relevant, including `ato_cluster_lens` for compromised-account / stolen-account posting analysis.
+10. Select representative samples.
+11. Produce cluster evidence cards for representative samples.
+12. Produce pattern summary and attack-path hypotheses.
+13. Produce missing evidence, source gap and follow-up plan.
+14. Produce expansion, strategy, monitoring, grey release and manual review suggestions.
 
 ## 5. Hard Boundaries
 
@@ -91,4 +93,5 @@ DataAgent is only a future Hive / warehouse query planning path when batch scale
 - 不能仅凭相似性判断同团伙.
 - 历史 case 不能污染当前批次事实证据.
 - L1 high-contribution pattern can only be cluster hint / candidate feature hint before validation.
+- ATO batch is not "no clustering"; existing clusters remain, then `ato_cluster_lens` checks WEB non-trusted login, `login_to_action_delta`, device identity drift, content-action deep dive, representative single-case proof, and `cluster_level_backfill`.
 - Dennis explains and reasons; DataAgent/Hive extracts and aggregates batch data.

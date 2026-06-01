@@ -2,7 +2,18 @@
 
 ## 1. 定位
 
-ATO 是当前已经打通的深度 DataAgent 闭环样板。
+本 manifest 固化 Dennis 的通用风险研判工作模式。账号安全 / ATO 是已沉淀较深的场景之一，但不能把通用 workflow 收窄成只围绕 ATO、登录日志或 Hive 登录表。
+
+通用主线：
+
+```text
+实时 readonly source 优先
+-> 实时证据能闭合则给 evidence-based 结论
+-> 实时证据不闭合则输出 partial evidence / missing_evidence
+-> 需要时给分场景离线补证计划
+-> DataAgent/Hive 执行前逐次确认
+-> 单案可扩展为分簇 / 共性分析
+```
 
 以下 runtime summaries 是运行态专家认知底座：
 
@@ -19,39 +30,72 @@ ATO 是当前已经打通的深度 DataAgent 闭环样板。
 它们用于：
 
 - 默认轻量加载。
-- 提升非 ATO 场景回答质量。
-- 给出场景判断、证据拆解、低成本取证方向、治理建议。
+- 让所有风险场景默认按证据链工作，而不是堆 source。
+- 给出场景判断、实时 source 计划、证据拆解、缺口、分场景离线补证方向、治理建议。
+- 支持从单案抽象到批量分簇 / 共性分析。
 
 它们**不替代**深度 Skill 原文。
 
 ## 2. 使用原则
 
-### 2.1 轻量支持
+### 2.1 实时优先
 
-非 ATO 场景默认只做：
+用户问风险研判时，先规划低成本、只读、实时 source。实时 source 可以来自 Login Logs、Archives、Track、RCP、Weapon、browser-backed fixed actions 或已登记 readonly API。实时证据能闭合时，直接给 evidence-based 结论；实时不闭合时，不强行定性。
 
-- 场景判断。
-- 攻击路径判断。
-- 强 / 中 / 弱证据拆解。
-- 缺失证据识别。
-- 低成本取证方向。
-- 治理建议。
-- 人工复核边界。
+实时研判输出必须包含：
 
-### 2.2 不默认查数
+- source_plan。
+- evidence_chain。
+- source_quality_matrix。
+- strong / weak / counter evidence。
+- missing_evidence。
+- final_answer_boundary。
 
-- 非 ATO 场景默认不自动调用 DataAgent。
-- 只有用户明确要求“查数 / 调 DataAgent / 生成查询问题”时，才进入 DataAgent。
-- 高成本查询必须用户确认。
+### 2.2 离线补证
 
-### 2.3 深度能力按需读取
+实时证据不闭合时，输出离线补证计划。离线补证不是只补 Hive 登录表，不同风险场景对应不同数据源：
 
-非 ATO 场景如果后续要做深度接入，仍应按 ATO 模式补齐：
+- 账号安全 / ATO：登录、注册、改密、换绑、扫码 / OAuth / token、发布、私信、资料修改和内容操作链路。
+- 反作弊 / 群控：设备、请求、行为、策略命中、特征宽表、群体聚集和对照分母。
+- 内容 / 导流：作品、评论、私信、主页、举报、处罚、策略命中、落地页和联系方式。
+- 策略治理：策略版本、发布记录、命中样本、误伤样本、灰度指标和线上回流。
+
+DataAgent/Hive 只能作为离线补证计划或用户逐次授权后的执行能力。上一次授权、同一会话或 P0/P1 数据不足都不构成默认授权。
+
+### 2.3 多源单链路分析
+
+Dennis 不是堆 source，而是围绕风险假设构建证据链。实时和离线只是取数方式不同，分析逻辑一致：
+
+- 先定义风险假设和最小区分点。
+- 再选择能验证该假设的 source。
+- 每个 source 都必须给 source_quality 和时间窗口边界。
+- 多 source 冲突时输出冲突原因、可信度和 missing_evidence，不强行定论。
+- no_data、blocked、auth_failed、timeout、parse_error、partial 都不能作为低风险反证。
+
+### 2.4 共性分簇
+
+用户问“一批 / 举一反三 / 同类攻击 / 黑产模式”时，进入共性分簇或计划模式，而不是逐个在线 for-loop。通用维度包括：
+
+- 时间窗。
+- 设备 / IP / 网络。
+- 行为序列。
+- 内容 / 发布 / 互动。
+- 策略命中。
+- 前端活跃。
+- 账号画像。
+- 关联账号。
+
+实时数据能支撑就输出 cluster evidence；实时不够时输出离线补证计划。代表样本只证明代表簇机制，不能直接泛化到全批。
+
+### 2.5 深度能力按需读取
+
+任何场景后续要做深度接入，应补齐：
 
 - router。
 - workflow。
 - response contract。
-- DataAgent 取证模板。
+- 实时 source contract。
+- 分场景离线补证模板。
 - short question regression。
 - runtime slim / manifest。
 
@@ -104,14 +148,15 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 
 ## 6. 场景扩展方式
 
-如果某个非 ATO 场景后续要变成深度样板，应复用 ATO 的路径：
+如果某个场景后续要变成深度样板，应复用通用路径：
 
 1. 场景 router。
-2. workflow。
+2. 实时 source workflow。
 3. response contract。
-4. DataAgent template。
-5. 真实 POC。
+4. 分场景离线补证 template。
+5. source_quality / missing_evidence 边界。
 6. runtime slim。
+7. regression / smoke test。
 
 ## 7. 账号安全 / ATO 运行态补充
 
@@ -131,14 +176,15 @@ runtime summaries 的作用就是把已有完整认知压缩成“运行态可�
 
 ## 8. 数据调用边界
 
-- 非 ATO 场景默认不调 DataAgent。
-- 用户明确要求查数才生成 query plan。
-- 高成本查询必须确认。
-- SQL-only / partial / timeout 不能强结论。
+- 实时 readonly source 在字段齐备且已登记时可进入 source_plan。
+- DataAgent/Hive 不默认执行；每一次实际执行都必须用户明确授权。
+- 可以生成 query plan、推荐表、字段、窗口、聚合维度和 no-data 解释。
+- 不得在 plan_mode 下伪装成已经查过离线数据。
+- SQL-only、pending、partial、timeout、no_data 都不能强结论。
 
 ## 9. 结论
 
 runtime summaries 的定位是：  
-**在不加载全量历史材料的前提下，把非 ATO 场景的完整风控认知带进运行态。**
+**在不加载全量历史材料的前提下，把通用证据链 workflow 和各场景专家认知带进运行态。**
 
 这样既能提升回答质量，也能控制 token 成本。
