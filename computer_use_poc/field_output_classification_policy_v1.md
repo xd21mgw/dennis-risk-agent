@@ -27,7 +27,7 @@ Runtime and evidence-card code uses these canonical class names:
 |---|---|---|---|
 | `credential_secret` | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, storageState, auth credential in headers, KIM code, login ticket, credential secret | never plaintext; `present_redacted` / `credential_present_redacted` only | P0 |
 | `pii_strict` | phone number, ID card, real-name identity information, precise personal identity fields, verification code | limited masking / presence summary; no full plaintext | P1/P0 depending exposure |
-| `risk_entity_identifier` | UID / user_id, DID, deviceId, deviceceid, IP, tokenId when it is an event identifier rather than a token secret, eventId, sourceId, strategyId, hitFusePolicyCode, login method, logSource, timestamp / `_occurTime`, coarse geo | controlled by `output_scope`; usable as analysis entities in trusted internal risk analysis | P1 if audience policy is wrong; not P0 credential leakage by default |
+| `risk_entity_identifier` | UID / user_id, DID, device_id / deviceId, deviceceid, IP, UA / user_agent, photo_id, event_id / eventId, source_id / sourceId, policy_code / strategyId / hitFusePolicyCode, tokenId when it is an event identifier rather than a token secret, login method, logSource, timestamp / `_occurTime`, device model, app version, coarse geo | internal risk review keeps the raw risk entity by default for evidence chaining; external share masks by audience scope | P1 if audience policy is wrong; not P0 credential leakage by default |
 | `source_summary_metric` | IP subnet, ASN, carrier, geo cluster, device risk tags, same-device count, registration cohort, behavior-object cluster, risk label distribution, success/failure counts, time-series summary | preferred output for reports and KIM responses | usually safe if no raw sensitive values |
 
 ## 3. P0 Credential / Authentication Secrets
@@ -77,15 +77,19 @@ Output strategy:
 Risk entity fields are normal inputs for risk analysis:
 
 - UID / user_id.
-- DID / deviceId / deviceceid.
+- DID / device_id / deviceId / deviceceid.
 - IP.
+- UA / user_agent.
+- photo_id.
+- event_id / eventId.
+- policy_code / source_id / strategy_id / hitFusePolicyCode.
 - tokenId when it is an event identifier rather than a token secret.
 - requestId / sourceId / strategyId / adminaction.
 - appVersion / UA / device model / login method / coarse geo.
 
 Output strategy:
 
-- Trusted internal risk analysis: may output raw values as analysis entities for evidence cards, pattern summaries, and case tables when necessary. For small-batch internal evidence output, user headings should use copyable raw user IDs, for example `用户 772671837`, not `U1`, tail-only labels, or `user_***1837`.
+- Trusted internal risk analysis / source observation / evidence card: output raw risk entity identifiers by default when they are needed to chain evidence. This includes user_id, device_id / DID, IP, UA / user_agent, photo_id, event_id, source_id, policy_code / strategy_id, login_type, publish_source, device model, and app version. Do not write “IP/device_id hidden so cannot judge” in internal risk review; keep these anchors for login-vs-publish device alignment, same-device expansion, and historical baseline checks.
 - KIM semi-open: may output by default when useful, but avoid large-scale detail export; use `safe_ref` or partial mask when the audience or channel is broader.
 - Larger semi-open, cross-team sharing, or outbound materials: default to `masked`, `safe_ref`, `count`, or `distribution`. `external_share` small-batch headings may use aliases such as `用户 U1（user_***1837）` or `用户 A`.
 - Do not confuse risk entity fields with token / cookie / session / password credential secrets.
@@ -93,7 +97,7 @@ Output strategy:
 `tokenId` rule:
 
 - If it is a token event identifier, it is not a token secret.
-- Default output should be `token_id_ref` or partial mask.
+- Internal risk review keeps it as a risk entity identifier; external share may mask it by audience scope.
 - If it exposes a reusable credential secret, treat it as P0 credential.
 
 ## 6. Derived / Aggregate Features
@@ -118,7 +122,7 @@ Output strategy:
 
 | output_scope | risk_entity_identifier | credential_secret | pii_strict | recommended_output |
 |---|---|---|---|---|
-| `internal_risk_review` | allowed when necessary | never plaintext | limited masking / weak summary | evidence card values or safe refs; credentials present_redacted |
+| `internal_risk_review` | raw risk entity identifiers allowed by default for evidence chaining | never plaintext | limited masking / weak summary | evidence card values with field paths; credentials present_redacted |
 | `external_share` | masked / aggregate only | never plaintext | stricter masking / presence only | masked, safe_ref, count, distribution, no raw detail |
 
 ## 8. Validation Rules
@@ -128,7 +132,7 @@ Output strategy:
 - True P0 leakage only includes authentication credential plaintext or reusable secrets.
 - `sensitive_output=false` / `no_sensitive_plaintext=true` must not be applied as a one-size-fits-all ban on all risk entity fields. In browser-backed evidence cards it means no credential secrets and no raw full body / raw record / raw labelInfo / raw originalLog full dump.
 - Runtime validation and KIM E2E should classify fields through this policy.
-- Broad semi-open outputs should still default IP / UID / deviceId to safe refs or partial masks to prevent unbounded propagation.
+- Broad semi-open / external share outputs may mask IP / UID / deviceId / UA by audience and sharing scope, but this masking must not be applied to internal evidence chaining or source observations.
 
 ## 9. Boundary
 

@@ -690,6 +690,28 @@
                 "business_fields_missing_flag": "content_chain_business_fields_missing",
                 "alignment_required": "publish_device must align with login_logs_search, archives_user_analysis, Track, Weapon, and historical baseline when available"
               },
+              "archives_photo_profile_meta": {
+                "next_hop_when_photo_id_available": true,
+                "actions": [
+                  "archives_photo_profile",
+                  "archives_photo_meta"
+                ],
+                "completed_extracts": [
+                  "uploadSource",
+                  "photoMethod",
+                  "photoIp",
+                  "publishDevice",
+                  "device_id_or_did",
+                  "publish_source",
+                  "publish_device",
+                  "publish_ip_or_ua",
+                  "content_status"
+                ],
+                "body_visible_but_unparsed": "parser_mapping_gap",
+                "http_200_body_suppressed": "service_body_visibility_gap",
+                "missing_publish_device": "publish_device_missing_after_photo_meta",
+                "alignment_required": "parsed publish_device/did becomes candidate_device_id for Track/Weapon/device consistency chain"
+              },
               "track_analysis_check_data_ready": {
                 "not_risk_conclusion_source": true,
                 "device_id_resolution_first": "user_device_entity_resolution",
@@ -714,6 +736,101 @@
               }
             }
           },
+          "evidence_projection_before_observation": {
+            "projection_applied_before_observation": true,
+            "projection_not_business_normalizer": true,
+            "raw_body_not_retained_in_answer": true,
+            "purpose": "drop obvious useless, duplicate, empty, and huge low-value fields before Dennis observation so capped byte budget preserves more risk anchors",
+            "drop_scope": [
+              "ui_config",
+              "menu_theme_style",
+              "debug_blob_or_stack_trace",
+              "html_dom_raw_frontend_config",
+              "duplicate_large_context_without_allowlisted_evidence_fields",
+              "empty_values"
+            ],
+            "preserve_risk_anchors": [
+              "user_id",
+              "photo_id",
+              "device_id_or_did",
+              "ip",
+              "ua",
+              "login_time",
+              "login_type",
+              "login_source",
+              "endpoint_path",
+              "operation",
+              "publish_time",
+              "publish_source",
+              "publish_device",
+              "policy_code",
+              "event_id"
+            ],
+            "credential_control_chain_rule": "token/session/cookie/auth/header/password field names must not cause whole business rows to be dropped; keep presence/path/type/length/hash safe handles for control-chain reasoning, but never output raw credential values in final answer",
+            "array_source_rule": "row-level projection happens before observation and before downstream cap accounting when capped body is visible",
+            "fallback_if_projection_error": "keep existing capped/json_array_capped interpretation, mark projection_error, do not block partial evidence"
+          },
+          "evidence_chain_state_machine": {
+            "states": [
+              "missing",
+              "partial_transport",
+              "partial_fields",
+              "partial_baseline",
+              "partial_consistency",
+              "partial_authorization_required",
+              "closed"
+            ],
+            "partial_transport": "byte_limit, response_too_large, body visibility gap, timeout/auth/parse/source transport boundary",
+            "partial_fields": "body visible and parsed but required business fields are still missing",
+            "partial_baseline": "fact fields exist but historical common device/login/IP/publish baseline is incomplete",
+            "partial_consistency": "multiple entities exist but login/publish/operation/history alignment is not decided",
+            "partial_authorization_required": "realtime readonly boundary reached; next hop requires DataAgent/Hive, expansion, or explicit user authorization",
+            "closed": "current authorized and visible source scope closes the chain"
+          },
+          "next_hop_decision_table": [
+            {
+              "chain_id": "web_publish_fact",
+              "missing_field": "publish_device_or_publish_source",
+              "current_state": "partial_fields",
+              "next_hop_type": "auto_realtime_next_hop",
+              "candidate_actions": ["archives_photo_profile", "archives_photo_meta"],
+              "required_inputs": ["photo_id"],
+              "can_auto_execute": true,
+              "requires_user_authorization": false,
+              "expected_fields": ["publish_device", "publish_source", "publish_ip_ua", "uploadSource", "photoMethod"],
+              "stop_condition": "publish_device_or_publish_source_found",
+              "fallback_if_failed": "publish_device_missing_after_photo_meta",
+              "source_quality_boundary": "completed_transport_not_business_evidence"
+            },
+            {
+              "chain_id": "web_login_history",
+              "missing_field": "full_login_window",
+              "current_state": "partial_transport",
+              "next_hop_type": "auto_realtime_next_hop",
+              "candidate_actions": ["login_logs_search"],
+              "required_inputs": ["user_id", "anchor_time"],
+              "can_auto_execute": true,
+              "requires_user_authorization": false,
+              "expected_fields": ["login_time", "login_type", "login_source", "device_id", "ip_ua"],
+              "stop_condition": "returned_records_not_truncated_or_key_window_covered",
+              "fallback_if_failed": "dynamic_offline_module_web_login_history",
+              "source_quality_boundary": "byte_limit_partial_source_not_no_data"
+            },
+            {
+              "chain_id": "device_identity_alignment",
+              "missing_field": "historical_baseline",
+              "current_state": "partial_baseline",
+              "next_hop_type": "user_authorized_next_hop",
+              "candidate_actions": ["DataAgent/Hive device_history_baseline"],
+              "required_inputs": ["user_id", "device_id_or_did", "anchor_time"],
+              "can_auto_execute": false,
+              "requires_user_authorization": true,
+              "expected_fields": ["historical_device_frequency", "first_seen_time", "recent_activity"],
+              "stop_condition": "historical_baseline_available",
+              "fallback_if_failed": "baseline_authorization_required",
+              "source_quality_boundary": "offline_required_not_no_risk"
+            }
+          ],
           "evidence_card_chain_contract": {
             "organization": "ato_risk_chain_not_flat_source_status",
             "required_sections": [
@@ -922,7 +1039,48 @@
               "expected_observation": "bounded operation/action timeline for publish/live/comment/profile/four_items anchors and behavior closure"
             }
           ],
-          "orchestration": "user_id -> realtime P0 source collection (login/profile/analysis/photo/Track) -> multi-source suspicious anchor derivation -> candidate control endpoint extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card",
+          "conditional_next_hop_sources": [
+            {
+              "source_id": "ato_archives_photo_profile_by_photo_id",
+              "action": "archives_photo_profile",
+              "trigger": "photo_id_available_and_publish_fact_chain_missing_publish_source_publish_device_publish_ip_ua_or_content_state",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "ato_archives_photo_search"
+              ],
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-next-hop",
+              "expected_observation": "photo profile detail with publish source/device/IP/status safe handles; completed transport is not business evidence unless fields parse"
+            },
+            {
+              "source_id": "ato_archives_photo_meta_by_photo_id",
+              "action": "archives_photo_meta",
+              "trigger": "photo_id_available_and_publish_fact_chain_missing_uploadSource_photoMethod_photoIp_publishDevice_or_did",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "ato_archives_photo_search"
+              ],
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-next-hop",
+              "expected_observation": "photo meta uploadSource/photoMethod/photoIp/publishDevice fields for publish and device identity chain backfill"
+            },
+            {
+              "source_id": "ato_archives_gallery_photo_list_if_photo_id_missing",
+              "action": "archives_gallery_photo_list",
+              "trigger": "publish_fact_chain_missing_photo_id_after_archives_photo_search_or_action_timeline",
+              "execution_group": "auth_sensitive_serial",
+              "depends_on": [
+                "ato_archives_user_profile"
+              ],
+              "timeout_class": "auth_sensitive",
+              "failure_policy": "non_blocking_partial",
+              "source_priority": "P0-next-hop",
+              "expected_observation": "recent gallery photo list to discover photo_id and publish_time candidates"
+            }
+          ],
+          "orchestration": "user_id -> realtime P0 source collection (login/profile/analysis/photo/Track) -> multi-source suspicious anchor derivation -> if photo_id exists and publish fields are missing, plan archives_photo_profile/archives_photo_meta next-hop -> candidate control endpoint extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card",
           "boundary_flags": [
             "suspicious_anchor_derived_from_realtime_p0_sources",
             "anchor_not_found_must_be_explicit",

@@ -10,6 +10,7 @@ This adapter lets Dennis consume the local browser-backed API service without op
 - The service no longer returns business normalization fields such as `normalized_observation`, `source_quality`, `source_card`, `evidence_card_inputs`, `compat_summary`, `risk_event_scan`, or `feature_group_summary`.
 - Dennis consumes the pure passthrough envelope, transport metadata, capped body presence/truncation signals, and batch transport matrices.
 - Dennis generates observation, `source_quality_matrix`, evidence cards, missing evidence, and final answer boundaries locally.
+- Dennis may apply evidence projection before local observation when capped/body JSON is visible: drop obvious UI/debug/blob/repeated/empty low-value fields, preserve risk anchors, and convert credential-control-chain fields to safe presence/path/hash handles. This is not a service normalizer and raw credential values remain forbidden in final answers.
 - Action failures are source quality inputs, not Dennis runtime failures, when the service returns a passthrough envelope or transport status.
 
 ## Pure Passthrough Envelope Contract
@@ -100,6 +101,11 @@ Mapping rules:
 | Archives Center photo report search | `archives_photo_search` | `POST /actions/archives_photo_search` |
 | Archives Center user profile baseline | `archives_user_profile` | `POST /actions/archives_user_profile` |
 | Archives Center same-device related users | `archives_related_users` | `POST /actions/archives_related_users` |
+| Archives Center photo profile detail | `archives_photo_profile` | `POST /actions/archives_photo_profile` |
+| Archives Center photo meta detail | `archives_photo_meta` | `POST /actions/archives_photo_meta` |
+| Archives Center photo report aggregate | `archives_photo_report_aggregate` | `POST /actions/archives_photo_report_aggregate` |
+| Archives Center photo autonomy/action context | `archives_photo_user_autonomy` | `POST /actions/archives_photo_user_autonomy` |
+| Archives Center gallery photo list | `archives_gallery_photo_list` | `POST /actions/archives_gallery_photo_list` |
 | Archives Center private-message summary | `archives_private_message_search` | `POST /actions/archives_private_message_search` |
 | Archives Center four-info change log | `archives_past_four_items` | `POST /actions/archives_past_four_items` |
 | RCP event detail | `rcp_event_detail` | `POST /actions/rcp_event_detail` |
@@ -110,23 +116,32 @@ Mapping rules:
 | RCP policy tree node lookup | `rcp_policy_tree_lookup` | `POST /actions/rcp_policy_tree_lookup` |
 | RCP condition-level policy attribution | `rcp_node_policy_attribution` | `POST /actions/rcp_node_policy_attribution` |
 | RCP node-binding policy attribution | `rcp_node_bind_policy_attribution` | `POST /actions/rcp_node_bind_policy_attribution` |
+| RCP event tree / decision context | `rcp_event_tree_or_decision` | `POST /actions/rcp_event_tree_or_decision` |
+| RCP fast query hbase | `rcp_fast_query_hbase` | `POST /actions/rcp_fast_query_hbase` |
+| RCP feature info by keys | `rcp_feature_info_by_keys` | `POST /actions/rcp_feature_info_by_keys` |
+| RCP policy basic info | `rcp_policy_basic_info` | `POST /actions/rcp_policy_basic_info` |
+| RCP relation policy tree | `rcp_relation_policy_tree` | `POST /actions/rcp_relation_policy_tree` |
+| RCP policy binding list | `rcp_policy_binding_info_list` | `POST /actions/rcp_policy_binding_info_list` |
+| RCP policy search | `rcp_policy_search` / `rcp_policy_blur_search` | `POST /actions/rcp_policy_search`, `POST /actions/rcp_policy_blur_search` |
+| RCP policy versions | `rcp_policy_all_version` / `rcp_pipeline_policy_versions_by_code` | `POST /actions/rcp_policy_all_version`, `POST /actions/rcp_pipeline_policy_versions_by_code` |
+| Track auxiliary discovery | `track_analysis_product_list`, `track_sequence_dimension_list`, `track_data_type_list` | `POST /actions/<name>` |
 
 For clean `full_runtime` single-user ATO/account-security execution, the primary path is `runtime_case_execution_runner.py` building an explicit controlled batch payload. The default ATO realtime P0 sources are `login_logs_search`, `archives_user_profile`, `track_analysis_check_data_ready`, `archives_photo_search`, and dependent `archives_user_analysis`; suspicious anchors are derived from those observations, not requested as a standalone source. Weapon and RCP/Tianshi are conditional follow-ups when device or event identifiers exist. Dennis requests passthrough envelopes and then creates Dennis-owned observations, source quality, evidence summaries, and missing-evidence rows. Dennis must not try legacy runners such as `bin/sso_session_runner`, `bin/track_analysis_runner`, or `bin/archives_profile_runner` after browser-backed source gaps. These additions do not change `default_runtime_routing=false`.
 
-`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. In browser-backed fixed actions v1 source plans, Archives Center is key evidence but not a hard blocker: ATO / login anomaly includes `archives_user_profile`, `archives_user_analysis`, and `archives_photo_search`; abnormal publish / traffic diversion also uses photo search, profile, and analysis; black-market spread / same-device analysis includes `archives_related_users` and profile. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, and `parse_error` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
+`archives_user_analysis`, `archives_photo_search`, `archives_user_profile`, and `archives_related_users` are the Archives Center sources in the v1 routing-closure batch. The current service contract also exposes photo detail actions: `archives_photo_profile`, `archives_photo_meta`, `archives_photo_report_aggregate`, `archives_photo_user_autonomy`, and `archives_gallery_photo_list`. Dennis must not default-call all of them. If ATO / abnormal publish already has `photo_id` and the publish fact chain lacks `publish_source`, `publish_device`, `publish_ip_ua`, `uploadSource`, or `photoMethod`, Dennis plans `archives_photo_profile + archives_photo_meta` as auth-sensitive next-hop and consumes their passthrough body into the publish/device evidence chain. If `photo_id` is missing, Dennis plans `archives_gallery_photo_list` / `archives_photo_search` for photo anchor discovery first. `auth_failed`, `no_data`, `partial_observation_available`, `timeout`, `blocked`, `service_body_visibility_gap`, and `parser_mapping_gap` enter source quality and missing evidence, then Dennis returns partial evidence. `archives_photo_search no_data` is not a risk exclusion; `archives_related_users` is an account-spread clue, not a gang conclusion. Private-message, past-four-items / profile-change, and related-device style sources remain conditional follow-up only; do not describe them as default verified sources unless a stable interface or explicit user-provided clue is present.
 
 `rcp_event_detail`, `rcp_event_feature_list`, `rcp_policy_version_lookup`, `rcp_policy_detail_lookup`, `rcp_policy_release_record_lookup`, `rcp_policy_tree_lookup`, `rcp_node_policy_attribution`, and `rcp_node_bind_policy_attribution` are explicit RCP/Tianshi drill-down sources. They require upstream event, policy, or policy-tree identifiers; they are not part of the default four-source account-security main chain. `rcp_event_detail -> rcp_event_feature_list` is the v1 event-attribution chain. `rcp_policy_tree_lookup` is strategy asset governance only and must not be used as a single-case event-hit path.
 
-The HAR inventory also tracks auxiliary candidates that are intentionally not in the default ATO realtime P0 runtime chain:
+The HAR inventory also tracks auxiliary actions that are intentionally not in the default ATO realtime P0 runtime chain:
 
 - `track_analysis_check_data_ready`: live-smoke verified readiness/provenance helper; fixed by HAR to `POST /dp/platform/app/analytics/v2/sequence/checkDataReady`; it is default ATO P0 auxiliary for front/backend activity alignment but not account-security evidence by itself.
-- `track_analysis_config_lookup`: config helper only; not evidence and not default runtime.
-- `rcp_event_type_list` / `rcp_realtime_op_list` / `rcp_event_feature_key_lookup` / `rcp_event_tree_or_decision_lookup`: RCP helper candidates only; not default runtime and not implemented in this adapter pass.
+- `track_analysis_product_list` / `track_sequence_dimension_list` / `track_data_type_list`: Track parameter / dimension / data-type discovery only; not risk evidence and not default conclusion chain.
+- `rcp_event_tree_or_decision` / `rcp_fast_query_hbase` / `rcp_feature_info_by_keys` / `rcp_policy_basic_info` / `rcp_relation_policy_tree` / `rcp_policy_binding_info_list` / `rcp_policy_search` / `rcp_policy_blur_search` / `rcp_policy_all_version` / `rcp_pipeline_policy_versions_by_code`: registered strategy governance / event attribution helpers. They require explicit event/policy/feature context and must not be inserted into ordinary ATO judgement unless the user asks strategy hit, policy attribution, false-positive review, or strategy governance.
 - `login_log_detail_lookup`: UI modal key extraction has validation evidence, but no fixed API path/body or row identifier contract has been confirmed.
 - `login_log_filter_options`: blocked until a safe HAR confirms a separate filter/config option path and response shape; current default remains `recallSource=2,0,1,3`.
 - `login_logs_search_page`: not a standalone action for the current `/rest/unified/log/search` contract because validated API responses can return the full current-window result and UI pagination is frontend-only.
 
-Current `browser-backed-api-poc` parity note: the adjacent service action registry now registers the v1 routing-closure batch with fixed action names: `login_logs_search`, `track_analysis_check_data_ready`, `archives_user_profile`, `archives_user_analysis`, `archives_photo_search`, `archives_related_users`, `rcp_event_detail`, `rcp_event_feature_list`, and `rcp_policy_tree_lookup`. The Dennis Python client exposes the same action endpoints. Registration parity does not imply default routing: every action still requires an explicit source plan, and no caller-provided URL/path/header/cookie/token/session input is accepted.
+Current `browser-backed-api-poc` parity note: the adjacent service action registry now reports `action_count=37` in live smoke, including Archives photo detail, login log `json_array_capped`, RCP governance helpers, and Track auxiliary discovery actions. Registration parity does not imply default routing: every action still requires an explicit source plan, and no caller-provided URL/path/header/cookie/token/session input is accepted.
 
 ## Controlled Parallel Batch Contract
 

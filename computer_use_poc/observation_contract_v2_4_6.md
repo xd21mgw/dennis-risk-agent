@@ -367,7 +367,7 @@ unified_log_api_pagination_discovery:
 - `logContent` 是 JSON string，允许 parse key 和非凭证明文 value。
 - 保留 userId、deviceId、did、userIp、userIpv6、serverIp、userAgent、appVer、sysVer、uri、method、status、actionType、result、reason、timestamp、dateTime、loginType、deviceModel、osVersion、sdkVersion 等风控字段。
 - token、loginToken、accessToken、refreshToken、session、sessionId、ticket、authorization、cookie、rawAuthHeader 等凭证明文字段只输出 `present_redacted`。
-- `tokenId` 若为 token 事件标识符，不等于 token secret；默认输出 `token_id_ref` 或 partial mask，不输出可复用凭证明文。
+- `tokenId` 若为 token 事件标识符，不等于 token secret；内部研判按 risk entity identifier 保留，不输出可复用凭证明文。
 - 不输出完整 response，不输出完整 `logContent`。
 
 字段输出分层：
@@ -745,7 +745,7 @@ device_sdk_api_observation:
     sdk_version:
     risk_level:
     risk_tags:
-    source_ip_redacted:
+    source_ip:
   normalized_risk_signals:
     jailbreak_or_root:
     hook:
@@ -1037,19 +1037,13 @@ user_login_unified_log:
     credential_fields:
       token:
       loginToken:
-      tokenId:
       session:
       ticket:
       authorization:
       refresh_token:
       access_token:
-  credential_fields_present_redacted_policy:
-    token: present_redacted_if_found
-    loginToken: present_redacted_if_found
-    tokenId: present_redacted_if_found
-    session: present_redacted_if_found
-    ticket: present_redacted_if_found
-    authorization: present_redacted_if_found
+    risk_entity_identifier_fields:
+      tokenId:
 ```
 
 解释规则：
@@ -1057,7 +1051,7 @@ user_login_unified_log:
 - 高危接口调用日志偏服务端调用链视角。
 - 多账号登录日志偏客户端登录环境视角。
 - 本轮只提取 JSON key，不输出 JSON value，不做风险定性。
-- `token` / `loginToken` 等凭证明文字段如出现，只输出 `present_redacted`；`tokenId` 若为事件标识符，输出 `token_id_ref` 或 partial mask。
+- `token` / `loginToken` 等凭证明文字段如出现，只输出 `present_redacted`；`tokenId` 若为事件标识符，内部研判按 `risk_entity_identifier` 保留。
 - “查看详情”按钮可能是 `type=submit`，必须使用 scoped row click，并阻止默认 submit 行为，或采用已验证的 modal 打开方式。
 - modal 内容异步渲染时，若首次仅显示 `{` 或 innerHTML 为空，等待 3-5 秒后再提取 JSON key。
 
@@ -1462,16 +1456,17 @@ Dennis 子 Agent 禁止：
 - 结论为风险线索 / 需要补证。
 - 不直接输出“确认盗号”。
 
-### 7.4 Dennis 不输出敏感明文
+### 7.4 Dennis 不输出 credential secret / strict PII 原文
 
 输入：
 
-- observation 中存在 IP、设备、手机号、open_id 等 redacted 字段。
+- observation 中存在 IP、设备、UA、手机号、open_id 等字段。
 
 预期：
 
-- 只输出派生判断、计数、分布和 redacted 标记。
-- 不输出明文值。
+- 内部风控研判保留 IP、设备、UA、user_id、photo_id、event_id、policy_code/source_id 等 risk entity identifier，用于串证。
+- cookie / token / session / header / password 等 credential secret 只输出 `present_redacted`。
+- 手机号、身份证号、姓名、详细地址等 strict PII 不输出原文。
 
 ### 7.5 Dennis 能给下一步平台建议
 

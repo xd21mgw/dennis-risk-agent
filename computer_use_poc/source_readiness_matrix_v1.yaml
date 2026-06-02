@@ -16,6 +16,15 @@ status_enum:
   - planned_or_minimal_stub
   - browser_backed_batch_ready
   - debug_only_runner_ready
+  - available
+  - source_not_connected
+  - service_contract_pending
+  - blocked_by_missing_request_shape
+  - service_body_visibility_gap
+  - parser_mapping_gap
+  - json_array_capped
+  - byte_limit
+  - partial_source
 
 global_boundaries:
   no_data_not_risk_exclusion: true
@@ -118,21 +127,28 @@ sources:
   archives_publish_device_trace:
     source_priority: P0-conditional
     readiness_status:
-      - playbook_ready
-      - not_connected
+      - browser_backed_batch_ready
+      - available
     supported_input:
       - user_id
+      - photo_id
       - publish_id
       - publish_time
+    browser_backed_actions:
+      - archives_photo_profile
+      - archives_photo_meta
+      - archives_gallery_photo_list
     output_summary:
       - publish_list
       - publish_time
       - publish_device
       - publish_source_chain
+      - publish_ip_ua_if_available
     boundary:
-      - future_source
-      - not_implemented_in_current_runner
-      - source_gap_until_connected
+      - profile_meta_next_hop_only_when_photo_id_or_publish_gap_exists
+      - completed_transport_not_business_evidence
+      - service_body_visibility_gap_not_business_no_data
+      - parser_mapping_gap_enters_missing_evidence
 
   tianshi_strategy_hit_inventory:
     source_priority: P0-explicit
@@ -173,6 +189,62 @@ sources:
     boundary:
       - partial_api_direct
       - not_general_user_id_lookup
+
+  rcp_strategy_governance_auxiliary:
+    source_priority: P0-explicit
+    readiness_status:
+      - browser_backed_batch_ready
+      - available
+    supported_input:
+      - event_id
+      - event_type
+      - query_time
+      - policy_code
+      - policy_tree_code
+      - feature_keys
+    browser_backed_actions:
+      - rcp_event_tree_or_decision
+      - rcp_fast_query_hbase
+      - rcp_feature_info_by_keys
+      - rcp_policy_basic_info
+      - rcp_relation_policy_tree
+      - rcp_policy_binding_info_list
+      - rcp_policy_search
+      - rcp_policy_blur_search
+      - rcp_policy_all_version
+      - rcp_pipeline_policy_versions_by_code
+    output_summary:
+      - event_decision_tree
+      - feature_key_context
+      - policy_basic_info
+      - policy_tree_relation
+      - policy_version_history
+    boundary:
+      - explicit_strategy_or_event_anchor_only
+      - not_default_ato_source
+      - strategy_hit_not_final_judgement
+      - raw_tree_dump_not_user_output
+
+  track_auxiliary_discovery:
+    source_priority: P2-helper
+    readiness_status:
+      - browser_backed_batch_ready
+      - available
+    supported_input:
+      - product
+      - appName
+    browser_backed_actions:
+      - track_analysis_product_list
+      - track_sequence_dimension_list
+      - track_data_type_list
+    output_summary:
+      - product_candidates
+      - sequence_dimensions
+      - data_type_candidates
+    boundary:
+      - parameter_discovery_only
+      - not_risk_conclusion_source
+      - not_default_ato_main_chain
 
   track_analysis_activity_profile:
     source_priority: P0_auxiliary_for_ato
@@ -217,6 +289,28 @@ sources:
       - ato_default_p0_source
       - no_data_not_abnormal_publish_or_ato_exclusion
       - auth_failed_timeout_parse_error_enter_missing_evidence
+
+  login_logs_json_array_capped:
+    source_priority: P0
+    readiness_status:
+      - browser_backed_batch_ready
+      - json_array_capped
+      - partial_source
+    supported_input:
+      - user_id
+      - time_window
+      - max_records
+    output_summary:
+      - login_events_returned_records
+      - observed_records
+      - returned_records
+      - missing_records
+      - cap_reason_byte_limit
+    boundary:
+      - returned_records_are_partial_evidence_only
+      - missing_records_not_no_data
+      - byte_limit_partial_source
+      - no_login_low_risk_from_large_response
 
   dataagent_hive:
     source_priority: P2

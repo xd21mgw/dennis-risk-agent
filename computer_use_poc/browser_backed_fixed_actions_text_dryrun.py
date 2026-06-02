@@ -197,6 +197,12 @@ FULL_METADATA_NEGATION_PATTERNS = [
     "不要输出 yaml",
     "用户可见不要默认展示",
     "不要默认展示",
+    "ui/debug/blob",
+    "debug/blob",
+    "debug 字段",
+    "debug字段",
+    "debug-only",
+    "debug only",
 ]
 
 BOUNDARY_FLAG_EXPLANATIONS = {
@@ -276,6 +282,13 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "raw_body_not_returned_to_final_answer": "raw body 不进入 final answer / evidence card 展示层",
     "credential_material_redacted": "cookie/token/session/header/password 等 credential 原文必须丢弃",
     "strict_pii_redacted": "手机号、身份证、姓名、详细地址等严格 PII 不进入用户输出",
+    "internal_risk_review_keeps_risk_entity_identifiers": "内部风控研判默认保留 device_id/DID/IP/UA/user_id/photo_id/event_id/policy_code/source_id 等风险实体锚点",
+    "external_share_masks_risk_entity_identifiers": "对外分享或更广受众输出时，风险实体按受众策略脱敏",
+    "archives_photo_detail_next_hop_required": "已有 photo_id 且发布链缺字段时，规划 archives_photo_profile + archives_photo_meta 作为受控下一跳",
+    "archives_photo_detail_fields_backfill_publish_chain": "photo profile/meta 的 uploadSource/photoMethod/photoIp/publishDevice 可回填发布事实链和设备一致性链",
+    "login_logs_json_array_capped_partial": "login_logs_search json_array_capped 只把 returned_records 作为 partial evidence，missing_records 仍是缺口",
+    "rcp_governance_actions_explicit_only": "RCP governance/helper actions 只在策略命中、策略治理、误伤复核或 event/policy anchor 存在时规划",
+    "track_auxiliary_parameter_discovery_only": "Track auxiliary actions 只用于参数/维度/字段发现，不进入风险结论链",
     "safe_parser_extracts_publish_fields": "archives_photo_search capped body 中的 photo_id/publish_time/source/device 可被 Dennis 抽取",
     "safe_parser_extracts_login_fields": "login_logs_search body 中的 login_time/login_type/source/device/ip_ua 可被 Dennis 抽取",
     "safe_parser_extracts_security_action_fields": "archives_user_analysis body 中的 security action / operation_device 可被 Dennis 抽取",
@@ -294,6 +307,20 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "login_log_window_shrink_anchor_missing": "登录日志缩窗前需先从发布、用户分析、策略事件或客诉时间找到时间锚点",
     "active_backfill_recomputes_evidence_chain": "每次主动补证或新字段进入后必须重算 evidence chain 和 conclusion_state",
     "generic_missing_entity_next_hop_planner": "缺实体到下一跳补证是通用机制，不是 ATO 单 case hardcode",
+    "partial_transport_subtype": "partial_transport 表示截断、byte_limit、body visibility gap、timeout/auth/parse 等传输或可见性不完整",
+    "partial_fields_subtype": "partial_fields 表示 body 可见且有业务字段，但关键字段仍缺",
+    "partial_baseline_subtype": "partial_baseline 表示事实字段已有，但历史常用设备/端/IP/UA 基线未闭合",
+    "partial_consistency_subtype": "partial_consistency 表示多个实体已出现，但登录/发布/操作/历史设备一致性未判定",
+    "partial_authorization_required_subtype": "partial_authorization_required 表示实时只读到边界，下一跳必须用户授权离线补证",
+    "auto_realtime_next_hop": "已登记只读 action、输入齐备、单 case 执行模式下可自动下一跳",
+    "auto_plan_only_next_hop": "缺输入或当前只需计划时，仅生成受控下一跳计划，不执行",
+    "user_authorized_next_hop": "DataAgent/Hive、长窗口离线、大批量扩展等必须逐次用户授权",
+    "blocked_next_hop": "action 未登记、contract pending、auth repair、URL guessing 或缺不可解析入参时阻塞，不绕查",
+    "evidence_projection_applied": "passthrough body 先做 evidence projection 再 observation，提高关键风控字段保留率",
+    "projection_not_business_normalizer": "projection 只裁剪无用/重复/超大字段，不生成业务结论或 service normalizer",
+    "projection_drops_useless_duplicate_huge_fields": "projection 可删除 UI/debug/blob/重复/空值等低价值字段",
+    "projection_preserves_sensitive_control_chain_as_safe_handle": "token/session/cookie/header/password 字段名不导致整行丢失，仅保留存在性/路径/hash/长度等安全句柄",
+    "projection_cap_before_observation": "数组类 source 先按 evidence row 投影，再进入 observation 与 cap 后解析",
     "login_small_body_likely_no_data_not_risk_exclusion": "登录日志 2xx 小 body 且有 empty hint 只能 likely_no_data，不作为低风险反证",
     "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
     "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
@@ -1026,6 +1053,20 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         "login_device",
         "operation_device",
         "candidate_device",
+        "evidence projection",
+        "projection",
+        "投影",
+        "partial_transport",
+        "partial_fields",
+        "partial_baseline",
+        "partial_consistency",
+        "partial_authorization_required",
+        "auto_realtime_next_hop",
+        "auto_plan_only_next_hop",
+        "user_authorized_next_hop",
+        "blocked_next_hop",
+        "控制链字段",
+        "字段名",
     ])
     if secret_or_raw_dump_requested and not safe_parser_context:
         return finalize_route(plan, text, {
@@ -1041,6 +1082,106 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_output_raw_login_records",
                 "do_not_output_raw_labelInfo",
                 "do_not_output_raw_full_body",
+            ]),
+        })
+
+    if has_any(text, ["track_analysis_product_list", "track_sequence_dimension_list", "track_data_type_list"]):
+        return finalize_route(plan, text, {
+            "actions": ["source_plan_only_no_action_selected"],
+            "orchestration": (
+                "Track auxiliary actions are registered for parameter/dimension/data-type discovery only; "
+                "they do not enter the default risk conclusion chain."
+            ),
+            "boundary_flags": [
+                "track_auxiliary_parameter_discovery_only",
+                "track_check_data_ready_not_risk_conclusion",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_mix_track_summary_with_check_data_ready",
+                "do_not_make_device_risk_judgement_from_readiness",
+            ]),
+        })
+
+    if has_any(text, [
+        "rcp_event_tree_or_decision",
+        "rcp_fast_query_hbase",
+        "rcp_feature_info_by_keys",
+        "rcp_policy_basic_info",
+        "rcp_relation_policy_tree",
+        "rcp_policy_binding_info_list",
+        "rcp_policy_search",
+        "rcp_policy_blur_search",
+        "rcp_policy_all_version",
+        "rcp_pipeline_policy_versions_by_code",
+    ]):
+        return finalize_route(plan, text, {
+            "actions": ["source_plan_only_no_action_selected"],
+            "orchestration": (
+                "RCP governance/helper actions are registered for explicit strategy governance, "
+                "policy attribution, false-positive review, or event/policy-anchor tasks only."
+            ),
+            "boundary_flags": [
+                "rcp_governance_actions_explicit_only",
+                "strategy_hit_not_final_judgement",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_make_final_judgement_from_strategy_hit_only",
+                "do_not_mix_event_detail_and_tree_governance",
+            ]),
+        })
+
+    if has_any(text, ["json_array_capped", "returned_records", "missing_records", "observed_records", "17/61", "61 条", "17 条", "byte_limit"]):
+        return finalize_route(plan, text, {
+            "actions": ["login_logs_search"],
+            "orchestration": (
+                "login_logs_search json_array_capped parses returned_records as partial evidence "
+                "and carries observed/returned/missing/cap_reason into source_quality."
+            ),
+            "boundary_flags": [
+                "login_logs_json_array_capped_partial",
+                "partial_login_log_parsed_from_json_array_capped",
+                "byte_limit_partial_source",
+                "response_too_large_not_login_evidence",
+                "partial_observation_available",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_claim_complete_from_capped_body",
+                "do_not_output_raw_login_records",
+            ]),
+        })
+
+    if has_any(text, [
+        "archives_photo_profile",
+        "archives_photo_meta",
+        "photo profile",
+        "photo meta",
+        "uploadsource",
+        "photomethod",
+        "photoip",
+    ]):
+        return finalize_route(plan, text, {
+            "actions": ["archives_photo_profile", "archives_photo_meta"],
+            "orchestration": (
+                "Existing photo_id plus missing publish-source/device/IP fields triggers archives_photo_profile "
+                "and archives_photo_meta next-hop backfill, then recomputes publish and device chains."
+            ),
+            "boundary_flags": [
+                "archives_photo_detail_next_hop_required",
+                "archives_photo_detail_fields_backfill_publish_chain",
+                "safe_parser_extracts_publish_fields",
+                "publish_device_login_device_alignment_required",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_use_completed_transport_as_business_closure",
+                "do_not_output_raw_records",
             ]),
         })
 
@@ -1140,6 +1281,12 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                     passthrough_flags += ["partial_login_log_parsed_from_capped_body"]
                 if has_any(text, ["不可见", "看不到", "suppressed", "snippet"]):
                     passthrough_flags += ["service_body_visibility_gap_for_truncated_login_log"]
+        if has_any(text, ["json_array_capped", "returned_records", "missing_records", "observed_records", "17/61", "61 条", "17 条", "byte_limit"]):
+            passthrough_flags += [
+                "login_logs_json_array_capped_partial",
+                "partial_login_log_parsed_from_json_array_capped",
+                "byte_limit_partial_source",
+            ]
         if has_any(text, ["200", "2xx", "body_present", "body_truncated"]):
             passthrough_flags += ["login_transport_success_partial_response_too_large", "partial_observation_available"]
         if has_any(text, ["raw_body_handling=suppressed", "raw_body_suppressed", "suppressed", "body_missing"]):
@@ -1161,8 +1308,23 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             passthrough_flags += ["credential_material_redacted"]
         if has_any(text, ["手机号", "身份证", "姓名", "详细地址", "PII", "pii"]):
             passthrough_flags += ["strict_pii_redacted"]
+        if has_any(text, ["internal_risk_review", "内部研判", "风控实体", "risk entity", "device_id", "DID", "IP/UA", "UA", "tokenId"]):
+            passthrough_flags += ["internal_risk_review_keeps_risk_entity_identifiers"]
+        if has_any(text, ["external_share", "外发", "对外分享", "更广受众"]):
+            passthrough_flags += ["external_share_masks_risk_entity_identifiers"]
         if has_any(text, ["publish_time", "publish_source", "publish_device", "photo_id", "发布设备"]):
             passthrough_flags += ["safe_parser_extracts_publish_fields"]
+        if has_any(text, ["archives_photo_profile", "archives_photo_meta", "photo profile", "photo meta", "uploadSource", "photoMethod", "photoIp"]):
+            passthrough_flags += [
+                "archives_photo_detail_next_hop_required",
+                "archives_photo_detail_fields_backfill_publish_chain",
+                "safe_parser_extracts_publish_fields",
+            ]
+            passthrough_actions = ["archives_photo_profile", "archives_photo_meta"]
+        if has_any(text, ["rcp_event_tree_or_decision", "rcp_fast_query_hbase", "rcp_feature_info_by_keys", "rcp_policy_basic_info", "rcp_relation_policy_tree", "rcp_policy_binding_info_list", "rcp_policy_search", "rcp_policy_blur_search", "rcp_policy_all_version", "rcp_pipeline_policy_versions_by_code"]):
+            passthrough_flags += ["rcp_governance_actions_explicit_only", "strategy_hit_not_final_judgement"]
+        if has_any(text, ["track_analysis_product_list", "track_sequence_dimension_list", "track_data_type_list"]):
+            passthrough_flags += ["track_auxiliary_parameter_discovery_only", "track_check_data_ready_not_risk_conclusion"]
         if has_any(text, ["login_time", "login_type", "login_source", "login_device", "ip_ua"]):
             passthrough_flags += ["safe_parser_extracts_login_fields"]
         if has_any(text, ["security action", "operation_device", "改密", "换绑", "保护账号"]):
@@ -1599,6 +1761,31 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "active_missing_evidence_next_hop_planner",
             "active_backfill_recomputes_evidence_chain",
         ]
+    if has_any(text, ["partial_transport", "partial_fields", "partial_baseline", "partial_consistency", "partial_authorization_required", "partial subtype", "partial 分型"]):
+        flags += [
+            "partial_transport_subtype",
+            "partial_fields_subtype",
+            "partial_baseline_subtype",
+            "partial_consistency_subtype",
+            "partial_authorization_required_subtype",
+        ]
+    if has_any(text, ["auto_realtime_next_hop", "auto_plan_only_next_hop", "user_authorized_next_hop", "blocked_next_hop", "自动 next-hop", "需用户授权"]):
+        flags += [
+            "auto_realtime_next_hop",
+            "auto_plan_only_next_hop",
+            "user_authorized_next_hop",
+            "blocked_next_hop",
+        ]
+    if has_any(text, ["evidence projection", "projection", "投影", "先 projection", "先投影", "无用字段", "重复字段", "超大字段"]):
+        flags += [
+            "evidence_projection_applied",
+            "projection_not_business_normalizer",
+            "projection_drops_useless_duplicate_huge_fields",
+            "projection_cap_before_observation",
+            "raw_body_not_returned_to_final_answer",
+        ]
+        if has_any(text, ["token", "session", "cookie", "header", "控制链"]):
+            flags += ["projection_preserves_sensitive_control_chain_as_safe_handle"]
     if has_any(text, ["缺 device_id", "缺候选设备", "candidate_device_id_missing", "candidate_device_id", "Track 缺"]):
         flags += [
             "candidate_device_resolution_active",

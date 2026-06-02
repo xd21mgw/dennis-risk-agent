@@ -74,8 +74,10 @@ def _assert_suppressed_case(result: dict[str, Any]) -> None:
     assert by_source["ato_archives_user_analysis"]["breakpoint_type"] == "service_body_visibility_gap"
     assert not by_source["ato_archives_photo_search"]["parser_input_available"]
     chain_status = result["evidence_card"]["chain_status"]
-    assert chain_status["web_publish_fact"]["status"] == "missing"
+    assert chain_status["web_publish_fact"]["status"] == "partial_transport"
+    assert chain_status["web_publish_fact"]["partial_subtype"] == "partial_transport"
     assert "service_body_visibility_gap" in chain_status["web_publish_fact"]["breakpoint_types"]
+    assert chain_status["web_login_history"]["status"] == "partial_transport"
     assert "service_body_visibility_gap_for_truncated_login_log" in chain_status["web_login_history"]["breakpoint_types"]
     assert result["user_device_entity_resolution"]["resolution_status"] == "candidate_device_id_missing_after_resolution"
     active_groups = {
@@ -84,6 +86,12 @@ def _assert_suppressed_case(result: dict[str, Any]) -> None:
     }
     assert active_groups["candidate_device_id"] == "candidate_device_id_missing_after_resolution"
     assert active_groups["login_fields"] == "service_body_visibility_gap_for_truncated_login_log"
+    candidate_group = next(
+        item
+        for item in result["evidence_card"]["active_backfill_plan"]["groups"]
+        if item["group_id"] == "candidate_device_id"
+    )
+    assert candidate_group["next_hop_type"] == "auto_realtime_next_hop"
     assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["status"] == "login_log_window_shrink_anchor_missing"
     assert "web_publish_fact" in [
         item["module_id"]
@@ -95,9 +103,13 @@ def _assert_suppressed_case(result: dict[str, Any]) -> None:
 def _assert_visible_case(result: dict[str, Any]) -> None:
     by_source = {row["source_id"]: row for row in result["live_response_inspection"]}
     assert by_source["ato_archives_photo_search"]["parser_input_available"]
-    assert {"photo_id", "publish_time", "publish_source", "publish_device"} <= set(
+    assert {"photo_id", "publish_time"} <= set(
         by_source["ato_archives_photo_search"]["extracted_business_fields"]
     )
+    detail_fields = set(
+        by_source["ato_archives_photo_meta_197323059879"]["extracted_business_fields"]
+    ) | set(by_source["ato_archives_photo_profile_197323443136"]["extracted_business_fields"])
+    assert {"photo_id", "publish_source", "publish_device", "publish_ip_ua"} <= detail_fields
     assert {"login_time", "login_type", "login_source", "device_id", "ip_ua"} <= set(
         by_source["ato_login_logs_search"]["extracted_business_fields"]
     )
@@ -114,27 +126,67 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
         for item in result["source_observations"]
         if item["source_id"] == "ato_login_logs_search"
     )
-    assert login_observation["passthrough_row_cap"]["observed_records"] == 334
-    assert login_observation["passthrough_row_cap"]["returned_records"] == 100
-    assert login_observation["passthrough_row_cap"]["missing_records"] == 234
+    assert login_observation["passthrough_row_cap"]["observed_records"] == 61
+    assert login_observation["passthrough_row_cap"]["returned_records"] == 17
+    assert login_observation["passthrough_row_cap"]["missing_records"] == 44
+    assert login_observation["passthrough_row_cap"]["cap_reason"] == "byte_limit"
     login_quality = next(
         item
         for item in result["source_quality"]["per_source"]
         if item["source_id"] == "ato_login_logs_search"
     )
-    assert login_quality["observed_records"] == 334
-    assert login_quality["returned_records"] == 100
-    assert login_quality["missing_records"] == 234
+    assert login_quality["observed_records"] == 61
+    assert login_quality["returned_records"] == 17
+    assert login_quality["missing_records"] == 44
+    assert login_quality["cap_reason"] == "byte_limit"
+    login_observation_detail = login_observation["dennis_observation"]
+    projection = login_observation_detail["evidence_projection"]
+    assert projection["projection_applied"] is True
+    assert projection["projection_not_business_normalizer"] is True
+    assert projection["raw_body_not_retained_in_answer"] is True
+    assert projection["projected_records"] >= 3
+    assert projection["sensitive_fields_projected_as_handles"] >= 1
+    assert projection["strict_pii_fields_redacted"] >= 1
+    assert "evidence_projection_applied" in login_observation["interpretation_flags"]
+    assert "credential_control_chain_projected_as_safe_handle" in login_observation["interpretation_flags"]
+    login_observation_values = {
+        (str(handle.get("canonical_field")), str(handle.get("value")))
+        for handle in login_observation_detail["extracted_safe_handles"]
+    }
+    login_values = {value for _field, value in login_observation_values}
+    assert ("device_id", "web_c5a2b6bbe230e1ad1c596577d00615c2") in login_observation_values
+    assert ("ip_ua", "223.221.196.192") in login_observation_values
+    assert ("ip_ua", "Chrome/140") in login_observation_values
+    assert ("token_event_id", "token_event_safe_1") in login_observation_values
+    assert "refresh_secret_should_not_survive" not in login_values
+    assert "cookie_secret_should_not_survive" not in login_values
+    assert projection["dropped_fields_count"] >= 1
+    assert "13812345678" not in login_values
+    assert "strict_name_should_not_survive" not in login_values
+    assert "blocked_sensitive_material_detected" in login_observation["interpretation_flags"]
+    assert "pii_strict_redacted" in login_observation["interpretation_flags"]
     candidates = result["user_device_entity_resolution"]["candidate_device_ids"]
     candidate_ids = {item["device_id"] for item in candidates}
-    assert {"did_publish_safe_1", "did_login_safe_1", "did_operation_safe_1"} <= candidate_ids
+    assert {"web_c5a2b6bbe230e1ad1c596577d00615c2", "did_operation_safe_1"} <= candidate_ids
     assert result["user_device_entity_resolution"]["resolution_status"] == "multiple_candidate_devices_need_ranking"
     chain_status = result["evidence_card"]["chain_status"]
     assert chain_status["web_publish_fact"]["status"] == "closed"
-    assert chain_status["web_login_history"]["status"] == "partial"
+    publish_fields = {
+        (item["field"], str(item["value"]))
+        for item in chain_status["web_publish_fact"]["field_paths"]
+    }
+    assert ("photo_id", "197323059879") in publish_fields
+    assert ("photo_id", "197323443136") in publish_fields
+    assert ("publish_device", "web_c5a2b6bbe230e1ad1c596577d00615c2") in publish_fields
+    assert chain_status["web_login_history"]["status"] == "partial_transport"
+    assert chain_status["web_login_history"]["partial_subtype"] == "partial_transport"
     assert "response_too_large_needs_window_shrink" in chain_status["web_login_history"]["breakpoint_types"]
-    assert chain_status["device_identity_alignment"]["status"] in {"closed", "partial"}
+    assert chain_status["device_identity_alignment"]["status"] in {"closed", "partial_baseline", "partial_consistency"}
     assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["status"] == "login_log_truncated_needs_window_shrink"
+    assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["next_hop_type"] == "auto_realtime_next_hop"
+    assert result["evidence_card"]["active_backfill_plan"]["photo_detail_next_hop_plan"]["status"] == "photo_detail_backfill_consumed"
+    assert result["evidence_card"]["evidence_projection_summary"]
+
 
 
 def main() -> int:

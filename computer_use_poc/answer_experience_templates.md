@@ -345,8 +345,11 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - 登录日志 `network_error` 必须细分为 `transport_error` / `service_gap` / `batch_contract_error` / `passthrough_interpretation_gap` / `invalid_params`，不能笼统作为最终解释。`response_too_large` / `body_truncated` 建议围绕可疑锚点缩小窗口，不是登录正常或登录很多的证据。
 - pure passthrough 下，`raw_body_handling=suppressed/capped` 是安全传输策略，不等于 `body_missing`；Dennis 可以保留 `device_id` / DID、发布设备、登录设备、IP/UA 派生、时间锚点和字段路径等 safe handle，但不得输出 raw body、cookie、token、session、header 或 password。
 - Dennis 可以在内部安全解析 `body` / `raw_body` / `response_body` / `upstream_body` / `raw_payload` / `capped_body` / `body_snippet` 等可见 body 字段；解析结果只保留 allowlisted 风控字段和字段路径，不把 raw full body 写入 final answer、evidence card 展示层或 run log。
+- 大响应进入 observation 前先做 evidence projection：只裁掉 UI/debug/blob/重复/空值等明显低价值字段，优先保留登录端、发布时间、设备、IP/UA、endpoint、operation、photo_id、policy/event 等风控锚点；token/session/cookie/header/password 字段名不得导致整行被删除，只保留存在性、路径、类型、长度、hash 等安全句柄，最终用户正文不输出原文。
 - 高价值 source 必须优先沉淀 source-specific safe parser：`login_logs_search` 抽登录时间、登录端、登录方式、设备、IP/UA；`archives_photo_search` 抽 photo_id、发布时间、发布端、发布设备、发布 IP/UA；`archives_user_analysis` 抽安全动作、操作时间、操作设备；`archives_related_users` / `weapon_inventory` 抽扩散设备和 user-device 图谱线索。
 - `login_logs_search` 分类先看 transport envelope：`2xx + body_present=true + body_truncated=true` 写 `transport_success + partial_observation_available / response_too_large`；只有 401/403、`auth_redirect_detected=true`、`api_code=302` 或明确 `error_type` 才写 auth/permission；`ok=false + network_error` 才写 service fetch failure。
+- `login_logs_search raw_body_handling=json_array_capped` 时，只把 `returned_records` 对应的 `upstream.capped_body.data.logSearchModels` 当 partial evidence；`observed_records`、`returned_records`、`missing_records`、`cap_reason=byte_limit` 必须进入 source_quality 和证据边界，不能把 missing records 当 no_data。
+- 已有 `photo_id` 且发布事实链缺发布端、发布设备、发布 IP/UA、`uploadSource` 或 `photoMethod` 时，Dennis 应规划 `archives_photo_profile + archives_photo_meta` 作为 controlled next-hop；如果返回 body visible，就把字段回填到发布事实链和设备一致性链；如果 HTTP 200 但 body suppressed 或字段缺失，写 `service_body_visibility_gap` / `parser_mapping_gap` / `publish_device_missing_after_photo_meta`。
 
 ATO evidence card 不按 source 状态平铺，按风险链路组织：
 
@@ -363,6 +366,8 @@ ATO evidence card 不按 source 状态平铺，按风险链路组织：
 ```
 
 `completed transport` 不能自动进入 weak evidence。只有抽到能支持判断的业务字段，才进入 strong / medium / weak evidence；只完成传输但缺业务字段时，写 `observation_compression_gap` / `business_fields_not_extracted` / `completed_transport_not_business_chain_closure`。
+
+每条链不要只写 `partial`，必须在内部状态里区分 `partial_transport`、`partial_fields`、`partial_baseline`、`partial_consistency`、`partial_authorization_required`，并映射到 `auto_realtime_next_hop`、`auto_plan_only_next_hop`、`user_authorized_next_hop` 或 `blocked_next_hop`。
 
 实时证据不闭合时，不默认请求“全量 Hive/DataAgent”，也不固定给 1-5 菜单。Dennis 必须基于当前 `missing_evidence` 动态生成补证 `module_id`：
 
@@ -2529,9 +2534,9 @@ D. 先不要执行，只优化计划
 - blocked / partial source 必须显式展示 `permission_status`，并降低结论置信度。
 - `manual_input` 不能单独支撑 strong conclusion；`model_inference` 不能作为 raw evidence。
 - `raw_reference` 只能是内部安全引用，不得包含 cookie / token / session / header / 手机号等敏感原文；IP / UID / DID / deviceId 等风控实体字段按 `field_output_classification_policy_v1.md` 的受众范围决定是否输出原值、safe_ref 或 partial mask。
-- evidence card 默认使用 `output_scope=internal_risk_review`，内部研判可展示必要风控实体字段；`external_share` 分享版必须 masked。
+- evidence card 默认使用 `output_scope=internal_risk_review`，内部研判默认保留并展示必要风控实体字段；`external_share` 分享版才按受众策略 masked。
 - IP / UID / DID / deviceId 完整输出不再默认等同 P0 credential leakage；真正 P0 只包括认证凭证明文和可直接复用的凭据。
-- `tokenId` 若只是 token 事件标识符，不是 token secret；建议默认输出 `token_id_ref` 或 partial mask。
+- `tokenId` 若只是 token 事件标识符，不是 token secret；内部研判按风险实体锚点保留，外发再脱敏。
 
 ### 不应输出的内容
 

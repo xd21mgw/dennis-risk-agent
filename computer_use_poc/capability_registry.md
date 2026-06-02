@@ -24,7 +24,7 @@
 - 所有 capability 的输出必须遵守 `computer_use_poc/field_output_classification_policy_v1.md`。
 - token / cookie / session / password / authorization / storageState / header 等认证凭证明文永远不得明文输出。
 - IP / UID / DID / deviceId / requestId / sourceId / strategyId / adminaction 等是风控实体字段；内部可信分析可作为 evidence card、pattern summary、case table 的分析实体，KIM 半开放和跨团队分享需按受众范围选择原值、safe_ref、partial mask、count 或 distribution。
-- `tokenId` 若只是事件标识符，不等于 token secret；默认 `token_id_ref` 或 partial mask。
+- `tokenId` 若只是事件标识符，不等于 token secret；`internal_risk_review` 默认作为风险实体锚点保留，`external_share` 再按受众策略脱敏。
 - `no_sensitive_plaintext` 不能一刀切覆盖所有风控实体字段；KIM E2E / runtime validation 必须按字段分层判定。
 
 | capability | purpose | primary adapters / sources | default_scope | status | key_boundary |
@@ -124,6 +124,7 @@
   - ATO single-case realtime P0：`browser_backed_fixed_actions_v1` 在 ATO 裸问中必须先收集登录 / 档案画像 / 档案用户分析 / 作品发布 / Track readiness 五类实时 P0 source，再由 Dennis 从多源观察中推导可疑锚点、候选控制端、`device_identity_consistency` 和历史基线。不能把 `suspicious_anchor_discovery` 当独立 source，也不能把 Track / RCP / Weapon / 登录日志 / 档案中心平铺 source 状态当成 ATO 研判主线。
   - ATO suspicious source priority：登录链路和内容 / 行为链路是可疑来源发现主入口；Track / Weapon / RCP 是补证 source。在线统一登录日志不可用、窗口不足、admin 侧仅 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失、`response_too_large` 或 UI/wrapper 不一致时，只能生成基于 `account_security_hive_source_registry_v1.md` 的 Hive query plan，等待用户逐次授权，不得让 DataAgent 自由猜表。
   - `device_identity_consistency` 是 ATO 设备判断能力：比较 `device_id`、首次出现、30/90/180 天出现天数、机型、系统、app 版本、UA、browser fingerprint、IP/省市/ASN、登录端和登录方式。风险标签包括 `device_identity_inconsistency`、`possible_device_id_spoofing`、`common_device_id_but_abnormal_fingerprint`、`common_device_id_not_sufficient_to_exclude_ato`。
+  - browser-backed action contract v1 live-smoke extension：Dennis registry 消费 service `action_count=37` 中的新只读 actions，但不改变 `default_runtime_routing=false`。Archives content forensics：`archives_photo_profile`、`archives_photo_meta`、`archives_photo_report_aggregate`、`archives_photo_user_autonomy`、`archives_gallery_photo_list`；ATO 已有 `photo_id` 且发布事实链缺 `publish_source` / `publish_device` / `publish_ip_ua` 时，规划 `archives_photo_profile + archives_photo_meta` 作为 auth-sensitive next-hop。Login logs：`login_logs_search` 支持 `raw_body_handling=json_array_capped` / `capped_json_path=data.logSearchModels` / `observed_records` / `returned_records` / `missing_records` / `cap_reason=byte_limit`，Dennis 只把 returned records 当 partial evidence。RCP governance：`rcp_event_tree_or_decision`、`rcp_fast_query_hbase`、`rcp_feature_info_by_keys`、`rcp_policy_basic_info`、`rcp_relation_policy_tree`、`rcp_policy_binding_info_list`、`rcp_policy_search`、`rcp_policy_blur_search`、`rcp_policy_all_version`、`rcp_pipeline_policy_versions_by_code` 只在策略命中解释、策略治理、误伤复核或 event/policy anchor 已存在时规划，不进入普通 ATO 默认主链。Track auxiliary：`track_analysis_product_list`、`track_sequence_dimension_list`、`track_data_type_list` 只用于参数发现 / 字段解释，不进入风险结论链。
   - Track 表述：当前 v1 裸问优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；历史 `track_analysis_summary` 只作为 Track 活跃画像泛化能力描述，避免混成当前 action 名。
   - 未稳定 source：private message、资料四件套 / 过往四项、related_devices 等不作为默认已验证 source；只有已有稳定接口、显式 source plan 或用户补充线索时，才写“可进一步查看”。
   - 风控实体字段 `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 可在内部研判和 source chaining 保留；cookie/token/session/header/password、手机号、身份证、姓名、地址严禁输出或保存。

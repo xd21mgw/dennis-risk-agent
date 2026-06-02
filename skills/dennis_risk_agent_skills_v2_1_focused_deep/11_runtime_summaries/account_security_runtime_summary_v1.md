@@ -353,6 +353,8 @@ RCP 归因与策略治理：
 
 - `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 是风控实体，可在内部研判和 source chaining 保留。
 - cookie/token/session/header/password、完整手机号、身份证、姓名、详细地址严禁输出或保存。
+- ATO 链路的 partial 必须分型：`partial_transport`、`partial_fields`、`partial_baseline`、`partial_consistency`、`partial_authorization_required`，并映射到 `auto_realtime_next_hop`、`auto_plan_only_next_hop`、`user_authorized_next_hop` 或 `blocked_next_hop`；普通回答不再只写“多个源 partial”。
+- 大响应 observation 前可做 evidence projection：只裁掉 UI/debug/blob/重复/空值等明显低价值字段，保留登录/发布/设备/IP/UA/endpoint/operation 等风控锚点；token/session/cookie/header/password 只保留安全句柄，最终答案不输出原文。
 
 输出元数据分级：
 

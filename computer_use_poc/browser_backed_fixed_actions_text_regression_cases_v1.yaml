@@ -928,6 +928,38 @@ cases:
     expected_execution_groups: [auth_sensitive_serial]
     should_not_do: [do_not_claim_complete_from_capped_body]
     expected_answer_contract: [source_observations, evidence_card, final_answer_boundary]
+  - id: PHOTO-DETAIL-NEXT-HOP-PROFILE-META-001
+    user_query: "已有 photo_id 197323059879 和 197323443136，但发布链缺 publish_device、uploadSource、photoMethod、photoIp，Dennis 会不会规划 archives_photo_profile 和 archives_photo_meta 下一跳并回填证据链？"
+    expected_route_or_actions: [archives_photo_profile, archives_photo_meta]
+    expected_orchestration: "Photo detail next-hop uses archives_photo_profile + archives_photo_meta when photo_id exists and publish fact chain lacks source/device/IP fields."
+    expected_boundary_flags: [archives_photo_detail_next_hop_required, archives_photo_detail_fields_backfill_publish_chain, safe_parser_extracts_publish_fields]
+    expected_execution_groups: []
+    should_not_do: [do_not_use_completed_transport_as_business_closure]
+    expected_answer_contract: [source_plan, source_observations, evidence_card, final_answer_boundary]
+  - id: LOGIN-JSON-ARRAY-CAPPED-PARTIAL-001
+    user_query: "login_logs_search 返回 json_array_capped：observed_records=61、returned_records=17、missing_records=44、cap_reason=byte_limit，Dennis 能不能只把前 17 条当 partial evidence？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Dennis parses upstream.capped_body.data.logSearchModels returned records and keeps missing_records as byte-limit source gap."
+    expected_boundary_flags: [login_logs_json_array_capped_partial, partial_login_log_parsed_from_json_array_capped, byte_limit_partial_source]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_claim_complete_from_capped_body, do_not_treat_response_too_large_as_login_evidence]
+    expected_answer_contract: [source_observations, source_quality_matrix, evidence_card, final_answer_boundary]
+  - id: RCP-NEW-ACTIONS-EXPLICIT-ONLY-001
+    user_query: "RCP 策略治理要用 rcp_event_tree_or_decision、rcp_feature_info_by_keys、rcp_policy_basic_info、rcp_relation_policy_tree，但普通 ATO 里不要乱调这些 action。"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "RCP governance actions are registered but explicit strategy/event anchor only, not default ATO main chain."
+    expected_boundary_flags: [rcp_governance_actions_explicit_only, strategy_hit_not_final_judgement]
+    expected_execution_groups: []
+    should_not_do: [do_not_make_final_judgement_from_strategy_hit_only]
+    expected_answer_contract: [source_plan, final_answer_boundary]
+  - id: TRACK-AUXILIARY-ACTIONS-PARAM-DISCOVERY-001
+    user_query: "track_analysis_product_list、track_sequence_dimension_list、track_data_type_list 是不是只能做 Track 参数/字段发现，不能进风险结论链？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Track auxiliary actions are for parameter and field discovery only; they do not produce risk conclusions."
+    expected_boundary_flags: [track_auxiliary_parameter_discovery_only, track_check_data_ready_not_risk_conclusion]
+    expected_execution_groups: []
+    should_not_do: [do_not_make_device_risk_judgement_from_readiness]
+    expected_answer_contract: [source_plan, final_answer_boundary]
   - id: SAFE-PARSER-LOGIN-FIELDS-001
     user_query: "safe parser 能不能从 login_logs_search body 抽 login_time、login_type、login_source、login_device、ip_ua？"
     expected_route_or_actions: [login_logs_search]
@@ -945,10 +977,10 @@ cases:
     should_not_do: [do_not_claim_complete_timeline]
     expected_answer_contract: [source_observations, user_device_entity_resolution, final_answer_boundary]
   - id: SAFE-PARSER-CREDENTIAL-REDACTION-001
-    user_query: "body 里如果有 cookie/token/session/header/password，safe parser 能不能解析业务字段但丢弃这些敏感值？"
+    user_query: "internal_risk_review 下 body 里同时有 cookie/token/session/header/password、tokenId、device_id、IP/UA，safe parser 能不能丢弃 credential 但保留风险实体锚点？"
     expected_route_or_actions: [source_plan_only_no_action_selected]
-    expected_orchestration: "Credential material is detected and redacted; raw body is not returned."
-    expected_boundary_flags: [safe_raw_capped_body_parser_enabled, credential_material_redacted, raw_body_not_returned_to_final_answer]
+    expected_orchestration: "Credential material is detected and redacted; tokenId/device_id/IP/UA remain risk entity identifiers for internal evidence chaining."
+    expected_boundary_flags: [safe_raw_capped_body_parser_enabled, credential_material_redacted, internal_risk_review_keeps_risk_entity_identifiers, raw_body_not_returned_to_final_answer]
     expected_execution_groups: []
     should_not_do: [do_not_output_raw_records]
     expected_answer_contract: [source_observations, final_answer_boundary]
@@ -1032,3 +1064,19 @@ cases:
     expected_execution_groups: []
     should_not_do: [do_not_call_hive_without_authorization]
     expected_answer_contract: [missing_evidence, final_answer_boundary]
+  - id: PARTIAL-SUBTYPE-NEXT-HOP-DECISION-TABLE-001
+    user_query: "ATO evidence chain 里 partial 不要只写 partial：partial_transport/partial_fields/partial_baseline/partial_consistency/partial_authorization_required 要怎么映射 auto_realtime_next_hop、auto_plan_only_next_hop、user_authorized_next_hop、blocked_next_hop？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "Partial subtype drives next-hop decision table; realtime registered read-only sources may auto next-hop, DataAgent/Hive and large expansion remain user_authorized_next_hop."
+    expected_boundary_flags: [partial_transport_subtype, partial_fields_subtype, partial_baseline_subtype, partial_consistency_subtype, partial_authorization_required_subtype, auto_realtime_next_hop, auto_plan_only_next_hop, user_authorized_next_hop, blocked_next_hop]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_call_hive_without_authorization, do_not_use_completed_transport_as_business_closure]
+    expected_answer_contract: [source_quality_matrix, evidence_card, final_answer_boundary]
+  - id: EVIDENCE-PROJECTION-BEFORE-OBSERVATION-001
+    user_query: "login_logs_search 大响应里有 UI/debug/blob/重复字段，也有 token/session/cookie 控制链字段；observation 前能不能先 evidence projection，删无用字段但不因 token/session/cookie 字段名删整行？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Evidence projection runs before observation, drops obvious useless/repeated/huge fields, keeps risk anchors and sensitive control-chain field presence as safe handles; final answer never outputs credential raw values."
+    expected_boundary_flags: [evidence_projection_applied, projection_not_business_normalizer, projection_drops_useless_duplicate_huge_fields, projection_preserves_sensitive_control_chain_as_safe_handle, projection_cap_before_observation, raw_body_not_returned_to_final_answer]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_dump_raw_body, do_not_output_cookie, do_not_output_token, do_not_output_session, do_not_output_header, do_not_output_password]
+    expected_answer_contract: [source_observations, evidence_card, final_answer_boundary]

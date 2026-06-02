@@ -9,31 +9,28 @@ returning or persisting raw upstream bodies.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from typing import Any
 
 
-SECRET_KEY_FRAGMENTS = (
-    "cookie",
-    "token",
-    "session",
-    "header",
-    "authorization",
-    "password",
-    "secret",
-    "credential",
-)
+CREDENTIAL_SECRET_KEYS = {
+    "token", "accesstoken", "refreshtoken", "logintoken", "authtoken", "passtoken",
+    "session", "sessionid", "cookie", "cookies", "authorization", "authheader",
+    "rawauthheader", "password", "passwd", "secret", "credential", "ticket",
+}
 
-STRICT_PII_KEY_FRAGMENTS = (
-    "phone",
-    "mobile",
-    "idcard",
-    "identity",
-    "realname",
-    "name",
-    "address",
-)
+RISK_ENTITY_TOKEN_KEYS = {
+    "tokenid", "tokenstatus", "tokentype", "tokensource", "tokentime",
+    "tokencreatetime", "tokengeneratetime", "tokenexpiretime",
+}
+
+STRICT_PII_KEYS = {
+    "phone", "phonenumber", "mobile", "mobilenumber", "idcard", "identity",
+    "identitynumber", "realname", "name", "address", "detailaddress",
+    "detailedaddress",
+}
 
 BODY_CANDIDATE_KEYS = {
     "body",
@@ -71,6 +68,41 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "publish_ip_ua",
         "content_status",
         "audit_or_strategy_reason",
+    ],
+    "archives_photo_profile": [
+        "photo_id",
+        "publish_time",
+        "publish_source",
+        "publish_device",
+        "publish_ip_ua",
+        "content_status",
+        "audit_or_strategy_reason",
+    ],
+    "archives_photo_meta": [
+        "photo_id",
+        "publish_time",
+        "publish_source",
+        "publish_device",
+        "publish_ip_ua",
+        "content_status",
+        "audit_or_strategy_reason",
+    ],
+    "archives_photo_report_aggregate": [
+        "photo_id",
+        "audit_or_strategy_reason",
+        "content_status",
+    ],
+    "archives_photo_user_autonomy": [
+        "photo_id",
+        "operation_time",
+        "operation_type",
+        "content_status",
+    ],
+    "archives_gallery_photo_list": [
+        "photo_id",
+        "publish_time",
+        "publish_source",
+        "publish_device",
     ],
     "archives_user_analysis": [
         "operation_time",
@@ -112,15 +144,39 @@ BUSINESS_FIELD_ALIASES = {
     "photo_id": {"photo_id", "photoId", "photoID", "content_id", "contentId"},
     "event_id": {"event_id", "eventId", "sourceId", "source_id"},
     "policy_code": {"policy_code", "policyCode", "hitFusePolicyCode", "policyTreeCode"},
+    "token_event_id": {"tokenId", "token_id"},
     "login_time": {"login_time", "loginTime", "loginTimestamp", "timestamp", "event_time", "time"},
     "login_type": {"login_type", "loginType", "reset_login_type", "resetLoginType", "authType"},
     "login_source": {"login_source", "loginSource", "login_channel", "clientType", "platform", "loginPlatform", "logSource"},
     "login_device": {"login_device", "loginDevice", "loginDeviceId", "device_id", "deviceId", "did"},
     "ip_ua": {"ip", "loginIp", "clientIp", "requestIp", "ua", "UA", "userAgent", "user_agent", "browserUa"},
-    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime"},
-    "publish_source": {"publish_source", "publishSource", "publish_channel", "source", "clientType", "publishPlatform"},
-    "publish_device": {"publish_device", "publishDevice", "publishDeviceId", "publish_did", "device_id", "deviceId", "did"},
-    "publish_ip_ua": {"publish_ip", "publishIp", "ip", "clientIp", "publishUA", "publishUa", "ua", "userAgent"},
+    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime", "upload_time", "create_time"},
+    "publish_source": {
+        "publish_source",
+        "publishSource",
+        "publish_channel",
+        "source",
+        "clientType",
+        "publishPlatform",
+        "uploadSource",
+        "photoMethod",
+        "operationSource",
+        "client",
+        "app",
+        "platform",
+    },
+    "publish_device": {
+        "publish_device",
+        "publishDevice",
+        "publishDeviceId",
+        "publish_did",
+        "uploadDevice",
+        "uploadDeviceId",
+        "device_id",
+        "deviceId",
+        "did",
+    },
+    "publish_ip_ua": {"publish_ip", "publishIp", "photoIp", "ip", "clientIp", "publishUA", "publishUa", "ua", "userAgent"},
     "operation_time": {"operation_time", "operationTime", "time", "createTime", "eventTime"},
     "operation_type": {"operation_type", "operationType", "actionType", "opType", "eventType"},
     "operation_device": {"operation_device", "operationDevice", "operationDeviceId", "device_id", "deviceId", "did"},
@@ -155,6 +211,7 @@ BUSINESS_FIELD_ALIASES = {
     "user_device_edge": {"user_device_edge", "edge", "pointInfoMap", "deviceId", "did"},
     "graph_relation_count": {"graph_relation_count", "relationCount", "edgeCount", "count"},
     "riskdata_status": {"riskdata_status", "riskData", "riskStatus"},
+    "endpoint_path": {"method", "path", "endpoint", "apiPath", "requestPath", "urlPath"},
 }
 
 DEVICE_CANONICAL_FIELDS = {
@@ -165,6 +222,24 @@ DEVICE_CANONICAL_FIELDS = {
     "operation_device",
     "shared_device",
     "user_device_edge",
+}
+
+RISK_ENTITY_CANONICAL_FIELDS = {
+    "user_id",
+    "device_id",
+    "candidate_device_id",
+    "login_device",
+    "publish_device",
+    "operation_device",
+    "shared_device",
+    "photo_id",
+    "event_id",
+    "policy_code",
+    "token_event_id",
+    "ip_ua",
+    "publish_ip_ua",
+    "operation_ip_ua",
+    "endpoint_path",
 }
 
 SENSITIVE_VALUE_PATTERNS = (
@@ -179,7 +254,61 @@ ROW_CAP_METADATA_KEYS = (
     "returned_records",
     "missing_records",
     "missing_body_reason",
+    "cap_reason",
 )
+
+PROJECTION_DROP_KEY_FRAGMENTS = {
+    "uiconfig",
+    "menulist",
+    "theme",
+    "stylesheet",
+    "styleconfig",
+    "debugblob",
+    "debugmetadata",
+    "stacktrace",
+    "html",
+    "dom",
+    "rawhtml",
+    "traceidlist",
+    "frontendconfig",
+}
+
+PROJECTION_LARGE_LOW_VALUE_KEYS = {
+    "extra",
+    "ext",
+    "context",
+    "rawrequest",
+    "rawresponse",
+    "requestbody",
+    "responsebody",
+    "labelinfo",
+    "debug",
+}
+
+PROJECTION_ALWAYS_KEEP_KEYS = {
+    "id",
+    "method",
+    "path",
+    "endpoint",
+    "operation",
+    "operationType",
+    "status",
+    "result",
+    "reason",
+    "errorReason",
+    "logContent",
+    "parsedLogContent",
+    "parsedLogContentParams",
+    "params",
+    "code",
+    "data",
+    "logSearchModels",
+    "items",
+}
+
+MAX_PROJECTED_STRING_VALUE_LENGTH = 512
+MAX_PROJECTED_ARRAY_ITEMS = 200
+MAX_RETAINED_FIELD_PATHS = 120
 
 
 def _unique(items: list[str]) -> list[str]:
@@ -192,9 +321,32 @@ def _unique(items: list[str]) -> list[str]:
     return result
 
 
-def _key_has_fragment(key: str, fragments: tuple[str, ...]) -> bool:
-    lowered = key.lower()
-    return any(fragment in lowered for fragment in fragments)
+def _normalized_key(key: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", key.lower())
+
+
+def _is_credential_secret_key(key: str) -> bool:
+    normalized = _normalized_key(key)
+    if normalized in RISK_ENTITY_TOKEN_KEYS:
+        return False
+    if normalized in CREDENTIAL_SECRET_KEYS:
+        return True
+    if any(fragment in normalized for fragment in ("cookie", "authorization", "password", "secret", "credential")):
+        return True
+    if "header" in normalized:
+        return True
+    if normalized.endswith("token") or "accesstoken" in normalized or "refreshtoken" in normalized:
+        return True
+    if normalized.startswith("session") or normalized.endswith("session"):
+        return True
+    return False
+
+
+def _is_strict_pii_key(key: str) -> bool:
+    normalized = _normalized_key(key)
+    if normalized in STRICT_PII_KEYS:
+        return True
+    return any(fragment in normalized for fragment in ("idcard", "identitynumber", "realname", "detailaddress", "detailedaddress"))
 
 
 def _looks_sensitive_scalar(value: Any) -> bool:
@@ -272,6 +424,7 @@ def _row_cap_metadata(source_payload: dict[str, Any], transport_row: dict[str, A
             "returned_records": returned,
             "missing_records": missing,
             "missing_body_reason": candidate.get("missing_body_reason") or "response_too_large",
+            "cap_reason": candidate.get("cap_reason"),
         }
         return {key: value for key, value in metadata.items() if value is not None}
     return {}
@@ -302,6 +455,182 @@ def _parse_nested_json(value: Any) -> Any:
         return json.loads(text)
     except json.JSONDecodeError:
         return None
+
+
+def _safe_value_hash(value: Any) -> str:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+    return "sha256:" + hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _projection_meta() -> dict[str, Any]:
+    return {
+        "projection_applied": False,
+        "projection_not_business_normalizer": True,
+        "raw_body_not_retained_in_answer": True,
+        "cap_after_projection": True,
+        "projection_policy": "drop_obvious_useless_duplicate_huge_only",
+        "projected_records": 0,
+        "dropped_fields_count": 0,
+        "sensitive_fields_projected_as_handles": 0,
+        "strict_pii_fields_redacted": 0,
+        "retained_field_paths": [],
+        "field_paths_retained": [],
+        "projection_errors": [],
+    }
+
+
+def _record_retained_path(meta: dict[str, Any], path: str) -> None:
+    paths = meta.setdefault("retained_field_paths", [])
+    if len(paths) < MAX_RETAINED_FIELD_PATHS and path not in paths:
+        paths.append(path)
+    meta["field_paths_retained"] = paths
+
+
+def _should_drop_projection_key(key: str, value: Any) -> bool:
+    normalized = _normalized_key(key)
+    if key in PROJECTION_ALWAYS_KEEP_KEYS or _canonical_for_key(key):
+        return False
+    if any(fragment in normalized for fragment in PROJECTION_DROP_KEY_FRAGMENTS):
+        return True
+    if value in (None, "", [], {}):
+        return True
+    if normalized in PROJECTION_LARGE_LOW_VALUE_KEYS and not _contains_allowlisted_field(value):
+        return True
+    if isinstance(value, str) and len(value) > MAX_PROJECTED_STRING_VALUE_LENGTH and not _contains_allowlisted_field({key: value}):
+        return True
+    return False
+
+
+def _contains_allowlisted_field(value: Any, *, depth: int = 0) -> bool:
+    if depth > 5:
+        return False
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in PROJECTION_ALWAYS_KEEP_KEYS or _canonical_for_key(str(key)):
+                return True
+            if isinstance(child, (dict, list)) and _contains_allowlisted_field(child, depth=depth + 1):
+                return True
+    elif isinstance(value, list):
+        return any(_contains_allowlisted_field(item, depth=depth + 1) for item in value[:20])
+    return False
+
+
+def _safe_sensitive_projection(key: str, value: Any) -> dict[str, Any]:
+    value_type = type(value).__name__
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+    return {
+        "__sensitive_control_chain_field_present__": True,
+        "field": key,
+        "value_type": value_type,
+        "value_length": len(text),
+        "value_hash": _safe_value_hash(value),
+    }
+
+
+def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple[Any, dict[str, Any]]:
+    """Project large passthrough bodies before observation extraction.
+
+    This is intentionally not a service normalizer and not a conclusion layer.
+    It only removes obvious non-evidence bulk while retaining risk anchors and
+    sensitive control-chain field presence as safe handles.
+    """
+
+    meta = _projection_meta()
+
+    def project(item: Any, path: str, depth: int = 0) -> Any:
+        if isinstance(item, dict):
+            projected: dict[str, Any] = {}
+            for key, child in item.items():
+                child_path = f"{path}.{key}"
+                if _is_credential_secret_key(str(key)):
+                    projected[key] = _safe_sensitive_projection(str(key), child)
+                    meta["sensitive_fields_projected_as_handles"] += 1
+                    _record_retained_path(meta, child_path)
+                    continue
+                if _is_strict_pii_key(str(key)):
+                    projected[key] = {"__strict_pii_redacted__": True}
+                    meta["strict_pii_fields_redacted"] += 1
+                    _record_retained_path(meta, child_path)
+                    continue
+                canonical = _canonical_for_key(str(key))
+                if canonical in RISK_ENTITY_CANONICAL_FIELDS and isinstance(child, (str, int, float, bool)):
+                    projected[key] = child
+                    _record_retained_path(meta, child_path)
+                    continue
+                if _should_drop_projection_key(str(key), child):
+                    meta["dropped_fields_count"] += 1
+                    continue
+                if str(key) == "logContent" and isinstance(child, str) and "parsedLogContent" in item:
+                    meta["dropped_fields_count"] += 1
+                    continue
+                projected_child = project(child, child_path, depth + 1)
+                if projected_child in (None, "", [], {}):
+                    meta["dropped_fields_count"] += 1
+                    continue
+                projected[key] = projected_child
+                if _canonical_for_key(str(key)) or str(key) in PROJECTION_ALWAYS_KEEP_KEYS:
+                    _record_retained_path(meta, child_path)
+            return projected
+        if isinstance(item, list):
+            projected_list = []
+            for index, child in enumerate(item[:MAX_PROJECTED_ARRAY_ITEMS]):
+                child_path = f"{path}[{index}]"
+                projected_child = project(child, child_path, depth + 1)
+                if projected_child in (None, "", [], {}):
+                    meta["dropped_fields_count"] += 1
+                    continue
+                projected_list.append(projected_child)
+            if action == "login_logs_search" and path.endswith("logSearchModels"):
+                meta["projected_records"] += len(projected_list)
+            return projected_list
+        if isinstance(item, str):
+            if _looks_sensitive_scalar(item):
+                meta["strict_pii_fields_redacted"] += 1
+                return {"__strict_pii_redacted__": True}
+            if len(item) > MAX_PROJECTED_STRING_VALUE_LENGTH:
+                meta["dropped_fields_count"] += 1
+                return {
+                    "__large_string_projected__": True,
+                    "value_length": len(item),
+                    "value_hash": _safe_value_hash(item),
+                }
+        return item
+
+    try:
+        projected = project(parsed, body_path)
+        if projected is not parsed:
+            meta["projection_applied"] = True
+        if meta["projected_records"] == 0 and isinstance(projected, dict):
+            records = _value_at_path(projected, LOGIN_LOGS_ARRAY_CAP_PATH)
+            if isinstance(records, list):
+                meta["projected_records"] = len(records)
+        return projected, meta
+    except Exception as exc:  # defensive: projection must never block parsing
+        meta["projection_errors"].append(type(exc).__name__)
+        return parsed, meta
+
+
+def _aggregate_projection_metadata(items: list[dict[str, Any]]) -> dict[str, Any]:
+    aggregate = _projection_meta()
+    if not items:
+        return aggregate
+    aggregate["projection_applied"] = any(bool(item.get("projection_applied")) for item in items)
+    for key in (
+        "projected_records",
+        "dropped_fields_count",
+        "sensitive_fields_projected_as_handles",
+        "strict_pii_fields_redacted",
+    ):
+        aggregate[key] = sum(int(item.get(key) or 0) for item in items)
+    retained_paths: list[str] = []
+    errors: list[str] = []
+    for item in items:
+        retained_paths.extend(str(path) for path in item.get("retained_field_paths", []) if path)
+        errors.extend(str(error) for error in item.get("projection_errors", []) if error)
+    aggregate["retained_field_paths"] = _unique(retained_paths)[:MAX_RETAINED_FIELD_PATHS]
+    aggregate["field_paths_retained"] = aggregate["retained_field_paths"]
+    aggregate["projection_errors"] = _unique(errors)
+    return aggregate
 
 
 def _prepare_body_for_action(action: str, parsed: Any) -> Any:
@@ -338,7 +667,7 @@ def _collect_body_candidates(value: Any, *, path: str = "$", limit: int = 12) ->
         for key, item in value.items():
             child_path = f"{path}.{key}"
             lowered = key.lower()
-            if _key_has_fragment(key, SECRET_KEY_FRAGMENTS):
+            if _is_credential_secret_key(key):
                 continue
             if lowered in BODY_CANDIDATE_KEYS:
                 candidates.append((child_path, item))
@@ -383,7 +712,7 @@ def _extract_handles(
                 canonical = _canonical_for_key(key)
                 if key.lower() in BODY_CANDIDATE_KEYS:
                     continue
-                if _key_has_fragment(key, SECRET_KEY_FRAGMENTS):
+                if _is_credential_secret_key(key):
                     flags.append("blocked_sensitive_material_detected")
                     if canonical == "token_oauth_scan":
                         handles.append(
@@ -396,11 +725,11 @@ def _extract_handles(
                             }
                         )
                     continue
-                if _key_has_fragment(key, STRICT_PII_KEY_FRAGMENTS):
+                if _is_strict_pii_key(key):
                     flags.append("pii_strict_redacted")
                     continue
                 if canonical and isinstance(child, (str, int, float, bool)):
-                    if _looks_sensitive_scalar(child):
+                    if canonical not in RISK_ENTITY_CANONICAL_FIELDS and _looks_sensitive_scalar(child):
                         flags.append("pii_strict_redacted")
                         continue
                     handles.append(
@@ -446,6 +775,7 @@ def build_safe_observation(
     body_candidates = _collect_body_candidates(source_payload)
     body_parse_statuses: list[str] = []
     parsed_values: list[tuple[str, Any]] = []
+    projection_metadata: list[dict[str, Any]] = []
     flags: list[str] = []
     row_cap_metadata = _row_cap_metadata(source_payload, transport_row)
 
@@ -456,7 +786,10 @@ def build_safe_observation(
             if parse_status.endswith("parse_error"):
                 flags.append("passthrough_interpretation_gap")
             continue
-        parsed_values.append((body_path, _prepare_body_for_action(action, parsed)))
+        prepared = _prepare_body_for_action(action, parsed)
+        projected, projection_meta = _project_evidence_body(action, prepared, body_path=body_path)
+        projection_metadata.append(projection_meta)
+        parsed_values.append((body_path, projected))
 
     direct_handles, direct_flags = _extract_handles(source_payload, source_id=source_id, path="$passthrough")
     flags.extend(direct_flags)
@@ -481,7 +814,19 @@ def build_safe_observation(
         flags.append("safe_raw_or_capped_body_parser_attempted")
     if parsed_values:
         flags.append("safe_body_parsed")
-    elif (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
+    if any(item.get("projection_applied") for item in projection_metadata):
+        flags.extend([
+            "evidence_projection_applied",
+            "projection_not_business_normalizer",
+            "raw_body_not_retained_in_answer",
+        ])
+    if any(item.get("sensitive_fields_projected_as_handles") for item in projection_metadata):
+        flags.append("credential_control_chain_projected_as_safe_handle")
+    if any(item.get("strict_pii_fields_redacted") for item in projection_metadata):
+        flags.append("pii_strict_redacted")
+    if any(item.get("projection_errors") for item in projection_metadata):
+        flags.append("projection_error")
+    if not parsed_values and (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
         flags.append("service_body_visibility_gap")
     if body_candidates and not parsed_values:
         flags.append("passthrough_interpretation_gap")
@@ -527,6 +872,7 @@ def build_safe_observation(
         "missing_business_fields": missing_business_fields,
         "candidate_device_ids": _dedupe_device_candidates(candidate_device_ids),
         "passthrough_row_cap": row_cap_metadata,
+        "evidence_projection": _aggregate_projection_metadata(projection_metadata),
         "interpretation_flags": _unique(flags),
         "source_quality_hint": _source_quality_hint(flags, missing_business_fields),
         "evidence_chain_tags": _evidence_chain_tags(action, extracted_business_fields),
@@ -545,11 +891,13 @@ def _source_specific_flags(
             flags.extend(["partial_observation_available", "response_too_large_window_shrink_recommended"])
         if {"login_time", "login_type", "login_source", "device_id", "ip_ua"} & set(missing_business_fields):
             flags.append("login_chain_business_fields_missing")
-    elif action == "archives_photo_search":
+    elif action in {"archives_photo_search", "archives_photo_profile", "archives_photo_meta", "archives_gallery_photo_list"}:
         if {"photo_id", "publish_time", "publish_source", "publish_device"} & set(missing_business_fields):
             flags.append("content_chain_business_fields_missing")
         if "publish_device" in extracted_business_fields:
             flags.append("publish_device_candidate_device_source")
+        if action in {"archives_photo_profile", "archives_photo_meta"} and "publish_device" in missing_business_fields:
+            flags.append("publish_device_missing_after_photo_meta")
     elif action == "archives_user_analysis":
         if {"operation_time", "operation_type", "security_action_type", "operation_device"} & set(missing_business_fields):
             flags.append("behavior_chain_business_fields_missing")
@@ -575,7 +923,7 @@ def _source_quality_hint(flags: list[str], missing_business_fields: list[str]) -
 def _evidence_chain_tags(action: str, extracted_business_fields: list[str]) -> list[str]:
     fields = set(extracted_business_fields)
     tags: list[str] = []
-    if action == "archives_photo_search" and {"publish_time", "publish_source", "publish_device", "photo_id"} & fields:
+    if action in {"archives_photo_search", "archives_photo_profile", "archives_photo_meta", "archives_gallery_photo_list"} and {"publish_time", "publish_source", "publish_device", "photo_id"} & fields:
         tags.append("web_or_abnormal_publish_fact")
     if action == "login_logs_search" and {"login_time", "login_source", "login_type", "device_id"} & fields:
         tags.append("web_history_baseline")

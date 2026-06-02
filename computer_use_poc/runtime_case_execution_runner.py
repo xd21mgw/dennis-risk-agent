@@ -33,14 +33,15 @@ LOGIN_LOG_RELIABLE_WINDOW_DAYS = 7
 TRACK_READINESS_WINDOW_DAYS = 7
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
-SECRET_KEY_FRAGMENTS = (
-    "cookie",
-    "token",
-    "session",
-    "header",
-    "authorization",
-    "password",
-)
+CREDENTIAL_SECRET_KEYS = {
+    "token", "accesstoken", "refreshtoken", "logintoken", "authtoken", "passtoken",
+    "session", "sessionid", "cookie", "cookies", "authorization", "authheader",
+    "rawauthheader", "password", "passwd", "secret", "credential", "ticket",
+}
+RISK_ENTITY_TOKEN_KEYS = {
+    "tokenid", "tokenstatus", "tokentype", "tokensource", "tokentime",
+    "tokencreatetime", "tokengeneratetime", "tokenexpiretime",
+}
 BODY_KEYS_TO_SUPPRESS = {
     "body",
     "raw_body",
@@ -49,6 +50,27 @@ BODY_KEYS_TO_SUPPRESS = {
     "html",
     "raw_payload",
 }
+
+
+def _normalized_key(key: str) -> str:
+    return "".join(ch for ch in key.lower() if ch.isalnum())
+
+
+def _is_credential_secret_key(key: str) -> bool:
+    normalized = _normalized_key(key)
+    if normalized in RISK_ENTITY_TOKEN_KEYS:
+        return False
+    if normalized in CREDENTIAL_SECRET_KEYS:
+        return True
+    if any(fragment in normalized for fragment in ("cookie", "authorization", "password", "secret", "credential")):
+        return True
+    if "header" in normalized:
+        return True
+    if normalized.endswith("token") or "accesstoken" in normalized or "refreshtoken" in normalized:
+        return True
+    if normalized.startswith("session") or normalized.endswith("session"):
+        return True
+    return False
 
 
 @dataclass(frozen=True)
@@ -361,13 +383,13 @@ def validate_batch_payload_contract(payload: dict[str, Any]) -> dict[str, Any]:
         "large_response_serial",
         "auth_sensitive_serial",
     }
-    forbidden_key_parts = set(SECRET_KEY_FRAGMENTS) | {"url", "uri", "href", "path", "endpoint", "raw_body"}
+    forbidden_key_parts = {"url", "uri", "href", "path", "endpoint", "raw_body"}
 
     def scan_for_forbidden(value: Any, path: str) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
                 lowered = key.lower()
-                if any(part in lowered for part in forbidden_key_parts):
+                if _is_credential_secret_key(key) or any(part in lowered for part in forbidden_key_parts):
                     errors.append(f"forbidden_key:{path}.{key}")
                 scan_for_forbidden(child, f"{path}.{key}")
         elif isinstance(value, list):
@@ -453,7 +475,7 @@ def sanitize_for_output(value: Any) -> Any:
         clean: dict[str, Any] = {}
         for key, item in value.items():
             lowered = key.lower()
-            if any(fragment in lowered for fragment in SECRET_KEY_FRAGMENTS):
+            if _is_credential_secret_key(key):
                 clean[key] = "[suppressed]"
                 continue
             if lowered in BODY_KEYS_TO_SUPPRESS and isinstance(item, (str, bytes, dict, list)):
@@ -824,6 +846,7 @@ ROW_CAP_METADATA_KEYS = {
     "returned_records",
     "missing_records",
     "missing_body_reason",
+    "cap_reason",
 }
 
 
@@ -865,8 +888,16 @@ def _merge_row_cap_metadata(row: dict[str, Any], source_payload: dict[str, Any])
 def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[str, Any]) -> dict[str, Any]:
     plan_by_id = {item.source_id: item for item in source_plan}
     rows = normalize_mapping_or_list(batch_result.get("transport_status_matrix"))
+    source_result_rows = rows_from_source_results(batch_result.get("source_results"))
     if not rows:
-        rows = rows_from_source_results(batch_result.get("source_results"))
+        rows = source_result_rows
+    else:
+        seen_row_ids = {str(row.get("source_id") or "") for row in rows if isinstance(row, dict)}
+        rows.extend(
+            row
+            for row in source_result_rows
+            if isinstance(row, dict) and str(row.get("source_id") or "") not in seen_row_ids
+        )
     if not rows:
         rows = normalize_mapping_or_list(batch_result.get("missing_or_failed_sources"))
     if not rows:
@@ -924,6 +955,8 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
             notes.append("partial_login_log_parsed_from_json_array_capped")
         if int(row.get("missing_records") or 0) > 0:
             notes.append("login_log_incomplete")
+        if str(row.get("cap_reason") or "") == "byte_limit":
+            notes.append("byte_limit_partial_source")
         if classification == "no_data":
             notes.append("no_data_not_risk_exclusion")
         if classification in {"blocked", "timeout", "parse_error", "auth_failed"}:
@@ -952,6 +985,7 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
                 "returned_records": row.get("returned_records"),
                 "missing_records": row.get("missing_records"),
                 "missing_body_reason": row.get("missing_body_reason"),
+                "cap_reason": row.get("cap_reason"),
                 "missing_required_fields": row.get("missing_required_fields", []),
                 "transport_interpretation": transport_interpretation,
                 "failure_policy": item.failure_policy if item else "non_blocking_partial",
@@ -1061,6 +1095,52 @@ OFFLINE_BACKFILL_MODULE_CATALOG = {
 }
 
 
+OFFLINE_BACKFILL_MODULE_DECISIONS = {
+    "web_publish_fact": {
+        "chain_id": "web_publish_fact",
+        "next_hop_type": "user_authorized_next_hop",
+        "candidate_actions": ["DataAgent/Hive web_publish_fact"],
+        "required_inputs": ["user_id", "photo_id_or_publish_time_window"],
+        "input_resolution_strategy": "use parsed photo_id/publish_time first; otherwise plan photo anchor discovery",
+        "expected_fields": ["publish_time", "publish_source", "publish_device", "publish_ip_ua", "photo_id"],
+        "can_auto_execute": False,
+        "requires_user_authorization": True,
+        "stop_condition": "publish_fact_fields_available",
+        "fallback_if_failed": "web_publish_fact_remains_missing_evidence",
+        "source_quality_boundary": "offline_required_not_no_risk",
+        "answer_boundary": "only generate query plan for explicitly authorized module_id",
+    },
+    "web_login_history": {
+        "chain_id": "web_login_history",
+        "next_hop_type": "user_authorized_next_hop",
+        "candidate_actions": ["DataAgent/Hive web_login_history"],
+        "required_inputs": ["user_id", "anchor_time_or_time_window"],
+        "input_resolution_strategy": "use publish/event/user-claim anchor; if absent, ask for anchor or keep plan-only",
+        "expected_fields": ["login_time", "login_type", "login_source", "device_id", "ip_ua", "historical_web_baseline"],
+        "can_auto_execute": False,
+        "requires_user_authorization": True,
+        "stop_condition": "login_history_baseline_available",
+        "fallback_if_failed": "login_window_incomplete_not_no_risk",
+        "source_quality_boundary": "offline_required_not_no_risk",
+        "answer_boundary": "offline login history requires per-module authorization",
+    },
+    "device_history_baseline": {
+        "chain_id": "device_identity_alignment",
+        "next_hop_type": "user_authorized_next_hop",
+        "candidate_actions": ["DataAgent/Hive device_history_baseline"],
+        "required_inputs": ["user_id", "device_id_or_did", "anchor_time"],
+        "input_resolution_strategy": "use candidate device ranking from login/photo/user-analysis/Track/Weapon",
+        "expected_fields": ["historical_device_frequency", "first_seen_time", "recent_activity", "device_seen_days"],
+        "can_auto_execute": False,
+        "requires_user_authorization": True,
+        "stop_condition": "historical_baseline_available",
+        "fallback_if_failed": "baseline_authorization_required",
+        "source_quality_boundary": "offline_required_not_no_risk",
+        "answer_boundary": "baseline query plan only after explicit user authorization",
+    },
+}
+
+
 SOURCE_OBSERVATION_CONTRACTS = {
     "login_logs_search": {
         "chain_section": "control_entry",
@@ -1114,6 +1194,61 @@ SOURCE_OBSERVATION_CONTRACTS = {
             "audit_or_strategy_reason",
         ],
         "role": "作品/发布/内容承接链路，no_data 不排除异常发布或 ATO",
+    },
+    "archives_photo_profile": {
+        "chain_section": "content_publish_handoff",
+        "expected_business_fields": [
+            "photo_id",
+            "publish_time",
+            "publish_device",
+            "publish_source",
+            "publish_ip_ua",
+            "content_status",
+            "audit_or_strategy_reason",
+        ],
+        "role": "作品 profile 详情，用于回填发布事实链和设备一致性链",
+    },
+    "archives_photo_meta": {
+        "chain_section": "content_publish_handoff",
+        "expected_business_fields": [
+            "photo_id",
+            "publish_time",
+            "publish_device",
+            "publish_source",
+            "publish_ip_ua",
+            "content_status",
+            "audit_or_strategy_reason",
+        ],
+        "role": "作品 meta 详情，用于回填 uploadSource/photoMethod/photoIp/publishDevice 等发布证据字段",
+    },
+    "archives_photo_report_aggregate": {
+        "chain_section": "strategy_risk_signal",
+        "expected_business_fields": [
+            "photo_id",
+            "audit_or_strategy_reason",
+            "content_status",
+        ],
+        "role": "作品举报/审核聚合辅助线索，不单独定性 ATO",
+    },
+    "archives_photo_user_autonomy": {
+        "chain_section": "account_state_and_post_actions",
+        "expected_business_fields": [
+            "photo_id",
+            "operation_time",
+            "operation_type",
+            "content_status",
+        ],
+        "role": "作品相关用户自治/处置动作辅助线索",
+    },
+    "archives_gallery_photo_list": {
+        "chain_section": "content_publish_handoff",
+        "expected_business_fields": [
+            "photo_id",
+            "publish_time",
+            "publish_device",
+            "publish_source",
+        ],
+        "role": "缺 photo_id 时的作品列表锚点发现 source",
     },
     "track_analysis_check_data_ready": {
         "chain_section": "frontend_backend_activity_alignment",
@@ -1197,10 +1332,10 @@ BUSINESS_FIELD_ALIASES = {
     "publish_related_operation": {"publish_related_operation", "publish", "photoPublish", "postVideo"},
     "security_operation_timeline": {"security_operation_timeline", "securityTimeline", "operationTime"},
     "photo_id": {"photo_id", "photoId", "photoID", "content_id", "contentId"},
-    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime"},
-    "publish_device": {"publish_device", "publishDevice", "publishDeviceId", "device_id", "deviceId", "did"},
-    "publish_source": {"publish_source", "publishSource", "source", "clientType", "publishPlatform"},
-    "publish_ip": {"publish_ip", "publishIp", "ip", "clientIp"},
+    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime", "upload_time", "create_time"},
+    "publish_device": {"publish_device", "publishDevice", "publishDeviceId", "uploadDevice", "uploadDeviceId", "device_id", "deviceId", "did"},
+    "publish_source": {"publish_source", "publishSource", "source", "clientType", "publishPlatform", "uploadSource", "photoMethod", "operationSource", "client", "app", "platform"},
+    "publish_ip": {"publish_ip", "publishIp", "photoIp", "ip", "clientIp"},
     "publish_ua": {"publish_ua", "publishUA", "publishUa", "ua", "userAgent"},
     "content_status": {"content_status", "photoStatus", "auditStatus", "status"},
     "audit_or_strategy_reason": {"audit_reason", "strategyReason", "hitReason", "reason"},
@@ -1241,6 +1376,11 @@ OBSERVATION_SAFE_ANCHOR_KEYS = {
     "publishSource",
     "publish_device",
     "publishDevice",
+    "uploadSource",
+    "photoMethod",
+    "photoIp",
+    "uploadDevice",
+    "uploadDeviceId",
     "ip",
     "clientIp",
     "loginIp",
@@ -1342,7 +1482,7 @@ def extract_observation_field_handles(
         for key, item in value.items():
             lowered = key.lower()
             child_path = f"{path}.{key}"
-            if any(fragment in lowered for fragment in SECRET_KEY_FRAGMENTS):
+            if _is_credential_secret_key(key):
                 continue
             if lowered in BODY_KEYS_TO_SUPPRESS:
                 continue
@@ -1397,23 +1537,24 @@ def build_source_observations(
     rows_by_id = _source_quality_by_id(source_quality_matrix)
     raw_rows_by_id = _rows_by_source_id_from_batch(batch_result)
     observations: list[dict[str, Any]] = []
+    processed_source_ids: set[str] = set()
 
-    for item in source_plan:
-        row = rows_by_id.get(item.source_id, {})
-        action = str(row.get("action") or item.action)
+    def append_observation(source_id: str, fallback_action: str, fallback_role: str) -> None:
+        row = rows_by_id.get(source_id, {})
+        action = str(row.get("action") or fallback_action)
         contract = SOURCE_OBSERVATION_CONTRACTS.get(action, {})
         quality = str(row.get("quality_class") or "blocked")
         flags: list[str] = []
-        raw_source_payload = raw_rows_by_id.get(item.source_id, {})
+        raw_source_payload = raw_rows_by_id.get(source_id, {})
         expected_business_fields = list(contract.get("expected_business_fields", []))
         safe_observation = build_safe_observation(
-            source_id=item.source_id,
+            source_id=source_id,
             action=action,
             source_payload=raw_source_payload,
             transport_row=row,
             expected_business_fields=expected_business_fields,
             chain_section=str(contract.get("chain_section", "source_quality")),
-            role=str(contract.get("role", item.expected_observation)),
+            role=str(contract.get("role", fallback_role)),
         )
         field_handles = list(safe_observation.get("extracted_safe_handles", []))
         row_cap_metadata = safe_observation.get("passthrough_row_cap") or {}
@@ -1440,6 +1581,8 @@ def build_source_observations(
                 flags.append("partial_login_log_parsed_from_json_array_capped")
                 if int(row_cap_metadata.get("missing_records") or 0) > 0:
                     flags.append("login_log_incomplete")
+                if str(row_cap_metadata.get("cap_reason") or "") == "byte_limit":
+                    flags.append("byte_limit_partial_source")
             subtype = _transport_issue_subtype(row)
             if subtype:
                 flags.append(f"login_logs_{subtype}")
@@ -1468,7 +1611,7 @@ def build_source_observations(
                 flags.append("partial_behavior_timeline")
             if quality in {"completed", "partial"} and "behavior_chain_business_fields_missing" not in flags and missing_business_fields:
                 flags.append("behavior_chain_business_fields_missing")
-        elif action == "archives_photo_search":
+        elif action in {"archives_photo_search", "archives_photo_profile", "archives_photo_meta", "archives_gallery_photo_list"}:
             if quality in {"completed", "partial"} and missing_business_fields:
                 flags.append("content_chain_business_fields_missing")
             if quality == "no_data":
@@ -1491,17 +1634,23 @@ def build_source_observations(
         elif action == "rcp_policy_tree_lookup":
             flags.append("policy_tree_asset_not_event_hit_path")
 
-        if quality in {"completed", "partial"} and action in {"archives_user_analysis", "archives_photo_search"}:
+        if quality in {"completed", "partial"} and action in {
+            "archives_user_analysis",
+            "archives_photo_search",
+            "archives_photo_profile",
+            "archives_photo_meta",
+            "archives_gallery_photo_list",
+        }:
             flags.append("completed_transport_not_business_chain_closure")
 
         observations.append(
             {
                 "dennis_observation": safe_observation,
-                "source_id": item.source_id,
+                "source_id": source_id,
                 "action": action,
                 "chain_section": contract.get("chain_section", "source_quality"),
                 "quality_class": quality,
-                "role": contract.get("role", item.expected_observation),
+                "role": contract.get("role", fallback_role),
                 "expected_business_fields": expected_business_fields,
                 "extracted_business_fields": extracted_business_fields,
                 "observed_field_handles": field_handles,
@@ -1525,6 +1674,20 @@ def build_source_observations(
                 ),
                 "is_low_risk_counter_evidence": False,
             }
+        )
+        processed_source_ids.add(source_id)
+
+    for item in source_plan:
+        append_observation(item.source_id, item.action, item.expected_observation)
+
+    for row in source_quality_matrix.get("per_source", []):
+        source_id = str(row.get("source_id") or "")
+        if not source_id or source_id in processed_source_ids:
+            continue
+        append_observation(
+            source_id,
+            str(row.get("action") or "unknown_action"),
+            "additional controlled batch source returned outside initial source_plan",
         )
 
     return observations
@@ -1630,6 +1793,7 @@ def build_user_device_entity_resolution(
                 {
                     "device_id": device_id,
                     "source_id": str(candidate.get("source_id") or observation.get("source_id") or "safe_observation"),
+                    "action": str(observation.get("action") or ""),
                     "field_path": str(candidate.get("field_path") or "safe_observation.candidate_device_ids"),
                 }
             )
@@ -1642,6 +1806,13 @@ def build_user_device_entity_resolution(
         "ato_weapon_inventory": 70,
         "ato_track_analysis_check_data_ready": 60,
     }
+    action_rank = {
+        "archives_photo_meta": 95,
+        "archives_photo_profile": 92,
+        "archives_photo_search": 90,
+        "login_logs_search": 85,
+        "archives_user_analysis": 80,
+    }
     deduped: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     for candidate in candidates:
@@ -1650,7 +1821,12 @@ def build_user_device_entity_resolution(
             continue
         seen_ids.add(device_id)
         candidate = dict(candidate)
-        candidate["rank_score"] = source_rank.get(str(candidate.get("source_id")), 50)
+        source_id_text = str(candidate.get("source_id") or "")
+        candidate["rank_score"] = (
+            source_rank.get(source_id_text)
+            or action_rank.get(str(candidate.get("action") or ""))
+            or (95 if "photo_meta" in source_id_text else 92 if "photo_profile" in source_id_text else 50)
+        )
         candidate["rank_reason"] = (
             "user_provided"
             if candidate.get("source_id") == "user_input"
@@ -1665,11 +1841,17 @@ def build_user_device_entity_resolution(
 
     def source_has_candidate(action: str) -> bool:
         source_id = planned_source_ids_by_action.get(action)
-        return bool(source_id and source_id in candidate_source_ids)
+        return bool(source_id and source_id in candidate_source_ids) or any(
+            str(candidate.get("action")) == action for candidate in deduped
+        )
 
     device_entity_gap_breakdown = {
         "login_device_not_extracted": not source_has_candidate("login_logs_search"),
-        "publish_device_not_extracted": not source_has_candidate("archives_photo_search"),
+        "publish_device_not_extracted": not (
+            source_has_candidate("archives_photo_search")
+            or source_has_candidate("archives_photo_profile")
+            or source_has_candidate("archives_photo_meta")
+        ),
         "user_analysis_device_not_extracted": not source_has_candidate("archives_user_analysis"),
         "user_device_graph_not_checked_or_failed": (
             "weapon_inventory" not in planned_actions or not source_has_candidate("weapon_inventory")
@@ -1824,11 +2006,25 @@ def build_dynamic_offline_backfill_recommendation(
         if not matched_flags and not matched_fields:
             continue
         matched_reasons = matched_flags + matched_fields
+        decision = OFFLINE_BACKFILL_MODULE_DECISIONS.get(module_id, {})
         options.append(
             {
                 "module_id": module_id,
                 "label": module["label"],
                 "purpose": module["purpose"],
+                "chain_id": decision.get("chain_id"),
+                "trigger_condition": matched_reasons,
+                "next_hop_type": decision.get("next_hop_type", "user_authorized_next_hop"),
+                "candidate_actions": decision.get("candidate_actions", []),
+                "required_inputs": decision.get("required_inputs", []),
+                "input_resolution_strategy": decision.get("input_resolution_strategy"),
+                "expected_fields": decision.get("expected_fields", []),
+                "can_auto_execute": bool(decision.get("can_auto_execute", False)),
+                "requires_user_authorization": bool(decision.get("requires_user_authorization", True)),
+                "stop_condition": decision.get("stop_condition"),
+                "fallback_if_failed": decision.get("fallback_if_failed"),
+                "source_quality_boundary": decision.get("source_quality_boundary"),
+                "answer_boundary": decision.get("answer_boundary"),
                 "generated_from_current_gap": True,
                 "triggered_by": matched_reasons,
                 "triggering_sources": unique_strings(
@@ -1977,6 +2173,12 @@ CHAIN_DEFINITIONS: dict[str, dict[str, Any]] = {
         "label": "WEB/发布事实链",
         "required_fields": {"photo_id", "publish_time", "publish_source", "publish_device"},
         "source_ids": {"ato_archives_photo_search"},
+        "source_actions": {
+            "archives_photo_search",
+            "archives_photo_profile",
+            "archives_photo_meta",
+            "archives_gallery_photo_list",
+        },
         "missing_module": "web_publish_fact",
     },
     "web_login_history": {
@@ -1994,9 +2196,83 @@ CHAIN_DEFINITIONS: dict[str, dict[str, Any]] = {
             "ato_archives_user_analysis",
             "ato_track_analysis_check_data_ready",
         },
+        "source_actions": {
+            "login_logs_search",
+            "archives_photo_search",
+            "archives_photo_profile",
+            "archives_photo_meta",
+            "archives_user_analysis",
+            "track_analysis_check_data_ready",
+        },
         "missing_module": "device_history_baseline",
     },
 }
+
+
+PARTIAL_STATE_ORDER = [
+    "missing",
+    "partial_transport",
+    "partial_fields",
+    "partial_baseline",
+    "partial_consistency",
+    "partial_authorization_required",
+    "closed",
+]
+
+
+def _chain_has_transport_breakpoint(breakpoints: list[str]) -> bool:
+    transport_markers = {
+        "response_too_large_needs_window_shrink",
+        "service_body_visibility_gap",
+        "service_body_visibility_gap_for_truncated_login_log",
+        "timeout",
+        "auth_failed",
+        "parse_error",
+        "blocked",
+    }
+    return any(
+        breakpoint in transport_markers
+        or "response_too_large" in breakpoint
+        or "byte_limit" in breakpoint
+        or "visibility_gap" in breakpoint
+        for breakpoint in breakpoints
+    )
+
+
+def _partial_subtype_for_chain(
+    *,
+    chain_id: str,
+    extracted_fields: set[str],
+    missing_fields_total: list[str],
+    breakpoints: list[str],
+    relevant: list[dict[str, Any]],
+    non_closed_source_seen: bool,
+    user_device_entity_resolution: dict[str, Any],
+) -> str:
+    if not relevant and not extracted_fields:
+        return "missing"
+    if not missing_fields_total and not non_closed_source_seen and not _chain_has_transport_breakpoint(breakpoints):
+        return "closed"
+    if _chain_has_transport_breakpoint(breakpoints) and (
+        chain_id == "web_login_history" or not extracted_fields
+    ):
+        return "partial_transport"
+    if chain_id == "device_identity_alignment":
+        if user_device_entity_resolution.get("multiple_candidate_devices_need_ranking"):
+            return "partial_consistency"
+        if extracted_fields and ("device_id" in extracted_fields or "publish_device" in extracted_fields):
+            return "partial_baseline"
+        if user_device_entity_resolution.get("candidate_device_id_missing_after_resolution"):
+            return "missing"
+    if chain_id == "web_login_history" and extracted_fields and "device_id" in extracted_fields:
+        return "partial_baseline"
+    if chain_id == "web_publish_fact" and extracted_fields and {"publish_device", "publish_source"} & extracted_fields:
+        return "partial_consistency" if not missing_fields_total else "partial_fields"
+    if missing_fields_total and extracted_fields:
+        return "partial_fields"
+    if _chain_has_transport_breakpoint(breakpoints):
+        return "partial_transport"
+    return "missing"
 
 
 def _handles_for_fields(observations: list[dict[str, Any]], fields: set[str]) -> list[dict[str, Any]]:
@@ -2026,7 +2302,12 @@ def build_chain_status(
     for chain_id, definition in CHAIN_DEFINITIONS.items():
         required_fields = set(definition["required_fields"])
         source_ids = set(definition["source_ids"])
-        relevant = [obs for obs in source_observations if str(obs.get("source_id")) in source_ids]
+        source_actions = set(definition.get("source_actions", set()))
+        relevant = [
+            obs
+            for obs in source_observations
+            if str(obs.get("source_id")) in source_ids or str(obs.get("action")) in source_actions
+        ]
         extracted_fields: set[str] = set()
         missing_by_source: list[dict[str, Any]] = []
         breakpoints: list[str] = []
@@ -2075,15 +2356,20 @@ def build_chain_status(
             )
 
         missing_fields_total = sorted(required_fields - extracted_fields)
-        if not missing_fields_total and relevant and not non_closed_source_seen:
-            chain_state = "closed"
-        elif extracted_fields:
-            chain_state = "partial"
-        else:
-            chain_state = "missing"
+        chain_state = _partial_subtype_for_chain(
+            chain_id=chain_id,
+            extracted_fields=extracted_fields,
+            missing_fields_total=missing_fields_total,
+            breakpoints=unique_strings(breakpoints),
+            relevant=relevant,
+            non_closed_source_seen=non_closed_source_seen,
+            user_device_entity_resolution=user_device_entity_resolution,
+        )
         status[chain_id] = {
             "label": definition["label"],
             "status": chain_state,
+            "partial_subtype": None if chain_state in {"closed", "missing"} else chain_state,
+            "state_machine": PARTIAL_STATE_ORDER,
             "required_fields": sorted(required_fields),
             "extracted_fields": sorted(extracted_fields),
             "missing_fields": missing_fields_total,
@@ -2100,6 +2386,7 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
     "photo_id": {
         "fields": {"photo_id"},
         "sources": [
+            ("archives_gallery_photo_list", "用户近期作品列表 / gallery"),
             ("archives_photo_search", "用户近期发布作品列表 / photo_search"),
             ("archives_user_analysis", "用户分析发布相关操作"),
             ("rcp_event_detail", "策略命中或内容事件详情"),
@@ -2123,6 +2410,8 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
         "fields": {"publish_device", "operation_device"},
         "sources": [
             ("archives_photo_search", "作品发布设备 / 发布端"),
+            ("archives_photo_profile", "作品 profile 详情中的发布来源/设备/IP"),
+            ("archives_photo_meta", "作品 meta 详情中的 uploadSource/photoMethod/photoIp/publishDevice"),
             ("archives_user_analysis", "操作设备 / 发布相关操作设备"),
             ("weapon_inventory", "Weapon user-device graph"),
             ("track_analysis_check_data_ready", "Track device readiness"),
@@ -2148,6 +2437,8 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
         "sources": [
             ("login_logs_search", "登录设备"),
             ("archives_photo_search", "发布设备"),
+            ("archives_photo_profile", "作品 profile 发布设备"),
+            ("archives_photo_meta", "作品 meta 发布设备"),
             ("archives_user_analysis", "操作设备"),
             ("archives_user_profile", "历史 / 画像设备"),
             ("weapon_inventory", "user-device graph"),
@@ -2156,6 +2447,82 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
         "found_status": "candidate_device_found",
         "unavailable_status": "candidate_device_source_unavailable",
         "missing_status": "candidate_device_id_missing_after_resolution",
+    },
+}
+
+
+NEXT_HOP_DECISION_TABLE: dict[str, dict[str, Any]] = {
+    "photo_id": {
+        "chain_id": "web_publish_fact",
+        "current_state": "missing",
+        "next_hop_type": "auto_plan_only_next_hop",
+        "candidate_actions": ["archives_gallery_photo_list", "archives_photo_search"],
+        "required_inputs": ["user_id", "time_window_or_content_anchor"],
+        "can_auto_execute": False,
+        "requires_user_authorization": False,
+        "expected_fields": ["photo_id", "publish_time"],
+        "stop_condition": "photo_id_found_or_photo_source_unavailable",
+        "fallback_if_failed": "photo_id_missing_after_backfill",
+        "source_quality_boundary": "photo_source_no_data_not_ato_exclusion",
+    },
+    "publish_time": {
+        "chain_id": "web_publish_fact",
+        "current_state": "partial_fields",
+        "next_hop_type": "auto_realtime_next_hop",
+        "candidate_actions": ["archives_photo_profile", "archives_photo_meta", "archives_user_analysis"],
+        "required_inputs": ["photo_id"],
+        "can_auto_execute": True,
+        "requires_user_authorization": False,
+        "expected_fields": ["publish_time", "publish_source", "publish_device"],
+        "stop_condition": "publish_time_or_publish_source_found",
+        "fallback_if_failed": "publish_time_missing_after_backfill",
+        "source_quality_boundary": "completed_transport_not_business_evidence",
+    },
+    "publish_device": {
+        "chain_id": "web_publish_fact",
+        "current_state": "partial_fields",
+        "next_hop_type": "auto_realtime_next_hop",
+        "candidate_actions": ["archives_photo_profile", "archives_photo_meta"],
+        "required_inputs": ["photo_id"],
+        "can_auto_execute": True,
+        "requires_user_authorization": False,
+        "expected_fields": ["publish_device", "publish_source", "publish_ip_ua", "uploadSource", "photoMethod"],
+        "stop_condition": "publish_device_or_publish_source_found",
+        "fallback_if_failed": "mark_publish_device_missing_after_photo_meta",
+        "source_quality_boundary": "completed_transport_not_business_evidence",
+    },
+    "login_fields": {
+        "chain_id": "web_login_history",
+        "current_state": "partial_transport",
+        "next_hop_type": "auto_realtime_next_hop",
+        "candidate_actions": ["login_logs_search"],
+        "required_inputs": ["user_id", "anchor_time"],
+        "can_auto_execute": True,
+        "requires_user_authorization": False,
+        "expected_fields": ["login_time", "login_type", "login_source", "device_id", "ip_ua"],
+        "stop_condition": "returned_records_not_truncated_or_key_window_covered",
+        "fallback_if_failed": "dynamic_offline_module_web_login_history",
+        "source_quality_boundary": "byte_limit_partial_source_not_no_data",
+    },
+    "candidate_device_id": {
+        "chain_id": "device_identity_alignment",
+        "current_state": "missing",
+        "next_hop_type": "auto_realtime_next_hop",
+        "candidate_actions": [
+            "login_logs_search",
+            "archives_photo_profile",
+            "archives_photo_meta",
+            "archives_user_analysis",
+            "track_analysis_check_data_ready",
+            "weapon_inventory",
+        ],
+        "required_inputs": ["user_id", "photo_id_or_login_or_operation_anchor"],
+        "can_auto_execute": True,
+        "requires_user_authorization": False,
+        "expected_fields": ["device_id", "publish_device", "operation_device", "shared_device"],
+        "stop_condition": "candidate_device_found_or_resolution_exhausted",
+        "fallback_if_failed": "candidate_device_id_missing_after_resolution",
+        "source_quality_boundary": "candidate_device_missing_not_low_risk",
     },
 }
 
@@ -2196,6 +2563,7 @@ def _source_next_hop_status(action: str, observations_by_action: dict[str, dict[
 
 
 def _login_window_shrink_plan(source_observations: list[dict[str, Any]], chain_status: dict[str, Any]) -> dict[str, Any]:
+    decision = NEXT_HOP_DECISION_TABLE["login_fields"]
     anchors = _field_values_from_observations(
         source_observations,
         {"publish_time", "operation_time", "event_time", "login_time"},
@@ -2203,6 +2571,15 @@ def _login_window_shrink_plan(source_observations: list[dict[str, Any]], chain_s
     if anchors:
         return {
             "status": "login_log_truncated_needs_window_shrink",
+            "next_hop_type": "auto_realtime_next_hop",
+            "can_auto_execute": True,
+            "requires_user_authorization": False,
+            "candidate_actions": decision["candidate_actions"],
+            "required_inputs": decision["required_inputs"],
+            "expected_fields": decision["expected_fields"],
+            "stop_condition": decision["stop_condition"],
+            "fallback_if_failed": decision["fallback_if_failed"],
+            "source_quality_boundary": decision["source_quality_boundary"],
             "anchor_status": "window_shrink_anchor_found",
             "anchor_priority": [
                 "publish_time",
@@ -2220,6 +2597,15 @@ def _login_window_shrink_plan(source_observations: list[dict[str, Any]], chain_s
     ):
         return {
             "status": "login_log_window_shrink_anchor_missing",
+            "next_hop_type": "auto_plan_only_next_hop",
+            "can_auto_execute": False,
+            "requires_user_authorization": False,
+            "candidate_actions": ["archives_photo_search", "archives_user_analysis", "rcp_event_detail_if_event_id_exists"],
+            "required_inputs": ["publish_time_or_event_time_or_user_claim_time"],
+            "expected_fields": ["anchor_time"],
+            "stop_condition": "anchor_time_found",
+            "fallback_if_failed": "dynamic_offline_module_web_login_history",
+            "source_quality_boundary": "byte_limit_partial_source_not_no_data",
             "anchor_status": "need_publish_or_event_anchor_before_retry",
             "anchor_priority": [
                 "publish_time",
@@ -2236,7 +2622,97 @@ def _login_window_shrink_plan(source_observations: list[dict[str, Any]], chain_s
         }
     return {
         "status": "not_needed",
+        "next_hop_type": "blocked_next_hop",
+        "can_auto_execute": False,
+        "requires_user_authorization": False,
         "anchor_status": "login_log_not_large_response",
+    }
+
+
+def _photo_detail_next_hop_plan(source_observations: list[dict[str, Any]], chain_status: dict[str, Any]) -> dict[str, Any]:
+    decision = NEXT_HOP_DECISION_TABLE["publish_device"]
+    photo_values = _field_values_from_observations(source_observations, {"photo_id"})
+    photo_ids = unique_strings([str(item.get("value")) for item in photo_values if item.get("value")])
+    detail_actions_present = {
+        str(obs.get("action"))
+        for obs in source_observations
+        if str(obs.get("action")) in {"archives_photo_profile", "archives_photo_meta"}
+    }
+    publish_chain = chain_status.get("web_publish_fact", {})
+    if photo_ids and {"archives_photo_profile", "archives_photo_meta"} <= detail_actions_present:
+        status = "photo_detail_backfill_consumed"
+    elif photo_ids:
+        status = "photo_detail_next_hop_required"
+    elif publish_chain.get("status") != "closed":
+        status = "photo_id_discovery_required"
+    else:
+        status = "not_needed"
+    planned_sources = []
+    for photo_id in photo_ids[:5]:
+        planned_sources.extend(
+            [
+                {
+                    "source_id": f"photo_profile_{photo_id}",
+                    "action": "archives_photo_profile",
+                    "params": {"photo_id": photo_id},
+                    "execution_group": "auth_sensitive_serial",
+                    "failure_policy": "non_blocking_partial",
+                    "expected_observation": "photo profile publish source/device/IP/status fields",
+                },
+                {
+                    "source_id": f"photo_meta_{photo_id}",
+                    "action": "archives_photo_meta",
+                    "params": {"photo_id": photo_id},
+                    "execution_group": "auth_sensitive_serial",
+                    "failure_policy": "non_blocking_partial",
+                    "expected_observation": "photo meta uploadSource/photoMethod/photoIp/publishDevice fields",
+                },
+            ]
+        )
+    if not photo_ids and status == "photo_id_discovery_required":
+        planned_sources.extend(
+            [
+                {
+                    "source_id": "gallery_photo_list",
+                    "action": "archives_gallery_photo_list",
+                    "params": {"source": "user_id_or_content_anchor"},
+                    "execution_group": "auth_sensitive_serial",
+                    "failure_policy": "non_blocking_partial",
+                    "expected_observation": "recent gallery photo_id and publish_time candidates",
+                },
+                {
+                    "source_id": "archives_photo_search",
+                    "action": "archives_photo_search",
+                    "params": {"source": "user_id_time_window"},
+                    "execution_group": "auth_sensitive_serial",
+                    "failure_policy": "non_blocking_partial",
+                    "expected_observation": "photo_id discovery before photo detail follow-up",
+                },
+            ]
+        )
+    return {
+        "status": status,
+        "next_hop_type": (
+            "completed_auto_realtime_next_hop"
+            if status == "photo_detail_backfill_consumed"
+            else "auto_realtime_next_hop"
+            if status == "photo_detail_next_hop_required"
+            else "auto_plan_only_next_hop"
+            if status == "photo_id_discovery_required"
+            else "blocked_next_hop"
+        ),
+        "can_auto_execute": status == "photo_detail_next_hop_required",
+        "requires_user_authorization": False,
+        "candidate_actions": decision["candidate_actions"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["candidate_actions"],
+        "required_inputs": decision["required_inputs"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["required_inputs"],
+        "expected_fields": decision["expected_fields"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["expected_fields"],
+        "stop_condition": decision["stop_condition"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["stop_condition"],
+        "fallback_if_failed": decision["fallback_if_failed"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["fallback_if_failed"],
+        "source_quality_boundary": decision["source_quality_boundary"] if photo_ids else NEXT_HOP_DECISION_TABLE["photo_id"]["source_quality_boundary"],
+        "photo_ids": photo_ids[:5],
+        "planned_sources": planned_sources,
+        "default_runtime_routing": False,
+        "manual_curl_or_single_action_fallback_allowed": False,
     }
 
 
@@ -2282,11 +2758,32 @@ def build_missing_evidence_next_hops(
             status = definition["unavailable_status"]
         else:
             status = definition["missing_status"]
+        decision = dict(NEXT_HOP_DECISION_TABLE.get(group_id, {}))
+        if status == definition.get("found_status"):
+            next_hop_type = "completed_auto_realtime_next_hop"
+            can_auto_execute = False
+        elif group_id == "photo_id" and not found_values:
+            next_hop_type = "auto_plan_only_next_hop"
+            can_auto_execute = False
+        else:
+            next_hop_type = str(decision.get("next_hop_type") or "auto_plan_only_next_hop")
+            can_auto_execute = bool(decision.get("can_auto_execute")) and next_hop_type == "auto_realtime_next_hop"
         groups.append(
             {
                 "group_id": group_id,
                 "missing_fields": sorted(chain_missing_fields & group_fields),
                 "status": status,
+                "chain_id": decision.get("chain_id"),
+                "current_state": decision.get("current_state"),
+                "next_hop_type": next_hop_type,
+                "candidate_actions": decision.get("candidate_actions", []),
+                "required_inputs": decision.get("required_inputs", []),
+                "can_auto_execute": can_auto_execute,
+                "requires_user_authorization": bool(decision.get("requires_user_authorization", False)),
+                "expected_fields": decision.get("expected_fields", []),
+                "stop_condition": decision.get("stop_condition"),
+                "fallback_if_failed": decision.get("fallback_if_failed"),
+                "source_quality_boundary": decision.get("source_quality_boundary"),
                 "found_values": found_values[:10],
                 "next_hop_attempts": attempts,
                 "no_new_platform_action_added": True,
@@ -2301,6 +2798,17 @@ def build_missing_evidence_next_hops(
                 "group_id": "candidate_device_id",
                 "missing_fields": ["candidate_device_id"],
                 "status": "candidate_device_id_missing_after_resolution",
+                "chain_id": "device_identity_alignment",
+                "current_state": "missing",
+                "next_hop_type": "auto_realtime_next_hop",
+                "candidate_actions": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["candidate_actions"],
+                "required_inputs": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["required_inputs"],
+                "can_auto_execute": True,
+                "requires_user_authorization": False,
+                "expected_fields": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["expected_fields"],
+                "stop_condition": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["stop_condition"],
+                "fallback_if_failed": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["fallback_if_failed"],
+                "source_quality_boundary": NEXT_HOP_DECISION_TABLE["candidate_device_id"]["source_quality_boundary"],
                 "found_values": [],
                 "next_hop_attempts": user_device_entity_resolution.get("next_hop_attempts", []),
                 "no_new_platform_action_added": True,
@@ -2318,6 +2826,7 @@ def build_missing_evidence_next_hops(
             "new_evidence_to_chain_recompute",
         ],
         "groups": groups,
+        "photo_detail_next_hop_plan": _photo_detail_next_hop_plan(source_observations, chain_status),
         "login_window_shrink_plan": _login_window_shrink_plan(source_observations, chain_status),
         "dataagent_hive_called": False,
         "service_normalizer_restored": False,
@@ -2340,7 +2849,7 @@ def recompute_conclusion_state(
     chain_states = {chain_id: str(chain.get("status")) for chain_id, chain in chain_status.items()}
     extracted_field_count = sum(len(obs.get("extracted_business_fields", [])) for obs in source_observations)
     closed_count = sum(1 for state in chain_states.values() if state == "closed")
-    partial_count = sum(1 for state in chain_states.values() if state == "partial")
+    partial_count = sum(1 for state in chain_states.values() if state.startswith("partial_"))
     if closed_count == len(chain_status) and extracted_field_count:
         conclusion_state = "likely_risk"
         reason = "core_chains_closed_but_business_abnormality_still_requires_value_interpretation"
@@ -2391,15 +2900,29 @@ def build_live_response_inspection(
                 consumed_sources.add(str(observation.get("source_id")))
 
     rows: list[dict[str, Any]] = []
-    for item in source_plan:
-        payload = rows_by_id.get(item.source_id, {})
+    inspection_items = [
+        {"source_id": item.source_id, "action": item.action}
+        for item in source_plan
+    ]
+    seen_inspection_ids = {item["source_id"] for item in inspection_items}
+    for observation in source_observations:
+        source_id = str(observation.get("source_id") or "")
+        if not source_id or source_id in seen_inspection_ids:
+            continue
+        inspection_items.append({"source_id": source_id, "action": str(observation.get("action") or "")})
+        seen_inspection_ids.add(source_id)
+
+    for item in inspection_items:
+        source_id = str(item["source_id"])
+        action = str(item["action"])
+        payload = rows_by_id.get(source_id, {})
         row = payload.get("transport") if isinstance(payload.get("transport"), dict) else payload
-        observation = observations_by_source.get(item.source_id, {})
+        observation = observations_by_source.get(source_id, {})
         dennis_observation = observation.get("dennis_observation", {}) if isinstance(observation, dict) else {}
         rows.append(
             {
-                "source_id": item.source_id,
-                "action": item.action,
+                "source_id": source_id,
+                "action": action,
                 "status": row.get("source_status") or row.get("category"),
                 "body_present": row.get("body_present"),
                 "body_truncated": row.get("body_truncated"),
@@ -2432,7 +2955,7 @@ def build_live_response_inspection(
                         "operation_device",
                     }
                 ],
-                "evidence_card_consumed": item.source_id in consumed_sources,
+                "evidence_card_consumed": source_id in consumed_sources,
                 "chain_coverage": observation.get("chain_section"),
                 "breakpoint_type": observation.get("breakpoint_type"),
             }
@@ -2458,9 +2981,19 @@ def render_user_answer_draft(evidence_card: dict[str, Any]) -> str:
         return f"- {label}: {status}; missing={missing}; breakpoint={reasons}"
 
     active_groups = [
-        f"{group.get('group_id')}={group.get('status')}"
+        f"{group.get('group_id')}={group.get('status')}({group.get('next_hop_type', 'next_hop')})"
         for group in active_plan.get("groups", [])
         if group.get("group_id")
+    ]
+    auto_next_hops = [
+        group.get("group_id")
+        for group in active_plan.get("groups", [])
+        if group.get("can_auto_execute")
+    ]
+    authorized_modules = [
+        option.get("module_id")
+        for option in evidence_card.get("offline_backfill_recommendation", {}).get("options", [])
+        if option.get("requires_user_authorization")
     ]
     shrink_plan = active_plan.get("login_window_shrink_plan", {})
     shrink_line = (
@@ -2483,6 +3016,8 @@ def render_user_answer_draft(evidence_card: dict[str, Any]) -> str:
             line("web_login_history"),
             line("device_identity_alignment"),
             "Dennis 已主动补证/回填：" + (", ".join(active_groups) if active_groups else "当前没有可用下一跳"),
+            "可自动 next-hop：" + (", ".join(auto_next_hops) if auto_next_hops else "无；缺输入或需授权"),
+            "需用户授权：" + (", ".join(authorized_modules) if authorized_modules else "无离线授权项"),
             shrink_line,
             "关键边界：transport completed 不等于业务链闭合；no_data/partial/auth gap 不是低风险反证。",
             "下一步补证模块：" + (", ".join(modules) if modules else "当前缺口未生成离线模块"),
@@ -2557,6 +3092,25 @@ def build_evidence_card(
         for observation in source_observations
         if observation.get("evidence_use") == "transport_only_boundary"
     ]
+    evidence_projection_summary = []
+    for observation in source_observations:
+        projection = observation.get("dennis_observation", {}).get("evidence_projection")
+        if not isinstance(projection, dict) or not projection.get("projection_applied"):
+            continue
+        evidence_projection_summary.append(
+            {
+                "source_id": observation.get("source_id"),
+                "action": observation.get("action"),
+                "projection_applied": True,
+                "projection_not_business_normalizer": True,
+                "raw_body_not_retained_in_answer": True,
+                "projected_records": projection.get("projected_records"),
+                "dropped_fields_count": projection.get("dropped_fields_count"),
+                "sensitive_fields_projected_as_handles": projection.get("sensitive_fields_projected_as_handles"),
+                "strict_pii_fields_redacted": projection.get("strict_pii_fields_redacted"),
+                "retained_field_paths": projection.get("retained_field_paths", [])[:30],
+            }
+        )
     chain_missing = [
         {
             "chain": "web_or_abnormal_publish_fact",
@@ -2613,6 +3167,7 @@ def build_evidence_card(
         "chain_status": chain_status,
         "active_backfill_plan": active_backfill_plan,
         "conclusion_recompute": conclusion_recompute,
+        "evidence_projection_summary": evidence_projection_summary,
         "evidence_chain": {
             "web_or_abnormal_publish_fact": {
                 "question": "是否存在 WEB/异常端发布或导流内容承接",

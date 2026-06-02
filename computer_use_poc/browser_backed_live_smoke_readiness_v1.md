@@ -136,9 +136,9 @@ closure for the nine selected actions is recorded above.
 | Archives Center | `archives_related_devices` | not_ready | No standalone fixed path/body; may be derived from profile/user-analysis/device summaries. | Keep blocker until safe HAR confirms a standalone source. |
 | RCP / Tianshi | `rcp_event_type_list` | contract_only | Config option lookup, not evidence. | Keep inventory-only unless explicit config lookup is required. |
 | RCP / Tianshi | `rcp_realtime_op_list` | contract_only | Config option lookup, not evidence. | Keep inventory-only unless explicit config lookup is required. |
-| RCP / Tianshi | `rcp_event_feature_key_lookup` | not_ready | Raw feature values require stronger minimization before action. | Define Dennis-side value-suppression parser/output boundary first. |
-| RCP / Tianshi | `rcp_event_tree_or_decision_lookup` | not_ready | Response semantics/tree dump minimization not source-card ready. | Summarize tree/decision shape before action. |
-| RCP / Tianshi | `rcp_policy_search_lookup` | contract_only | Policy discovery helper; config-heavy and not evidence. | Require explicit governance use case. |
+| RCP / Tianshi | `rcp_event_tree_or_decision` | live_smoke_verified | Explicit event/policy attribution helper; not default ATO source. | Use only for strategy hit explanation, false-positive review, or governance with event/policy anchor. |
+| RCP / Tianshi | `rcp_feature_info_by_keys` | live_smoke_verified | Feature key helper; raw values still require minimization. | Use only under explicit feature / attribution context; do not dump raw feature payload. |
+| RCP / Tianshi | `rcp_policy_search` / `rcp_policy_blur_search` | live_smoke_verified | Policy discovery helper; config-heavy and not evidence. | Require explicit governance use case. |
 | RCP / Tianshi | expression dependency | not_supported | Requires raw policy expression body/config dump. | Do not implement. |
 | RCP / Tianshi | test case/config paths | not_supported | Test/write-like execution boundary. | Do not implement. |
 | Track Analysis | `track_analysis_config_lookup` | contract_only | Config helper only, not evidence. | Keep inventory-only. |

@@ -213,7 +213,7 @@ task prompt 明确授权的 `browser_same_origin`、已登记只读 API playbook
 
 ### Raw Reference Retention / Redaction Layering
 
-展示层脱敏不得污染执行层 source chaining。`user_id`、`device_id`、`event_id`、`source_id`、`policy_code`、`ip` 等风险实体可在 `tool_call_internal` / `source_checkpoint_private` / `source_chaining` 层按当前任务保留 raw reference safe handle；用户可见 evidence card、final answer 和 run log 只能展示 alias / masked value / summary。
+展示层脱敏不得污染执行层 source chaining。默认 `output_scope=internal_risk_review` 时，用户可见 evidence card / final answer 可以展示最小必要的风控实体锚点，包括 `user_id`、`device_id` / DID、`ip`、UA、`photo_id`、`event_id`、`source_id`、`policy_code` / `strategy_id`、登录端、发布端、设备型号和 app 版本，用于登录、发布、设备一致性、同设备扩散和历史基线串证。只有 `output_scope=external_share` 或更广受众分享时，风险实体才按受众策略 masked / alias / summary。
 
 Weapon `graphData -> riskData` 必须使用 graphData checkpoint 中保留的 raw `device_id` reference，不能使用 `masked_device_id`、`device_ref_*` 或展示层脱敏串作为 riskData 输入。graphData 解析 `payload.data.pointInfoMap` 时必须过滤纯数字 userId 节点，避免把 userId 当 deviceId。若 raw reference 未保留，riskData 应标 `missing_required_fields` / `not_checked`，不得伪装 completed。
 
@@ -491,6 +491,8 @@ ATO 单案用户设备实体层：
 - `archives_photo_search` 默认用于作品 / 发布 / 内容承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`。
 - `archives_user_analysis` 到达 transport 层但缺改密、换绑、保护账号、资料修改、发布相关操作等业务字段时标 `behavior_chain_business_fields_missing`。
 - 登录日志 `response_too_large` / `body_truncated` 是 partial observation：若 capped body/snippet 可见，Dennis 先安全解析前段登录字段；若 `body_present=true` 但 Dennis 看不到 capped/snippet，标 `service_body_visibility_gap_for_truncated_login_log`。缩窗锚点优先来自发布时间、用户客诉时间、异常事件时间、策略命中时间和近期作品发布时间；没有锚点时先从作品/用户分析/策略事件找锚点。`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
+- partial 必须分型：`partial_transport`、`partial_fields`、`partial_baseline`、`partial_consistency`、`partial_authorization_required` 分别映射到自动实时下一跳、plan-only 下一跳、用户授权下一跳或 blocked 下一跳；不得只写“多个源 partial”。
+- observation 前允许 Dennis 做 evidence projection：只删 UI/debug/blob/重复/空值等明显低价值字段，保留风控锚点和敏感控制链字段的存在性/路径/hash/长度安全句柄；最终用户正文仍禁止输出 cookie/token/session/header/password 原文。
 
 实时证据不闭合时，离线补证必须按当前 `missing_evidence` 动态生成 `module_id`，不固定输出 1-5 菜单，也不默认请求全量 DataAgent/Hive。典型动态模块包括 `web_publish_fact`、`web_login_history`、`device_history_baseline`、`token_oauth_scan_chain`、`security_action_chain`、`post_action_chain`；用户只授权哪个 `module_id`，只能生成/执行哪个模块的 query plan，未授权模块继续进入 `missing_evidence`。
 
@@ -628,7 +630,7 @@ timeout / no_data / blocked 不等于无风险。
 
 - credential 明文永不输出；
 - 高敏个人信息默认脱敏；
-- 风控实体字段按受众范围输出；
+- 风控实体字段在 `internal_risk_review` 默认保留，`external_share` 才按受众范围脱敏；
 - 派生 / 聚合特征优先输出。
 
 ## 路由观测
