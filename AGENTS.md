@@ -651,70 +651,29 @@ timeout / no_data / blocked 不等于无风险。
   - `boundary_risk`
 - routing trace 不影响正常回答，也不改变 DataAgent 边界。
 
-## routing_metadata 输出块
+## 内部路由元数据边界
 
 默认用户可见正文，包括业务研判答复、partial evidence card、本地修复完成报告和 Codex final summary style answer，均不得输出完整 `routing_metadata` / `source_quality` YAML / `boundary_flags` / debug 字段。
 
-`routing_metadata` 只能出现在：
+完整路由元数据只能用于 internal observation log、validation fixture / regression、debug 模式，或用户明确要求“给我 routing_metadata / 输出内部过程字段 / debug YAML / run log YAML”时。普通回答只用自然语言说明执行状态、证据边界和下一步。
 
-- internal observation log；
-- validation fixture / regression output；
-- debug 模式；
-- 用户明确要求“给我 routing_metadata / 输出内部过程字段 / debug YAML / run log YAML”。
+内部元数据字段约束以 validation / dry-run fixture 为准；AGENTS.md 只保留输出边界和下方 route / capability 名称映射。未显式进入 debug / internal / validation 场景时，不得在用户正文末尾追加机器可读 metadata。
 
-当允许输出时，机器可读 `routing_metadata` YAML block 供 main agent / 观测日志 / 验收测试读取本轮内部路由结果。该 block 不依赖跨 session history，不改变业务判断逻辑。
+内部 metadata 约束：
 
-必填字段：
-
-```yaml
-routing_metadata:
-  route: "<final_route>"
-  capability: "<selected_capability>"
-  sub_capability: "<selected_sub_capability_or_null>"
-  intent_type: "<user_intent_type>"
-  execution_mode: "single_entity_execution_mode | small_batch_execution_with_checkpoint | batch_clustering_mode | plan_mode | expert_mode | denied"
-  evidence_mode: "evidence_card | partial_evidence | small_batch_evidence_summary | batch_pattern_summary | strategy_recommendation | expert_reasoning"
-  query_plan_only: false
-  platform_called: false
-  platform_call_summary: []
-  dataagent_called: false
-  direct_tool_bypass: false
-  sensitive_output: false
-  redaction_applied: true
-  boundary_flags:
-    - "<boundary_flag>"
-  source_quality:
-    completed_sources: []
-    no_data_sources: []
-    blocked_sources: []
-    auth_failed_sources: []
-    timeout_sources: []
-    parse_error_sources: []
-    missing_sources: []
-  missing_required_fields: []
-  partial_reason: null
-  final_status: "answered | needs_input | partial | refused | failed"
-```
-
-约束：
-
-- 未显式进入 debug / internal / validation 场景时，不得在用户正文末尾追加该 block；只用自然语言说明执行状态、证据边界和下一步。
 - `route` 必须使用 `computer_use_poc/scene_to_capability_routing.md` 中的正式 route 名。
 - `capability` 必须使用 `computer_use_poc/capability_registry.md` 中的正式 capability 名。
 - `sub_capability` 必须使用正式子能力名；没有子能力时填 `null`。
 - `boundary_flags` 必须使用标准 flag 名，不允许自由改写或语义近似替换。
-- 允许输出完整 metadata 时，`routing_metadata` 必须是 YAML block，不得输出 JSON metadata。
 - 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
 - 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
 - `execution_mode` 必须使用标准枚举：`single_entity_execution_mode`、`small_batch_execution_with_checkpoint`、`batch_clustering_mode`、`plan_mode`、`expert_mode`、`denied`。
 - `evidence_mode` 必须使用标准枚举：`evidence_card`、`partial_evidence`、`small_batch_evidence_summary`、`batch_pattern_summary`、`strategy_recommendation`、`expert_reasoning`。
-- 未调用真实平台时，`platform_called=false`，`platform_call_summary=[]`。
-- 未调用 DataAgent 时，`dataagent_called=false`。
-- 未发生 main agent direct exec bypass 时，`direct_tool_bypass=false`。
-- 正常必须 `sensitive_output=false`。
-- asset map / ANTICRAWL candidate / real-name partial contract 必须 `query_plan_only=true`。
-- 缺字段时 `final_status=needs_input`，`missing_required_fields` 非空。
+- 未调用真实平台时，内部 metadata 记平台未调用；未调用 DataAgent 时，内部 metadata 记 DataAgent 未调用。
+- 正常必须标记未输出敏感信息。
+- asset map / ANTICRAWL candidate / real-name partial contract 必须标 plan/query-plan only。
+- 缺字段时必须标 needs_input，并记录 missing required fields。
 - 泛风险问题不得默认标完整策略治理、attach、ANTICRAWL 或实名能力为执行能力。
 
 名称映射表：
