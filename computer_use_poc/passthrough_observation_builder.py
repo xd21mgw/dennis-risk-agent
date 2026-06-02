@@ -263,6 +263,8 @@ def _extract_handles(
             for key, child in item.items():
                 child_path = f"{current_path}.{key}"
                 canonical = _canonical_for_key(key)
+                if key.lower() in BODY_CANDIDATE_KEYS:
+                    continue
                 if _key_has_fragment(key, SECRET_KEY_FRAGMENTS):
                     flags.append("blocked_sensitive_material_detected")
                     if canonical == "token_oauth_scan":
@@ -345,11 +347,12 @@ def build_safe_observation(
         body_handles.extend(handles)
         flags.extend(body_flags)
 
-    all_handles = _dedupe_handles(direct_handles + body_handles)
+    parsed_body_handles = _dedupe_handles(body_handles)
+    all_handles = _dedupe_handles(direct_handles + parsed_body_handles)
     extracted_business_fields = _unique(
         [
             str(handle["canonical_field"])
-            for handle in all_handles
+            for handle in parsed_body_handles
             if str(handle.get("canonical_field")) in expected or not expected
         ]
     )
@@ -359,6 +362,8 @@ def build_safe_observation(
         flags.append("safe_raw_or_capped_body_parser_attempted")
     if parsed_values:
         flags.append("safe_body_parsed")
+    elif (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
+        flags.append("service_body_visibility_gap")
     if body_candidates and not parsed_values:
         flags.append("passthrough_interpretation_gap")
     if missing_business_fields and str(transport_row.get("quality_class") or "") in {"completed", "partial"}:
@@ -386,7 +391,11 @@ def build_safe_observation(
         "role": role,
         "safe_parse_body": True,
         "raw_body_returned": False,
+        "visible_body_keys": [path for path, _value in body_candidates],
+        "parser_input_available": bool(parsed_values),
         "body_parse_statuses": body_parse_statuses,
+        "direct_safe_handles": direct_handles,
+        "parsed_body_safe_handles": parsed_body_handles,
         "extracted_safe_handles": all_handles,
         "extracted_business_fields": extracted_business_fields,
         "missing_business_fields": missing_business_fields,

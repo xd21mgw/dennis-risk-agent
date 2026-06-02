@@ -8623,8 +8623,25 @@ Text gate checks:
 - expected_runtime_behavior: passthrough_interpretation_gap_not_blocking
 - expected_output_boundary: mark `passthrough_interpretation_gap` / `observation_compression_gap`, keep partial evidence, generate dynamic offline backfill from field-level gaps, and do not restore service-side normalizers.
 
+## 893. ATO live evidence-chain rendering
+
+- test_id: ATO-LIVE-E2E-INSPECTION-BODY-VISIBILITY-GAP-001
+- input: `runtime_case_execution_runner.py --mode live` returns Archives sources with `body_present=true` and `raw_body_handling=suppressed`, but no visible `body/capped_body/body_snippet`.
+- expected_runtime_behavior: live_response_inspection_classifies_breakpoint
+- expected_output_boundary: `live_response_inspection` must show body visibility, parser input availability, extracted business fields, field paths, evidence-card consumption, and chain coverage. If Dennis cannot see a body/snippet, mark `service_body_visibility_gap`; do not claim publish/security behavior chains are closed.
+
+- test_id: ATO-LIVE-E2E-PARSER-MAPPING-GAP-001
+- input: source response contains visible body/snippet, but no publish/login/operation fields are extracted.
+- expected_runtime_behavior: parser_mapping_gap_field_level_missing_evidence
+- expected_output_boundary: mark `parser_mapping_gap` and field-level missing evidence; do not treat completed transport as weak evidence or business-chain closure.
+
+- test_id: ATO-LIVE-E2E-RENDERER-CONSUMES-CHAIN-FIELDS-001
+- input: parser extracts `publish_time`, `publish_source`, `publish_device`, `photo_id`, `login_device`, and `operation_device`.
+- expected_runtime_behavior: renderer_consumes_business_fields_into_three_chains
+- expected_output_boundary: user-facing answer must start from WEB/发布事实链、WEB 登录历史链、设备一致性链 status, then key gaps and dynamic offline modules. It must not primarily flatten `completed_sources` / `blocked_sources`.
+
 Keyword check:
 
 ```bash
-grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser" computer_use_poc skills AGENTS.md 2>/dev/null
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser\|service_body_visibility_gap\|parser_mapping_gap\|renderer_consumption_gap" computer_use_poc skills AGENTS.md 2>/dev/null
 ```

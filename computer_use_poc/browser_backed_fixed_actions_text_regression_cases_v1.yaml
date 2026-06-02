@@ -976,3 +976,27 @@ cases:
     expected_execution_groups: []
     should_not_do: [do_not_make_final_judgement_without_source_quality]
     expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-LIVE-RESPONSE-INSPECTION-BODY-VISIBILITY-GAP-001
+    user_query: "帮我判断 user_id=2892617234 是否疑似 ATO；live_response_inspection 里作品 source completed 且 body_present=true，但 Dennis 看不到 capped body，要怎么归因？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Text regression checks the boundary; harness fixture/live regression owns full E2E inspection."
+    expected_boundary_flags: [live_response_inspection_required, service_body_visibility_gap_detected]
+    expected_execution_groups: []
+    should_not_do: [do_not_use_completed_transport_as_business_closure, do_not_claim_complete_from_capped_body]
+    expected_answer_contract: [final_answer_boundary]
+  - id: ATO-PARSER-MAPPING-GAP-WHEN-BODY-VISIBLE-001
+    user_query: "ATO 单案 parser_mapping_gap：body/snippet 可见但没有抽到 publish_device、login_device、operation_device，应标什么？"
+    expected_route_or_actions: [login_logs_search, archives_photo_search, archives_user_analysis]
+    expected_orchestration: "Visible body with missing business extraction must be parser_mapping_gap and field-level missing evidence."
+    expected_boundary_flags: [parser_mapping_gap_detected, content_chain_business_fields_missing, behavior_chain_business_fields_missing]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_use_completed_transport_as_business_closure, do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [source_observations, missing_evidence, final_answer_boundary]
+  - id: ATO-RENDERER-CONSUMES-PARSER-FIELDS-THREE-CHAINS-001
+    user_query: "ATO 单案 evidence card 三条证据链：parser 已抽到 publish_time/publish_source/publish_device/photo_id 和 login_device 后，用户答案还能只平铺 completed_sources 吗？"
+    expected_route_or_actions: [login_logs_search, archives_photo_search, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Renderer must consume extracted fields into WEB/发布事实链、WEB 登录历史链、设备一致性链 before source status."
+    expected_boundary_flags: [renderer_consumption_gap_forbidden, three_chain_status_required, ato_evidence_card_three_core_chains]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_use_completed_transport_as_business_closure]
+    expected_answer_contract: [evidence_card, final_answer_boundary, offline_backfill_recommendation]

@@ -1,0 +1,275 @@
+{
+  "schema_version": "ato_live_evidence_chain_fixture_v1",
+  "description": "Sanitized live-shaped passthrough fixtures for user_id 2892617234 ATO evidence-chain rendering. No raw platform body, credentials, strict PII, cookie, token, session, header or password values are included.",
+  "cases": [
+    {
+      "id": "live_suppressed_body_visibility_gap",
+      "batch_result": {
+        "ok": true,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": "partial",
+        "source_results": {
+          "ato_login_logs_search": {
+            "source_id": "ato_login_logs_search",
+            "transport": {
+              "source_id": "ato_login_logs_search",
+              "action": "login_logs_search",
+              "category": "blocked",
+              "source_status": "failed",
+              "error_type": "network_error",
+              "body_present": false,
+              "body_truncated": false,
+              "observed_bytes": 0,
+              "raw_body_handling": "suppressed",
+              "transport_error": "network_error"
+            }
+          },
+          "ato_archives_user_profile": {
+            "source_id": "ato_archives_user_profile",
+            "transport": {
+              "source_id": "ato_archives_user_profile",
+              "action": "archives_user_profile",
+              "category": "completed",
+              "source_status": "completed",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": false,
+              "observed_bytes": 13213,
+              "raw_body_handling": "suppressed"
+            }
+          },
+          "ato_archives_photo_search": {
+            "source_id": "ato_archives_photo_search",
+            "transport": {
+              "source_id": "ato_archives_photo_search",
+              "action": "archives_photo_search",
+              "category": "completed",
+              "source_status": "completed",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": false,
+              "observed_bytes": 25009,
+              "raw_body_handling": "suppressed"
+            }
+          },
+          "ato_archives_user_analysis": {
+            "source_id": "ato_archives_user_analysis",
+            "transport": {
+              "source_id": "ato_archives_user_analysis",
+              "action": "archives_user_analysis",
+              "category": "completed",
+              "source_status": "completed",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": false,
+              "observed_bytes": 4940,
+              "raw_body_handling": "suppressed"
+            }
+          }
+        },
+        "transport_status_matrix": {
+          "ato_login_logs_search": {
+            "source_id": "ato_login_logs_search",
+            "action": "login_logs_search",
+            "category": "blocked",
+            "source_status": "failed",
+            "error_type": "network_error",
+            "body_present": false,
+            "body_truncated": false,
+            "observed_bytes": 0,
+            "raw_body_handling": "suppressed",
+            "transport_error": "network_error"
+          },
+          "ato_archives_user_profile": {
+            "source_id": "ato_archives_user_profile",
+            "action": "archives_user_profile",
+            "category": "completed",
+            "source_status": "completed",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": false,
+            "observed_bytes": 13213,
+            "raw_body_handling": "suppressed"
+          },
+          "ato_archives_photo_search": {
+            "source_id": "ato_archives_photo_search",
+            "action": "archives_photo_search",
+            "category": "completed",
+            "source_status": "completed",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": false,
+            "observed_bytes": 25009,
+            "raw_body_handling": "suppressed"
+          },
+          "ato_archives_user_analysis": {
+            "source_id": "ato_archives_user_analysis",
+            "action": "archives_user_analysis",
+            "category": "completed",
+            "source_status": "completed",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": false,
+            "observed_bytes": 4940,
+            "raw_body_handling": "suppressed"
+          }
+        },
+        "classifications": {
+          "completed": [
+            "ato_archives_user_profile",
+            "ato_archives_photo_search",
+            "ato_archives_user_analysis"
+          ],
+          "blocked": [
+            "ato_login_logs_search"
+          ],
+          "partial": [],
+          "no_data": [],
+          "auth_failed": [],
+          "timeout": [],
+          "parse_error": [],
+          "planned": []
+        },
+        "missing_or_failed_sources": []
+      }
+    },
+    {
+      "id": "visible_capped_body_business_fields_available",
+      "batch_result": {
+        "ok": true,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": "partial",
+        "source_results": {
+          "ato_login_logs_search": {
+            "source_id": "ato_login_logs_search",
+            "transport": {
+              "source_id": "ato_login_logs_search",
+              "action": "login_logs_search",
+              "category": "partial",
+              "source_status": "response_too_large",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": true,
+              "observed_bytes": 65536,
+              "raw_body_handling": "capped"
+            },
+            "capped_body": {
+              "records": [
+                {
+                  "loginTime": 1780000001000,
+                  "loginType": "password",
+                  "loginSource": "WEB",
+                  "loginDeviceId": "did_login_safe_1",
+                  "requestIp": "10.0.0.2",
+                  "userAgent": "UA_SAFE_LOGIN",
+                  "scanLogin": true
+                }
+              ]
+            }
+          },
+          "ato_archives_photo_search": {
+            "source_id": "ato_archives_photo_search",
+            "transport": {
+              "source_id": "ato_archives_photo_search",
+              "action": "archives_photo_search",
+              "category": "completed",
+              "source_status": "completed",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": false,
+              "observed_bytes": 4096,
+              "raw_body_handling": "capped"
+            },
+            "capped_body": {
+              "data": [
+                {
+                  "photoId": "photo_safe_1",
+                  "publishTime": 1780000000000,
+                  "publishSource": "WEB",
+                  "publishDeviceId": "did_publish_safe_1",
+                  "publishIp": "10.0.0.3",
+                  "publishUA": "UA_SAFE_PUBLISH"
+                }
+              ]
+            }
+          },
+          "ato_archives_user_analysis": {
+            "source_id": "ato_archives_user_analysis",
+            "transport": {
+              "source_id": "ato_archives_user_analysis",
+              "action": "archives_user_analysis",
+              "category": "completed",
+              "source_status": "completed",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": false,
+              "observed_bytes": 4096,
+              "raw_body_handling": "capped"
+            },
+            "capped_body": {
+              "items": [
+                {
+                  "operationTime": 1780000002000,
+                  "operationType": "resetPwd",
+                  "resetPwd": true,
+                  "operationDeviceId": "did_operation_safe_1"
+                }
+              ]
+            }
+          }
+        },
+        "transport_status_matrix": {
+          "ato_login_logs_search": {
+            "source_id": "ato_login_logs_search",
+            "action": "login_logs_search",
+            "category": "partial",
+            "source_status": "response_too_large",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": true,
+            "observed_bytes": 65536,
+            "raw_body_handling": "capped"
+          },
+          "ato_archives_photo_search": {
+            "source_id": "ato_archives_photo_search",
+            "action": "archives_photo_search",
+            "category": "completed",
+            "source_status": "completed",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": false,
+            "observed_bytes": 4096,
+            "raw_body_handling": "capped"
+          },
+          "ato_archives_user_analysis": {
+            "source_id": "ato_archives_user_analysis",
+            "action": "archives_user_analysis",
+            "category": "completed",
+            "source_status": "completed",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": false,
+            "observed_bytes": 4096,
+            "raw_body_handling": "capped"
+          }
+        },
+        "classifications": {
+          "completed": [
+            "ato_archives_photo_search",
+            "ato_archives_user_analysis"
+          ],
+          "partial": [
+            "ato_login_logs_search"
+          ],
+          "blocked": [],
+          "no_data": [],
+          "auth_failed": [],
+          "timeout": [],
+          "parse_error": [],
+          "planned": []
+        },
+        "missing_or_failed_sources": []
+      }
+    }
+  ]
+}

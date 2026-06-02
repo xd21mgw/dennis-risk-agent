@@ -44,6 +44,8 @@ full_runtime_required:
     - computer_use_poc/browser_backed_fixed_actions_text_regression_cases_v1.yaml
     - computer_use_poc/browser_backed_fixed_actions_text_dryrun.py
     - computer_use_poc/browser_backed_fixed_actions_text_demo_v1.md
+    - computer_use_poc/ato_live_evidence_chain_fixture_check.py
+    - computer_use_poc/test_fixtures/ato_live_evidence_chain_2892617234_shape_v1.json
     - computer_use_poc/platform_access/observation_schema_v0_1.yaml
     - computer_use_poc/failure_triage_card_template_v1.md
     - computer_use_poc/plan_mode_capability_v1.md

@@ -280,6 +280,11 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "safe_parser_extracts_security_action_fields": "archives_user_analysis body 中的 security action / operation_device 可被 Dennis 抽取",
     "extracted_device_drives_track_followup": "抽取到的 login/publish/operation device 可进入 candidate_device_ids 并驱动 Track readiness",
     "safe_parser_failure_enters_passthrough_interpretation_gap": "body parser 失败进入 passthrough_interpretation_gap，不阻塞 partial answer",
+    "service_body_visibility_gap_detected": "source transport/body_present 成立但 Dennis 看不到 body/capped/snippet 时标 service_body_visibility_gap",
+    "parser_mapping_gap_detected": "body/snippet 可见但未抽出业务字段时标 parser_mapping_gap",
+    "renderer_consumption_gap_forbidden": "parser 已抽字段时 evidence renderer 必须消费到三条证据链，不得退回 source 状态平铺",
+    "live_response_inspection_required": "live E2E 必须输出 source/body/parser/field/evidence consumption inspection",
+    "three_chain_status_required": "ATO live answer 必须先输出 WEB/发布事实链、WEB 登录历史链、设备一致性链状态",
     "login_small_body_likely_no_data_not_risk_exclusion": "登录日志 2xx 小 body 且有 empty hint 只能 likely_no_data，不作为低风险反证",
     "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
     "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
@@ -1131,6 +1136,14 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "safe_raw_capped_body_parser_enabled",
                 "raw_body_not_returned_to_final_answer",
             ]
+        if has_any(text, ["service_body_visibility_gap", "body visibility gap", "看不到 body", "看不到 capped body", "body 不可见", "body_present 但看不到"]):
+            passthrough_flags += ["service_body_visibility_gap_detected"]
+        if has_any(text, ["parser_mapping_gap", "mapping gap", "body 可见但未抽", "可见但没有抽", "parser 没映射"]):
+            passthrough_flags += ["parser_mapping_gap_detected"]
+        if has_any(text, ["renderer_consumption_gap", "renderer 没消费", "parser 已抽到", "答案没用"]):
+            passthrough_flags += ["renderer_consumption_gap_forbidden"]
+        if has_any(text, ["live_response_inspection", "live response inspection", "inspection 表", "evidence_card_consumed", "chain_coverage"]):
+            passthrough_flags += ["live_response_inspection_required"]
         if has_any(text, ["token/session/header/password", "cookie", "credential", "敏感"]):
             passthrough_flags += ["credential_material_redacted"]
         if has_any(text, ["手机号", "身份证", "姓名", "详细地址", "PII", "pii"]):
@@ -1544,8 +1557,19 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "partial_observation_available",
         ]
 
+    if has_any(text, ["service_body_visibility_gap", "body visibility gap", "看不到 body", "看不到 capped body", "body 不可见", "body_present 但看不到"]):
+        flags += ["service_body_visibility_gap_detected"]
+    if has_any(text, ["parser_mapping_gap", "mapping gap", "body 可见但未抽", "可见但没有抽", "parser 没映射"]):
+        flags += ["parser_mapping_gap_detected"]
+    if has_any(text, ["renderer_consumption_gap", "renderer 没消费", "parser 已抽到", "答案没用"]):
+        flags += ["renderer_consumption_gap_forbidden"]
+    if has_any(text, ["live_response_inspection", "live response inspection", "inspection 表", "evidence_card_consumed", "chain_coverage"]):
+        flags += ["live_response_inspection_required"]
+
     if has_any(text, ["evidence card", "证据卡", "source 状态平铺", "链路组织", "证据链路"]):
         flags += ["ato_evidence_card_chain_organized", "ato_evidence_card_three_core_chains"]
+    if has_any(text, ["三条证据链", "WEB/发布事实链", "WEB 登录历史链", "设备一致性链"]):
+        flags += ["three_chain_status_required", "ato_evidence_card_three_core_chains"]
     if has_any(text, ["completed transport", "transport completed", "weak evidence", "弱证据", "自动进入 weak"]):
         flags += ["completed_transport_not_weak_evidence", "completed_transport_not_business_chain_closure"]
         if has_any(text, ["archives_photo_search", "photo_search", "作品", "发布"]):

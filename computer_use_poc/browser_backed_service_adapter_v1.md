@@ -775,7 +775,7 @@ Source-specific interpretation must stay Dennis-owned:
 - `archives_photo_search`: completed transport is not content handoff closure; if `photo_id`, publish time, publish device, or publish source are unavailable, mark `content_chain_business_fields_missing`. `no_data` does not exclude abnormal publish or ATO.
 - `track_analysis_check_data_ready`: readiness/provenance only; it does not prove owner operation or low risk.
 
-When realtime evidence is incomplete, Dennis should expose selectable offline authorization modules rather than asking for broad Hive/DataAgent permission. The modules are: login/control chain, token/OAuth/scan/refresh chain, account-security actions, post-takeover content/actions, and device/IP/UA baseline. Unselected modules remain `missing_evidence`.
+When realtime evidence is incomplete, Dennis should expose selectable offline authorization modules generated from the current missing fields and chain breakpoints rather than asking for broad Hive/DataAgent permission. Typical dynamic `module_id` values include `web_publish_fact`, `web_login_history`, `device_history_baseline`, `token_oauth_scan_chain`, `security_action_chain`, and `post_action_chain`, but only modules triggered by the current evidence gap should be offered. Unselected modules remain `missing_evidence`.
 
 The service no longer needs to return `sensitive_output=false`; safe passthrough is enforced by raw-body suppression/capping and fixed typed actions. If a response contains credential material or an uncapped raw full body, Dennis treats it as `blocked` with a source contract gap and excludes the body from evidence.
 
