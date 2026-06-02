@@ -69,12 +69,22 @@ def _evaluate_case(case: dict[str, Any]) -> dict[str, Any]:
 
 def _assert_suppressed_case(result: dict[str, Any]) -> None:
     by_source = {row["source_id"]: row for row in result["live_response_inspection"]}
+    assert by_source["ato_login_logs_search"]["breakpoint_type"] == "service_body_visibility_gap_for_truncated_login_log"
     assert by_source["ato_archives_photo_search"]["breakpoint_type"] == "service_body_visibility_gap"
     assert by_source["ato_archives_user_analysis"]["breakpoint_type"] == "service_body_visibility_gap"
     assert not by_source["ato_archives_photo_search"]["parser_input_available"]
     chain_status = result["evidence_card"]["chain_status"]
     assert chain_status["web_publish_fact"]["status"] == "missing"
     assert "service_body_visibility_gap" in chain_status["web_publish_fact"]["breakpoint_types"]
+    assert "service_body_visibility_gap_for_truncated_login_log" in chain_status["web_login_history"]["breakpoint_types"]
+    assert result["user_device_entity_resolution"]["resolution_status"] == "candidate_device_id_missing_after_resolution"
+    active_groups = {
+        item["group_id"]: item["status"]
+        for item in result["evidence_card"]["active_backfill_plan"]["groups"]
+    }
+    assert active_groups["candidate_device_id"] == "candidate_device_id_missing_after_resolution"
+    assert active_groups["login_fields"] == "service_body_visibility_gap_for_truncated_login_log"
+    assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["status"] == "login_log_window_shrink_anchor_missing"
     assert "web_publish_fact" in [
         item["module_id"]
         for item in result["evidence_card"]["offline_backfill_recommendation"]["options"]
@@ -91,14 +101,40 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
     assert {"login_time", "login_type", "login_source", "device_id", "ip_ua"} <= set(
         by_source["ato_login_logs_search"]["extracted_business_fields"]
     )
+    login_flags = next(
+        item["interpretation_flags"]
+        for item in result["source_observations"]
+        if item["source_id"] == "ato_login_logs_search"
+    )
+    assert "partial_login_log_parsed_from_capped_body" in login_flags
+    assert "partial_login_log_parsed_from_json_array_capped" in login_flags
+    assert "login_log_incomplete" in login_flags
+    login_observation = next(
+        item
+        for item in result["source_observations"]
+        if item["source_id"] == "ato_login_logs_search"
+    )
+    assert login_observation["passthrough_row_cap"]["observed_records"] == 334
+    assert login_observation["passthrough_row_cap"]["returned_records"] == 100
+    assert login_observation["passthrough_row_cap"]["missing_records"] == 234
+    login_quality = next(
+        item
+        for item in result["source_quality"]["per_source"]
+        if item["source_id"] == "ato_login_logs_search"
+    )
+    assert login_quality["observed_records"] == 334
+    assert login_quality["returned_records"] == 100
+    assert login_quality["missing_records"] == 234
     candidates = result["user_device_entity_resolution"]["candidate_device_ids"]
     candidate_ids = {item["device_id"] for item in candidates}
     assert {"did_publish_safe_1", "did_login_safe_1", "did_operation_safe_1"} <= candidate_ids
+    assert result["user_device_entity_resolution"]["resolution_status"] == "multiple_candidate_devices_need_ranking"
     chain_status = result["evidence_card"]["chain_status"]
     assert chain_status["web_publish_fact"]["status"] == "closed"
     assert chain_status["web_login_history"]["status"] == "partial"
     assert "response_too_large_needs_window_shrink" in chain_status["web_login_history"]["breakpoint_types"]
     assert chain_status["device_identity_alignment"]["status"] in {"closed", "partial"}
+    assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["status"] == "login_log_truncated_needs_window_shrink"
 
 
 def main() -> int:

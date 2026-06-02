@@ -172,6 +172,15 @@ SENSITIVE_VALUE_PATTERNS = (
     re.compile(r"\b\d{17}[\dXx]\b"),
 )
 
+LOGIN_LOGS_ARRAY_CAP_PATH = ("data", "logSearchModels")
+ROW_CAP_METADATA_KEYS = (
+    "capped_json_path",
+    "observed_records",
+    "returned_records",
+    "missing_records",
+    "missing_body_reason",
+)
+
 
 def _unique(items: list[str]) -> list[str]:
     seen: set[str] = set()
@@ -210,6 +219,115 @@ def _parse_body_value(value: Any) -> tuple[Any, str]:
         except json.JSONDecodeError:
             return None, "json_parse_error"
     return None, "non_json_text"
+
+
+
+def _safe_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float) and value.is_integer() and value >= 0:
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+def _nested_dicts(value: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = [value]
+    upstream = value.get("upstream")
+    if isinstance(upstream, dict):
+        candidates.append(upstream)
+    source_result = value.get("source_result")
+    if isinstance(source_result, dict):
+        candidates.append(source_result)
+        nested_upstream = source_result.get("upstream")
+        if isinstance(nested_upstream, dict):
+            candidates.append(nested_upstream)
+        transport = source_result.get("transport")
+        if isinstance(transport, dict):
+            candidates.append(transport)
+    transport = value.get("transport")
+    if isinstance(transport, dict):
+        candidates.append(transport)
+    return candidates
+
+
+def _row_cap_metadata(source_payload: dict[str, Any], transport_row: dict[str, Any]) -> dict[str, Any]:
+    for candidate in [transport_row, *_nested_dicts(source_payload)]:
+        if not isinstance(candidate, dict):
+            continue
+        raw_handling = str(candidate.get("raw_body_handling") or "")
+        path = candidate.get("capped_json_path")
+        observed = _safe_int(candidate.get("observed_records"))
+        returned = _safe_int(candidate.get("returned_records"))
+        missing = _safe_int(candidate.get("missing_records"))
+        if raw_handling != "json_array_capped" and not path:
+            continue
+        metadata = {
+            "raw_body_handling": raw_handling or "json_array_capped",
+            "capped_json_path": str(path or "data.logSearchModels"),
+            "observed_records": observed,
+            "returned_records": returned,
+            "missing_records": missing,
+            "missing_body_reason": candidate.get("missing_body_reason") or "response_too_large",
+        }
+        return {key: value for key, value in metadata.items() if value is not None}
+    return {}
+
+
+def _value_at_path(value: Any, path: tuple[str, ...]) -> Any:
+    cursor = value
+    for key in path:
+        if not isinstance(cursor, dict) or key not in cursor:
+            return None
+        cursor = cursor[key]
+    return cursor
+
+
+def _clone_json(value: Any) -> Any:
+    return json.loads(json.dumps(value, ensure_ascii=False))
+
+
+def _parse_nested_json(value: Any) -> Any:
+    if isinstance(value, (dict, list)):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or text[0] not in "[{":
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def _prepare_body_for_action(action: str, parsed: Any) -> Any:
+    if action != "login_logs_search" or not isinstance(parsed, dict):
+        return parsed
+    candidate_paths = (LOGIN_LOGS_ARRAY_CAP_PATH, ("logSearchModels",))
+    if not any(isinstance(_value_at_path(parsed, path), list) for path in candidate_paths):
+        return parsed
+    cloned = _clone_json(parsed)
+    for path in candidate_paths:
+        cloned_records = _value_at_path(cloned, path)
+        if not isinstance(cloned_records, list):
+            continue
+        for record in cloned_records[:200]:
+            if not isinstance(record, dict):
+                continue
+            parsed_log_content = _parse_nested_json(record.get("logContent"))
+            if isinstance(parsed_log_content, dict):
+                record["parsedLogContent"] = parsed_log_content
+                params = parsed_log_content.get("params")
+                if isinstance(params, dict):
+                    record["parsedLogContentParams"] = params
+            params = record.get("params")
+            if isinstance(params, dict):
+                record["loginParams"] = params
+    return cloned
 
 
 def _collect_body_candidates(value: Any, *, path: str = "$", limit: int = 12) -> list[tuple[str, Any]]:
@@ -329,6 +447,7 @@ def build_safe_observation(
     body_parse_statuses: list[str] = []
     parsed_values: list[tuple[str, Any]] = []
     flags: list[str] = []
+    row_cap_metadata = _row_cap_metadata(source_payload, transport_row)
 
     for body_path, body_value in body_candidates:
         parsed, parse_status = _parse_body_value(body_value)
@@ -337,7 +456,7 @@ def build_safe_observation(
             if parse_status.endswith("parse_error"):
                 flags.append("passthrough_interpretation_gap")
             continue
-        parsed_values.append((body_path, parsed))
+        parsed_values.append((body_path, _prepare_body_for_action(action, parsed)))
 
     direct_handles, direct_flags = _extract_handles(source_payload, source_id=source_id, path="$passthrough")
     flags.extend(direct_flags)
@@ -371,6 +490,13 @@ def build_safe_observation(
 
     source_specific_flags = _source_specific_flags(action, missing_business_fields, extracted_business_fields, transport_row)
     flags.extend(source_specific_flags)
+    if row_cap_metadata:
+        flags.append("json_array_capped_body_available")
+        if action == "login_logs_search":
+            if parsed_values:
+                flags.append("partial_login_log_parsed_from_json_array_capped")
+            if int(row_cap_metadata.get("missing_records") or 0) > 0:
+                flags.append("login_log_incomplete")
 
     candidate_device_ids = [
         {
@@ -400,6 +526,7 @@ def build_safe_observation(
         "extracted_business_fields": extracted_business_fields,
         "missing_business_fields": missing_business_fields,
         "candidate_device_ids": _dedupe_device_candidates(candidate_device_ids),
+        "passthrough_row_cap": row_cap_metadata,
         "interpretation_flags": _unique(flags),
         "source_quality_hint": _source_quality_hint(flags, missing_business_fields),
         "evidence_chain_tags": _evidence_chain_tags(action, extracted_business_fields),

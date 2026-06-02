@@ -14,14 +14,13 @@
             "transport": {
               "source_id": "ato_login_logs_search",
               "action": "login_logs_search",
-              "category": "blocked",
-              "source_status": "failed",
-              "error_type": "network_error",
-              "body_present": false,
-              "body_truncated": false,
-              "observed_bytes": 0,
-              "raw_body_handling": "suppressed",
-              "transport_error": "network_error"
+              "category": "partial",
+              "source_status": "response_too_large",
+              "http_status": 200,
+              "body_present": true,
+              "body_truncated": true,
+              "observed_bytes": 65536,
+              "raw_body_handling": "suppressed"
             }
           },
           "ato_archives_user_profile": {
@@ -71,14 +70,13 @@
           "ato_login_logs_search": {
             "source_id": "ato_login_logs_search",
             "action": "login_logs_search",
-            "category": "blocked",
-            "source_status": "failed",
-            "error_type": "network_error",
-            "body_present": false,
-            "body_truncated": false,
-            "observed_bytes": 0,
-            "raw_body_handling": "suppressed",
-            "transport_error": "network_error"
+            "category": "partial",
+            "source_status": "response_too_large",
+            "http_status": 200,
+            "body_present": true,
+            "body_truncated": true,
+            "observed_bytes": 65536,
+            "raw_body_handling": "suppressed"
           },
           "ato_archives_user_profile": {
             "source_id": "ato_archives_user_profile",
@@ -120,10 +118,10 @@
             "ato_archives_photo_search",
             "ato_archives_user_analysis"
           ],
-          "blocked": [
+          "blocked": [],
+          "partial": [
             "ato_login_logs_search"
           ],
-          "partial": [],
           "no_data": [],
           "auth_failed": [],
           "timeout": [],
@@ -150,21 +148,48 @@
               "http_status": 200,
               "body_present": true,
               "body_truncated": true,
-              "observed_bytes": 65536,
-              "raw_body_handling": "capped"
+              "observed_bytes": 180000,
+              "raw_body_handling": "json_array_capped",
+              "capped_json_path": "data.logSearchModels",
+              "observed_records": 334,
+              "returned_records": 100,
+              "missing_records": 234,
+              "missing_body_reason": "response_too_large",
+              "response_too_large": true
             },
-            "capped_body": {
-              "records": [
-                {
-                  "loginTime": 1780000001000,
-                  "loginType": "password",
-                  "loginSource": "WEB",
-                  "loginDeviceId": "did_login_safe_1",
-                  "requestIp": "10.0.0.2",
-                  "userAgent": "UA_SAFE_LOGIN",
-                  "scanLogin": true
+            "upstream": {
+              "status": 200,
+              "content_type": "application/json",
+              "body_present": true,
+              "body_omitted": false,
+              "body_truncated": true,
+              "observed_bytes": 180000,
+              "returned_bytes": 12000,
+              "raw_body_handling": "json_array_capped",
+              "capped_json_path": "data.logSearchModels",
+              "observed_records": 334,
+              "returned_records": 100,
+              "missing_records": 234,
+              "missing_body_reason": "response_too_large",
+              "response_too_large": true,
+              "capped_body": {
+                "code": 0,
+                "data": {
+                  "total": 334,
+                  "logSearchModels": [
+                    {
+                      "id": "login_safe_1",
+                      "userId": "2892617234",
+                      "logSource": "WEB",
+                      "method": "/pass/kuaishou/login/qr/callback",
+                      "deviceId": "did_login_safe_1",
+                      "requestIp": "10.0.0.2",
+                      "userAgent": "UA_SAFE_LOGIN",
+                      "logContent": "{\"params\": {\"login_time\": 1780000001000, \"login_type\": \"qr_scan\", \"login_source\": \"WEB\", \"login_device\": \"did_login_safe_1\", \"ip\": \"10.0.0.2\", \"ua\": \"UA_SAFE_LOGIN\", \"tokenType\": \"business_event_field\", \"loginSessionEvent\": \"visible_business_event\"}}"
+                    }
+                  ]
                 }
-              ]
+              }
             }
           },
           "ato_archives_photo_search": {
@@ -227,8 +252,14 @@
             "http_status": 200,
             "body_present": true,
             "body_truncated": true,
-            "observed_bytes": 65536,
-            "raw_body_handling": "capped"
+            "observed_bytes": 180000,
+            "raw_body_handling": "json_array_capped",
+            "capped_json_path": "data.logSearchModels",
+            "observed_records": 334,
+            "returned_records": 100,
+            "missing_records": 234,
+            "missing_body_reason": "response_too_large",
+            "response_too_large": true
           },
           "ato_archives_photo_search": {
             "source_id": "ato_archives_photo_search",
