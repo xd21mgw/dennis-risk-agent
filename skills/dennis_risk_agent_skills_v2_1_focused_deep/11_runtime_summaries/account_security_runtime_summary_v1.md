@@ -301,6 +301,7 @@ ATO / 登录异常推荐顺序：
 controlled parallel 编排口径：
 
 - browser-backed service 是 pure passthrough：只提供 action envelope、transport metadata、capped body 和 batch `transport_status_matrix` / `source_results`。Dennis 不依赖 service-side `normalized_observation`、`source_card`、`source_quality`、`evidence_card_inputs` 或 `compat_summary`，必须自行生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和最终边界。
+- Dennis 可在内部安全解析 visible raw/capped body 字段，但只保留 allowlisted 风控锚点和字段路径：登录时间 / 登录方式 / 登录端 / 登录设备 / IP-UA、`photo_id` / 发布时间 / 发布端 / 发布设备、操作时间 / 安全动作 / 操作设备、关联设备 / user-device 图谱线索。raw full body、cookie、token、session、header、password、手机号、身份证号、姓名和详细地址不得进入用户正文或 evidence 展示层。
 - ATO 单案 source plan 不再只表达线性顺序，必须表达 `execution_group`、`depends_on`、`timeout_class`、`failure_policy`、`source_priority` 和 `expected_observation`。
 - ATO 单案 first step 是 realtime P0 source collection；Dennis 从登录链路、档案画像、用户分析、作品/发布承接和 Track readiness 共同推导可疑锚点，再进入候选控制端提取、设备身份一致性和历史基线比较。
 - `login_logs_search`、`archives_user_profile`、`track_analysis_check_data_ready` 可作为 `independent_parallel` 组并行执行；三者分别覆盖登录侧、账号基线和 Track 数据可用性 / provenance。

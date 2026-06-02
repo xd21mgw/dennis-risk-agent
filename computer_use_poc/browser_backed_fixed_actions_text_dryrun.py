@@ -271,6 +271,15 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "login_network_error_subtyped": "登录日志 network_error 必须细分为 transport_error/service_gap/batch_contract_error/passthrough_interpretation_gap/invalid_params",
     "login_transport_success_partial_response_too_large": "登录日志 2xx + body_present + body_truncated 应归为 transport_success + partial/response_too_large",
     "raw_body_suppressed_not_body_missing": "raw_body_handling=suppressed/capped 不等于 body_missing",
+    "safe_raw_capped_body_parser_enabled": "Dennis 可在内部安全解析 raw/capped body，只返回 allowlisted safe handles",
+    "raw_body_not_returned_to_final_answer": "raw body 不进入 final answer / evidence card 展示层",
+    "credential_material_redacted": "cookie/token/session/header/password 等 credential 原文必须丢弃",
+    "strict_pii_redacted": "手机号、身份证、姓名、详细地址等严格 PII 不进入用户输出",
+    "safe_parser_extracts_publish_fields": "archives_photo_search capped body 中的 photo_id/publish_time/source/device 可被 Dennis 抽取",
+    "safe_parser_extracts_login_fields": "login_logs_search body 中的 login_time/login_type/source/device/ip_ua 可被 Dennis 抽取",
+    "safe_parser_extracts_security_action_fields": "archives_user_analysis body 中的 security action / operation_device 可被 Dennis 抽取",
+    "extracted_device_drives_track_followup": "抽取到的 login/publish/operation device 可进入 candidate_device_ids 并驱动 Track readiness",
+    "safe_parser_failure_enters_passthrough_interpretation_gap": "body parser 失败进入 passthrough_interpretation_gap，不阻塞 partial answer",
     "login_small_body_likely_no_data_not_risk_exclusion": "登录日志 2xx 小 body 且有 empty hint 只能 likely_no_data，不作为低风险反证",
     "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
     "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
@@ -989,7 +998,22 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         "raw token",
         "token secret",
     ])
-    if secret_or_raw_dump_requested:
+    safe_parser_context = has_any(text, [
+        "safe parser",
+        "safe raw",
+        "capped body parser",
+        "raw/capped body parser",
+        "capped body",
+        "body 里",
+        "body 中",
+        "解析 rawbody",
+        "解析 raw body",
+        "publish_device",
+        "login_device",
+        "operation_device",
+        "candidate_device",
+    ])
+    if secret_or_raw_dump_requested and not safe_parser_context:
         return finalize_route(plan, text, {
             "actions": [],
             "orchestration": "deny raw secret/raw dump request; offer sanitized source summary only",
@@ -1003,6 +1027,29 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_output_raw_login_records",
                 "do_not_output_raw_labelInfo",
                 "do_not_output_raw_full_body",
+            ]),
+        })
+
+    if has_any(text, ["驱动 track_analysis_check_data_ready", "驱动 track readiness"]) or (
+        has_any(text, ["publish_device", "login_device", "operation_device"])
+        and has_any(text, ["抽到 candidate_device", "驱动 track", "驱动 Track"])
+    ):
+        return finalize_route(plan, text, {
+            "actions": ["track_analysis_check_data_ready"],
+            "orchestration": "Extracted device handles enter candidate_device_ids and drive Track readiness.",
+            "boundary_flags": [
+                "pure_passthrough_envelope_required",
+                "dennis_generates_observation_from_passthrough",
+                "safe_raw_capped_body_parser_enabled",
+                "safe_parser_extracts_publish_fields",
+                "safe_parser_extracts_login_fields",
+                "extracted_device_drives_track_followup",
+                "default_runtime_routing_false",
+            ],
+            "answer_contract": list(GLOBAL_ANSWER_CONTRACT),
+            "safety_flags": unique(GLOBAL_SAFETY_FLAGS + ANSWER_TEMPLATE_NEGATIVE_GUARDS + [
+                "do_not_treat_track_missing_device_as_simple_skip",
+                "do_not_output_raw_records",
             ]),
         })
 
@@ -1029,6 +1076,12 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         "small body",
         "empty hint",
         "likely_no_data",
+        "safe parser",
+        "safe raw",
+        "capped body parser",
+        "raw/capped body parser",
+        "body 里",
+        "body 中",
     ]):
         passthrough_actions = ["source_plan_only_no_action_selected"]
         if has_any(text, ["login_logs_search"]):
@@ -1039,6 +1092,8 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             passthrough_actions = ["archives_photo_search", "archives_user_profile", "archives_user_analysis"]
         elif has_any(text, ["rcp_event_feature_list", "feature_list"]):
             passthrough_actions = ["rcp_event_feature_list"]
+        elif has_any(text, ["track_analysis_check_data_ready", "track readiness", "Track readiness"]):
+            passthrough_actions = ["track_analysis_check_data_ready"]
         passthrough_flags = [
             "pure_passthrough_envelope_required",
             "dennis_generates_observation_from_passthrough",
@@ -1071,6 +1126,25 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             passthrough_flags += ["login_transport_success_partial_response_too_large", "partial_observation_available"]
         if has_any(text, ["raw_body_handling=suppressed", "raw_body_suppressed", "suppressed", "body_missing"]):
             passthrough_flags += ["raw_body_suppressed_not_body_missing"]
+        if has_any(text, ["safe parser", "safe raw", "capped body", "capped body parser", "raw/capped body parser", "body 里", "body 中", "解析 rawbody", "解析 raw body"]):
+            passthrough_flags += [
+                "safe_raw_capped_body_parser_enabled",
+                "raw_body_not_returned_to_final_answer",
+            ]
+        if has_any(text, ["token/session/header/password", "cookie", "credential", "敏感"]):
+            passthrough_flags += ["credential_material_redacted"]
+        if has_any(text, ["手机号", "身份证", "姓名", "详细地址", "PII", "pii"]):
+            passthrough_flags += ["strict_pii_redacted"]
+        if has_any(text, ["publish_time", "publish_source", "publish_device", "photo_id", "发布设备"]):
+            passthrough_flags += ["safe_parser_extracts_publish_fields"]
+        if has_any(text, ["login_time", "login_type", "login_source", "login_device", "ip_ua"]):
+            passthrough_flags += ["safe_parser_extracts_login_fields"]
+        if has_any(text, ["security action", "operation_device", "改密", "换绑", "保护账号"]):
+            passthrough_flags += ["safe_parser_extracts_security_action_fields"]
+        if has_any(text, ["candidate_device", "publish_device", "login_device", "operation_device", "Track", "track_analysis_check_data_ready"]):
+            passthrough_flags += ["extracted_device_drives_track_followup"]
+        if has_any(text, ["parser 失败", "parse fail", "解析失败"]):
+            passthrough_flags += ["safe_parser_failure_enters_passthrough_interpretation_gap", "partial_evidence_required"]
         if has_any(text, ["feature list", "feature_list", "特征明细", "完整特征"]):
             passthrough_flags += ["feature_list_partial_only_feature_group_summary"]
         if has_any(text, ["timeout", "platform_error", "parse_error"]):
@@ -1123,6 +1197,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "do_not_use_compat_summary_in_pure_passthrough",
                 "do_not_claim_complete_from_capped_body",
                 "do_not_discard_completed_source",
+                "do_not_output_raw_records",
             ]),
         })
 
@@ -1300,6 +1375,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     if has_any(text, ["publish_device", "publish_time", "photo_id", "发布设备", "发布时间", "作品设备", "发布来源"]):
         flags += [
             "content_chain_business_fields_missing",
+            "photo_search_no_data_not_abnormal_publish_exclusion",
             "publish_device_login_device_alignment_required",
         ]
         if has_any(text, ["login_logs", "登录日志", "track", "weapon", "设备链路", "对齐"]):

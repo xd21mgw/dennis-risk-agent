@@ -767,6 +767,9 @@ Dennis adds a `user_device_entity_resolution` layer for ATO/account takeover cas
 
 Source-specific interpretation must stay Dennis-owned:
 
+- Dennis may safely parse visible `body`, `raw_body`, `response_body`, `upstream_body`, `raw_payload`, `capped_body`, `body_excerpt`, or `body_snippet` fields in memory. The parser returns only allowlisted risk handles, field paths, observation gaps, and evidence-chain tags; it must not return or persist raw full body content.
+- `cookie`, `token`, `session`, `header`, `authorization`, `password`, `secret`, and credential-like values are dropped. Token/OAuth/scan control-chain presence may be retained only as a redacted presence handle, never as a credential value.
+- Strict PII such as phone number, ID card number, real name, or detailed address is not allowed in user-visible evidence. If encountered, mark `pii_strict_redacted` and use only safe summaries or handles.
 - `login_logs_search`: `response_too_large` / `body_truncated` means partial observation and should recommend a narrower window; `network_error` must be subtyped as transport, service, batch-contract, passthrough-interpretation, or invalid-params gap.
 - `archives_user_analysis`: completed transport is not behavior-chain closure; if password/binding/protection/profile/publish operation fields are unavailable, mark `behavior_chain_business_fields_missing`.
 - `archives_photo_search`: completed transport is not content handoff closure; if `photo_id`, publish time, publish device, or publish source are unavailable, mark `content_chain_business_fields_missing`. `no_data` does not exclude abnormal publish or ATO.

@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from passthrough_observation_builder import build_safe_observation
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ORCHESTRATION_CHECK = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"
@@ -592,7 +594,7 @@ def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[st
         )
 
     try:
-        return sanitize_for_output(json.loads(data.decode("utf-8")))
+        return json.loads(data.decode("utf-8"))
     except json.JSONDecodeError:
         return build_harness_error_result(
             source_status="parse_error",
@@ -1347,11 +1349,20 @@ def build_source_observations(
         contract = SOURCE_OBSERVATION_CONTRACTS.get(action, {})
         quality = str(row.get("quality_class") or "blocked")
         flags: list[str] = []
-        missing_business_fields: list[str] = []
         raw_source_payload = raw_rows_by_id.get(item.source_id, {})
-        field_handles = extract_observation_field_handles(raw_source_payload, source_id=item.source_id)
         expected_business_fields = list(contract.get("expected_business_fields", []))
-        extracted_business_fields, inferred_missing_fields = match_business_fields(field_handles, expected_business_fields)
+        safe_observation = build_safe_observation(
+            source_id=item.source_id,
+            action=action,
+            source_payload=raw_source_payload,
+            transport_row=row,
+            expected_business_fields=expected_business_fields,
+            chain_section=str(contract.get("chain_section", "source_quality")),
+            role=str(contract.get("role", item.expected_observation)),
+        )
+        field_handles = list(safe_observation.get("extracted_safe_handles", []))
+        extracted_business_fields = list(safe_observation.get("extracted_business_fields", []))
+        missing_business_fields = list(safe_observation.get("missing_business_fields", []))
 
         if row.get("body_truncated") or quality == "partial":
             flags.append("partial_observation_available")
@@ -1363,9 +1374,8 @@ def build_source_observations(
             flags.append("missing_evidence_not_counter_evidence")
         if quality == "planned":
             flags.append("dry_run_not_platform_evidence")
-        if quality in {"completed", "partial"} and inferred_missing_fields:
+        if quality in {"completed", "partial"} and missing_business_fields:
             flags.extend(["observation_compression_gap", "business_fields_not_extracted"])
-            missing_business_fields = inferred_missing_fields
 
         if action == "login_logs_search":
             subtype = _transport_issue_subtype(row)
@@ -1413,6 +1423,7 @@ def build_source_observations(
 
         observations.append(
             {
+                "dennis_observation": safe_observation,
                 "source_id": item.source_id,
                 "action": action,
                 "chain_section": contract.get("chain_section", "source_quality"),
@@ -1422,7 +1433,8 @@ def build_source_observations(
                 "extracted_business_fields": extracted_business_fields,
                 "observed_field_handles": field_handles,
                 "missing_business_fields": missing_business_fields,
-                "interpretation_flags": unique_strings(flags),
+                "candidate_device_ids": safe_observation.get("candidate_device_ids", []),
+                "interpretation_flags": unique_strings(flags + list(safe_observation.get("interpretation_flags", []))),
                 "evidence_use": (
                     "business_evidence_candidate"
                     if extracted_business_fields and quality in {"completed", "partial"}
@@ -1486,6 +1498,7 @@ def build_user_device_entity_resolution(
     batch_result: dict[str, Any],
     *,
     provided_device_id: str | None,
+    source_observations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     extracted = extract_candidate_device_ids(batch_result)
     candidates: list[dict[str, str]] = []
@@ -1498,6 +1511,20 @@ def build_user_device_entity_resolution(
             }
         )
     candidates.extend(extracted)
+    for observation in source_observations or []:
+        for candidate in observation.get("candidate_device_ids", []):
+            if not isinstance(candidate, dict):
+                continue
+            device_id = str(candidate.get("device_id") or "").strip()
+            if not device_id:
+                continue
+            candidates.append(
+                {
+                    "device_id": device_id,
+                    "source_id": str(candidate.get("source_id") or observation.get("source_id") or "safe_observation"),
+                    "field_path": str(candidate.get("field_path") or "safe_observation.candidate_device_ids"),
+                }
+            )
     deduped: list[dict[str, str]] = []
     seen_ids: set[str] = set()
     for candidate in candidates:
@@ -2008,11 +2035,17 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError("--browser-backed-base is required in live mode")
         primary_result = call_browser_backed_batch(args.browser_backed_base, batch_payload)
 
-    primary_result = sanitize_for_output(primary_result)
+    primary_source_quality_matrix = merge_source_quality(primary_source_plan, primary_result)
+    primary_source_observations = build_source_observations(
+        primary_source_plan,
+        primary_source_quality_matrix,
+        primary_result,
+    )
     primary_user_device_entity_resolution = build_user_device_entity_resolution(
         source_plan,
         primary_result,
         provided_device_id=args.device_id,
+        source_observations=primary_source_observations,
     )
     primary_candidates = primary_user_device_entity_resolution.get("candidate_device_ids", [])
     candidate_device_id = (
@@ -2045,14 +2078,16 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         else:
             followup_results.append(synthetic_track_missing_result(track_item))
 
-    batch_result = sanitize_for_output(merge_batch_results([primary_result, *followup_results]))
+    batch_result_raw = merge_batch_results([primary_result, *followup_results])
+    source_quality_matrix = merge_source_quality(source_plan, batch_result_raw)
+    source_observations = build_source_observations(source_plan, source_quality_matrix, batch_result_raw)
     user_device_entity_resolution = build_user_device_entity_resolution(
         source_plan,
-        batch_result,
+        batch_result_raw,
         provided_device_id=args.device_id,
+        source_observations=source_observations,
     )
-    source_quality_matrix = merge_source_quality(source_plan, batch_result)
-    source_observations = build_source_observations(source_plan, source_quality_matrix, batch_result)
+    batch_result = sanitize_for_output(batch_result_raw)
     missing_evidence = build_missing_evidence(source_quality_matrix)
     missing_evidence.extend(user_device_entity_resolution.get("missing_evidence", []))
     evidence_card = build_evidence_card(

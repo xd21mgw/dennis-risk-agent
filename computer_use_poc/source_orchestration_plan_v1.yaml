@@ -556,6 +556,68 @@
           },
           "source_observation_interpretation_contract": {
             "service_output_boundary": "browser-backed service provides pure passthrough envelope / transport metadata / capped body only; Dennis generates source observations",
+            "dennis_safe_raw_capped_body_parser_contract": {
+              "enabled": true,
+              "owner": "Dennis runtime, not browser-backed service",
+              "safe_parse_body": true,
+              "raw_body_returned_to_final_answer": false,
+              "raw_full_body_persisted": false,
+              "service_side_normalizer_restored": false,
+              "body_keys_may_be_parsed_internally": [
+                "body",
+                "raw_body",
+                "response_body",
+                "upstream_body",
+                "raw_payload",
+                "capped_body",
+                "body_excerpt",
+                "body_snippet",
+                "body_preview"
+              ],
+              "credential_fragments_forbidden": [
+                "cookie",
+                "token",
+                "session",
+                "header",
+                "password",
+                "authorization",
+                "secret"
+              ],
+              "strict_pii_redacted": [
+                "phone",
+                "id_card",
+                "real_name",
+                "address"
+              ],
+              "allowlisted_safe_handles": [
+                "user_id",
+                "device_id",
+                "did",
+                "candidate_device_id",
+                "photo_id",
+                "event_id",
+                "source_id",
+                "policy_code",
+                "login_time",
+                "login_type",
+                "login_source",
+                "login_device",
+                "login_ip_ua",
+                "publish_time",
+                "publish_source",
+                "publish_device",
+                "publish_ip_ua",
+                "operation_time",
+                "operation_type",
+                "security_action_type",
+                "operation_device",
+                "related_user_id",
+                "relation_type",
+                "field_path",
+                "observed_window",
+                "raw_reference_safe_id"
+              ]
+            },
             "completed_transport_not_business_chain_closure": true,
             "sources": {
               "login_logs_search": {

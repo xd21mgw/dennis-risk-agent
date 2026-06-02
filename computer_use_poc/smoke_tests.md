@@ -8606,8 +8606,25 @@ Text gate checks:
 - expected_runtime_behavior: offline_backfill_dynamic_module_authorization
 - expected_output_boundary: 默认输出 `offline_backfill_dynamic_authorization`，根据当前 `missing_evidence` 生成 `module_id`；不得固定列出 1-5 菜单；用户只授权 `web_publish_fact,device_history_baseline` 时必须包含 `offline_authorized_modules_only` 和 `offline_unapproved_modules_missing_evidence`，未授权模块不得执行；本地 dry-run 不调用 DataAgent/Hive。
 
+## 892. Dennis-owned safe passthrough observation builders
+
+- test_id: SAFE-PASSTHROUGH-PHOTO-PUBLISH-FIELDS-001
+- input: `archives_photo_search` passthrough capped body contains `photo_id`, `publish_time`, `publish_source`, and `publish_device`.
+- expected_runtime_behavior: dennis_safe_raw_capped_body_parser
+- expected_output_boundary: Dennis extracts allowlisted publish handles and field paths into `source_observations`; raw body is not returned; `publish_device` enters `candidate_device_ids`; completed transport alone is not weak evidence.
+
+- test_id: SAFE-PASSTHROUGH-LOGIN-FIELDS-001
+- input: `login_logs_search` body contains login time, login type/source, login device, IP/UA, and a token/OAuth/scan clue.
+- expected_runtime_behavior: dennis_safe_raw_capped_body_parser
+- expected_output_boundary: Dennis extracts login handles; credential values are redacted; token/OAuth/scan may be retained only as a redacted presence handle; no raw credential appears in user output.
+
+- test_id: SAFE-PASSTHROUGH-BUILDER-FAILURE-PARTIAL-001
+- input: capped body cannot be parsed or lacks expected business fields.
+- expected_runtime_behavior: passthrough_interpretation_gap_not_blocking
+- expected_output_boundary: mark `passthrough_interpretation_gap` / `observation_compression_gap`, keep partial evidence, generate dynamic offline backfill from field-level gaps, and do not restore service-side normalizers.
+
 Keyword check:
 
 ```bash
-grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization" computer_use_poc skills AGENTS.md 2>/dev/null
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser" computer_use_poc skills AGENTS.md 2>/dev/null
 ```

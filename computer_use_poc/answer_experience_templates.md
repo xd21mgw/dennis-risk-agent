@@ -344,6 +344,8 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - `archives_user_analysis` 或 `archives_photo_search` 到达 transport 层不等于业务证据闭合。若无法提取改密 / 换绑 / 保护账号 / 发布操作时间线，写 `behavior_chain_business_fields_missing`；若无法提取 `photo_id` / 发布时间 / 发布设备 / 发布来源，写 `content_chain_business_fields_missing`。
 - 登录日志 `network_error` 必须细分为 `transport_error` / `service_gap` / `batch_contract_error` / `passthrough_interpretation_gap` / `invalid_params`，不能笼统作为最终解释。`response_too_large` / `body_truncated` 建议围绕可疑锚点缩小窗口，不是登录正常或登录很多的证据。
 - pure passthrough 下，`raw_body_handling=suppressed/capped` 是安全传输策略，不等于 `body_missing`；Dennis 可以保留 `device_id` / DID、发布设备、登录设备、IP/UA 派生、时间锚点和字段路径等 safe handle，但不得输出 raw body、cookie、token、session、header 或 password。
+- Dennis 可以在内部安全解析 `body` / `raw_body` / `response_body` / `upstream_body` / `raw_payload` / `capped_body` / `body_snippet` 等可见 body 字段；解析结果只保留 allowlisted 风控字段和字段路径，不把 raw full body 写入 final answer、evidence card 展示层或 run log。
+- 高价值 source 必须优先沉淀 source-specific safe parser：`login_logs_search` 抽登录时间、登录端、登录方式、设备、IP/UA；`archives_photo_search` 抽 photo_id、发布时间、发布端、发布设备、发布 IP/UA；`archives_user_analysis` 抽安全动作、操作时间、操作设备；`archives_related_users` / `weapon_inventory` 抽扩散设备和 user-device 图谱线索。
 - `login_logs_search` 分类先看 transport envelope：`2xx + body_present=true + body_truncated=true` 写 `transport_success + partial_observation_available / response_too_large`；只有 401/403、`auth_redirect_detected=true`、`api_code=302` 或明确 `error_type` 才写 auth/permission；`ok=false + network_error` 才写 service fetch failure。
 
 ATO evidence card 不按 source 状态平铺，按风险链路组织：

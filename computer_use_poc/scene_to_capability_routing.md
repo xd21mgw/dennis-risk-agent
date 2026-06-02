@@ -154,6 +154,7 @@ Controlled parallel 编排补丁：
 - `auth_sensitive_serial` 用于 Archives 同源 / 共享认证上下文 source，例如 ATO / 异常发布中的 `archives_photo_search`、`archives_user_analysis` 在 profile 后串行补证。
 - 单 source `auth_failed` / `blocked` / `timeout` / `parse_error` 只影响该 source 和显式依赖它的后续 source，不阻塞其他已完成 source 进入 partial evidence card。
 - browser-backed service 采用 pure passthrough：service 只输出 passthrough envelope、transport metadata、capped body、`source_results`、`transport_status_matrix` 和 `missing_or_failed_sources`；Dennis 负责生成 observation、`source_quality_matrix`、evidence card、`missing_evidence` 和 `final_answer_boundary`。
+- pure passthrough 不等于 Dennis 不解析 body。Dennis-owned safe parser 可解析 visible capped/raw body，只保留 allowlisted 风控锚点和字段路径，用于 ATO 登录/发布/设备一致性链路；raw body、credential secret 和 strict PII 不输出。
 - `source_quality_matrix` 合并必须区分 `completed`、`no_data`、`partial`、`auth_failed`、`blocked`、`timeout`、`parse_error`；失败 source 进入 `missing_evidence`，已完成/partial passthrough observation 进入 Dennis evidence card。
 
 ATO 单案 realtime P0 路由补丁：

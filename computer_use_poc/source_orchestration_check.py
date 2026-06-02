@@ -96,6 +96,18 @@ ATO_DYNAMIC_OFFLINE_MODULE_IDS = {
     "web_login_history",
     "device_history_baseline",
 }
+ATO_SAFE_BODY_REQUIRED_HANDLES = {
+    "device_id",
+    "photo_id",
+    "login_time",
+    "login_source",
+    "publish_time",
+    "publish_source",
+    "publish_device",
+    "operation_time",
+    "security_action_type",
+    "field_path",
+}
 BATCH_ATO_REQUIRED_PLAN_STEPS = {
     "existing_cluster_signal_collection",
     "ato_cluster_lens_overlay",
@@ -668,6 +680,22 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                 )
             interpretation = scenario.get("source_observation_interpretation_contract", {})
             interpretation_sources = interpretation.get("sources", {})
+            safe_body_parser = interpretation.get("dennis_safe_raw_capped_body_parser_contract", {})
+            safe_handles = set(safe_body_parser.get("allowlisted_safe_handles", []))
+            if (
+                safe_body_parser.get("enabled") is not True
+                or safe_body_parser.get("owner") != "Dennis runtime, not browser-backed service"
+                or safe_body_parser.get("safe_parse_body") is not True
+                or safe_body_parser.get("raw_body_returned_to_final_answer") is not False
+                or safe_body_parser.get("service_side_normalizer_restored") is not False
+                or not ATO_SAFE_BODY_REQUIRED_HANDLES.issubset(safe_handles)
+            ):
+                failures.append(
+                    {
+                        "rule": "dennis_safe_raw_capped_body_parser_contract_required",
+                        "reason": "Dennis must own safe raw/capped body parsing, retain allowlisted risk handles, and keep raw body out of final answers without restoring service normalizers",
+                    }
+                )
             required_interpretation_sources = {
                 "login_logs_search",
                 "archives_user_analysis",

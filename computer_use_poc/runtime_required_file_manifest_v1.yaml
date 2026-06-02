@@ -37,6 +37,7 @@ full_runtime_required:
     - computer_use_poc/browser_backed_service_client.py
     - computer_use_poc/browser_backed_service_adapter_v1.md
     - computer_use_poc/runtime_case_execution_runner.py
+    - computer_use_poc/passthrough_observation_builder.py
     - computer_use_poc/har_platform_interface_inventory_v1.md
     - computer_use_poc/browser_backed_live_smoke_readiness_v1.md
     - computer_use_poc/browser_backed_fixed_actions_v1_integration_closure.md
