@@ -16,6 +16,8 @@ This file is the lightweight platform-call preflight entry for release / overlay
 
 ## Source Orchestration Gate
 
+- Code changes must follow `computer_use_poc/code_entropy_reduction_policy_v1.md`: audit first, delete/merge/replace before adding, explain any new code, and report net line delta plus retained items.
+
 - Business execution cases must select a source plan before platform source calls.
 - `source_orchestration_check.py` is the canonical local validator for source plan and source completion matrix drift.
 - Login-log-only execution is not sufficient for a final account security / ATO judgement.

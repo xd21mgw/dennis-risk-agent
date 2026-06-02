@@ -31,6 +31,8 @@ release 打包的完整 Skill / Prompt 原文。
 
 ## 默认工作流
 
+工程改动默认先按 `computer_use_poc/code_entropy_reduction_policy_v1.md` 做熵减审计，优先删、合并、替换，新增代码须说明不可复用，验收写净增删与保留原因。
+
 每次回答前，必须完成：
 
 1. 判断用户问题属于哪个业务领域：
@@ -485,10 +487,10 @@ ATO 单案用户设备实体层：
 
 - 默认运行 Dennis-side `user_device_entity_resolution`，它不是最终风险结论 source。
 - 候选 device_id 来源：登录日志、档案中心用户分析、作品搜索、Weapon 图谱、Track readiness。
-- 如果没有提取到候选 device_id，输出 `candidate_device_id_missing`，Track / Weapon / 发布设备对齐进入 `missing_evidence`，不得让整个 batch fail，也不得简单写“Track 未执行”。
+- 如果初始 source 没有提取到候选 device_id，必须先主动做 `user_device_entity_resolution`：按登录设备、发布设备、用户分析操作设备、历史/画像设备、Weapon graphData、Track getDeviceIds/readiness 的顺序找候选并排序；仍找不到时才输出 `candidate_device_id_missing_after_resolution`，Track / Weapon / 发布设备对齐进入 `missing_evidence`，不得让整个 batch fail，也不得简单写“Track 未执行”。
 - `archives_photo_search` 默认用于作品 / 发布 / 内容承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`。
 - `archives_user_analysis` 到达 transport 层但缺改密、换绑、保护账号、资料修改、发布相关操作等业务字段时标 `behavior_chain_business_fields_missing`。
-- 登录日志 `response_too_large` / `body_truncated` 是 partial observation，建议缩窗；`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
+- 登录日志 `response_too_large` / `body_truncated` 是 partial observation：若 capped body/snippet 可见，Dennis 先安全解析前段登录字段；若 `body_present=true` 但 Dennis 看不到 capped/snippet，标 `service_body_visibility_gap_for_truncated_login_log`。缩窗锚点优先来自发布时间、用户客诉时间、异常事件时间、策略命中时间和近期作品发布时间；没有锚点时先从作品/用户分析/策略事件找锚点。`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
 
 实时证据不闭合时，离线补证必须按当前 `missing_evidence` 动态生成 `module_id`，不固定输出 1-5 菜单，也不默认请求全量 DataAgent/Hive。典型动态模块包括 `web_publish_fact`、`web_login_history`、`device_history_baseline`、`token_oauth_scan_chain`、`security_action_chain`、`post_action_chain`；用户只授权哪个 `module_id`，只能生成/执行哪个模块的 query plan，未授权模块继续进入 `missing_evidence`。
 

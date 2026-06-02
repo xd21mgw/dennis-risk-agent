@@ -162,6 +162,7 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_request_full_hive_authorization_by_default",
     "do_not_execute_unapproved_offline_modules",
     "do_not_treat_network_error_as_final_platform_explanation",
+    "do_not_treat_response_too_large_as_login_evidence",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -285,6 +286,14 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "renderer_consumption_gap_forbidden": "parser 已抽字段时 evidence renderer 必须消费到三条证据链，不得退回 source 状态平铺",
     "live_response_inspection_required": "live E2E 必须输出 source/body/parser/field/evidence consumption inspection",
     "three_chain_status_required": "ATO live answer 必须先输出 WEB/发布事实链、WEB 登录历史链、设备一致性链状态",
+    "active_missing_evidence_next_hop_planner": "缺字段时 Dennis 必须先基于现有手脚生成下一跳补证计划，而不是直接停在 missing",
+    "candidate_device_resolution_active": "Track 缺 device_id 时主动从登录、发布、用户分析、历史设备、Weapon/Track getDeviceIds 找候选设备",
+    "candidate_device_id_missing_after_resolution": "候选设备只能在主动 resolution 后仍未找到时才进入 after-resolution missing",
+    "partial_login_log_parsed_from_capped_body": "login_logs_search 截断且 capped body 可见时先解析前段登录字段候选",
+    "service_body_visibility_gap_for_truncated_login_log": "login_logs_search body_present/truncated 但 Dennis 看不到 capped/snippet 时标服务体可见性缺口",
+    "login_log_window_shrink_anchor_missing": "登录日志缩窗前需先从发布、用户分析、策略事件或客诉时间找到时间锚点",
+    "active_backfill_recomputes_evidence_chain": "每次主动补证或新字段进入后必须重算 evidence chain 和 conclusion_state",
+    "generic_missing_entity_next_hop_planner": "缺实体到下一跳补证是通用机制，不是 ATO 单 case hardcode",
     "login_small_body_likely_no_data_not_risk_exclusion": "登录日志 2xx 小 body 且有 empty hint 只能 likely_no_data，不作为低风险反证",
     "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
     "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
@@ -1127,6 +1136,10 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             ]
             if has_any(text, ["login_logs_search", "login"]):
                 passthrough_flags += ["response_too_large_not_login_evidence"]
+                if has_any(text, ["可见", "visible", "前段", "解析前段", "capped 前段"]):
+                    passthrough_flags += ["partial_login_log_parsed_from_capped_body"]
+                if has_any(text, ["不可见", "看不到", "suppressed", "snippet"]):
+                    passthrough_flags += ["service_body_visibility_gap_for_truncated_login_log"]
         if has_any(text, ["200", "2xx", "body_present", "body_truncated"]):
             passthrough_flags += ["login_transport_success_partial_response_too_large", "partial_observation_available"]
         if has_any(text, ["raw_body_handling=suppressed", "raw_body_suppressed", "suppressed", "body_missing"]):
@@ -1156,6 +1169,18 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             passthrough_flags += ["safe_parser_extracts_security_action_fields"]
         if has_any(text, ["candidate_device", "publish_device", "login_device", "operation_device", "Track", "track_analysis_check_data_ready"]):
             passthrough_flags += ["extracted_device_drives_track_followup"]
+        if has_any(text, ["next-hop", "下一跳", "主动补证", "主动找", "继续找", "回填", "recompute", "重算"]):
+            passthrough_flags += [
+                "active_missing_evidence_next_hop_planner",
+                "active_backfill_recomputes_evidence_chain",
+            ]
+        if has_any(text, ["缺 device_id", "缺候选设备", "candidate_device_id_missing", "candidate_device_id", "Track 缺"]):
+            passthrough_flags += [
+                "candidate_device_resolution_active",
+                "candidate_device_id_missing_after_resolution",
+            ]
+        if has_any(text, ["缩窗锚点", "window shrink anchor", "anchor missing"]):
+            passthrough_flags += ["login_log_window_shrink_anchor_missing"]
         if has_any(text, ["parser 失败", "parse fail", "解析失败"]):
             passthrough_flags += ["safe_parser_failure_enters_passthrough_interpretation_gap", "partial_evidence_required"]
         if has_any(text, ["feature list", "feature_list", "特征明细", "完整特征"]):
@@ -1556,6 +1581,10 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "response_too_large_window_shrink_recommended",
             "partial_observation_available",
         ]
+        if has_any(text, ["capped 可见", "capped body 可见", "可见前段", "解析前段"]):
+            flags += ["partial_login_log_parsed_from_capped_body"]
+        if has_any(text, ["body_present", "body_truncated", "看不到", "snippet", "suppressed"]):
+            flags += ["service_body_visibility_gap_for_truncated_login_log"]
 
     if has_any(text, ["service_body_visibility_gap", "body visibility gap", "看不到 body", "看不到 capped body", "body 不可见", "body_present 但看不到"]):
         flags += ["service_body_visibility_gap_detected"]
@@ -1565,6 +1594,20 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         flags += ["renderer_consumption_gap_forbidden"]
     if has_any(text, ["live_response_inspection", "live response inspection", "inspection 表", "evidence_card_consumed", "chain_coverage"]):
         flags += ["live_response_inspection_required"]
+    if has_any(text, ["next-hop", "下一跳", "主动补证", "主动找", "继续找", "回填", "recompute", "重算"]):
+        flags += [
+            "active_missing_evidence_next_hop_planner",
+            "active_backfill_recomputes_evidence_chain",
+        ]
+    if has_any(text, ["缺 device_id", "缺候选设备", "candidate_device_id_missing", "candidate_device_id", "Track 缺"]):
+        flags += [
+            "candidate_device_resolution_active",
+            "candidate_device_id_missing_after_resolution",
+        ]
+    if has_any(text, ["缩窗锚点", "window shrink anchor", "anchor missing"]):
+        flags += ["login_log_window_shrink_anchor_missing"]
+    if has_any(text, ["非 ATO", "通用机制", "generic", "不是 ATO hardcode", "反爬", "群控", "导流"]):
+        flags += ["generic_missing_entity_next_hop_planner"]
 
     if has_any(text, ["evidence card", "证据卡", "source 状态平铺", "链路组织", "证据链路"]):
         flags += ["ato_evidence_card_chain_organized", "ato_evidence_card_three_core_chains"]

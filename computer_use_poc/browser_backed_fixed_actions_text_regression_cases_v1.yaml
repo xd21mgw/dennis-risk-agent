@@ -1000,3 +1000,35 @@ cases:
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_use_completed_transport_as_business_closure]
     expected_answer_contract: [evidence_card, final_answer_boundary, offline_backfill_recommendation]
+  - id: ATO-ACTIVE-NEXT-HOP-PLANNER-MISSING-FIELDS-001
+    user_query: "ATO live 三条证据链里缺 photo_id/publish_time/publish_device/login_device/candidate_device_id 时，Dennis 能不能先 next-hop 主动补证、回填并重算，而不是只输出 missing？"
+    expected_route_or_actions: [login_logs_search, archives_photo_search, archives_user_analysis, track_analysis_check_data_ready]
+    expected_orchestration: "Missing fields trigger active next-hop planner, user_device_entity_resolution, chain backfill, and conclusion recompute without new platform actions."
+    expected_boundary_flags: [active_missing_evidence_next_hop_planner, candidate_device_resolution_active, active_backfill_recomputes_evidence_chain, three_chain_status_required]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_make_final_judgement_without_source_quality, do_not_treat_track_missing_device_as_simple_skip]
+    expected_answer_contract: [evidence_card, source_observations, user_device_entity_resolution, final_answer_boundary]
+  - id: ATO-LOGIN-TRUNCATED-CAPPED-BODY-PARSE-OR-VISIBILITY-GAP-001
+    user_query: "login_logs_search response_too_large：如果 capped body 可见要解析前段；如果 body_present/body_truncated 但看不到 snippet，要标 service_body_visibility_gap_for_truncated_login_log 和缩窗锚点缺口。"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Truncated login logs parse visible capped prefix first, otherwise mark body visibility gap and generate window shrink anchor plan."
+    expected_boundary_flags: [partial_login_log_parsed_from_capped_body, service_body_visibility_gap_for_truncated_login_log, login_log_window_shrink_anchor_missing, response_too_large_window_shrink_recommended]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_response_too_large_as_login_evidence, do_not_claim_complete_from_capped_body]
+    expected_answer_contract: [source_observations, missing_evidence, final_answer_boundary]
+  - id: TRACK-CANDIDATE-DEVICE-AFTER-RESOLUTION-001
+    user_query: "Track 缺 device_id 时，不能直接停在 candidate_device_id_missing；要主动从 login_device/publish_device/operation_device/Weapon/Track getDeviceIds 找，找不到才 after resolution missing。"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Track missing device id triggers active user_device_entity_resolution before blocked/missing_required_fields."
+    expected_boundary_flags: [candidate_device_resolution_active, candidate_device_id_missing_after_resolution, track_candidate_device_from_prior_sources]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_track_missing_device_as_simple_skip]
+    expected_answer_contract: [user_device_entity_resolution, source_quality_matrix, missing_evidence]
+  - id: GENERIC-MISSING-ENTITY-NEXT-HOP-PLANNER-001
+    user_query: "先别查平台：导流/群控风险里缺实体锚点时，也要用通用机制 next-hop 找时间、设备、内容或策略锚点，不是单案 hardcode。"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Generic missing entity/time/source gap uses next-hop planner and evidence-chain recompute; no live platform call in text-only plan."
+    expected_boundary_flags: [generic_missing_entity_next_hop_planner, active_missing_evidence_next_hop_planner, active_backfill_recomputes_evidence_chain, plan_mode_no_platform_execution]
+    expected_execution_groups: []
+    should_not_do: [do_not_call_hive_without_authorization]
+    expected_answer_contract: [missing_evidence, final_answer_boundary]

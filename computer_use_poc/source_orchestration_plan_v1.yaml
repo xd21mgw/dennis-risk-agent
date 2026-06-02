@@ -478,7 +478,7 @@
               "publish_device_login_device_alignment",
               "historical_device_baseline_comparison"
             ],
-            "missing_candidate_device_rule": "if no candidate_device_id can be extracted, mark candidate_device_id_missing and put Track/Weapon/device-alignment gaps into missing_evidence; do not fail the whole batch",
+            "missing_candidate_device_rule": "if no candidate_device_id is present after initial parsing, actively run user_device_entity_resolution over login_device, publish_device, operation_device, profile/history device, Weapon graphData and Track getDeviceIds/readiness; only if that fails mark candidate_device_id_missing_after_resolution and put Track/Weapon/device-alignment gaps into missing_evidence; do not fail the whole batch",
             "track_missing_device_rule": "Track checkDataReady first attempts user_device_entity_resolution; only then mark missing_required_fields",
             "publish_alignment_rule": "publish_device from archives_photo_search must be aligned with login_logs_search, archives_user_analysis, Track, Weapon, and historical baseline when available"
           },

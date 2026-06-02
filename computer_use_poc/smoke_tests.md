@@ -8640,8 +8640,25 @@ Text gate checks:
 - expected_runtime_behavior: renderer_consumes_business_fields_into_three_chains
 - expected_output_boundary: user-facing answer must start from WEB/发布事实链、WEB 登录历史链、设备一致性链 status, then key gaps and dynamic offline modules. It must not primarily flatten `completed_sources` / `blocked_sources`.
 
+## 894. Active missing-evidence next-hop loop
+
+- test_id: ATO-ACTIVE-NEXT-HOP-PLANNER-MISSING-FIELDS-001
+- input: ATO live-shaped result is missing `photo_id`, `publish_time`, `publish_device`, `login_device`, and `candidate_device_id`.
+- expected_runtime_behavior: active_missing_evidence_next_hop_planner
+- expected_output_boundary: Dennis must first attempt existing next hops: photo/search and user-analysis for publish fields, capped login parsing or shrink-window planning for login fields, and `user_device_entity_resolution` for Track/Weapon/device alignment. Missing device becomes `candidate_device_id_missing_after_resolution`, not an immediate Track skip.
+
+- test_id: LOGIN-TRUNCATED-CAPPED-PARSE-OR-BODY-VISIBILITY-GAP-001
+- input: `login_logs_search` returns `body_present=true`, `body_truncated=true`, and either visible capped body or suppressed body.
+- expected_runtime_behavior: login_truncated_parse_or_visibility_gap
+- expected_output_boundary: If capped body is visible, mark `partial_login_log_parsed_from_capped_body` and extract safe login handles; if parser input is unavailable, mark `service_body_visibility_gap_for_truncated_login_log` and generate `login_log_window_shrink_anchor_missing` until publish/event/user-claim anchor exists.
+
+- test_id: GENERIC-MISSING-ENTITY-NEXT-HOP-PLANNER-001
+- input: non-ATO risk analysis lacks an entity/time anchor for follow-up evidence.
+- expected_runtime_behavior: generic_missing_entity_next_hop_planner
+- expected_output_boundary: The next-hop loop is generic: missing entity -> entity resolution, missing time -> behavior/event/strategy/content anchor, large response -> capped parse plus shrink, new evidence -> evidence-chain recompute. It must not be hardcoded only to ATO or `2892617234`.
+
 Keyword check:
 
 ```bash
-grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser\|service_body_visibility_gap\|parser_mapping_gap\|renderer_consumption_gap" computer_use_poc skills AGENTS.md 2>/dev/null
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|candidate_device_id_missing_after_resolution\|active_missing_evidence_next_hop_planner\|partial_login_log_parsed_from_capped_body\|service_body_visibility_gap_for_truncated_login_log\|login_log_window_shrink_anchor_missing\|active_backfill_recomputes_evidence_chain\|generic_missing_entity_next_hop_planner\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser\|service_body_visibility_gap\|parser_mapping_gap\|renderer_consumption_gap" computer_use_poc skills AGENTS.md 2>/dev/null
 ```
