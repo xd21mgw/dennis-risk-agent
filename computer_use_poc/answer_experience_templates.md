@@ -343,31 +343,34 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - ATO 单案默认要先跑 `user_device_entity_resolution` 这一层：从登录日志、档案中心用户分析、作品搜索、Weapon 图谱和 Track readiness 中提取候选 `device_id` / DID，再驱动 Track、Weapon、发布设备对齐和历史设备基线。提取不到时写 `candidate_device_id_missing`，让 Track 进入 `missing_evidence`，不能让整个 batch 失败，也不能简单写“Track 未执行”。
 - `archives_user_analysis` 或 `archives_photo_search` 到达 transport 层不等于业务证据闭合。若无法提取改密 / 换绑 / 保护账号 / 发布操作时间线，写 `behavior_chain_business_fields_missing`；若无法提取 `photo_id` / 发布时间 / 发布设备 / 发布来源，写 `content_chain_business_fields_missing`。
 - 登录日志 `network_error` 必须细分为 `transport_error` / `service_gap` / `batch_contract_error` / `passthrough_interpretation_gap` / `invalid_params`，不能笼统作为最终解释。`response_too_large` / `body_truncated` 建议围绕可疑锚点缩小窗口，不是登录正常或登录很多的证据。
+- pure passthrough 下，`raw_body_handling=suppressed/capped` 是安全传输策略，不等于 `body_missing`；Dennis 可以保留 `device_id` / DID、发布设备、登录设备、IP/UA 派生、时间锚点和字段路径等 safe handle，但不得输出 raw body、cookie、token、session、header 或 password。
+- `login_logs_search` 分类先看 transport envelope：`2xx + body_present=true + body_truncated=true` 写 `transport_success + partial_observation_available / response_too_large`；只有 401/403、`auth_redirect_detected=true`、`api_code=302` 或明确 `error_type` 才写 auth/permission；`ok=false + network_error` 才写 service fetch failure。
 
 ATO evidence card 不按 source 状态平铺，按风险链路组织：
 
 ```text
-1. 控制权入口：登录方式、设备/IP、OAuth/扫码/token、window gap。
-2. 账号状态与后置行为：账号状态、改密、换绑、保护账号、资料修改、关注、发布操作。
-3. 内容/发布承接：作品、发布时间、发布来源、发布设备、导流/审核/策略原因。
-4. 前后端活跃对齐：Track readiness、front-back mismatch、缺 device_id。
-5. 设备/IP/扩散：candidate_device_ids、设备图谱、关联账号、历史常用设备差异。
-6. 策略/风控信号：event/policy hit 只能作为辅助。
-7. 反证与缺口：no_data、partial、auth gap、missing device、常用设备反证是否闭合。
-8. 结论边界：未闭合时写 insufficient_support，并说明缺哪条链路。
+1. WEB/异常端发布事实：publish_time、publish_source、publish_device、publish_ip_ua、photo_id。
+2. WEB 历史常用：发布前后 WEB/H5/PC/token/OAuth/扫码登录是否存在，历史 WEB 是否常用。
+3. 设备一致性：发布设备、登录设备、用户设备反查、历史设备基线是否一致。
+4. 控制权入口：登录方式、设备/IP、OAuth/扫码/token、window gap。
+5. 账号状态与后置行为：账号状态、改密、换绑、保护账号、资料修改、关注、发布操作。
+6. 前后端活跃对齐：Track readiness、front-back mismatch、缺可对齐设备实体。
+7. 策略/风控信号：event/policy hit 只能作为辅助。
+8. 反证与缺口：no_data、partial、auth gap、missing device、常用设备反证是否闭合。
+9. 结论边界：未闭合时写 insufficient_support，并说明缺哪条链路。
 ```
 
-实时证据不闭合时，不默认请求“全量 Hive/DataAgent”。用户正文给模块化授权：
+`completed transport` 不能自动进入 weak evidence。只有抽到能支持判断的业务字段，才进入 strong / medium / weak evidence；只完成传输但缺业务字段时，写 `observation_compression_gap` / `business_fields_not_extracted` / `completed_transport_not_business_chain_closure`。
+
+实时证据不闭合时，不默认请求“全量 Hive/DataAgent”，也不固定给 1-5 菜单。Dennis 必须基于当前 `missing_evidence` 动态生成补证 `module_id`：
 
 ```text
-当前实时证据不足，不能确认/排除。若要继续闭环，请选择授权以下一项或多项：
-1. 登录/控制链：登录成功/失败、登录方式、设备/IP、kickout、风险登录。
-2. token/OAuth/扫码/refreshToken 链路：确认是否存在非密码型接管。
-3. 改密/换绑/保护账号：确认控制权变化后的安全操作。
-4. 发布作品/私信/资料修改后置行为：确认是否有非本人内容承接。
-5. 设备/IP/UA 历史基线：对比异常行为是否偏离历史常用环境。
+当前实时证据不足，不能确认/排除。基于当前缺口，建议授权以下补证模块：
+- web_publish_fact：补发布时间、发布端、发布设备、发布 IP/UA、photo_id。
+- web_login_history：补发布前后 WEB/H5/PC/token/OAuth/扫码登录，判断历史 WEB 是否常用。
+- device_history_baseline：补登录设备、发布设备、用户历史设备是否同一类，首次出现和历史出现天数。
 
-请回复要授权的编号，例如 1,3,4；回复“全查”才授权全部模块。未授权模块只保留为 missing_evidence。
+请回复要授权的 module_id，例如 web_publish_fact,device_history_baseline。只会生成你授权模块的 DataAgent/Hive 查询计划；未授权模块继续保留为 missing_evidence。
 ```
 
 短期 observation builder 方向：

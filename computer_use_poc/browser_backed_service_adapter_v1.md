@@ -80,10 +80,11 @@ dennis_generated_from_passthrough:
 Mapping rules:
 
 - `body_truncated=true` -> `partial_observation_available`; do not claim complete detail coverage.
+- `http_status` 2xx + `body_present=true` + `body_truncated=true` -> transport success with partial observation / response-too-large boundary, not `network_error`, `auth_failed`, or permission denial.
 - `auth_redirect_detected=true` or `api_code=302` -> `auth_flow_not_completed_in_bound_context`; do not say the user has no permission unless a permission denial is explicit.
 - `body_present=false` with empty result semantics -> `no_data` source quality; never low-risk/no-risk counter evidence.
 - `timeout=true`, `platform_error`, transport error, invalid params, or parse failure -> missing evidence and partial answer where other sources are usable.
-- `raw_body_handling=suppressed|capped` -> only limited observation; do not output raw upstream body or raw records.
+- `raw_body_handling=suppressed|capped` -> raw body is intentionally withheld, not `body_missing`; only limited observation is allowed, but Dennis may retain safe field handles such as device, time, source, and field path.
 - Dennis may use model understanding over capped passthrough bodies for high-value sources, but full standard observation builders remain incremental Dennis-owned work, not service responsibility.
 
 ## Fixed Action Mapping
@@ -288,7 +289,7 @@ account_security_browser_backed_sequence:
       - 不能把失败或空结果解释为无风险反证
 ```
 
-ATO single-case execution must be represented by the harness-generated controlled batch plan: `login_logs_search`, `archives_user_profile`, `track_analysis_check_data_ready`, and dependent `archives_user_analysis`. In the passthrough default path, Dennis records passthrough parser failures directly in Dennis-generated `source_quality` and `missing_evidence`; it must not silently fall back to summary mode, service-side `compat_summary`, old runners, or freeform single actions. `no_data`, `parse_error`, `body_missing`, `response_too_large`, and `source_gap` are not no-risk counter-evidence.
+ATO single-case execution must be represented by the harness-generated controlled batch plan: `login_logs_search`, `archives_user_profile`, `archives_photo_search`, `track_analysis_check_data_ready`, and dependent `archives_user_analysis`. In the passthrough default path, Dennis records passthrough parser failures directly in Dennis-generated `source_quality` and `missing_evidence`; it must not silently fall back to summary mode, service-side `compat_summary`, old runners, or freeform single actions. `no_data`, `parse_error`, `body_missing`, `response_too_large`, and `source_gap` are not no-risk counter-evidence.
 
 For ATO default execution, Track is the `track_analysis_check_data_ready` readiness/provenance source. Historical `track_analysis_account_security_bundle` helper behavior is unit-test/manual helper scope, not the default case execution path. If Track lacks `device_id` or returns no/partial data, that gap stays missing in Dennis-generated `source_quality` instead of becoming owner proof or low-risk evidence.
 
@@ -373,6 +374,7 @@ Legacy service summary fields are historical only:
 | Passthrough signal | Dennis source_status | failure_layer | Handling |
 | --- | --- | --- | --- |
 | usable envelope with no error/timeout/auth redirect | `completed` | `no_failure` | Enter completed source evidence after Dennis interpretation. |
+| HTTP 2xx + `body_present=true` + `body_truncated=true` | `partial` | `response_size_boundary` | Treat as transport success with partial observation / response-too-large boundary. |
 | `body_truncated=true` or capped body | `partial` | `response_size_boundary` | Enter partial observation and avoid complete-detail claims. |
 | empty result metadata or `body_present=false` without error | `no_data` | `observed_empty_result` | Record no-data source quality; not no-risk evidence. |
 | `auth_redirect_detected=true` or `api_code=302` | `auth_failed` | `auth_session` | Record auth flow not completed in bounded context; do not start auth debug. |

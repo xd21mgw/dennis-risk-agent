@@ -79,6 +79,9 @@ ATO_USER_DEVICE_ENTITY_SOURCES = {
     "track_analysis_check_data_ready",
 }
 ATO_EVIDENCE_CHAIN_SECTIONS = {
+    "web_or_abnormal_publish_fact",
+    "web_history_baseline",
+    "device_identity_alignment",
     "control_entry",
     "account_state_and_post_actions",
     "content_publish_handoff",
@@ -88,7 +91,11 @@ ATO_EVIDENCE_CHAIN_SECTIONS = {
     "counter_evidence_and_gaps",
     "conclusion_boundary",
 }
-ATO_OFFLINE_AUTH_MODULE_IDS = {1, 2, 3, 4, 5}
+ATO_DYNAMIC_OFFLINE_MODULE_IDS = {
+    "web_publish_fact",
+    "web_login_history",
+    "device_history_baseline",
+}
 BATCH_ATO_REQUIRED_PLAN_STEPS = {
     "existing_cluster_signal_collection",
     "ato_cluster_lens_overlay",
@@ -269,20 +276,30 @@ def parse_passthrough_envelope(raw: str | None) -> dict[str, Any] | None:
 
 
 def classify_passthrough_source(envelope: dict[str, Any]) -> str:
+    try:
+        http_status = int(envelope.get("http_status")) if envelope.get("http_status") not in {None, ""} else None
+    except (TypeError, ValueError):
+        http_status = None
+    if http_status is not None and 200 <= http_status < 300 and envelope.get("body_present") is True and envelope.get("body_truncated") is True:
+        return "partial"
+    if http_status is not None and 200 <= http_status < 300 and envelope.get("body_present") is True:
+        return "completed"
     if envelope.get("timeout") is True:
         return "timeout"
     if (
         envelope.get("auth_redirect_detected") is True
         or str(envelope.get("api_code")) == "302"
-        or str(envelope.get("http_status")) == "302"
+        or http_status in {302, 401, 403}
     ):
         return "auth_failed"
     if envelope.get("invalid_params"):
-        return "parse_error"
+        return "blocked"
     if envelope.get("transport_error") or envelope.get("platform_error"):
         return "blocked"
     if envelope.get("body_truncated") is True:
         return "partial"
+    if str(envelope.get("raw_body_handling", "")) in {"suppressed", "capped", "metadata_only"}:
+        return "completed"
     if envelope.get("body_present") is False:
         return "no_data"
     return "completed"
@@ -719,24 +736,25 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                         "reason": "ATO realtime incomplete contract must require login window, admin APP-only, WEB control-chain and offline Hive flags",
                     }
                 )
-            offline_auth = scenario.get("offline_backfill_modular_authorization_contract", {})
+            offline_auth = scenario.get("offline_backfill_dynamic_authorization_contract", {})
             module_ids = {
-                int(item.get("id"))
-                for item in offline_auth.get("options", [])
-                if isinstance(item, dict) and str(item.get("id", "")).isdigit()
+                str(item.get("module_id"))
+                for item in offline_auth.get("dynamic_module_catalog", [])
+                if isinstance(item, dict) and item.get("module_id")
             }
             if (
                 offline_auth.get("authorization_required") is not True
                 or offline_auth.get("one_time_full_authorization_forbidden") is not True
                 or offline_auth.get("previous_authorization_not_reusable") is not True
+                or offline_auth.get("fixed_1_to_5_menu_forbidden") is not True
                 or offline_auth.get("unselected_modules_enter_missing_evidence") is not True
                 or offline_auth.get("dataagent_or_hive_call_without_module_authorization_allowed") is not False
-                or not ATO_OFFLINE_AUTH_MODULE_IDS.issubset(module_ids)
+                or not ATO_DYNAMIC_OFFLINE_MODULE_IDS.issubset(module_ids)
             ):
                 failures.append(
                     {
-                        "rule": "ato_offline_backfill_modular_authorization_required",
-                        "reason": "ATO offline backfill must expose 1-5 selectable modules and forbid DataAgent/Hive execution outside explicit module authorization",
+                        "rule": "ato_offline_backfill_dynamic_authorization_required",
+                        "reason": "ATO offline backfill must dynamically generate modules from current gaps and forbid DataAgent/Hive execution outside explicit module authorization",
                     }
                 )
 

@@ -651,7 +651,114 @@ def build_harness_error_result(
     }
 
 
+def _http_status_int(row: dict[str, Any]) -> int | None:
+    try:
+        value = row.get("http_status")
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _success_http_with_body(row: dict[str, Any]) -> bool:
+    http_status = _http_status_int(row)
+    return http_status is not None and 200 <= http_status < 300 and row.get("body_present") is True
+
+
+def _explicit_auth_failure(row: dict[str, Any]) -> bool:
+    http_status = _http_status_int(row)
+    status = str(row.get("source_status") or "").lower()
+    error_type = str(row.get("error_type") or "").lower()
+    platform_error = str(row.get("platform_error") or "").lower()
+    return (
+        http_status in {401, 403}
+        or row.get("auth_redirect_detected") is True
+        or str(row.get("api_code")) == "302"
+        or http_status == 302
+        or "auth_failed" in status
+        or "auth_failed" in error_type
+        or "permission_denied" in status
+        or "permission_denied" in error_type
+        or "permission_denied" in platform_error
+    )
+
+
+def _row_has_empty_hint(row: dict[str, Any]) -> bool:
+    empty_keys = (
+        "empty_result",
+        "no_data_hint",
+        "result_empty",
+        "is_empty_result",
+        "has_records",
+    )
+    for key in empty_keys:
+        if key in row:
+            value = row.get(key)
+            if key == "has_records":
+                return value is False
+            return bool(value)
+    for key in ("totalCount", "total_count", "result_count", "resultArrayLength", "result_array_length", "count"):
+        if key in row:
+            try:
+                return int(row.get(key) or 0) == 0
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
+def derive_transport_interpretation(row: dict[str, Any]) -> str:
+    """Classify transport before business interpretation.
+
+    The browser-backed service is pure passthrough: capped/suppressed bodies
+    are expected transport behavior and are not auth or body-missing evidence.
+    """
+    status = str(row.get("source_status") or row.get("category") or "").lower()
+    error_type = str(row.get("error_type") or "").lower()
+    transport_error = str(row.get("transport_error") or "").lower()
+    platform_error = str(row.get("platform_error") or "").lower()
+
+    if _success_http_with_body(row) and _row_has_large_response(row):
+        return "transport_success_partial_observation_response_too_large"
+    if _success_http_with_body(row) and _row_has_empty_hint(row):
+        return "transport_success_likely_no_data"
+    if _success_http_with_body(row):
+        if str(row.get("raw_body_handling") or "").lower() in {"suppressed", "capped", "metadata_only"}:
+            return "transport_success_body_suppressed"
+        return "transport_success"
+    if row.get("timed_out") or row.get("timeout") or "timeout" in status or "timeout" in error_type or "timeout" in transport_error:
+        return "timeout"
+    if _explicit_auth_failure(row):
+        return "auth_failed"
+    if row.get("invalid_params") or "missing_required" in status or "invalid" in status or "invalid" in error_type:
+        return "invalid_params"
+    if "parse" in status or "parse" in error_type:
+        return "parse_error"
+    if "no_data" in status or "empty" in status:
+        return "likely_no_data"
+    if row.get("body_truncated") or "response_too_large" in status or "too_large" in error_type or "too_large" in platform_error:
+        return "partial_observation_available_response_too_large"
+    if "planned" in status or "planned" in str(row.get("category") or "").lower():
+        return "planned_not_executed"
+    if transport_error or "network_error" in status or "network_error" in error_type:
+        return "network_error"
+    if platform_error:
+        return "platform_error"
+    if row.get("body_present") is False:
+        return "body_not_present"
+    if "completed" in status or "completed" in str(row.get("category") or "").lower():
+        return "completed_transport"
+    return "blocked_or_unknown"
+
+
 def classify_source(row: dict[str, Any]) -> str:
+    interpretation = derive_transport_interpretation(row)
+    if interpretation == "transport_success_partial_observation_response_too_large":
+        return "partial"
+    if interpretation == "transport_success_likely_no_data":
+        return "no_data"
+    if interpretation in {"transport_success_body_suppressed", "transport_success"}:
+        return "completed"
     status = str(row.get("source_status") or row.get("category") or "").lower()
     category = str(row.get("category") or "").lower()
     error_type = str(row.get("error_type") or "").lower()
@@ -660,14 +767,7 @@ def classify_source(row: dict[str, Any]) -> str:
 
     if row.get("timed_out") or row.get("timeout") or "timeout" in status or "timeout" in error_type or "timeout" in transport_error:
         return "timeout"
-    if (
-        "auth" in status
-        or "auth" in error_type
-        or "auth" in platform_error
-        or row.get("auth_redirect_detected")
-        or row.get("api_code") == 302
-        or row.get("http_status") == 302
-    ):
+    if _explicit_auth_failure(row):
         return "auth_failed"
     if row.get("invalid_params") or "missing_required" in status or "invalid" in status:
         return "blocked"
@@ -757,12 +857,21 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
         source_id = row.get("source_id") or "unknown_source"
         seen.add(source_id)
         item = plan_by_id.get(source_id)
+        transport_interpretation = derive_transport_interpretation(row)
         classification = classify_source(row)
         buckets.setdefault(classification, []).append(source_id)
 
         notes: list[str] = []
+        if "transport_success" in transport_interpretation:
+            notes.append("transport_success")
+        if transport_interpretation == "transport_success_body_suppressed":
+            notes.append("raw_body_suppressed_not_body_missing")
+        if transport_interpretation == "transport_success_likely_no_data":
+            notes.append("likely_no_data_not_risk_exclusion")
         if row.get("body_truncated"):
             notes.append("partial_observation_available")
+        if _row_has_large_response(row):
+            notes.extend(["partial_observation_available", "response_too_large_not_login_evidence"])
         if classification == "no_data":
             notes.append("no_data_not_risk_exclusion")
         if classification in {"blocked", "timeout", "parse_error", "auth_failed"}:
@@ -787,8 +896,9 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
                 "invalid_params": row.get("invalid_params"),
                 "raw_body_handling": row.get("raw_body_handling"),
                 "missing_required_fields": row.get("missing_required_fields", []),
+                "transport_interpretation": transport_interpretation,
                 "failure_policy": item.failure_policy if item else "non_blocking_partial",
-                "boundary_notes": notes,
+                "boundary_notes": unique_strings(notes),
                 "legacy_runner_fallback_attempted": False,
                 "manual_batch_curl_fallback_attempted": False,
             }
@@ -850,38 +960,48 @@ DEVICE_ID_KEYS = {
 }
 
 
-OFFLINE_BACKFILL_MODULES = [
-    {
-        "id": 1,
-        "name": "login_control_chain",
-        "label": "登录/控制链",
-        "purpose": "登录成功/失败、登录方式、设备/IP、kickout、风险登录",
+OFFLINE_BACKFILL_MODULE_CATALOG = {
+    "web_publish_fact": {
+        "label": "WEB/发布事实",
+        "purpose": "补发布时间、发布端、发布设备、发布 IP/UA、photo_id",
+        "trigger_flags": {"content_chain_business_fields_missing", "photo_search_no_data_not_abnormal_publish_exclusion"},
+        "trigger_missing_fields": {"photo_id", "publish_time", "publish_device", "publish_source", "publish_ip", "publish_ua"},
     },
-    {
-        "id": 2,
-        "name": "token_oauth_scan_refresh_chain",
-        "label": "token/OAuth/扫码/refreshToken 链路",
-        "purpose": "确认是否存在非密码型接管或 token/session 使用",
+    "web_login_history": {
+        "label": "WEB/登录历史",
+        "purpose": "补发布前后 WEB/H5/PC/token/OAuth/扫码登录，判断历史 WEB 是否常用",
+        "trigger_flags": {
+            "login_no_data_or_window_gap_not_ato_exclusion",
+            "response_too_large_not_login_evidence",
+            "login_network_error_subtyped",
+        },
+        "trigger_missing_fields": {"login_time", "login_source", "login_type", "device_id", "ip", "ua"},
     },
-    {
-        "id": 3,
-        "name": "account_security_actions",
-        "label": "改密/换绑/保护账号",
-        "purpose": "确认控制权变化后的安全操作",
+    "device_history_baseline": {
+        "label": "设备历史基线",
+        "purpose": "对齐登录设备、发布设备、用户历史设备是否同一类，补首次出现和历史出现天数",
+        "trigger_flags": {"candidate_device_id_missing", "publish_device_login_device_alignment_required"},
+        "trigger_missing_fields": {"device_id", "candidate_device_id", "publish_device"},
     },
-    {
-        "id": 4,
-        "name": "post_takeover_actions",
-        "label": "发布作品/私信/资料修改后置行为",
-        "purpose": "确认是否有非本人内容承接或导流动作",
+    "token_oauth_scan_chain": {
+        "label": "token/OAuth/扫码链路",
+        "purpose": "仅在实时观察出现 token/OAuth/扫码/refreshToken 锚点或对应缺口时补非密码型接管链",
+        "trigger_flags": {"token_oauth_scan_anchor_detected", "missing_token_oauth_scan_chain"},
+        "trigger_missing_fields": {"token_oauth_scan"},
     },
-    {
-        "id": 5,
-        "name": "device_ip_ua_baseline",
-        "label": "设备/IP/UA 历史基线",
-        "purpose": "对比异常行为是否偏离历史常用环境",
+    "security_action_chain": {
+        "label": "改密/换绑/保护账号链",
+        "purpose": "仅在实时观察出现安全动作锚点或用户分析缺安全动作字段时补控制权变化后的安全操作",
+        "trigger_flags": {"behavior_chain_business_fields_missing"},
+        "trigger_missing_fields": {"password_change", "binding_change", "account_protection", "security_operation_timeline"},
     },
-]
+    "post_action_chain": {
+        "label": "私信/资料修改/后置行为链",
+        "purpose": "仅在实时观察出现私信、资料修改、关注或后置行为锚点/缺口时补非本人动作承接",
+        "trigger_flags": {"behavior_chain_business_fields_missing"},
+        "trigger_missing_fields": {"profile_change", "follow_action", "publish_related_operation"},
+    },
+}
 
 
 SOURCE_OBSERVATION_CONTRACTS = {
@@ -997,11 +1117,114 @@ SOURCE_OBSERVATION_CONTRACTS = {
 }
 
 
+BUSINESS_FIELD_ALIASES = {
+    "login_time": {"login_time", "loginTime", "loginTimestamp", "timestamp", "event_time", "time"},
+    "login_type": {"login_type", "loginType", "reset_login_type", "resetLoginType", "authType"},
+    "login_source": {"login_source", "loginSource", "source", "clientType", "platform", "loginPlatform"},
+    "device_id": {"device_id", "deviceId", "deviceid", "did", "loginDeviceId"},
+    "ip": {"ip", "loginIp", "clientIp", "requestIp"},
+    "ua": {"ua", "UA", "userAgent", "user_agent", "browserUa"},
+    "token_oauth_scan": {"token", "oauth", "OAuth", "scan", "scanLogin", "refreshToken", "byToken", "logined"},
+    "kickout": {"kickout", "kick_out", "kickedOut", "protectKickout"},
+    "success_failure_sequence": {"login_result", "loginResult", "success", "failure", "status"},
+    "window_coverage": {"request_window_start", "request_window_end", "from_timestamp", "to_timestamp"},
+    "account_status": {"account_status", "accountStatus", "status", "accountState"},
+    "profile_baseline": {"profile_baseline", "profileBaseline", "profile", "userProfile"},
+    "punishment_or_label": {"punishment", "label", "riskLabel", "tag", "penalty"},
+    "protection_state": {"protection_state", "accountProtection", "protectState"},
+    "password_change": {"password_change", "resetPwd", "changePassword", "pwdChange"},
+    "binding_change": {"binding_change", "bindPhone", "unbind", "changeBinding"},
+    "account_protection": {"account_protection", "protectAccount", "accountProtect"},
+    "profile_change": {"profile_change", "profileChange", "modifyProfile"},
+    "follow_action": {"follow_action", "follow", "followAction"},
+    "publish_related_operation": {"publish_related_operation", "publish", "photoPublish", "postVideo"},
+    "security_operation_timeline": {"security_operation_timeline", "securityTimeline", "operationTime"},
+    "photo_id": {"photo_id", "photoId", "photoID", "content_id", "contentId"},
+    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime"},
+    "publish_device": {"publish_device", "publishDevice", "publishDeviceId", "device_id", "deviceId", "did"},
+    "publish_source": {"publish_source", "publishSource", "source", "clientType", "publishPlatform"},
+    "publish_ip": {"publish_ip", "publishIp", "ip", "clientIp"},
+    "publish_ua": {"publish_ua", "publishUA", "publishUa", "ua", "userAgent"},
+    "content_status": {"content_status", "photoStatus", "auditStatus", "status"},
+    "audit_or_strategy_reason": {"audit_reason", "strategyReason", "hitReason", "reason"},
+    "candidate_device_id": {"candidate_device_id", "device_id", "deviceId", "did"},
+    "track_data_ready": {"track_data_ready", "dataReady", "ready"},
+    "event_day_frontend_activity": {"event_day_frontend_activity", "frontendActivity", "activePv"},
+    "frontend_backend_activity_alignment": {"frontend_backend_activity_alignment", "frontBackendAlignment"},
+}
+
+
+OBSERVATION_SAFE_ANCHOR_KEYS = {
+    "user_id",
+    "userId",
+    "photo_id",
+    "photoId",
+    "event_id",
+    "eventId",
+    "source_id",
+    "sourceId",
+    "policy_code",
+    "policyCode",
+    "policyTreeCode",
+    "device_id",
+    "deviceId",
+    "did",
+    "candidate_device_id",
+    "login_time",
+    "loginTime",
+    "publish_time",
+    "publishTime",
+    "createTime",
+    "operationTime",
+    "login_source",
+    "loginSource",
+    "login_type",
+    "loginType",
+    "publish_source",
+    "publishSource",
+    "publish_device",
+    "publishDevice",
+    "ip",
+    "clientIp",
+    "loginIp",
+    "publishIp",
+    "province",
+    "city",
+    "asn",
+    "isProxy",
+    "isIDC",
+    "ua",
+    "UA",
+    "userAgent",
+    "device_model",
+    "deviceModel",
+    "os",
+    "osVersion",
+    "appVersion",
+    "first_seen_device",
+    "firstSeenDevice",
+    "device_seen_days",
+    "deviceSeenDays",
+    "field_path",
+    "result_array_path",
+    "request_window_start",
+    "request_window_end",
+}
+
+
 def _source_quality_by_id(source_quality_matrix: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(row.get("source_id")): row for row in source_quality_matrix.get("per_source", [])}
 
 
 def _transport_issue_subtype(row: dict[str, Any]) -> str | None:
+    interpretation = derive_transport_interpretation(row)
+    if interpretation in {
+        "transport_success",
+        "transport_success_body_suppressed",
+        "transport_success_likely_no_data",
+        "transport_success_partial_observation_response_too_large",
+    }:
+        return None
     status = str(row.get("source_status") or "").lower()
     error_type = str(row.get("error_type") or "").lower()
     transport_error = str(row.get("transport_error") or "").lower()
@@ -1016,8 +1239,6 @@ def _transport_issue_subtype(row: dict[str, Any]) -> str | None:
         return "transport_error"
     if platform_error:
         return "platform_error"
-    if row.get("body_present") is False and row.get("raw_body_handling") in {"suppressed", "capped", "metadata_only"}:
-        return "passthrough_interpretation_gap"
     return None
 
 
@@ -1026,11 +1247,98 @@ def _row_has_large_response(row: dict[str, Any]) -> bool:
     return row.get("body_truncated") is True or "response_too_large" in serialized or "too_large" in serialized
 
 
+def _rows_by_source_id_from_batch(batch_result: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    for row in normalize_mapping_or_list(batch_result.get("transport_status_matrix")):
+        source_id = str(row.get("source_id") or "")
+        if source_id:
+            rows[source_id] = row
+    for item in normalize_mapping_or_list(batch_result.get("source_results")):
+        source_id = str(item.get("source_id") or "")
+        if not source_id:
+            continue
+        merged = dict(rows.get(source_id, {}))
+        merged["source_result"] = item
+        if isinstance(item.get("transport"), dict):
+            merged.update({f"transport.{key}": value for key, value in item["transport"].items()})
+        rows[source_id] = merged
+    return rows
+
+
+def _key_matches_business_field(key: str, business_field: str) -> bool:
+    aliases = BUSINESS_FIELD_ALIASES.get(business_field, {business_field})
+    lowered = key.lower()
+    return any(alias.lower() == lowered or alias.lower() in lowered for alias in aliases)
+
+
+def extract_observation_field_handles(
+    value: Any,
+    *,
+    source_id: str,
+    path: str = "$",
+    limit: int = 80,
+) -> list[dict[str, Any]]:
+    handles: list[dict[str, Any]] = []
+    if len(handles) >= limit:
+        return handles
+    if isinstance(value, dict):
+        for key, item in value.items():
+            lowered = key.lower()
+            child_path = f"{path}.{key}"
+            if any(fragment in lowered for fragment in SECRET_KEY_FRAGMENTS):
+                continue
+            if lowered in BODY_KEYS_TO_SUPPRESS:
+                continue
+            if key in OBSERVATION_SAFE_ANCHOR_KEYS and isinstance(item, (str, int, float, bool)):
+                handles.append(
+                    {
+                        "field": key,
+                        "field_path": child_path,
+                        "source_id": source_id,
+                        "value": item,
+                    }
+                )
+                if len(handles) >= limit:
+                    return handles
+            handles.extend(
+                extract_observation_field_handles(item, source_id=source_id, path=child_path, limit=limit - len(handles))
+            )
+            if len(handles) >= limit:
+                return handles[:limit]
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            handles.extend(
+                extract_observation_field_handles(item, source_id=source_id, path=f"{path}[{index}]", limit=limit - len(handles))
+            )
+            if len(handles) >= limit:
+                return handles[:limit]
+    return handles[:limit]
+
+
+def match_business_fields(
+    field_handles: list[dict[str, Any]],
+    expected_business_fields: list[str],
+) -> tuple[list[str], list[str]]:
+    present: list[str] = []
+    for business_field in expected_business_fields:
+        for handle in field_handles:
+            field_name = str(handle.get("field") or "")
+            field_path = str(handle.get("field_path") or "")
+            if _key_matches_business_field(field_name, business_field) or _key_matches_business_field(field_path, business_field):
+                present.append(business_field)
+                break
+    present = unique_strings(present)
+    missing = [field for field in expected_business_fields if field not in present]
+    return present, missing
+
+
 def build_source_observations(
     source_plan: list[SourcePlanItem],
     source_quality_matrix: dict[str, Any],
+    batch_result: dict[str, Any],
 ) -> list[dict[str, Any]]:
     rows_by_id = _source_quality_by_id(source_quality_matrix)
+    raw_rows_by_id = _rows_by_source_id_from_batch(batch_result)
     observations: list[dict[str, Any]] = []
 
     for item in source_plan:
@@ -1040,20 +1348,32 @@ def build_source_observations(
         quality = str(row.get("quality_class") or "blocked")
         flags: list[str] = []
         missing_business_fields: list[str] = []
+        raw_source_payload = raw_rows_by_id.get(item.source_id, {})
+        field_handles = extract_observation_field_handles(raw_source_payload, source_id=item.source_id)
+        expected_business_fields = list(contract.get("expected_business_fields", []))
+        extracted_business_fields, inferred_missing_fields = match_business_fields(field_handles, expected_business_fields)
 
         if row.get("body_truncated") or quality == "partial":
             flags.append("partial_observation_available")
+        if str(row.get("raw_body_handling") or "").lower() in {"suppressed", "capped", "metadata_only"}:
+            flags.append("raw_body_suppressed_not_body_missing")
         if quality == "no_data":
             flags.append("no_data_not_risk_exclusion")
         if quality in {"blocked", "timeout", "parse_error", "auth_failed"}:
             flags.append("missing_evidence_not_counter_evidence")
         if quality == "planned":
             flags.append("dry_run_not_platform_evidence")
+        if quality in {"completed", "partial"} and inferred_missing_fields:
+            flags.extend(["observation_compression_gap", "business_fields_not_extracted"])
+            missing_business_fields = inferred_missing_fields
 
         if action == "login_logs_search":
             subtype = _transport_issue_subtype(row)
             if subtype:
                 flags.append(f"login_logs_{subtype}")
+            transport_interpretation = str(row.get("transport_interpretation") or "")
+            if "transport_success" in transport_interpretation:
+                flags.append(transport_interpretation)
             if _row_has_large_response(row):
                 flags.extend([
                     "response_too_large_not_login_evidence",
@@ -1064,13 +1384,11 @@ def build_source_observations(
         elif action == "archives_user_analysis":
             if quality == "partial" or row.get("body_truncated"):
                 flags.append("partial_behavior_timeline")
-            if quality == "completed" and row.get("body_present") is False:
+            if quality in {"completed", "partial"} and "behavior_chain_business_fields_missing" not in flags and missing_business_fields:
                 flags.append("behavior_chain_business_fields_missing")
-                missing_business_fields = list(contract.get("expected_business_fields", []))
         elif action == "archives_photo_search":
-            if quality == "completed" and row.get("body_present") is False:
+            if quality in {"completed", "partial"} and missing_business_fields:
                 flags.append("content_chain_business_fields_missing")
-                missing_business_fields = ["photo_id", "publish_time", "publish_device", "publish_source"]
             if quality == "no_data":
                 flags.append("photo_search_no_data_not_abnormal_publish_exclusion")
             flags.append("publish_device_login_device_alignment_required")
@@ -1090,7 +1408,7 @@ def build_source_observations(
         elif action == "rcp_policy_tree_lookup":
             flags.append("policy_tree_asset_not_event_hit_path")
 
-        if quality == "completed" and action in {"archives_user_analysis", "archives_photo_search"} and not missing_business_fields:
+        if quality in {"completed", "partial"} and action in {"archives_user_analysis", "archives_photo_search"}:
             flags.append("completed_transport_not_business_chain_closure")
 
         observations.append(
@@ -1100,11 +1418,15 @@ def build_source_observations(
                 "chain_section": contract.get("chain_section", "source_quality"),
                 "quality_class": quality,
                 "role": contract.get("role", item.expected_observation),
-                "expected_business_fields": contract.get("expected_business_fields", []),
+                "expected_business_fields": expected_business_fields,
+                "extracted_business_fields": extracted_business_fields,
+                "observed_field_handles": field_handles,
                 "missing_business_fields": missing_business_fields,
                 "interpretation_flags": unique_strings(flags),
                 "evidence_use": (
-                    "candidate_partial_observation"
+                    "business_evidence_candidate"
+                    if extracted_business_fields and quality in {"completed", "partial"}
+                    else "transport_only_boundary"
                     if quality in {"completed", "partial"}
                     else "missing_evidence_or_boundary_only"
                 ),
@@ -1186,12 +1508,33 @@ def build_user_device_entity_resolution(
         deduped.append(candidate)
 
     planned_actions = {item.action for item in source_plan}
+    candidate_source_ids = {candidate["source_id"] for candidate in deduped}
+    planned_source_ids_by_action = {item.action: item.source_id for item in source_plan}
+
+    def source_has_candidate(action: str) -> bool:
+        source_id = planned_source_ids_by_action.get(action)
+        return bool(source_id and source_id in candidate_source_ids)
+
+    device_entity_gap_breakdown = {
+        "login_device_not_extracted": not source_has_candidate("login_logs_search"),
+        "publish_device_not_extracted": not source_has_candidate("archives_photo_search"),
+        "user_analysis_device_not_extracted": not source_has_candidate("archives_user_analysis"),
+        "user_device_graph_not_checked_or_failed": (
+            "weapon_inventory" not in planned_actions or not source_has_candidate("weapon_inventory")
+        ),
+        "track_candidate_device_missing": not deduped,
+    }
+    missing_device_reasons = [
+        reason for reason, missing in device_entity_gap_breakdown.items() if missing
+    ]
     return {
         "layer": "user_device_entity_resolution",
         "default_p0_entity_layer": True,
         "purpose": "bridge user-level evidence to device-level Track/Weapon/publish-device alignment",
         "candidate_device_ids": deduped,
         "candidate_device_id_missing": not deduped,
+        "candidate_device_id_missing_semantics": "missing any device entity usable for login/publish/user-analysis/Track/Weapon alignment, not only missing risky device",
+        "device_entity_gap_breakdown": device_entity_gap_breakdown,
         "candidate_sources_checked": [
             "login_logs_search",
             "archives_user_analysis",
@@ -1214,6 +1557,8 @@ def build_user_device_entity_resolution(
             [
                 {
                     "reason": "candidate_device_id_missing",
+                    "device_entity_gap_breakdown": device_entity_gap_breakdown,
+                    "missing_device_reasons": missing_device_reasons,
                     "needed_for": [
                         "track_analysis_check_data_ready",
                         "weapon riskData/graphData follow-up",
@@ -1229,16 +1574,95 @@ def build_user_device_entity_resolution(
     }
 
 
-def build_offline_backfill_recommendation() -> dict[str, Any]:
+def build_dynamic_offline_backfill_recommendation(
+    source_observations: list[dict[str, Any]],
+    user_device_entity_resolution: dict[str, Any],
+    missing_evidence: list[dict[str, Any]],
+) -> dict[str, Any]:
+    observed_flags: set[str] = set()
+    missing_fields: set[str] = set()
+    triggering_sources: dict[str, list[str]] = {}
+
+    for observation in source_observations:
+        source_id = str(observation.get("source_id") or "unknown_source")
+        for flag in observation.get("interpretation_flags", []):
+            observed_flags.add(str(flag))
+            triggering_sources.setdefault(str(flag), []).append(source_id)
+        for field in observation.get("missing_business_fields", []):
+            missing_fields.add(str(field))
+            triggering_sources.setdefault(str(field), []).append(source_id)
+
+    if user_device_entity_resolution.get("candidate_device_id_missing"):
+        observed_flags.add("candidate_device_id_missing")
+        triggering_sources.setdefault("candidate_device_id_missing", []).append("user_device_entity_resolution")
+    for item in missing_evidence:
+        reason = str(item.get("reason") or "")
+        if reason:
+            observed_flags.add(reason)
+            triggering_sources.setdefault(reason, []).append(str(item.get("source_id") or "missing_evidence"))
+        for field in item.get("missing_business_fields", []) if isinstance(item.get("missing_business_fields"), list) else []:
+            missing_fields.add(str(field))
+
+    options: list[dict[str, Any]] = []
+    for module_id, module in OFFLINE_BACKFILL_MODULE_CATALOG.items():
+        trigger_flags = set(module.get("trigger_flags", set()))
+        trigger_missing_fields = set(module.get("trigger_missing_fields", set()))
+        matched_flags = sorted(trigger_flags & observed_flags)
+        matched_fields = sorted(trigger_missing_fields & missing_fields)
+        if not matched_flags and not matched_fields:
+            continue
+        matched_reasons = matched_flags + matched_fields
+        options.append(
+            {
+                "module_id": module_id,
+                "label": module["label"],
+                "purpose": module["purpose"],
+                "generated_from_current_gap": True,
+                "triggered_by": matched_reasons,
+                "triggering_sources": unique_strings(
+                    [
+                        source
+                        for reason in matched_reasons
+                        for source in triggering_sources.get(reason, [])
+                    ]
+                ),
+            }
+        )
+
     return {
         "required_when": "realtime control/action/device/baseline chain is incomplete",
         "dataagent_hive_called": False,
         "authorization_required": True,
-        "authorization_mode": "select_modules",
-        "options": OFFLINE_BACKFILL_MODULES,
-        "user_prompt": "请回复要授权的编号，例如 1,3,4；回复“全查”才授权全部模块。",
+        "authorization_mode": "select_dynamic_modules_by_id",
+        "fixed_1_to_5_menu": False,
+        "module_generation": "dynamic_from_current_missing_evidence",
+        "options": options,
+        "user_prompt": (
+            "请回复要授权的 module_id，例如 web_publish_fact,device_history_baseline；"
+            "只会生成你授权模块的 DataAgent/Hive 查询计划，未授权模块继续保留为 missing_evidence。"
+        ),
         "authorization_boundary": [
-            "only selected modules may enter DataAgent/Hive query plan",
+            "only selected dynamic modules may enter DataAgent/Hive query plan",
+            "unselected modules remain missing_evidence",
+            "previous authorization is not reusable for a new module, table, time range, or evidence direction",
+            "DataAgent/Hive is not called by this harness without explicit per-module authorization",
+        ],
+    }
+
+
+def build_offline_backfill_recommendation() -> dict[str, Any]:
+    """Compatibility wrapper for callers that have not passed current gaps."""
+    return {
+        "required_when": "realtime control/action/device/baseline chain is incomplete",
+        "dataagent_hive_called": False,
+        "authorization_required": True,
+        "authorization_mode": "select_dynamic_modules_by_id",
+        "fixed_1_to_5_menu": False,
+        "module_generation": "dynamic_from_current_missing_evidence",
+        "options": [],
+        "user_prompt": "当前缺口未传入；需先基于 missing_evidence 动态生成 module_id。",
+        "authorization_boundary": [
+            "only selected dynamic modules may enter DataAgent/Hive query plan",
             "unselected modules remain missing_evidence",
             "previous authorization is not reusable for a new module, table, time range, or evidence direction",
         ],
@@ -1388,27 +1812,58 @@ def build_evidence_card(
         section = str(observation.get("chain_section") or "source_quality")
         observations_by_section.setdefault(section, []).append(observation)
 
-    offline_backfill = build_offline_backfill_recommendation()
+    offline_backfill = build_dynamic_offline_backfill_recommendation(
+        source_observations,
+        user_device_entity_resolution,
+        missing_evidence,
+    )
+    business_evidence_candidates = [
+        {
+            "source_id": observation.get("source_id"),
+            "action": observation.get("action"),
+            "chain_section": observation.get("chain_section"),
+            "extracted_business_fields": observation.get("extracted_business_fields", []),
+            "observed_field_handles": observation.get("observed_field_handles", []),
+        }
+        for observation in source_observations
+        if observation.get("evidence_use") == "business_evidence_candidate"
+    ]
+    transport_only_boundaries = [
+        {
+            "source_id": observation.get("source_id"),
+            "action": observation.get("action"),
+            "chain_section": observation.get("chain_section"),
+            "missing_business_fields": observation.get("missing_business_fields", []),
+            "interpretation_flags": observation.get("interpretation_flags", []),
+        }
+        for observation in source_observations
+        if observation.get("evidence_use") == "transport_only_boundary"
+    ]
     chain_missing = [
+        {
+            "chain": "web_or_abnormal_publish_fact",
+            "missing": "WEB/异常端发布事实未闭合：publish_time/publish_source/publish_device/publish_ip_ua/photo_id",
+            "source_ids": ["ato_archives_photo_search", "ato_archives_user_analysis"],
+        },
+        {
+            "chain": "web_history_baseline",
+            "missing": "WEB/H5/PC/token/OAuth/扫码登录是否历史常用未闭合",
+            "source_ids": ["ato_login_logs_search"],
+        },
+        {
+            "chain": "device_identity_alignment",
+            "missing": "发布设备、登录设备、用户设备反查和历史设备基线一致性未闭合",
+            "source_ids": ["ato_login_logs_search", "ato_archives_photo_search", "ato_track_analysis_check_data_ready", "user_device_entity_resolution"],
+        },
         {
             "chain": "control_entry",
             "missing": "closed login/control-chain evidence with login_type/device/IP/UA/window coverage",
             "source_ids": ["ato_login_logs_search"],
         },
         {
-            "chain": "account_state_and_post_actions",
-            "missing": "closed account security operation and post-action timeline",
-            "source_ids": ["ato_archives_user_profile", "ato_archives_user_analysis"],
-        },
-        {
-            "chain": "content_publish_handoff",
-            "missing": "photo_id/publish_time/publish_device/publish_source and content handoff alignment",
-            "source_ids": ["ato_archives_photo_search"],
-        },
-        {
-            "chain": "frontend_backend_activity_alignment",
-            "missing": "Track readiness with candidate device and front/backend activity alignment",
-            "source_ids": ["ato_track_analysis_check_data_ready"],
+            "chain": "post_action_or_security_timeline",
+            "missing": "改密、换绑、保护账号、资料修改、私信/关注/发布后置行为时间线未闭合",
+            "source_ids": ["ato_archives_user_analysis"],
         },
     ]
     if user_device_entity_resolution.get("candidate_device_id_missing"):
@@ -1427,7 +1882,35 @@ def build_evidence_card(
         "final_status": final_status,
         "conclusion_state": conclusion_state,
         "organization": "ato_risk_chain_not_flat_source_status",
+        "core_chain_order": [
+            "web_or_abnormal_publish_fact",
+            "web_history_baseline",
+            "device_identity_alignment",
+            "control_entry",
+            "account_state_and_post_actions",
+            "frontend_backend_activity_alignment",
+            "strategy_risk_signal",
+            "counter_evidence_and_gaps",
+            "conclusion_boundary",
+        ],
         "evidence_chain": {
+            "web_or_abnormal_publish_fact": {
+                "question": "是否存在 WEB/异常端发布或导流内容承接",
+                "observations": observations_by_section.get("content_publish_handoff", []),
+                "boundary": "只有提取到 publish_time/publish_source/publish_device/photo_id 等业务字段才进入证据；transport completed 不等于发布链闭合",
+            },
+            "web_history_baseline": {
+                "question": "WEB/H5/PC/token/OAuth/扫码登录是否历史常用",
+                "observations": observations_by_section.get("control_entry", []),
+                "boundary": "登录日志 no_data/response_too_large/window gap 只说明当前实时窗口或解析受限，不能排除 ATO",
+            },
+            "device_identity_alignment": {
+                "question": "发布设备、登录设备、用户设备反查是否一致",
+                "user_device_entity_resolution": user_device_entity_resolution,
+                "observations": observations_by_section.get("device_ip_spread", [])
+                + observations_by_section.get("frontend_backend_activity_alignment", []),
+                "boundary": "candidate_device_id_missing 是缺可用于对齐的设备实体，不是只缺风险设备",
+            },
             "control_entry": {
                 "question": "是否存在异常登录/控制权入口",
                 "observations": observations_by_section.get("control_entry", []),
@@ -1462,6 +1945,7 @@ def build_evidence_card(
             "counter_evidence_and_gaps": {
                 "counter_evidence": [],
                 "missing_chain_evidence": chain_missing,
+                "transport_only_boundaries": transport_only_boundaries,
                 "source_quality_boundary": (
                     "no_data, partial, auth_failed, blocked, timeout and parse_error are not low-risk counter evidence"
                 ),
@@ -1479,14 +1963,8 @@ def build_evidence_card(
         "no_data_sources": buckets.get("no_data", []),
         "planned_sources": buckets.get("planned", []),
         "strong_evidence": [],
-        "medium_evidence": [],
-        "weak_evidence": [
-            {
-                "source_id": source_id,
-                "reason": "source reached transport layer but does not close ATO control/action/baseline chain",
-            }
-            for source_id in completed + partial
-        ],
+        "medium_evidence": business_evidence_candidates,
+        "weak_evidence": [],
         "counter_evidence": [],
         "missing_evidence": missing_evidence,
         "caveats": [
@@ -1574,7 +2052,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         provided_device_id=args.device_id,
     )
     source_quality_matrix = merge_source_quality(source_plan, batch_result)
-    source_observations = build_source_observations(source_plan, source_quality_matrix)
+    source_observations = build_source_observations(source_plan, source_quality_matrix, batch_result)
     missing_evidence = build_missing_evidence(source_quality_matrix)
     missing_evidence.extend(user_device_entity_resolution.get("missing_evidence", []))
     evidence_card = build_evidence_card(
@@ -1648,7 +2126,8 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "service_evidence_card_inputs_dependency": False,
             "manual_curl_actions_batch_fallback_allowed": False,
             "dataagent_hive_called": False,
-            "offline_authorization_options_visible_when_realtime_incomplete": True,
+            "dynamic_offline_authorization_options_visible_when_realtime_incomplete": True,
+            "fixed_1_to_5_offline_menu_used": False,
             "offline_hive_requires_per_request_authorization": True,
             "final_risk_judgement_made": False,
         },

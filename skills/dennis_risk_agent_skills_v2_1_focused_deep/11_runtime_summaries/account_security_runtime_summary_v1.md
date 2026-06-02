@@ -402,15 +402,18 @@ ATO 实时源不完整时，Hive 不是“可选增强”，而是定性闭环�
 当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。
 ```
 
-离线补证授权必须模块化，不默认请求全量 DataAgent/Hive。给用户 1-5 选项：
+离线补证授权必须按当前缺口动态生成，不默认请求全量 DataAgent/Hive，也不固定输出 1-5 菜单。典型动态模块：
 
-1. 登录/控制链：成功/失败登录、登录方式、设备/IP、kickout、风险登录。
-2. token/OAuth/扫码/refreshToken 链路：确认非密码型接管。
-3. 改密/换绑/保护账号：确认控制权变化后的安全操作。
-4. 发布作品/私信/资料修改后置行为：确认是否有非本人内容承接。
-5. 设备/IP/UA 历史基线：对比异常行为是否偏离历史常用环境。
+- `web_publish_fact`：缺发布时间、发布端、发布设备、发布 IP/UA、photo_id 时生成。
+- `web_login_history`：缺发布前后 WEB/H5/PC/token/OAuth/扫码登录或历史 WEB 基线时生成。
+- `device_history_baseline`：缺登录设备、发布设备、用户历史设备、首次出现或历史出现天数时生成。
+- `token_oauth_scan_chain`：发现扫码/OAuth/token/refreshToken 锚点或缺口时才生成。
+- `security_action_chain`：发现改密/换绑/保护账号锚点或缺安全动作字段时才生成。
+- `post_action_chain`：发现私信/资料修改/关注/后置行为锚点或缺口时才生成。
 
-用户只回复 `1,3` 时，只能生成/执行 1 和 3 的 query plan；未授权模块保留为 `missing_evidence`。只有用户明确回复“全查”才视为授权全部模块。plan mode 不得伪装已经查过离线数据。
+用户只授权某个 `module_id` 时，只能生成/执行该模块 query plan；未授权模块保留为 `missing_evidence`。plan mode 不得伪装已经查过离线数据。
+
+pure passthrough 下，`raw_body_handling=suppressed/capped` 是安全传输策略，不等于业务 body missing。Dennis 侧必须保留可安全用于研判的风控锚点和字段路径：`device_id`/DID、登录设备、发布设备、登录端、发布端、IP/UA 派生、省市/ASN、发布时间、登录时间、首次出现和历史出现天数。不得输出 raw body、cookie、token、session、header、password。
 
 触发强提醒的典型条件：
 

@@ -8601,13 +8601,13 @@ Text gate checks:
 - expected_runtime_behavior: dennis_interprets_passthrough_into_ato_evidence_chain
 - expected_output_boundary: 必须包含 `user_device_entity_resolution_required`、`candidate_device_id_missing_enters_missing_evidence`、`response_too_large_window_shrink_recommended`、`login_network_error_subtyped`、`content_chain_business_fields_missing`、`behavior_chain_business_fields_missing`、`publish_device_login_device_alignment_required`、`ato_evidence_card_chain_organized`；不得把 completed transport 当业务链路闭合，不得把 Track 简单跳过，不得访问平台或调用 DataAgent/Hive。
 
-- test_id: ATO-OFFLINE-BACKFILL-MODULAR-AUTHORIZATION-001
-- input: ATO realtime evidence insufficient; user authorizes only `1,3`, or explicitly says `全查`。
-- expected_runtime_behavior: offline_backfill_selectable_module_authorization
-- expected_output_boundary: 默认输出 `offline_backfill_modular_authorization`，列出 1-5 模块；用户只授权 `1,3` 时必须包含 `offline_authorized_modules_only` 和 `offline_unapproved_modules_missing_evidence`，未授权模块不得执行；只有用户说 `全查` 才允许全部模块进入 query plan；本地 dry-run 不调用 DataAgent/Hive。
+- test_id: ATO-OFFLINE-BACKFILL-DYNAMIC-AUTHORIZATION-001
+- input: ATO realtime evidence insufficient; current missing_evidence includes publish device/time and device baseline gaps; user authorizes only `web_publish_fact,device_history_baseline`。
+- expected_runtime_behavior: offline_backfill_dynamic_module_authorization
+- expected_output_boundary: 默认输出 `offline_backfill_dynamic_authorization`，根据当前 `missing_evidence` 生成 `module_id`；不得固定列出 1-5 菜单；用户只授权 `web_publish_fact,device_history_baseline` 时必须包含 `offline_authorized_modules_only` 和 `offline_unapproved_modules_missing_evidence`，未授权模块不得执行；本地 dry-run 不调用 DataAgent/Hive。
 
 Keyword check:
 
 ```bash
-grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|offline_backfill_modular_authorization" computer_use_poc skills AGENTS.md 2>/dev/null
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization" computer_use_poc skills AGENTS.md 2>/dev/null
 ```

@@ -851,24 +851,72 @@ cases:
   - id: ATO-INSUFFICIENT-SUPPORT-OFFLINE-MODULES-001
     user_query: "ATO 实时证据不闭合，insufficient_support 时下一步离线补证怎么授权？"
     expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
-    expected_orchestration: "Insufficient support must output offline_backfill_recommendation with selectable modules."
-    expected_boundary_flags: [ato_evidence_card_chain_organized, offline_backfill_modular_authorization, offline_hive_required]
+    expected_orchestration: "Insufficient support must output dynamic offline_backfill_recommendation from current missing evidence."
+    expected_boundary_flags: [ato_evidence_card_chain_organized, offline_backfill_dynamic_authorization, offline_fixed_1_to_5_menu_forbidden, offline_hive_required]
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_request_full_hive_authorization_by_default, do_not_call_hive_without_authorization]
     expected_answer_contract: [evidence_card, offline_backfill_recommendation, missing_evidence, final_answer_boundary]
-  - id: ATO-OFFLINE-AUTH-ONLY-1-3-001
-    user_query: "用户只授权 1,3 离线补证，能不能顺便查 2,4,5？"
+  - id: ATO-OFFLINE-AUTH-DYNAMIC-MODULE-ONLY-001
+    user_query: "用户只授权 web_publish_fact 和 device_history_baseline，能不能顺便查 token_oauth_scan_chain？"
     expected_route_or_actions: [source_plan_only_no_action_selected]
-    expected_orchestration: "Only authorized modules 1 and 3 may enter query plan; unapproved modules remain missing evidence."
-    expected_boundary_flags: [offline_backfill_modular_authorization, offline_authorized_modules_only, offline_unapproved_modules_missing_evidence]
+    expected_orchestration: "Only authorized dynamic module_id may enter query plan; unapproved modules remain missing evidence."
+    expected_boundary_flags: [offline_backfill_dynamic_authorization, offline_authorized_modules_only, offline_unapproved_modules_missing_evidence, offline_fixed_1_to_5_menu_forbidden]
     expected_execution_groups: []
     should_not_do: [do_not_execute_unapproved_offline_modules, do_not_call_hive_without_authorization]
     expected_answer_contract: [offline_backfill_recommendation, missing_evidence, final_answer_boundary]
-  - id: ATO-OFFLINE-AUTH-ALL-001
-    user_query: "用户回复全查，是否才视为授权全部离线补证模块？"
+  - id: ATO-OFFLINE-FIXED-1-5-MENU-FORBIDDEN-001
+    user_query: "离线补证是不是固定 1-5 菜单，用户回复全查就全部执行？"
     expected_route_or_actions: [source_plan_only_no_action_selected]
-    expected_orchestration: "All modules are authorized only when the user explicitly says 全查."
-    expected_boundary_flags: [offline_backfill_modular_authorization, offline_all_modules_authorized_only_when_user_says_all]
+    expected_orchestration: "Offline backfill must be dynamic from current gaps, not a fixed 1-5 menu."
+    expected_boundary_flags: [offline_fixed_1_to_5_menu_forbidden]
     expected_execution_groups: []
     should_not_do: [do_not_request_full_hive_authorization_by_default]
     expected_answer_contract: [offline_backfill_recommendation, final_answer_boundary]
+  - id: LOGIN-PASSTHROUGH-200-TRUNCATED-PARTIAL-001
+    user_query: "login_logs_search 返回 200 + body_present=true + body_truncated=true，能不能判成 network_error 或 auth_failed？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "2xx with body_present and body_truncated is transport_success partial observation / response_too_large."
+    expected_boundary_flags: [login_transport_success_partial_response_too_large, partial_observation_available, response_too_large_not_login_evidence]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_output_low_risk_from_no_data]
+    expected_answer_contract: [source_observations, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: RAW-BODY-SUPPRESSED-NOT-BODY-MISSING-001
+    user_query: "raw_body_handling=suppressed 是不是就等于 body_missing，不能保留设备 safe handle？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "raw body suppressed is a safe passthrough handling mode, not body missing; Dennis may retain safe field handles."
+    expected_boundary_flags: [raw_body_suppressed_not_body_missing]
+    expected_execution_groups: []
+    should_not_do: [do_not_claim_complete_from_capped_body]
+    expected_answer_contract: [source_observations, final_answer_boundary]
+  - id: LOGIN-SMALL-BODY-LIKELY-NODATA-001
+    user_query: "login_logs_search 200 small body 没截断，empty hint，能不能说明无风险？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Small non-truncated body with empty hint is likely_no_data only, not risk exclusion."
+    expected_boundary_flags: [login_small_body_likely_no_data_not_risk_exclusion, no_data_not_risk_exclusion]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_output_low_risk_from_no_data]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-COMPLETED-TRANSPORT-NOT-WEAK-EVIDENCE-001
+    user_query: "archives_photo_search completed transport 能不能自动进入 weak evidence？"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Completed transport cannot become weak evidence without extracted business fields."
+    expected_boundary_flags: [completed_transport_not_weak_evidence, completed_transport_not_business_chain_closure, content_chain_business_fields_missing]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_use_completed_transport_as_business_closure]
+    expected_answer_contract: [source_observations, evidence_card, missing_evidence, final_answer_boundary]
+  - id: ATO-EVIDENCE-CARD-THREE-CORE-CHAINS-001
+    user_query: "ATO evidence card 要不要先围绕 WEB/发布事实、WEB 历史常用、设备一致性三条链，而不是 source 状态平铺？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO evidence card must prioritize web/publish fact, web history baseline, and device identity alignment."
+    expected_boundary_flags: [ato_evidence_card_chain_organized, ato_evidence_card_three_core_chains]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_make_final_judgement_without_source_quality]
+    expected_answer_contract: [evidence_card, source_observations, missing_evidence, final_answer_boundary]
+  - id: ATO-CANDIDATE-DEVICE-GAP-BREAKDOWN-001
+    user_query: "candidate_device_id_missing 要不要区分登录设备缺失、发布设备缺失、用户分析设备缺失和 user->device 反查缺失？"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Candidate device gap must be broken down by evidence source."
+    expected_boundary_flags: [candidate_device_id_missing_enters_missing_evidence, candidate_device_id_missing_gap_breakdown_required]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_track_missing_device_as_simple_skip]
+    expected_answer_contract: [user_device_entity_resolution, missing_evidence, final_answer_boundary]

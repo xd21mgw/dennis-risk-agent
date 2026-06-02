@@ -490,7 +490,7 @@ ATO 单案用户设备实体层：
 - `archives_user_analysis` 到达 transport 层但缺改密、换绑、保护账号、资料修改、发布相关操作等业务字段时标 `behavior_chain_business_fields_missing`。
 - 登录日志 `response_too_large` / `body_truncated` 是 partial observation，建议缩窗；`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
 
-实时证据不闭合时，离线补证只能模块化授权：1 登录/控制链，2 token/OAuth/扫码/refreshToken，3 改密/换绑/保护账号，4 发布作品/私信/资料修改后置行为，5 设备/IP/UA 历史基线。用户只授权 `1,3` 时只能处理 1 和 3；未授权模块进入 `missing_evidence`。只有用户明确说“全查”才授权全部模块。
+实时证据不闭合时，离线补证必须按当前 `missing_evidence` 动态生成 `module_id`，不固定输出 1-5 菜单，也不默认请求全量 DataAgent/Hive。典型动态模块包括 `web_publish_fact`、`web_login_history`、`device_history_baseline`、`token_oauth_scan_chain`、`security_action_chain`、`post_action_chain`；用户只授权哪个 `module_id`，只能生成/执行哪个模块的 query plan，未授权模块继续进入 `missing_evidence`。
 
 ATO partial evidence card 必填：
 

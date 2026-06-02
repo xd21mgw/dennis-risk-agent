@@ -559,6 +559,13 @@
             "completed_transport_not_business_chain_closure": true,
             "sources": {
               "login_logs_search": {
+                "passthrough_transport_classification": {
+                  "http_2xx_body_present_body_truncated": "transport_success + partial_observation_available + response_too_large",
+                  "http_2xx_body_present_not_truncated_small_body": "transport_success_body_suppressed; may become likely_no_data only with explicit empty-result hint",
+                  "raw_body_handling_suppressed": "not_body_missing",
+                  "auth_failed_or_permission_denied_only_from": ["401_403", "auth_redirect_detected_true", "api_code_302", "explicit_error_type"],
+                  "ok_false_network_error": "service_fetch_failure_only; suggest prewarm_or_retry"
+                },
                 "completed_extracts": [
                   "login_time",
                   "login_type",
@@ -577,7 +584,7 @@
                   "transport_error",
                   "service_gap",
                   "batch_contract_error",
-                  "passthrough_interpretation_gap",
+                  "passthrough_interpretation_gap_when_envelope_cannot_be_understood",
                   "invalid_params"
                 ],
                 "online_window_rule": "login_logs_search reliable online window does not constrain Archives/Photo/Track/Weapon/RCP windows"
@@ -648,6 +655,9 @@
           "evidence_card_chain_contract": {
             "organization": "ato_risk_chain_not_flat_source_status",
             "required_sections": [
+              "web_or_abnormal_publish_fact",
+              "web_history_baseline",
+              "device_identity_alignment",
               "control_entry",
               "account_state_and_post_actions",
               "content_publish_handoff",
@@ -657,8 +667,9 @@
               "counter_evidence_and_gaps",
               "conclusion_boundary"
             ],
+            "evidence_strength_rule": "completed transport cannot automatically enter weak evidence; only extracted business fields that support judgement can enter strong/medium/weak evidence",
             "conclusion_rule": "only give evidence-based conclusion when login/control chain, post-action/content handoff, device identity consistency, and historical baseline are closed",
-            "insufficient_support_rule": "when realtime evidence is incomplete, say which chain is open and include modular offline_backfill_recommendation"
+            "insufficient_support_rule": "when realtime evidence is incomplete, say which WEB/publish, WEB history, device alignment, control, or post-action chain is open and include dynamic offline_backfill_recommendation from current gaps"
           },
           "login_logs_search_contract_patch": {
             "response_too_large_status": "source_contract_gap",
@@ -734,47 +745,53 @@
             ],
             "actual_dataagent_or_hive_call_allowed": false
           },
-          "offline_backfill_modular_authorization_contract": {
+          "offline_backfill_dynamic_authorization_contract": {
             "authorization_required": true,
             "one_time_full_authorization_forbidden": true,
             "previous_authorization_not_reusable": true,
-            "user_can_select_one_or_more_modules": true,
-            "all_modules_authorized_only_when_user_says": "全查",
+            "fixed_1_to_5_menu_forbidden": true,
+            "user_can_select_one_or_more_dynamic_modules": true,
             "unselected_modules_enter_missing_evidence": true,
             "dataagent_or_hive_call_without_module_authorization_allowed": false,
-            "options": [
+            "dynamic_module_catalog": [
               {
-                "id": 1,
-                "name": "login_control_chain",
-                "label": "登录/控制链",
-                "scope": "登录成功/失败、登录方式、设备/IP、kickout、风险登录"
+                "module_id": "web_publish_fact",
+                "label": "WEB/发布事实",
+                "scope": "发布时间、发布端、发布设备、发布 IP/UA、photo_id",
+                "trigger": "content_chain_business_fields_missing or missing publish_time/publish_source/publish_device/photo_id"
               },
               {
-                "id": 2,
-                "name": "token_oauth_scan_refresh_chain",
-                "label": "token/OAuth/扫码/refreshToken 链路",
-                "scope": "确认是否存在非密码型接管"
+                "module_id": "web_login_history",
+                "label": "WEB/登录历史",
+                "scope": "发布前后 WEB/H5/PC/token/OAuth/扫码登录，历史 WEB 是否常用",
+                "trigger": "login window gap, response_too_large, no_data, or missing login_source/login_type/device/ip/ua"
               },
               {
-                "id": 3,
-                "name": "account_security_actions",
-                "label": "改密/换绑/保护账号",
-                "scope": "确认控制权变化后的安全操作"
+                "module_id": "device_history_baseline",
+                "label": "设备历史基线",
+                "scope": "登录设备、发布设备、用户历史设备是否同一类，首次出现和历史出现天数",
+                "trigger": "candidate_device_id_missing or publish_device_login_device_alignment_required"
               },
               {
-                "id": 4,
-                "name": "post_takeover_actions",
-                "label": "发布作品/私信/资料修改后置行为",
-                "scope": "确认是否有非本人内容承接"
+                "module_id": "token_oauth_scan_chain",
+                "label": "token/OAuth/扫码链路",
+                "scope": "仅发现 token/OAuth/扫码/refreshToken 锚点或缺口时补非密码型接管链",
+                "trigger": "token_oauth_scan_anchor_detected or missing_token_oauth_scan_chain"
               },
               {
-                "id": 5,
-                "name": "device_ip_ua_baseline",
-                "label": "设备/IP/UA 历史基线",
-                "scope": "对比异常行为是否偏离历史常用环境"
+                "module_id": "security_action_chain",
+                "label": "改密/换绑/保护账号链",
+                "scope": "仅发现安全动作锚点或缺安全动作字段时补控制权变化后的安全操作",
+                "trigger": "behavior_chain_business_fields_missing with password/binding/protection fields"
+              },
+              {
+                "module_id": "post_action_chain",
+                "label": "私信/资料修改/后置行为链",
+                "scope": "仅发现私信、资料修改、关注或后置行为锚点/缺口时补非本人动作承接",
+                "trigger": "behavior_chain_business_fields_missing with profile/follow/publish fields"
               }
             ],
-            "recommended_user_facing_expression": "当前实时证据不足，不能确认/排除。若要继续闭环，请选择授权 1-5 中的一项或多项；未授权模块只保留为 missing_evidence。"
+            "recommended_user_facing_expression": "当前实时证据不足，不能确认/排除。Dennis 会基于当前 missing_evidence 动态列出补证 module_id；请只授权需要的模块，未授权模块只保留为 missing_evidence。"
           },
           "source_plan": [
             {
@@ -874,9 +891,13 @@
             "behavior_chain_business_fields_missing",
             "publish_device_login_device_alignment_required",
             "login_network_error_subtyped",
+            "raw_body_suppressed_not_body_missing",
             "response_too_large_window_shrink_recommended",
             "ato_evidence_card_chain_organized",
-            "offline_backfill_modular_authorization",
+            "ato_evidence_card_three_core_chains",
+            "completed_transport_not_weak_evidence",
+            "offline_backfill_dynamic_authorization",
+            "offline_fixed_1_to_5_menu_forbidden",
             "offline_authorized_modules_only",
             "offline_unapproved_modules_missing_evidence"
           ]
