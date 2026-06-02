@@ -71,6 +71,24 @@ ATO_REALTIME_INCOMPLETE_REQUIRED_FLAGS = {
     "web_control_chain_missing",
     "offline_hive_required",
 }
+ATO_USER_DEVICE_ENTITY_SOURCES = {
+    "login_logs_search",
+    "archives_user_analysis",
+    "archives_photo_search",
+    "weapon_inventory",
+    "track_analysis_check_data_ready",
+}
+ATO_EVIDENCE_CHAIN_SECTIONS = {
+    "control_entry",
+    "account_state_and_post_actions",
+    "content_publish_handoff",
+    "frontend_backend_activity_alignment",
+    "device_ip_spread",
+    "strategy_risk_signal",
+    "counter_evidence_and_gaps",
+    "conclusion_boundary",
+}
+ATO_OFFLINE_AUTH_MODULE_IDS = {1, 2, 3, 4, 5}
 BATCH_ATO_REQUIRED_PLAN_STEPS = {
     "existing_cluster_signal_collection",
     "ato_cluster_lens_overlay",
@@ -591,6 +609,28 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                         "reason": "ATO scenario must derive suspicious anchors from realtime P0 sources, not a standalone source action",
                     }
                 )
+            primary_chain = set(scenario.get("primary_brain_chain", []))
+            if "user_device_entity_resolution" not in primary_chain:
+                failures.append(
+                    {
+                        "rule": "ato_user_device_entity_resolution_required",
+                        "reason": "ATO primary brain chain must include user_device_entity_resolution before device/Track/Weapon alignment",
+                    }
+                )
+            entity_contract = scenario.get("user_device_entity_resolution_contract", {})
+            entity_sources = set(entity_contract.get("candidate_device_sources", []))
+            if (
+                entity_contract.get("default_p0_entity_layer") is not True
+                or entity_contract.get("not_final_risk_conclusion_source") is not True
+                or not ATO_USER_DEVICE_ENTITY_SOURCES.issubset(entity_sources)
+                or "candidate_device_id_missing" not in str(entity_contract.get("missing_candidate_device_rule", ""))
+            ):
+                failures.append(
+                    {
+                        "rule": "ato_user_device_entity_resolution_contract_required",
+                        "reason": "ATO must resolve candidate devices from login/archives/photo/weapon/Track and treat missing candidate_device_id as missing_evidence, not batch failure",
+                    }
+                )
             identity_fields = set(
                 scenario.get("device_identity_consistency_contract", {}).get("identity_fields", [])
             )
@@ -607,6 +647,44 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                     {
                         "rule": "device_identity_consistency_fields_required",
                         "reason": "ATO device identity consistency must cover model/os/UA/IP/login_source/login_type",
+                    }
+                )
+            interpretation = scenario.get("source_observation_interpretation_contract", {})
+            interpretation_sources = interpretation.get("sources", {})
+            required_interpretation_sources = {
+                "login_logs_search",
+                "archives_user_analysis",
+                "archives_photo_search",
+                "track_analysis_check_data_ready",
+                "archives_related_users",
+                "weapon_inventory",
+                "rcp_event_feature_list",
+                "rcp_policy_tree_lookup",
+            }
+            if (
+                interpretation.get("completed_transport_not_business_chain_closure") is not True
+                or not required_interpretation_sources.issubset(set(interpretation_sources.keys()))
+                or "partial_observation_available" not in str(interpretation_sources.get("login_logs_search", {}))
+                or "content_chain_business_fields_missing" not in str(interpretation_sources.get("archives_photo_search", {}))
+                or "behavior_chain_business_fields_missing" not in str(interpretation_sources.get("archives_user_analysis", {}))
+            ):
+                failures.append(
+                    {
+                        "rule": "ato_source_observation_interpretation_contract_required",
+                        "reason": "ATO passthrough interpretation must distinguish transport status from business closure and cover login/photo/analysis/Track/related/Weapon/RCP boundaries",
+                    }
+                )
+            evidence_card_contract = scenario.get("evidence_card_chain_contract", {})
+            evidence_sections = set(evidence_card_contract.get("required_sections", []))
+            if (
+                evidence_card_contract.get("organization") != "ato_risk_chain_not_flat_source_status"
+                or not ATO_EVIDENCE_CHAIN_SECTIONS.issubset(evidence_sections)
+                or "offline_backfill_recommendation" not in str(evidence_card_contract.get("insufficient_support_rule", ""))
+            ):
+                failures.append(
+                    {
+                        "rule": "ato_chain_evidence_card_contract_required",
+                        "reason": "ATO evidence card must be organized by risk chain and include offline backfill recommendation when realtime evidence is incomplete",
                     }
                 )
             login_patch = scenario.get("login_logs_search_contract_patch", {})
@@ -639,6 +717,26 @@ def validate_static_plan_contract(plan: dict[str, Any]) -> list[dict[str, str]]:
                     {
                         "rule": "ato_realtime_incomplete_gap_flags_required",
                         "reason": "ATO realtime incomplete contract must require login window, admin APP-only, WEB control-chain and offline Hive flags",
+                    }
+                )
+            offline_auth = scenario.get("offline_backfill_modular_authorization_contract", {})
+            module_ids = {
+                int(item.get("id"))
+                for item in offline_auth.get("options", [])
+                if isinstance(item, dict) and str(item.get("id", "")).isdigit()
+            }
+            if (
+                offline_auth.get("authorization_required") is not True
+                or offline_auth.get("one_time_full_authorization_forbidden") is not True
+                or offline_auth.get("previous_authorization_not_reusable") is not True
+                or offline_auth.get("unselected_modules_enter_missing_evidence") is not True
+                or offline_auth.get("dataagent_or_hive_call_without_module_authorization_allowed") is not False
+                or not ATO_OFFLINE_AUTH_MODULE_IDS.issubset(module_ids)
+            ):
+                failures.append(
+                    {
+                        "rule": "ato_offline_backfill_modular_authorization_required",
+                        "reason": "ATO offline backfill must expose 1-5 selectable modules and forbid DataAgent/Hive execution outside explicit module authorization",
                     }
                 )
 

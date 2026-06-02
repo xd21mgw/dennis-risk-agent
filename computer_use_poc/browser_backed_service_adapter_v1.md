@@ -753,12 +753,24 @@ Dennis interpretation buckets:
 
 ATO source windows are source-specific. `login_logs_search` defaults to the reliable online login-log window, currently 7 days unless a playbook overrides it. `archives_user_profile`, `archives_user_analysis`, and `archives_photo_search` use the scene/action window and are not constrained by login logs' 7-day reliability window. `track_analysis_check_data_ready`, Weapon, and RCP use their own source capability windows. A response gap in one window must enter `source_quality_matrix`; it must not shrink other source windows or become low-risk counter-evidence.
 
-When Track lacks a `device_id`, Dennis first attempts to extract a candidate device from login, Archives, Weapon, or prior source results. If no candidate is available, Track is marked `missing_required_fields` in `source_quality_matrix` without failing the whole batch.
 | `auth_failed_sources` | `auth_redirect_detected=true`, `api_code=302`, or HTTP auth redirect |
 | `blocked_sources` | `transport_error`, `platform_error`, or service HTTP error |
 | `timeout_sources` | `timeout=true` |
 | `parse_error_sources` | invalid params, malformed passthrough envelope, or Dennis parser failure on capped body |
 | `invalid_parameter_sources` | `invalid_params=true` or missing typed params before action call |
+
+### ATO passthrough interpretation layer
+
+Dennis adds a `user_device_entity_resolution` layer for ATO/account takeover cases. It extracts candidate `device_id` / DID from login logs, Archives user analysis, Archives photo search, Weapon, and Track readiness results, then uses those candidates for Track, Weapon, publish-device alignment, and historical device baseline comparison. If no candidate is available, Track is marked `missing_required_fields` / `candidate_device_id_missing` in Dennis `source_quality_matrix` and `missing_evidence` without failing the whole batch.
+
+Source-specific interpretation must stay Dennis-owned:
+
+- `login_logs_search`: `response_too_large` / `body_truncated` means partial observation and should recommend a narrower window; `network_error` must be subtyped as transport, service, batch-contract, passthrough-interpretation, or invalid-params gap.
+- `archives_user_analysis`: completed transport is not behavior-chain closure; if password/binding/protection/profile/publish operation fields are unavailable, mark `behavior_chain_business_fields_missing`.
+- `archives_photo_search`: completed transport is not content handoff closure; if `photo_id`, publish time, publish device, or publish source are unavailable, mark `content_chain_business_fields_missing`. `no_data` does not exclude abnormal publish or ATO.
+- `track_analysis_check_data_ready`: readiness/provenance only; it does not prove owner operation or low risk.
+
+When realtime evidence is incomplete, Dennis should expose selectable offline authorization modules rather than asking for broad Hive/DataAgent permission. The modules are: login/control chain, token/OAuth/scan/refresh chain, account-security actions, post-takeover content/actions, and device/IP/UA baseline. Unselected modules remain `missing_evidence`.
 
 The service no longer needs to return `sensitive_output=false`; safe passthrough is enforced by raw-body suppression/capping and fixed typed actions. If a response contains credential material or an uncapped raw full body, Dennis treats it as `blocked` with a source contract gap and excludes the body from evidence.
 

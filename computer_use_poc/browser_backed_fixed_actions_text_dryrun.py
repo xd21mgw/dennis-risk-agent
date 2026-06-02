@@ -27,8 +27,11 @@ GLOBAL_ANSWER_CONTRACT = [
     "execution_groups",
     "batch_payload",
     "transport_status_matrix",
+    "source_observations",
     "source_quality_matrix",
+    "user_device_entity_resolution",
     "evidence_card",
+    "offline_backfill_recommendation",
     "partial_evidence",
     "missing_evidence",
     "evidence_strength",
@@ -153,6 +156,12 @@ ANSWER_TEMPLATE_NEGATIVE_GUARDS = [
     "do_not_treat_source_gap_as_low_risk",
     "do_not_default_all_realtime_sources_to_7d",
     "do_not_make_login_window_limit_archives",
+    "do_not_skip_user_device_entity_resolution",
+    "do_not_treat_track_missing_device_as_simple_skip",
+    "do_not_use_completed_transport_as_business_closure",
+    "do_not_request_full_hive_authorization_by_default",
+    "do_not_execute_unapproved_offline_modules",
+    "do_not_treat_network_error_as_final_platform_explanation",
 ]
 
 FULL_METADATA_REQUEST_PATTERNS = [
@@ -253,6 +262,18 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "transport_status_matrix_dict_list_compatible": "harness 兼容 transport_status_matrix 的 dict/list 两种返回形态",
     "missing_or_failed_sources_dict_list_compatible": "harness 兼容 missing_or_failed_sources 的 dict/list 两种返回形态",
     "track_missing_device_id_blocked_not_batch_failure": "Track 缺 device_id 只标 blocked/missing_required_fields，不导致整个 batch 失败",
+    "user_device_entity_resolution_required": "ATO 默认先把 user 级证据解析成候选 device_id，再驱动 Track/Weapon/发布设备对齐",
+    "candidate_device_id_missing_enters_missing_evidence": "提取不到候选设备时写入 missing_evidence，不能把 Track 简单跳过或让 batch 失败",
+    "content_chain_business_fields_missing": "作品 source 到达 transport 不等于发布链路闭合，缺 photo_id/publish_time/publish_device 时要显式标缺口",
+    "behavior_chain_business_fields_missing": "用户分析 source 到达 transport 不等于行为时间线闭合，缺改密/换绑/发布等业务字段时要显式标缺口",
+    "publish_device_login_device_alignment_required": "发布设备需要与登录、用户分析、Track/Weapon 和历史设备基线对齐",
+    "login_network_error_subtyped": "登录日志 network_error 必须细分为 transport_error/service_gap/batch_contract_error/passthrough_interpretation_gap/invalid_params",
+    "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
+    "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
+    "offline_backfill_modular_authorization": "实时证据不闭合时给 1-5 离线补证模块，用户选择后才生成/执行对应 DataAgent/Hive 计划",
+    "offline_authorized_modules_only": "用户只授权部分编号时，只能处理授权模块",
+    "offline_unapproved_modules_missing_evidence": "未授权离线模块留在 missing_evidence，不得执行",
+    "offline_all_modules_authorized_only_when_user_says_all": "只有用户明确说全查才视为授权全部模块",
     "archives_photo_search_default_for_representative_ato": "批量 ATO 代表样本默认沿用单案 P0 的 archives_photo_search",
     "body_truncated_means_partial_observation": "body_truncated=true 只能支持 partial_observation_available",
     "raw_body_capped_limited_observation_only": "raw body suppressed/capped 时只能做有限观察，不声称完整明细",
@@ -998,6 +1019,15 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         "api_code=302",
         "api_code",
     ]):
+        passthrough_actions = ["source_plan_only_no_action_selected"]
+        if has_any(text, ["login_logs_search"]):
+            passthrough_actions = ["login_logs_search"]
+        elif has_any(text, ["archives_user_analysis"]):
+            passthrough_actions = ["archives_user_analysis"]
+        elif has_any(text, ["archives_photo_search"]):
+            passthrough_actions = ["archives_photo_search", "archives_user_profile", "archives_user_analysis"]
+        elif has_any(text, ["rcp_event_feature_list", "feature_list"]):
+            passthrough_actions = ["rcp_event_feature_list"]
         passthrough_flags = [
             "pure_passthrough_envelope_required",
             "dennis_generates_observation_from_passthrough",
@@ -1034,11 +1064,33 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         if has_any(text, ["no_data", "empty result", "无数据"]):
             passthrough_flags += ["no_data_not_risk_exclusion"]
         if has_any(text, ["缺 device_id", "missing device_id", "missing_required_fields"]):
-            passthrough_flags += ["track_missing_device_id_blocked_not_batch_failure"]
+            passthrough_flags += [
+                "user_device_entity_resolution_required",
+                "candidate_device_id_missing_enters_missing_evidence",
+                "track_missing_device_id_blocked_not_batch_failure",
+            ]
+        if has_any(text, ["network_error", "网络错误", "transport_error", "service_gap", "batch_contract_error"]):
+            passthrough_flags += ["login_network_error_subtyped"]
+        if has_any(text, ["response_too_large", "返回过大", "大响应"]):
+            passthrough_flags += [
+                "response_too_large_not_login_evidence",
+                "response_too_large_window_shrink_recommended",
+                "partial_observation_available",
+            ]
+        if has_any(text, ["publish_device", "publish_time", "photo_id", "发布设备", "发布时间", "作品设备"]):
+            passthrough_flags += [
+                "content_chain_business_fields_missing",
+                "publish_device_login_device_alignment_required",
+            ]
+        if has_any(text, ["archives_user_analysis", "body_truncated", "行为时间线", "改密", "换绑"]):
+            passthrough_flags += [
+                "behavior_chain_business_fields_missing",
+                "large_response_limited_enters_source_quality",
+            ]
         if has_any(text, ["auth_redirect_detected", "api_code=302", "302"]):
             passthrough_flags += ["auth_flow_not_completed_in_bound_context"]
         return finalize_route(plan, text, {
-            "actions": ["source_plan_only_no_action_selected"],
+            "actions": passthrough_actions,
             "orchestration": (
                 "pure passthrough envelope is consumed by Dennis; Dennis generates observation, "
                 "source_quality_matrix, evidence_card, missing_evidence and final_answer_boundary"
@@ -1198,8 +1250,52 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     if has_any(text, ["7-day", "7 天", "七天", "source-specific", "source specific", "window_policy", "time_window", "时间窗口"]):
         flags += ["source_specific_time_window_policy", "login_log_window_incomplete_possible"]
 
-    if has_any(text, ["候选 device", "候选设备", "candidate device", "prior source", "前序 source"]):
-        flags += ["track_candidate_device_from_prior_sources", "track_missing_device_id_blocked_not_batch_failure"]
+    if has_any(text, [
+        "user_device_entity_resolution",
+        "用户设备实体",
+        "候选 device",
+        "候选设备",
+        "candidate device",
+        "candidate_device",
+        "prior source",
+        "前序 source",
+        "提取候选设备",
+    ]):
+        flags += [
+            "user_device_entity_resolution_required",
+            "track_candidate_device_from_prior_sources",
+            "track_missing_device_id_blocked_not_batch_failure",
+        ]
+
+    if has_any(text, ["缺 device_id", "missing device_id", "missing_required_fields", "candidate_device_id_missing"]):
+        actions += ["track_analysis_check_data_ready"]
+        flags += [
+            "user_device_entity_resolution_required",
+            "candidate_device_id_missing_enters_missing_evidence",
+            "track_missing_device_id_blocked_not_batch_failure",
+            "track_check_data_ready_not_risk_conclusion",
+            "source_quality_matrix_merge_required",
+        ]
+
+    if has_any(text, ["publish_device", "publish_time", "photo_id", "发布设备", "发布时间", "作品设备", "发布来源"]):
+        flags += [
+            "content_chain_business_fields_missing",
+            "publish_device_login_device_alignment_required",
+        ]
+        if has_any(text, ["login_logs", "登录日志", "track", "weapon", "设备链路", "对齐"]):
+            actions += scenario_actions(plan, "ato_login_anomaly")
+            flags += [
+                "user_device_entity_resolution_required",
+                "device_identity_consistency_required",
+                "ato_evidence_card_chain_organized",
+            ]
+            orchestration = "publish device must be aligned with login, Archives analysis, Track/Weapon and historical device baseline"
+
+    if has_any(text, ["behavior_chain_business_fields_missing", "行为字段缺失", "行为时间线", "改密", "换绑", "保护账号"]):
+        flags += ["behavior_chain_business_fields_missing"]
+
+    if has_any(text, ["network_error", "网络错误", "transport_error", "service_gap", "batch_contract_error", "passthrough_interpretation_gap", "invalid_params"]):
+        flags += ["login_network_error_subtyped"]
 
     if has_any(text, ["timeout", "超时"]):
         flags += ["source_timeout_non_blocking_partial", "partial_evidence_required"]
@@ -1302,6 +1398,9 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
                 "controlled_case_execution_harness_required",
                 "default_runtime_routing_false",
                 "no_legacy_runner_fallback",
+                "user_device_entity_resolution_required",
+                "ato_evidence_card_chain_organized",
+                "offline_backfill_modular_authorization",
             ]
             orchestration = "ATO multi-source plan via runtime_case_execution_runner controlled batch, not login logs only"
         else:
@@ -1318,9 +1417,6 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         actions += ["track_analysis_check_data_ready"]
         flags += ["track_check_data_ready_not_risk_conclusion"]
         orchestration = "track_analysis_check_data_ready is readiness/provenance only"
-
-    if has_any(text, ["缺 device_id", "missing device_id", "missing_required_fields"]):
-        flags += ["track_missing_device_id_blocked_not_batch_failure", "source_quality_matrix_merge_required"]
 
     if has_any(text, ["track summary", "track_analysis_summary", "track 命名", "track能力", "track 能力", "track 活跃", "数据可用性"]):
         actions += ["track_analysis_check_data_ready"]
@@ -1345,7 +1441,37 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         orchestration = "browser-backed source gap becomes Dennis source_quality and missing_evidence without old runner fallback"
 
     if has_any(text, ["response_too_large"]):
-        flags += ["response_too_large_not_login_evidence"]
+        flags += [
+            "response_too_large_not_login_evidence",
+            "response_too_large_window_shrink_recommended",
+            "partial_observation_available",
+        ]
+
+    if has_any(text, ["evidence card", "证据卡", "source 状态平铺", "链路组织", "证据链路"]):
+        flags += ["ato_evidence_card_chain_organized"]
+
+    offline_module_auth_requested = has_any(text, [
+        "离线补证",
+        "模块化授权",
+        "授权 1",
+        "授权1",
+        "1,3",
+        "1，3",
+        "全查",
+        "offline_backfill",
+        "offline authorization",
+    ])
+    if offline_module_auth_requested:
+        flags += [
+            "offline_backfill_modular_authorization",
+            "hive_registry_first_query_plan",
+            "do_not_call_hive_without_authorization",
+        ]
+        orchestration = "realtime incomplete; present 1-5 selectable offline backfill modules and do not execute unapproved DataAgent/Hive"
+        if has_any(text, ["1,3", "1，3", "授权 1 和 3", "授权1和3"]):
+            flags += ["offline_authorized_modules_only", "offline_unapproved_modules_missing_evidence"]
+        if has_any(text, ["全查", "全部授权", "授权全部"]):
+            flags += ["offline_all_modules_authorized_only_when_user_says_all"]
 
     if has_any(text, ["冲突", "不一致", "登录日志没异常但", "登录没异常但", "登录没异常，但", "登录无异常但"]):
         flags += ["conflicting_sources_require_source_quality", "final_judgement_boundary_required"]

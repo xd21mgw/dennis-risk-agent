@@ -340,6 +340,35 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - 设备判断必须写 `device_identity_consistency`。`device_id` 常用只能说明一个变量一致；如果机型 / 系统 / UA / IP / 登录端 / 登录方式异常，应写“device_id 看似常用，但设备身份变量不一致，存在伪装常用设备或 session/token 接管嫌疑”。
 - Track 有活跃不能写成本人操作；Track 无活跃但后端有 WEB/session/API 内容动作时，写 `front_backend_activity_mismatch`。
 - `response_too_large` 只能写 wrapper/source contract gap，不能写成“登录很多”或登录证据；UI 无数据但 wrapper 过大时写 `wrapper_response_mismatch`、`source_contract_gap`、`actual_ui_no_data_unverified_by_wrapper`、`login_log_evidence_unusable`。
+- ATO 单案默认要先跑 `user_device_entity_resolution` 这一层：从登录日志、档案中心用户分析、作品搜索、Weapon 图谱和 Track readiness 中提取候选 `device_id` / DID，再驱动 Track、Weapon、发布设备对齐和历史设备基线。提取不到时写 `candidate_device_id_missing`，让 Track 进入 `missing_evidence`，不能让整个 batch 失败，也不能简单写“Track 未执行”。
+- `archives_user_analysis` 或 `archives_photo_search` 到达 transport 层不等于业务证据闭合。若无法提取改密 / 换绑 / 保护账号 / 发布操作时间线，写 `behavior_chain_business_fields_missing`；若无法提取 `photo_id` / 发布时间 / 发布设备 / 发布来源，写 `content_chain_business_fields_missing`。
+- 登录日志 `network_error` 必须细分为 `transport_error` / `service_gap` / `batch_contract_error` / `passthrough_interpretation_gap` / `invalid_params`，不能笼统作为最终解释。`response_too_large` / `body_truncated` 建议围绕可疑锚点缩小窗口，不是登录正常或登录很多的证据。
+
+ATO evidence card 不按 source 状态平铺，按风险链路组织：
+
+```text
+1. 控制权入口：登录方式、设备/IP、OAuth/扫码/token、window gap。
+2. 账号状态与后置行为：账号状态、改密、换绑、保护账号、资料修改、关注、发布操作。
+3. 内容/发布承接：作品、发布时间、发布来源、发布设备、导流/审核/策略原因。
+4. 前后端活跃对齐：Track readiness、front-back mismatch、缺 device_id。
+5. 设备/IP/扩散：candidate_device_ids、设备图谱、关联账号、历史常用设备差异。
+6. 策略/风控信号：event/policy hit 只能作为辅助。
+7. 反证与缺口：no_data、partial、auth gap、missing device、常用设备反证是否闭合。
+8. 结论边界：未闭合时写 insufficient_support，并说明缺哪条链路。
+```
+
+实时证据不闭合时，不默认请求“全量 Hive/DataAgent”。用户正文给模块化授权：
+
+```text
+当前实时证据不足，不能确认/排除。若要继续闭环，请选择授权以下一项或多项：
+1. 登录/控制链：登录成功/失败、登录方式、设备/IP、kickout、风险登录。
+2. token/OAuth/扫码/refreshToken 链路：确认是否存在非密码型接管。
+3. 改密/换绑/保护账号：确认控制权变化后的安全操作。
+4. 发布作品/私信/资料修改后置行为：确认是否有非本人内容承接。
+5. 设备/IP/UA 历史基线：对比异常行为是否偏离历史常用环境。
+
+请回复要授权的编号，例如 1,3,4；回复“全查”才授权全部模块。未授权模块只保留为 missing_evidence。
+```
 
 短期 observation builder 方向：
 
@@ -1197,9 +1226,10 @@ ATO 单案 source orchestration：
 
 - 每个 source 查询结束后必须立即写 checkpoint；completed source 不得因后续 source 失败而丢失。
 - `no_data` 也算 completed source，但必须标注 `no_data_not_risk_exclusion`，不得作为无风险反证。
-- P0 source：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
-- P1 source：档案中心画像、track-analysis stats-first。
-- P2 source：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+- P0 source：`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`。
+- P0 entity layer：`user_device_entity_resolution`，用于候选设备、Track/Weapon、发布设备和历史设备基线对齐。
+- Conditional source：Weapon graph/riskData 仅在有候选 device_id 或明确设备线索时触发；RCP / 天师策略归因仅在 eventId / 策略语境下触发。
+- P1/P2 source：更深层设备 SDK、RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细和离线补证。
 - 默认总预算 180s；任一 P0/P1 source completed 后，在 120s 或 150s checkpoint 停止扩展 P2 browser source，输出 partial evidence card。
 - browser 操作失败 3 次或超过单 source 时间预算必须停止，标入 timeout_sources / blocked_sources / auth_failed_sources。
 - execution 开始时先写 observation skeleton；最终 timeout 也必须写 partial / timeout observation，不允许日志无记录。

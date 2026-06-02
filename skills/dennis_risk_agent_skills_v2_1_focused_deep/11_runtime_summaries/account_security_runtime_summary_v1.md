@@ -232,6 +232,17 @@ ATO suspicious source priority：
 - P0 辅助对齐：`track_analysis_check_data_ready` 用于前后端活跃对齐、协议上号 / token 使用 / 非真实客户端线索，不证明本人操作。
 - 条件补证：Weapon 只做候选设备关系和设备风险补证；RCP / 策略命中只做行为风险 / 策略旁证。
 
+ATO 默认包含 `user_device_entity_resolution` 实体层：从登录日志、档案中心用户分析、作品搜索、Weapon 图谱和 Track readiness 中抽取候选 `device_id` / DID，用于驱动 Track、Weapon、发布设备一致性和历史设备基线比较。提取不到候选设备时标 `candidate_device_id_missing`，Track 进入 `missing_evidence` / `missing_required_fields`，不得让整个 batch 失败，也不得简单写“Track 未执行”。
+
+source observation 解释边界：
+
+- `login_logs_search` 的 `response_too_large` / `body_truncated` 是 partial observation，建议围绕可疑锚点缩窗；`no_data` 不排除 ATO；`network_error` 要细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
+- `archives_user_analysis` 到达 transport 层不等于行为链闭合；缺改密、换绑、保护账号、资料修改、发布操作等字段时标 `behavior_chain_business_fields_missing`。
+- `archives_photo_search` 默认用于内容/发布承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`，并与登录、用户分析、Track/Weapon 和历史设备基线对齐。
+- `track_analysis_check_data_ready` 是 readiness/provenance，不是本人操作证明。
+
+ATO 用户正文 evidence card 按风险链路组织：控制权入口、账号状态与后置行为、内容/发布承接、前后端活跃对齐、设备/IP/扩散、策略/风控信号、反证与缺口、结论边界。不要按 source 状态平铺。
+
 每个 source 查询结束后必须立即记录 checkpoint：
 
 - `source_name`
@@ -390,6 +401,16 @@ ATO 实时源不完整时，Hive 不是“可选增强”，而是定性闭环�
 ```text
 当前实时源无法定性。统一登录日志存在窗口限制，admin 侧主要覆盖 APP 日志，不能覆盖完整 WEB/H5/PC/token/OAuth 控制链。若要判断是否 ATO，需要补 Hive 长周期登录日志和发布动作链路。
 ```
+
+离线补证授权必须模块化，不默认请求全量 DataAgent/Hive。给用户 1-5 选项：
+
+1. 登录/控制链：成功/失败登录、登录方式、设备/IP、kickout、风险登录。
+2. token/OAuth/扫码/refreshToken 链路：确认非密码型接管。
+3. 改密/换绑/保护账号：确认控制权变化后的安全操作。
+4. 发布作品/私信/资料修改后置行为：确认是否有非本人内容承接。
+5. 设备/IP/UA 历史基线：对比异常行为是否偏离历史常用环境。
+
+用户只回复 `1,3` 时，只能生成/执行 1 和 3 的 query plan；未授权模块保留为 `missing_evidence`。只有用户明确回复“全查”才视为授权全部模块。plan mode 不得伪装已经查过离线数据。
 
 触发强提醒的典型条件：
 

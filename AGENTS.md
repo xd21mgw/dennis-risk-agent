@@ -434,7 +434,7 @@ Section classification: `main_agent_config_ops_only`, `deprecated_for_dennis_sub
 具体 `user_id` / `event_time` / `abnormal_action` 已存在时：
 
 - 默认 `single_entity_execution_mode`。
-- 优先在线只读 observation：登录日志、Weapon、档案中心、策略命中、前端行为。
+- 优先在线只读 observation：登录日志、档案中心账号画像/用户分析/作品发布承接、Track readiness；Weapon 和策略命中按候选设备或 eventId / 策略归因语境条件触发。
 - 不默认走 DataAgent，不默认只给方法论。
 - timeout 默认 180s，复杂单用户 240s。
 - 任一只读平台 timeout / auth blocked / parse error 时必须输出 partial evidence card，不得裸 timeout。
@@ -474,11 +474,23 @@ checkpoint 字段：
 
 source 优先级：
 
-- P0：统一登录日志、Weapon riskData / graphData、天师策略命中摘要。
-- P1：档案中心画像、track-analysis stats-first。
-- P2：RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细。
+- P0：`login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`。
+- P0 entity layer：`user_device_entity_resolution`，从登录、档案用户分析、作品搜索、Weapon 和 Track 中抽候选 device_id，驱动 Track/Weapon/发布设备/历史设备基线对齐。
+- Conditional：Weapon graph/riskData 仅在有候选 device_id 或明确设备线索时触发；RCP / 策略命中仅在 eventId / 策略归因语境下触发。
+- P1/P2：更深层设备 SDK、RCP browser、档案中心 browser recoverable_preflight、track-analysis SPA 明细和离线补证。
 
 P0 source completed 后，应具备输出 partial evidence card 的最低条件。browser 操作失败 3 次或超过单 source 时间预算必须停止并降级。
+
+ATO 单案用户设备实体层：
+
+- 默认运行 Dennis-side `user_device_entity_resolution`，它不是最终风险结论 source。
+- 候选 device_id 来源：登录日志、档案中心用户分析、作品搜索、Weapon 图谱、Track readiness。
+- 如果没有提取到候选 device_id，输出 `candidate_device_id_missing`，Track / Weapon / 发布设备对齐进入 `missing_evidence`，不得让整个 batch fail，也不得简单写“Track 未执行”。
+- `archives_photo_search` 默认用于作品 / 发布 / 内容承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`。
+- `archives_user_analysis` 到达 transport 层但缺改密、换绑、保护账号、资料修改、发布相关操作等业务字段时标 `behavior_chain_business_fields_missing`。
+- 登录日志 `response_too_large` / `body_truncated` 是 partial observation，建议缩窗；`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
+
+实时证据不闭合时，离线补证只能模块化授权：1 登录/控制链，2 token/OAuth/扫码/refreshToken，3 改密/换绑/保护账号，4 发布作品/私信/资料修改后置行为，5 设备/IP/UA 历史基线。用户只授权 `1,3` 时只能处理 1 和 3；未授权模块进入 `missing_evidence`。只有用户明确说“全查”才授权全部模块。
 
 ATO partial evidence card 必填：
 

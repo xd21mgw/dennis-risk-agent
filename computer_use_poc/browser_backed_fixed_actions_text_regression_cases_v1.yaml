@@ -776,3 +776,99 @@ cases:
     expected_execution_groups: []
     should_not_do: [do_not_browser_click_for_case_execution, do_not_dom_parse_for_case_execution, do_not_ad_hoc_fetch_for_case_execution, do_not_direct_curl_platform, do_not_fallback_sso_session_runner, do_not_fallback_archives_profile_runner]
     expected_answer_contract: [source_plan, batch_payload, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-USER-DEVICE-ENTITY-RESOLUTION-001
+    user_query: "ATO 单案 Track 缺 device_id 时，先通过 user_device_entity_resolution 从 login/archives/photo/weapon 提取 candidate_device_ids"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "ATO source interpretation resolves candidate device IDs before Track/Weapon/device-alignment follow-up."
+    expected_boundary_flags: [user_device_entity_resolution_required, track_candidate_device_from_prior_sources, track_missing_device_id_blocked_not_batch_failure]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_skip_user_device_entity_resolution, do_not_treat_track_missing_device_as_simple_skip]
+    expected_answer_contract: [source_plan, user_device_entity_resolution, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-TRACK-MISSING-DEVICE-ENTITY-GAP-001
+    user_query: "如果提取不到 candidate_device_id_missing，Track 是不是就简单不查？"
+    expected_route_or_actions: [track_analysis_check_data_ready]
+    expected_orchestration: "Missing candidate device enters missing_evidence and cannot fail the batch or become a silent skip."
+    expected_boundary_flags: [candidate_device_id_missing_enters_missing_evidence, track_missing_device_id_blocked_not_batch_failure, track_check_data_ready_not_risk_conclusion]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_track_missing_device_as_simple_skip, do_not_make_device_risk_judgement_from_readiness]
+    expected_answer_contract: [user_device_entity_resolution, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-PHOTO-CONTENT-BUSINESS-FIELDS-MISSING-001
+    user_query: "archives_photo_search completed 但没提取到 photo_id、publish_time、publish_device、发布来源时怎么写？"
+    expected_route_or_actions: [archives_photo_search, archives_user_profile, archives_user_analysis]
+    expected_orchestration: "Completed transport does not close content handoff; missing publish fields must be explicit."
+    expected_boundary_flags: [content_chain_business_fields_missing, publish_device_login_device_alignment_required, photo_search_no_data_not_abnormal_publish_exclusion]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_use_completed_transport_as_business_closure, do_not_output_no_abnormal_publish_from_photo_no_data]
+    expected_answer_contract: [source_observations, evidence_card, missing_evidence, final_answer_boundary]
+  - id: ATO-PUBLISH-DEVICE-ALIGNMENT-001
+    user_query: "发布设备要不要和 login_logs、archives_user_analysis、Track、Weapon 设备链路对齐？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "Publish device must be aligned with login/control chain, Archives behavior, Track/Weapon and historical baseline."
+    expected_boundary_flags: [publish_device_login_device_alignment_required, user_device_entity_resolution_required, device_identity_consistency_required]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_skip_user_device_entity_resolution, do_not_treat_common_device_id_as_ato_exclusion]
+    expected_answer_contract: [user_device_entity_resolution, evidence_card, missing_evidence, final_answer_boundary]
+  - id: LOGIN-RESPONSE-TOO-LARGE-SHRINK-WINDOW-001
+    user_query: "login_logs_search response_too_large 时是不是登录很多？要怎么处理？"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "response_too_large is a partial/source gap and should recommend shrinking the window around an anchor."
+    expected_boundary_flags: [response_too_large_not_login_evidence, response_too_large_window_shrink_recommended, partial_observation_available]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_source_gap_as_low_risk]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: LOGIN-NETWORK-ERROR-SUBTYPED-001
+    user_query: "login_logs_search network_error 不能笼统说平台不可用，要区分 transport_error、service_gap、batch_contract_error、passthrough_interpretation_gap、invalid_params"
+    expected_route_or_actions: [login_logs_search]
+    expected_orchestration: "Login network_error must be subtyped before entering source_quality."
+    expected_boundary_flags: [login_network_error_subtyped]
+    expected_execution_groups: [independent_parallel]
+    should_not_do: [do_not_treat_network_error_as_final_platform_explanation]
+    expected_answer_contract: [source_observations, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-ARCHIVES-ANALYSIS-BODY-TRUNCATED-PARTIAL-001
+    user_query: "archives_user_analysis body_truncated 只能当 partial behavior timeline，不能说完整行为时间线"
+    expected_route_or_actions: [archives_user_analysis]
+    expected_orchestration: "Archives user analysis truncation is partial behavior timeline with missing business fields."
+    expected_boundary_flags: [partial_observation_available, behavior_chain_business_fields_missing, large_response_limited_enters_source_quality]
+    expected_execution_groups: [auth_sensitive_serial]
+    should_not_do: [do_not_claim_complete_timeline, do_not_use_completed_transport_as_business_closure]
+    expected_answer_contract: [source_observations, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: RCP-FEATURE-LIST-TRUNCATED-PARTIAL-001
+    user_query: "rcp_event_feature_list body_truncated 能不能说明完整特征明细？"
+    expected_route_or_actions: [rcp_event_feature_list]
+    expected_orchestration: "Feature list truncation only supports partial feature grouping."
+    expected_boundary_flags: [feature_list_partial_only_feature_group_summary, partial_observation_available]
+    expected_execution_groups: [dependency_serial]
+    should_not_do: [do_not_claim_complete_feature_coverage, do_not_upgrade_partial_to_strong_evidence]
+    expected_answer_contract: [source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-RELATED-USERS-SPREAD-CLUE-NOT-GANG-001
+    user_query: "archives_related_users completed 能不能直接说同设备团伙？"
+    expected_route_or_actions: [archives_related_users, archives_user_profile, login_logs_search, track_analysis_check_data_ready]
+    expected_orchestration: "Related users are spread clues and require cross-source validation."
+    expected_boundary_flags: [archives_related_users_spread_clue_not_gang, related_users_not_gang_conclusion]
+    expected_execution_groups: [auth_sensitive_serial, dependency_serial]
+    should_not_do: [do_not_claim_archives_related_users_gang, do_not_label_gang_from_same_device_only]
+    expected_answer_contract: [source_plan, source_quality_matrix, missing_evidence, final_answer_boundary]
+  - id: ATO-INSUFFICIENT-SUPPORT-OFFLINE-MODULES-001
+    user_query: "ATO 实时证据不闭合，insufficient_support 时下一步离线补证怎么授权？"
+    expected_route_or_actions: [login_logs_search, archives_user_profile, archives_user_analysis, archives_photo_search, track_analysis_check_data_ready]
+    expected_orchestration: "Insufficient support must output offline_backfill_recommendation with selectable modules."
+    expected_boundary_flags: [ato_evidence_card_chain_organized, offline_backfill_modular_authorization, offline_hive_required]
+    expected_execution_groups: [independent_parallel, auth_sensitive_serial]
+    should_not_do: [do_not_request_full_hive_authorization_by_default, do_not_call_hive_without_authorization]
+    expected_answer_contract: [evidence_card, offline_backfill_recommendation, missing_evidence, final_answer_boundary]
+  - id: ATO-OFFLINE-AUTH-ONLY-1-3-001
+    user_query: "用户只授权 1,3 离线补证，能不能顺便查 2,4,5？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "Only authorized modules 1 and 3 may enter query plan; unapproved modules remain missing evidence."
+    expected_boundary_flags: [offline_backfill_modular_authorization, offline_authorized_modules_only, offline_unapproved_modules_missing_evidence]
+    expected_execution_groups: []
+    should_not_do: [do_not_execute_unapproved_offline_modules, do_not_call_hive_without_authorization]
+    expected_answer_contract: [offline_backfill_recommendation, missing_evidence, final_answer_boundary]
+  - id: ATO-OFFLINE-AUTH-ALL-001
+    user_query: "用户回复全查，是否才视为授权全部离线补证模块？"
+    expected_route_or_actions: [source_plan_only_no_action_selected]
+    expected_orchestration: "All modules are authorized only when the user explicitly says 全查."
+    expected_boundary_flags: [offline_backfill_modular_authorization, offline_all_modules_authorized_only_when_user_says_all]
+    expected_execution_groups: []
+    should_not_do: [do_not_request_full_hive_authorization_by_default]
+    expected_answer_contract: [offline_backfill_recommendation, final_answer_boundary]

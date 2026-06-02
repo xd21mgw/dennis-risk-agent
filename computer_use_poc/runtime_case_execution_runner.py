@@ -850,20 +850,399 @@ DEVICE_ID_KEYS = {
 }
 
 
-def extract_candidate_device_id(value: Any) -> str | None:
-    if isinstance(value, dict):
-        for key, item in value.items():
-            if key in DEVICE_ID_KEYS and isinstance(item, str) and item.strip():
-                return item.strip()
-            found = extract_candidate_device_id(item)
-            if found:
-                return found
-    elif isinstance(value, list):
-        for item in value:
-            found = extract_candidate_device_id(item)
-            if found:
-                return found
+OFFLINE_BACKFILL_MODULES = [
+    {
+        "id": 1,
+        "name": "login_control_chain",
+        "label": "登录/控制链",
+        "purpose": "登录成功/失败、登录方式、设备/IP、kickout、风险登录",
+    },
+    {
+        "id": 2,
+        "name": "token_oauth_scan_refresh_chain",
+        "label": "token/OAuth/扫码/refreshToken 链路",
+        "purpose": "确认是否存在非密码型接管或 token/session 使用",
+    },
+    {
+        "id": 3,
+        "name": "account_security_actions",
+        "label": "改密/换绑/保护账号",
+        "purpose": "确认控制权变化后的安全操作",
+    },
+    {
+        "id": 4,
+        "name": "post_takeover_actions",
+        "label": "发布作品/私信/资料修改后置行为",
+        "purpose": "确认是否有非本人内容承接或导流动作",
+    },
+    {
+        "id": 5,
+        "name": "device_ip_ua_baseline",
+        "label": "设备/IP/UA 历史基线",
+        "purpose": "对比异常行为是否偏离历史常用环境",
+    },
+]
+
+
+SOURCE_OBSERVATION_CONTRACTS = {
+    "login_logs_search": {
+        "chain_section": "control_entry",
+        "expected_business_fields": [
+            "login_time",
+            "login_type",
+            "login_source",
+            "device_id",
+            "ip",
+            "ua",
+            "token_oauth_scan",
+            "kickout",
+            "success_failure_sequence",
+            "window_coverage",
+        ],
+        "role": "登录/控制链入口，不单独完成 ATO 定性",
+    },
+    "archives_user_profile": {
+        "chain_section": "account_state_and_post_actions",
+        "expected_business_fields": [
+            "account_status",
+            "profile_baseline",
+            "punishment_or_label",
+            "protection_state",
+        ],
+        "role": "账号状态和画像基线，不是最终风险判断",
+    },
+    "archives_user_analysis": {
+        "chain_section": "account_state_and_post_actions",
+        "expected_business_fields": [
+            "password_change",
+            "binding_change",
+            "account_protection",
+            "profile_change",
+            "follow_action",
+            "publish_related_operation",
+            "security_operation_timeline",
+        ],
+        "role": "改密、换绑、保护账号、资料修改和后置行为时间线",
+    },
+    "archives_photo_search": {
+        "chain_section": "content_publish_handoff",
+        "expected_business_fields": [
+            "photo_id",
+            "publish_time",
+            "publish_device",
+            "publish_source",
+            "publish_ip",
+            "publish_ua",
+            "content_status",
+            "audit_or_strategy_reason",
+        ],
+        "role": "作品/发布/内容承接链路，no_data 不排除异常发布或 ATO",
+    },
+    "track_analysis_check_data_ready": {
+        "chain_section": "frontend_backend_activity_alignment",
+        "expected_business_fields": [
+            "candidate_device_id",
+            "track_data_ready",
+            "event_day_frontend_activity",
+            "frontend_backend_activity_alignment",
+        ],
+        "role": "前后端活跃对齐和真实客户端线索，不是风险结论",
+    },
+    "archives_related_users": {
+        "chain_section": "device_ip_spread",
+        "expected_business_fields": [
+            "related_user_ids",
+            "relation_type",
+            "shared_device_or_relation",
+        ],
+        "role": "扩散线索，不是团伙结论",
+    },
+    "weapon_inventory": {
+        "chain_section": "device_ip_spread",
+        "expected_business_fields": [
+            "user_device_graph",
+            "device_risk_label",
+            "device_relation",
+        ],
+        "role": "设备图谱和设备风险辅助证据，不替代登录/发布链路",
+    },
+    "rcp_event_detail": {
+        "chain_section": "strategy_risk_signal",
+        "expected_business_fields": [
+            "event_id",
+            "event_type",
+            "hit_policy",
+            "event_time",
+        ],
+        "role": "事件归因上下文，不单独定性风险",
+    },
+    "rcp_event_feature_list": {
+        "chain_section": "strategy_risk_signal",
+        "expected_business_fields": [
+            "feature_group",
+            "feature_presence",
+            "feature_list_boundary",
+        ],
+        "role": "策略特征分组/有限观察，不声称完整明细",
+    },
+    "rcp_policy_tree_lookup": {
+        "chain_section": "strategy_risk_signal",
+        "expected_business_fields": [
+            "policy_tree_code",
+            "policy_tree_version",
+            "policy_asset_path",
+        ],
+        "role": "策略资产治理，不是单案命中证据",
+    },
+}
+
+
+def _source_quality_by_id(source_quality_matrix: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {str(row.get("source_id")): row for row in source_quality_matrix.get("per_source", [])}
+
+
+def _transport_issue_subtype(row: dict[str, Any]) -> str | None:
+    status = str(row.get("source_status") or "").lower()
+    error_type = str(row.get("error_type") or "").lower()
+    transport_error = str(row.get("transport_error") or "").lower()
+    platform_error = str(row.get("platform_error") or "").lower()
+    if row.get("invalid_params") or "invalid" in status or "missing_required" in status:
+        return "invalid_params"
+    if "batch_contract" in status or "batch_contract" in error_type:
+        return "batch_contract_error"
+    if "service_unavailable" in status or "connection" in transport_error or "urlerror" in error_type:
+        return "service_gap"
+    if transport_error:
+        return "transport_error"
+    if platform_error:
+        return "platform_error"
+    if row.get("body_present") is False and row.get("raw_body_handling") in {"suppressed", "capped", "metadata_only"}:
+        return "passthrough_interpretation_gap"
     return None
+
+
+def _row_has_large_response(row: dict[str, Any]) -> bool:
+    serialized = json.dumps(row, ensure_ascii=False, sort_keys=True).lower()
+    return row.get("body_truncated") is True or "response_too_large" in serialized or "too_large" in serialized
+
+
+def build_source_observations(
+    source_plan: list[SourcePlanItem],
+    source_quality_matrix: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows_by_id = _source_quality_by_id(source_quality_matrix)
+    observations: list[dict[str, Any]] = []
+
+    for item in source_plan:
+        row = rows_by_id.get(item.source_id, {})
+        action = str(row.get("action") or item.action)
+        contract = SOURCE_OBSERVATION_CONTRACTS.get(action, {})
+        quality = str(row.get("quality_class") or "blocked")
+        flags: list[str] = []
+        missing_business_fields: list[str] = []
+
+        if row.get("body_truncated") or quality == "partial":
+            flags.append("partial_observation_available")
+        if quality == "no_data":
+            flags.append("no_data_not_risk_exclusion")
+        if quality in {"blocked", "timeout", "parse_error", "auth_failed"}:
+            flags.append("missing_evidence_not_counter_evidence")
+        if quality == "planned":
+            flags.append("dry_run_not_platform_evidence")
+
+        if action == "login_logs_search":
+            subtype = _transport_issue_subtype(row)
+            if subtype:
+                flags.append(f"login_logs_{subtype}")
+            if _row_has_large_response(row):
+                flags.extend([
+                    "response_too_large_not_login_evidence",
+                    "response_too_large_window_shrink_recommended",
+                ])
+            if quality == "no_data":
+                flags.append("login_no_data_or_window_gap_not_ato_exclusion")
+        elif action == "archives_user_analysis":
+            if quality == "partial" or row.get("body_truncated"):
+                flags.append("partial_behavior_timeline")
+            if quality == "completed" and row.get("body_present") is False:
+                flags.append("behavior_chain_business_fields_missing")
+                missing_business_fields = list(contract.get("expected_business_fields", []))
+        elif action == "archives_photo_search":
+            if quality == "completed" and row.get("body_present") is False:
+                flags.append("content_chain_business_fields_missing")
+                missing_business_fields = ["photo_id", "publish_time", "publish_device", "publish_source"]
+            if quality == "no_data":
+                flags.append("photo_search_no_data_not_abnormal_publish_exclusion")
+            flags.append("publish_device_login_device_alignment_required")
+        elif action == "track_analysis_check_data_ready":
+            flags.append("track_check_data_ready_not_risk_conclusion")
+            if "device_id" in row.get("missing_required_fields", []):
+                flags.extend([
+                    "user_device_entity_resolution_attempted",
+                    "candidate_device_id_missing",
+                ])
+        elif action == "archives_related_users":
+            flags.append("archives_related_users_spread_clue_not_gang")
+        elif action == "weapon_inventory":
+            flags.append("weapon_device_graph_not_ato_conclusion")
+        elif action == "rcp_event_feature_list" and (quality == "partial" or row.get("body_truncated")):
+            flags.append("feature_list_partial_only_feature_group_summary")
+        elif action == "rcp_policy_tree_lookup":
+            flags.append("policy_tree_asset_not_event_hit_path")
+
+        if quality == "completed" and action in {"archives_user_analysis", "archives_photo_search"} and not missing_business_fields:
+            flags.append("completed_transport_not_business_chain_closure")
+
+        observations.append(
+            {
+                "source_id": item.source_id,
+                "action": action,
+                "chain_section": contract.get("chain_section", "source_quality"),
+                "quality_class": quality,
+                "role": contract.get("role", item.expected_observation),
+                "expected_business_fields": contract.get("expected_business_fields", []),
+                "missing_business_fields": missing_business_fields,
+                "interpretation_flags": unique_strings(flags),
+                "evidence_use": (
+                    "candidate_partial_observation"
+                    if quality in {"completed", "partial"}
+                    else "missing_evidence_or_boundary_only"
+                ),
+                "is_low_risk_counter_evidence": False,
+            }
+        )
+
+    return observations
+
+
+def unique_strings(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def extract_candidate_device_ids(value: Any, *, source_id: str | None = None, path: str = "$") -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    if isinstance(value, dict):
+        current_source_id = str(value.get("source_id") or source_id or "unknown_source")
+        for key, item in value.items():
+            child_path = f"{path}.{key}"
+            if key in DEVICE_ID_KEYS and isinstance(item, (str, int)) and str(item).strip():
+                candidates.append(
+                    {
+                        "device_id": str(item).strip(),
+                        "source_id": current_source_id,
+                        "field_path": child_path,
+                    }
+                )
+            candidates.extend(extract_candidate_device_ids(item, source_id=current_source_id, path=child_path))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            candidates.extend(extract_candidate_device_ids(item, source_id=source_id, path=f"{path}[{index}]"))
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for candidate in candidates:
+        key = (candidate["device_id"], candidate["source_id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped[:20]
+
+
+def extract_candidate_device_id(value: Any) -> str | None:
+    candidates = extract_candidate_device_ids(value)
+    return candidates[0]["device_id"] if candidates else None
+
+
+def build_user_device_entity_resolution(
+    source_plan: list[SourcePlanItem],
+    batch_result: dict[str, Any],
+    *,
+    provided_device_id: str | None,
+) -> dict[str, Any]:
+    extracted = extract_candidate_device_ids(batch_result)
+    candidates: list[dict[str, str]] = []
+    if provided_device_id:
+        candidates.append(
+            {
+                "device_id": provided_device_id,
+                "source_id": "user_input",
+                "field_path": "args.device_id",
+            }
+        )
+    candidates.extend(extracted)
+    deduped: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for candidate in candidates:
+        device_id = candidate["device_id"]
+        if device_id in seen_ids:
+            continue
+        seen_ids.add(device_id)
+        deduped.append(candidate)
+
+    planned_actions = {item.action for item in source_plan}
+    return {
+        "layer": "user_device_entity_resolution",
+        "default_p0_entity_layer": True,
+        "purpose": "bridge user-level evidence to device-level Track/Weapon/publish-device alignment",
+        "candidate_device_ids": deduped,
+        "candidate_device_id_missing": not deduped,
+        "candidate_sources_checked": [
+            "login_logs_search",
+            "archives_user_analysis",
+            "archives_photo_search",
+            "weapon_inventory",
+            "track_analysis_check_data_ready",
+        ],
+        "drives_followup": [
+            source
+            for source in [
+                "track_analysis_check_data_ready",
+                "weapon_inventory",
+                "publish_device_login_device_alignment",
+                "historical_device_baseline",
+            ]
+            if source in planned_actions or source.endswith("_alignment") or source.endswith("_baseline")
+        ],
+        "track_missing_device_id_blocks_batch": False,
+        "missing_evidence": (
+            [
+                {
+                    "reason": "candidate_device_id_missing",
+                    "needed_for": [
+                        "track_analysis_check_data_ready",
+                        "weapon riskData/graphData follow-up",
+                        "publish device vs login device alignment",
+                        "historical device baseline comparison",
+                    ],
+                    "is_low_risk_counter_evidence": False,
+                }
+            ]
+            if not deduped
+            else []
+        ),
+    }
+
+
+def build_offline_backfill_recommendation() -> dict[str, Any]:
+    return {
+        "required_when": "realtime control/action/device/baseline chain is incomplete",
+        "dataagent_hive_called": False,
+        "authorization_required": True,
+        "authorization_mode": "select_modules",
+        "options": OFFLINE_BACKFILL_MODULES,
+        "user_prompt": "请回复要授权的编号，例如 1,3,4；回复“全查”才授权全部模块。",
+        "authorization_boundary": [
+            "only selected modules may enter DataAgent/Hive query plan",
+            "unselected modules remain missing_evidence",
+            "previous authorization is not reusable for a new module, table, time range, or evidence direction",
+        ],
+    }
 
 
 def with_track_device(source_plan: list[SourcePlanItem], device_id: str) -> SourcePlanItem:
@@ -980,6 +1359,8 @@ def build_evidence_card(
     user_id: str,
     mode: str,
     source_quality_matrix: dict[str, Any],
+    source_observations: list[dict[str, Any]],
+    user_device_entity_resolution: dict[str, Any],
     missing_evidence: list[dict[str, Any]],
 ) -> dict[str, Any]:
     buckets = source_quality_matrix["buckets"]
@@ -1002,12 +1383,96 @@ def build_evidence_card(
         conclusion_state = "insufficient_support"
         final_status = "insufficient_support"
 
+    observations_by_section: dict[str, list[dict[str, Any]]] = {}
+    for observation in source_observations:
+        section = str(observation.get("chain_section") or "source_quality")
+        observations_by_section.setdefault(section, []).append(observation)
+
+    offline_backfill = build_offline_backfill_recommendation()
+    chain_missing = [
+        {
+            "chain": "control_entry",
+            "missing": "closed login/control-chain evidence with login_type/device/IP/UA/window coverage",
+            "source_ids": ["ato_login_logs_search"],
+        },
+        {
+            "chain": "account_state_and_post_actions",
+            "missing": "closed account security operation and post-action timeline",
+            "source_ids": ["ato_archives_user_profile", "ato_archives_user_analysis"],
+        },
+        {
+            "chain": "content_publish_handoff",
+            "missing": "photo_id/publish_time/publish_device/publish_source and content handoff alignment",
+            "source_ids": ["ato_archives_photo_search"],
+        },
+        {
+            "chain": "frontend_backend_activity_alignment",
+            "missing": "Track readiness with candidate device and front/backend activity alignment",
+            "source_ids": ["ato_track_analysis_check_data_ready"],
+        },
+    ]
+    if user_device_entity_resolution.get("candidate_device_id_missing"):
+        chain_missing.append(
+            {
+                "chain": "device_ip_spread",
+                "missing": "candidate_device_id for Track/Weapon/publish-device alignment",
+                "source_ids": ["user_device_entity_resolution"],
+            }
+        )
+
     return {
         "case_id": _compact_case_id(task, user_id),
         "task": task,
         "user_id": user_id,
         "final_status": final_status,
         "conclusion_state": conclusion_state,
+        "organization": "ato_risk_chain_not_flat_source_status",
+        "evidence_chain": {
+            "control_entry": {
+                "question": "是否存在异常登录/控制权入口",
+                "observations": observations_by_section.get("control_entry", []),
+                "boundary": "login no_data/response_too_large/window gap cannot exclude ATO",
+            },
+            "account_state_and_post_actions": {
+                "question": "控制权变化后是否出现改密、换绑、保护账号、资料修改或后置行为",
+                "observations": observations_by_section.get("account_state_and_post_actions", []),
+                "boundary": "profile is baseline context; completed transport is not business closure",
+            },
+            "content_publish_handoff": {
+                "question": "是否有作品/发布/导流内容承接",
+                "observations": observations_by_section.get("content_publish_handoff", []),
+                "boundary": "photo_search no_data cannot exclude abnormal publish or diversion",
+            },
+            "frontend_backend_activity_alignment": {
+                "question": "前端活跃是否能与后端登录/发布对齐",
+                "observations": observations_by_section.get("frontend_backend_activity_alignment", []),
+                "boundary": "Track readiness is auxiliary provenance, not owner proof",
+            },
+            "device_ip_spread": {
+                "question": "候选设备/IP/扩散线索是否支持控制端异常",
+                "user_device_entity_resolution": user_device_entity_resolution,
+                "observations": observations_by_section.get("device_ip_spread", []),
+                "boundary": "same device or device risk is not a gang/ATO conclusion by itself",
+            },
+            "strategy_risk_signal": {
+                "question": "策略/风控信号是否提供旁证",
+                "observations": observations_by_section.get("strategy_risk_signal", []),
+                "boundary": "strategy hit is auxiliary evidence and cannot alone decide ATO",
+            },
+            "counter_evidence_and_gaps": {
+                "counter_evidence": [],
+                "missing_chain_evidence": chain_missing,
+                "source_quality_boundary": (
+                    "no_data, partial, auth_failed, blocked, timeout and parse_error are not low-risk counter evidence"
+                ),
+            },
+            "conclusion_boundary": {
+                "final_status": final_status,
+                "conclusion_state": conclusion_state,
+                "evidence_based_final_conclusion_allowed": False,
+                "reason": "control entry, post-action/content handoff, device identity, and baseline chain are not fully closed",
+            },
+        },
         "completed_sources": completed,
         "partial_sources": partial,
         "blocked_or_failed_sources": blockers,
@@ -1029,6 +1494,7 @@ def build_evidence_card(
             "Track activity, if available, is auxiliary provenance only and cannot prove owner operation",
             "DataAgent/Hive was not called; offline evidence requires per-request authorization",
         ],
+        "offline_backfill_recommendation": offline_backfill,
     }
 
 
@@ -1065,7 +1531,17 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         primary_result = call_browser_backed_batch(args.browser_backed_base, batch_payload)
 
     primary_result = sanitize_for_output(primary_result)
-    candidate_device_id = args.device_id or extract_candidate_device_id(primary_result)
+    primary_user_device_entity_resolution = build_user_device_entity_resolution(
+        source_plan,
+        primary_result,
+        provided_device_id=args.device_id,
+    )
+    primary_candidates = primary_user_device_entity_resolution.get("candidate_device_ids", [])
+    candidate_device_id = (
+        args.device_id
+        or (primary_candidates[0]["device_id"] if primary_candidates else None)
+        or extract_candidate_device_id(primary_result)
+    )
     followup_batch_payloads: list[dict[str, Any]] = []
     followup_results: list[dict[str, Any]] = []
     track_device_resolution = {
@@ -1092,13 +1568,22 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             followup_results.append(synthetic_track_missing_result(track_item))
 
     batch_result = sanitize_for_output(merge_batch_results([primary_result, *followup_results]))
+    user_device_entity_resolution = build_user_device_entity_resolution(
+        source_plan,
+        batch_result,
+        provided_device_id=args.device_id,
+    )
     source_quality_matrix = merge_source_quality(source_plan, batch_result)
+    source_observations = build_source_observations(source_plan, source_quality_matrix)
     missing_evidence = build_missing_evidence(source_quality_matrix)
+    missing_evidence.extend(user_device_entity_resolution.get("missing_evidence", []))
     evidence_card = build_evidence_card(
         args.task,
         args.user_id,
         args.mode,
         source_quality_matrix,
+        source_observations,
+        user_device_entity_resolution,
         missing_evidence,
     )
 
@@ -1147,11 +1632,14 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "batch_contract_validation": batch_contract_validation,
         "followup_batch_payloads": followup_batch_payloads,
         "track_device_resolution": track_device_resolution,
+        "user_device_entity_resolution": user_device_entity_resolution,
         "batch_result": batch_result,
         "transport_status_matrix": batch_result.get("transport_status_matrix", []),
+        "source_observations": source_observations,
         "source_quality_matrix": source_quality_matrix,
         "evidence_card": evidence_card,
         "missing_evidence": missing_evidence,
+        "offline_backfill_recommendation": evidence_card.get("offline_backfill_recommendation"),
         "final_answer_boundary": {
             "ordinary_user_answer_must_not_dump_routing_metadata": True,
             "raw_upstream_body_returned": False,
@@ -1160,6 +1648,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "service_evidence_card_inputs_dependency": False,
             "manual_curl_actions_batch_fallback_allowed": False,
             "dataagent_hive_called": False,
+            "offline_authorization_options_visible_when_realtime_incomplete": True,
             "offline_hive_requires_per_request_authorization": True,
             "final_risk_judgement_made": False,
         },

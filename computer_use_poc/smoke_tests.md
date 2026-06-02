@@ -7418,14 +7418,14 @@
 - test_id: ATO-ARCHIVE-CENTER-P0-001
 - input: ATO 单案要求看账号状态、登录、设备和行为链路。
 - expected_runtime_behavior: source_priority_access_method_separated
-- expected_output_boundary: 档案中心用户分析是 P0；login_log 和 Weapon graphData 是 P0；Weapon riskData conditional；API direct first 不能导致档案中心降级；如需 browser cookie activation，仍是受控 P0 source；blocked/auth_failed 进入 source_quality。
+- expected_output_boundary: ATO 单案默认 P0 包含 `login_logs_search`、`archives_user_profile`、`archives_user_analysis`、`archives_photo_search`、`track_analysis_check_data_ready`；`user_device_entity_resolution` 用于候选设备桥接；Weapon graph/riskData 仅在有候选 device_id 或明确设备线索时条件触发；blocked/auth_failed 进入 source_quality。
 
-## 766. ATO publish chain is P0 conditional
+## 766. ATO publish chain is default P0 content handoff
 
 - test_id: ATO-PUBLISH-CHAIN-P0-001
 - input: 用户反馈被盗号后账号发了作品 / 引流内容。
 - expected_runtime_behavior: publish_chain_target_source
-- expected_output_boundary: 发布作品列表、发布时间、发布设备、发布来源链路是 P0-conditional；发布设备触发 Weapon riskData；track-analysis 对齐发布日活跃；不得只看登录日志或策略命中。
+- expected_output_boundary: `archives_photo_search` 是 ATO 默认 P0 内容/发布承接 source；发布作品列表、发布时间、发布设备、发布来源链路必须进入 evidence card；发布设备用于 `user_device_entity_resolution` 和后续条件 Weapon/Track 对齐；不得只看登录日志或策略命中。
 
 ## 767. ATO policy hit explicit source
 
@@ -8593,3 +8593,21 @@ Text gate checks:
 - input: `outputs/full_runtime/computer_use_poc/runtime_case_execution_runner.py`
 - expected_runtime_behavior: full_runtime_shared_controlled_entry
 - expected_output_boundary: full-runtime 作为测试包包含同一 harness，可运行 dry-run；不包含旧 runner fallback 主链；不把 `outputs/full_runtime` 当开发源头。
+
+## 891. ATO passthrough interpretation and modular offline authorization
+
+- test_id: ATO-PASSTHROUGH-INTERPRETATION-CHAINED-EVIDENCE-001
+- input: ATO 单案 pure passthrough batch 中 Track 缺 device_id、`login_logs_search response_too_large / network_error`、`archives_photo_search` 缺 publish fields、`archives_user_analysis body_truncated`。
+- expected_runtime_behavior: dennis_interprets_passthrough_into_ato_evidence_chain
+- expected_output_boundary: 必须包含 `user_device_entity_resolution_required`、`candidate_device_id_missing_enters_missing_evidence`、`response_too_large_window_shrink_recommended`、`login_network_error_subtyped`、`content_chain_business_fields_missing`、`behavior_chain_business_fields_missing`、`publish_device_login_device_alignment_required`、`ato_evidence_card_chain_organized`；不得把 completed transport 当业务链路闭合，不得把 Track 简单跳过，不得访问平台或调用 DataAgent/Hive。
+
+- test_id: ATO-OFFLINE-BACKFILL-MODULAR-AUTHORIZATION-001
+- input: ATO realtime evidence insufficient; user authorizes only `1,3`, or explicitly says `全查`。
+- expected_runtime_behavior: offline_backfill_selectable_module_authorization
+- expected_output_boundary: 默认输出 `offline_backfill_modular_authorization`，列出 1-5 模块；用户只授权 `1,3` 时必须包含 `offline_authorized_modules_only` 和 `offline_unapproved_modules_missing_evidence`，未授权模块不得执行；只有用户说 `全查` 才允许全部模块进入 query plan；本地 dry-run 不调用 DataAgent/Hive。
+
+Keyword check:
+
+```bash
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|offline_backfill_modular_authorization" computer_use_poc skills AGENTS.md 2>/dev/null
+```

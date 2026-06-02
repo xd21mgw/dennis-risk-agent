@@ -394,6 +394,7 @@
             "user_id",
             "realtime_p0_source_collection",
             "multi_source_suspicious_anchor_derivation",
+            "user_device_entity_resolution",
             "login_control_chain_evidence",
             "content_publish_handoff_evidence",
             "candidate_control_endpoint_extraction",
@@ -452,6 +453,35 @@
               "track_analysis_check_data_ready"
             ]
           },
+          "user_device_entity_resolution_contract": {
+            "default_p0_entity_layer": true,
+            "not_final_risk_conclusion_source": true,
+            "purpose": "bridge user-level realtime observations to device-level Track, Weapon, publish-device alignment, and historical device baseline comparison",
+            "candidate_device_sources": [
+              "login_logs_search",
+              "archives_user_analysis",
+              "archives_photo_search",
+              "weapon_inventory",
+              "track_analysis_check_data_ready"
+            ],
+            "candidate_fields": [
+              "candidate_device_id",
+              "device_id",
+              "did",
+              "publish_device",
+              "login_device",
+              "operation_device"
+            ],
+            "drives_followup": [
+              "track_analysis_check_data_ready",
+              "weapon riskData / graphData when enabled and device_id is available",
+              "publish_device_login_device_alignment",
+              "historical_device_baseline_comparison"
+            ],
+            "missing_candidate_device_rule": "if no candidate_device_id can be extracted, mark candidate_device_id_missing and put Track/Weapon/device-alignment gaps into missing_evidence; do not fail the whole batch",
+            "track_missing_device_rule": "Track checkDataReady first attempts user_device_entity_resolution; only then mark missing_required_fields",
+            "publish_alignment_rule": "publish_device from archives_photo_search must be aligned with login_logs_search, archives_user_analysis, Track, Weapon, and historical baseline when available"
+          },
           "source_priority_reframe": {
             "P0": [
               "login_logs_search",
@@ -462,6 +492,7 @@
             ],
             "synthesis_after_p0": [
               "multi_source_suspicious_anchor_derivation",
+              "user_device_entity_resolution",
               "candidate_control_endpoint_extraction",
               "device_identity_consistency",
               "historical_baseline_comparison"
@@ -522,6 +553,112 @@
             ],
             "missing_photo_id_rule": "try_recent_content_action_discovery_before_asking_user",
             "alignment_rule": "align publish/live/comment/profile/four_items action with login/control-chain candidate session"
+          },
+          "source_observation_interpretation_contract": {
+            "service_output_boundary": "browser-backed service provides pure passthrough envelope / transport metadata / capped body only; Dennis generates source observations",
+            "completed_transport_not_business_chain_closure": true,
+            "sources": {
+              "login_logs_search": {
+                "completed_extracts": [
+                  "login_time",
+                  "login_type",
+                  "login_source",
+                  "device_id",
+                  "ip",
+                  "ua",
+                  "token_oauth_scan",
+                  "kickout",
+                  "success_failure_sequence",
+                  "window_coverage"
+                ],
+                "response_too_large_or_body_truncated": "partial_observation_available_and_recommend_shrink_window",
+                "no_data": "current_window_or_filter_no_result_only_not_ato_exclusion",
+                "network_error_subtypes": [
+                  "transport_error",
+                  "service_gap",
+                  "batch_contract_error",
+                  "passthrough_interpretation_gap",
+                  "invalid_params"
+                ],
+                "online_window_rule": "login_logs_search reliable online window does not constrain Archives/Photo/Track/Weapon/RCP windows"
+              },
+              "archives_user_profile": {
+                "completed_extracts": [
+                  "account_status",
+                  "profile_baseline",
+                  "punishment_or_label",
+                  "protection_state"
+                ],
+                "profile_not_final_risk_judgement": true,
+                "auth_failed_body_missing_partial_enters_source_quality": true
+              },
+              "archives_user_analysis": {
+                "completed_extracts": [
+                  "password_change",
+                  "binding_change",
+                  "account_protection",
+                  "profile_change",
+                  "follow_action",
+                  "publish_related_operation",
+                  "security_operation_timeline"
+                ],
+                "body_truncated": "partial_behavior_timeline",
+                "business_fields_missing_flag": "behavior_chain_business_fields_missing"
+              },
+              "archives_photo_search": {
+                "default_p0_for_ato_single_and_representative_batch_samples": true,
+                "completed_extracts": [
+                  "photo_id",
+                  "publish_time",
+                  "publish_device",
+                  "publish_source",
+                  "publish_ip",
+                  "publish_ua",
+                  "content_status",
+                  "audit_or_strategy_reason"
+                ],
+                "no_data": "current_query_no_photo_result_only_not_abnormal_publish_or_ato_exclusion",
+                "business_fields_missing_flag": "content_chain_business_fields_missing",
+                "alignment_required": "publish_device must align with login_logs_search, archives_user_analysis, Track, Weapon, and historical baseline when available"
+              },
+              "track_analysis_check_data_ready": {
+                "not_risk_conclusion_source": true,
+                "device_id_resolution_first": "user_device_entity_resolution",
+                "missing_device_id": "candidate_device_id_missing_enters_missing_evidence_not_batch_failure"
+              },
+              "archives_related_users": {
+                "completed_use": "spread clue only",
+                "not_gang_conclusion": true
+              },
+              "weapon_inventory": {
+                "completed_use": "device graph and device risk support only",
+                "not_ato_conclusion": true,
+                "platform_not_enabled_or_missing_device": "missing_evidence_no_old_runner_fallback"
+              },
+              "rcp_event_feature_list": {
+                "body_truncated": "partial_feature_grouping_only_not_complete_detail"
+              },
+              "rcp_policy_tree_lookup": {
+                "use": "policy asset governance only",
+                "not_event_hit_path": true,
+                "not_user_risk_conclusion": true
+              }
+            }
+          },
+          "evidence_card_chain_contract": {
+            "organization": "ato_risk_chain_not_flat_source_status",
+            "required_sections": [
+              "control_entry",
+              "account_state_and_post_actions",
+              "content_publish_handoff",
+              "frontend_backend_activity_alignment",
+              "device_ip_spread",
+              "strategy_risk_signal",
+              "counter_evidence_and_gaps",
+              "conclusion_boundary"
+            ],
+            "conclusion_rule": "only give evidence-based conclusion when login/control chain, post-action/content handoff, device identity consistency, and historical baseline are closed",
+            "insufficient_support_rule": "when realtime evidence is incomplete, say which chain is open and include modular offline_backfill_recommendation"
           },
           "login_logs_search_contract_patch": {
             "response_too_large_status": "source_contract_gap",
@@ -596,6 +733,48 @@
               "historical_baseline_closed"
             ],
             "actual_dataagent_or_hive_call_allowed": false
+          },
+          "offline_backfill_modular_authorization_contract": {
+            "authorization_required": true,
+            "one_time_full_authorization_forbidden": true,
+            "previous_authorization_not_reusable": true,
+            "user_can_select_one_or_more_modules": true,
+            "all_modules_authorized_only_when_user_says": "全查",
+            "unselected_modules_enter_missing_evidence": true,
+            "dataagent_or_hive_call_without_module_authorization_allowed": false,
+            "options": [
+              {
+                "id": 1,
+                "name": "login_control_chain",
+                "label": "登录/控制链",
+                "scope": "登录成功/失败、登录方式、设备/IP、kickout、风险登录"
+              },
+              {
+                "id": 2,
+                "name": "token_oauth_scan_refresh_chain",
+                "label": "token/OAuth/扫码/refreshToken 链路",
+                "scope": "确认是否存在非密码型接管"
+              },
+              {
+                "id": 3,
+                "name": "account_security_actions",
+                "label": "改密/换绑/保护账号",
+                "scope": "确认控制权变化后的安全操作"
+              },
+              {
+                "id": 4,
+                "name": "post_takeover_actions",
+                "label": "发布作品/私信/资料修改后置行为",
+                "scope": "确认是否有非本人内容承接"
+              },
+              {
+                "id": 5,
+                "name": "device_ip_ua_baseline",
+                "label": "设备/IP/UA 历史基线",
+                "scope": "对比异常行为是否偏离历史常用环境"
+              }
+            ],
+            "recommended_user_facing_expression": "当前实时证据不足，不能确认/排除。若要继续闭环，请选择授权 1-5 中的一项或多项；未授权模块只保留为 missing_evidence。"
           },
           "source_plan": [
             {
@@ -688,7 +867,18 @@
             "track_check_data_ready_not_risk_conclusion",
             "large_response_limited_enters_source_quality",
             "source_specific_time_window_policy",
-            "track_candidate_device_from_prior_sources"
+            "track_candidate_device_from_prior_sources",
+            "user_device_entity_resolution_required",
+            "candidate_device_id_missing_enters_missing_evidence",
+            "content_chain_business_fields_missing",
+            "behavior_chain_business_fields_missing",
+            "publish_device_login_device_alignment_required",
+            "login_network_error_subtyped",
+            "response_too_large_window_shrink_recommended",
+            "ato_evidence_card_chain_organized",
+            "offline_backfill_modular_authorization",
+            "offline_authorized_modules_only",
+            "offline_unapproved_modules_missing_evidence"
           ]
         },
         "abnormal_publish_content_handoff": {
