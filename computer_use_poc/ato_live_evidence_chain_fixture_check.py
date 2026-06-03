@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime_case_execution_runner import (
+    build_batch_payload,
     build_photo_detail_followup_items,
     build_ato_single_case_source_plan,
     build_evidence_card,
@@ -17,6 +18,7 @@ from runtime_case_execution_runner import (
     build_user_device_entity_resolution,
     merge_source_quality,
     render_user_answer_draft,
+    validate_batch_payload_contract,
 )
 
 
@@ -226,6 +228,14 @@ def _assert_photo_detail_followup_from_primary_only(case: dict[str, Any]) -> Non
     assert all(item.execution_group == "auth_sensitive_serial" for item in followup_items)
     assert all(item.failure_policy == "non_blocking_partial" for item in followup_items)
     assert all(item.required_fields == ["photo_id"] for item in followup_items)
+    followup_payload = build_batch_payload(
+        "dennis_ato_single_case_2892617234:photo_detail_followup",
+        followup_items,
+        dry_run=False,
+    )
+    assert validate_batch_payload_contract(followup_payload)["valid"]
+    assert [group["group_id"] for group in followup_payload["execution_groups"]] == ["auth_sensitive_serial"]
+    assert "depends_on" not in followup_payload["execution_groups"][0]
 
 
 def main() -> int:

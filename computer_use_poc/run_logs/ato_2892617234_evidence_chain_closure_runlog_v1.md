@@ -52,6 +52,26 @@ not a platform transcript, and not a raw source dump.
      returned 200"; it must state extracted business fields, missing fields,
      partial subtype, and next-hop execution state.
 
+6. Full-runtime live contract check after refresh
+   - Primary batch path: `runtime_case_execution_runner.py --mode live`
+     called local browser-backed `/actions/batch`; manual curl and legacy
+     runner fallback remained disabled.
+   - Finding before fix: photo detail follow-up used a standalone
+     `auth_sensitive_serial` batch while still carrying a group dependency on
+     `independent_parallel`; the service rejected that follow-up batch with
+     HTTP 400, so photo profile/meta results were not returned.
+   - Fix: standalone follow-up payloads no longer emit group-level
+     `depends_on: [independent_parallel]` unless the payload actually contains
+     an `independent_parallel` group.
+   - Result after fix: four photo detail sources completed for the two parsed
+     `photo_id` anchors, Track readiness executed after candidate device
+     resolution, and no manual fallback was used.
+   - Remaining case-specific gap: the live photo detail body exposed publish
+     source/time context but did not close `publish_device`; therefore
+     `web_publish_fact` remains `partial_fields`, `web_login_history` remains
+     `partial_transport`, and `device_identity_alignment` remains
+     `partial_consistency`.
+
 ## Current Evidence Chain Interpretation
 
 - WEB login history:

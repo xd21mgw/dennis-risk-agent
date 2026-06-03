@@ -354,9 +354,12 @@ def build_batch_payload(
                 "sources": [],
             },
         )
-        if item.execution_group in {"auth_sensitive_serial", "dependency_serial"}:
-            group.setdefault("depends_on", ["independent_parallel"])
         group["sources"].append(item.to_batch_source())
+
+    if "independent_parallel" in groups:
+        for group_id in ("auth_sensitive_serial", "dependency_serial"):
+            if group_id in groups:
+                groups[group_id].setdefault("depends_on", ["independent_parallel"])
 
     ordered_group_ids = ["independent_parallel", "auth_sensitive_serial", "dependency_serial", "large_response_serial"]
     execution_groups = [groups[group_id] for group_id in ordered_group_ids if group_id in groups]
