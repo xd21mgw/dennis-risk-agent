@@ -160,6 +160,7 @@ BUSINESS_FIELD_ALIASES = {
         "publishPlatform",
         "uploadSource",
         "photoMethod",
+        "videoType",
         "operationSource",
         "client",
         "app",
@@ -755,6 +756,45 @@ def _extract_handles(
     return handles, _unique(flags)
 
 
+def _source_contextual_handles(action: str, handles: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add source-specific aliases without changing the global field taxonomy."""
+
+    contextual: list[dict[str, Any]] = []
+    photo_actions = {
+        "archives_photo_search",
+        "archives_photo_profile",
+        "archives_photo_meta",
+        "archives_gallery_photo_list",
+    }
+    for handle in handles:
+        canonical = str(handle.get("canonical_field") or "")
+        field = _normalized_key(str(handle.get("field") or ""))
+        field_path = str(handle.get("field_path") or "")
+        normalized_path = _normalized_key(field_path)
+        if action in photo_actions:
+            if canonical in {"device_id", "candidate_device_id"} and (
+                field in {"deviceid", "did"}
+                or "commondeviceid" in normalized_path
+                or "photometacommondeviceid" in normalized_path
+            ):
+                clone = dict(handle)
+                clone["canonical_field"] = "publish_device"
+                clone["contextual_alias"] = "photo_meta_common_deviceid_as_publish_device"
+                contextual.append(clone)
+            if canonical == "login_time" and field == "time":
+                clone = dict(handle)
+                clone["canonical_field"] = "publish_time"
+                clone["contextual_alias"] = "photo_list_time_as_publish_time"
+                contextual.append(clone)
+        elif action == "archives_user_analysis":
+            if canonical in {"device_id", "candidate_device_id"} and field in {"deviceid", "did"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "operation_device"
+                clone["contextual_alias"] = "user_analysis_deviceid_as_operation_device"
+                contextual.append(clone)
+    return handles + contextual
+
+
 def _expected_fields_for_action(action: str, expected_business_fields: list[str] | None) -> list[str]:
     if expected_business_fields:
         return list(expected_business_fields)
@@ -799,7 +839,7 @@ def build_safe_observation(
         body_handles.extend(handles)
         flags.extend(body_flags)
 
-    parsed_body_handles = _dedupe_handles(body_handles)
+    parsed_body_handles = _dedupe_handles(_source_contextual_handles(action, body_handles))
     all_handles = _dedupe_handles(direct_handles + parsed_body_handles)
     extracted_business_fields = _unique(
         [

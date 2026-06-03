@@ -178,9 +178,25 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
         (item["field"], str(item["value"]))
         for item in chain_status["web_publish_fact"]["field_paths"]
     }
+    publish_field_paths = {
+        (item["field"], str(item["field_path"]))
+        for item in chain_status["web_publish_fact"]["field_paths"]
+    }
     assert ("photo_id", "197323059879") in publish_fields
     assert ("photo_id", "197323443136") in publish_fields
     assert ("publish_device", "web_c5a2b6bbe230e1ad1c596577d00615c2") in publish_fields
+    assert any(
+        field == "publish_device" and path.endswith(".common.deviceId")
+        for field, path in publish_field_paths
+    )
+    assert any(
+        field == "publish_source" and path.endswith(".common.uploadSource")
+        for field, path in publish_field_paths
+    )
+    assert any(
+        field == "publish_source" and path.endswith(".videoType")
+        for field, path in publish_field_paths
+    )
     assert chain_status["web_login_history"]["status"] == "partial_transport"
     assert chain_status["web_login_history"]["partial_subtype"] == "partial_transport"
     assert "response_too_large_needs_window_shrink" in chain_status["web_login_history"]["breakpoint_types"]

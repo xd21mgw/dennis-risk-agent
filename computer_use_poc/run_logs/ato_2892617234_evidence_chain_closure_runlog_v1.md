@@ -72,6 +72,24 @@ not a platform transcript, and not a raw source dump.
      `partial_transport`, and `device_identity_alignment` remains
      `partial_consistency`.
 
+7. Video meta field mapping round
+   - New input: Archives video home -> video meta showed the publish-side
+     device at `PhotoMeta.common.deviceId` and upload source at
+     `PhotoMeta.common.uploadSource`.
+   - Fix: Dennis parser now maps photo/profile/meta/list context
+     `common.deviceId` / `deviceId` / `did` into `publish_device`, while still
+     preserving the generic device handle for entity resolution.
+   - Fix: Dennis parser maps photo context `common.uploadSource`,
+     `photoMethod`, and `videoType` into `publish_source`; user-analysis
+     `deviceId` / `did` can also be duplicated into `operation_device`.
+   - Result in fixture: visible photo meta now closes `web_publish_fact` for
+     `publish_device` / `publish_source`, and `device_identity_alignment`
+     consumes `$.source_result.capped_body.data.common.deviceId` as the
+     publish device anchor.
+   - Boundary: if a live source returns 200 but suppresses the body, this is
+     still `service_body_visibility_gap`; if the body is visible and the field
+     exists, Dennis should no longer call publish device missing.
+
 ## Current Evidence Chain Interpretation
 
 - WEB login history:
