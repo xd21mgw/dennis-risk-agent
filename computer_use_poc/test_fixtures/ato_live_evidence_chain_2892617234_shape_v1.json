@@ -297,14 +297,7 @@
             "capped_body": {
               "data": {
                 "photoId": "197323059879",
-                "uploadTime": 1780153473000,
-                "common": {
-                  "uploadSource": 25,
-                  "deviceId": "web_c5a2b6bbe230e1ad1c596577d00615c2"
-                },
-                "photoMethod": "WEB_UPLOAD",
-                "photoIp": "10.0.0.3",
-                "videoType": "Web"
+                "PhotoMeta": "{\"uploadTime\":1780153473000,\"common\":{\"uploadSource\":25,\"deviceId\":\"web_c5a2b6bbe230e1ad1c596577d00615c2\"},\"photoMethod\":\"WEB_UPLOAD\",\"photoIp\":\"10.0.0.3\",\"videoType\":\"Web\"}"
               }
             }
           },
@@ -350,14 +343,7 @@
             "capped_body": {
               "data": {
                 "photoId": "197323443136",
-                "uploadTime": 1780182695000,
-                "common": {
-                  "uploadSource": 25,
-                  "deviceId": "web_c5a2b6bbe230e1ad1c596577d00615c2"
-                },
-                "photoMethod": "WEB_UPLOAD",
-                "photoIp": "10.0.0.4",
-                "videoType": "Web"
+                "PhotoMeta": "{\"uploadTime\":1780182695000,\"common\":{\"uploadSource\":25,\"deviceId\":\"web_c5a2b6bbe230e1ad1c596577d00615c2\"},\"photoMethod\":\"WEB_UPLOAD\",\"photoIp\":\"10.0.0.4\",\"videoType\":\"Web\"}"
               }
             }
           },

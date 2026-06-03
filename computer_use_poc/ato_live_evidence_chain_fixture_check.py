@@ -168,6 +168,13 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
     assert "strict_name_should_not_survive" not in login_values
     assert "blocked_sensitive_material_detected" in login_observation["interpretation_flags"]
     assert "pii_strict_redacted" in login_observation["interpretation_flags"]
+    photo_meta_observation = next(
+        item
+        for item in result["source_observations"]
+        if item["source_id"] == "ato_archives_photo_meta_197323059879"
+    )
+    assert photo_meta_observation["dennis_observation"]["embedded_json_parse"]["embedded_json_expanded"] is True
+    assert "embedded_json_string_expanded" in photo_meta_observation["interpretation_flags"]
     candidates = result["user_device_entity_resolution"]["candidate_device_ids"]
     candidate_ids = {item["device_id"] for item in candidates}
     assert {"web_c5a2b6bbe230e1ad1c596577d00615c2", "did_operation_safe_1"} <= candidate_ids
@@ -205,6 +212,90 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
     assert result["evidence_card"]["active_backfill_plan"]["login_window_shrink_plan"]["next_hop_type"] == "auto_realtime_next_hop"
     assert result["evidence_card"]["active_backfill_plan"]["photo_detail_next_hop_plan"]["status"] == "photo_detail_backfill_consumed"
     assert result["evidence_card"]["evidence_projection_summary"]
+
+
+def _assert_source_plan_contract() -> None:
+    source_plan = build_ato_single_case_source_plan(
+        "2892617234",
+        device_id=None,
+        window_start_ms=1777784300000,
+        window_end_ms=1780376300000,
+        include_abnormal_publish=True,
+        include_same_device=False,
+    )
+    login_item = next(item for item in source_plan if item.action == "login_logs_search")
+    assert login_item.params["max_records"] == 300
+    assert "limit" not in login_item.params
+
+
+def _assert_backfill_source_constraints(case: dict[str, Any]) -> None:
+    constrained = json.loads(json.dumps(case))
+    source_results = constrained["batch_result"]["source_results"]
+    transport_matrix = constrained["batch_result"]["transport_status_matrix"]
+    for source_id in list(source_results):
+        if "photo_profile" in source_id or "photo_meta" in source_id:
+            del source_results[source_id]
+    for source_id in list(transport_matrix):
+        if "photo_profile" in source_id or "photo_meta" in source_id:
+            del transport_matrix[source_id]
+    source_results["ato_login_logs_search"].pop("upstream", None)
+    source_results["ato_login_logs_search"].pop("capped_body", None)
+    result = _evaluate_case(constrained)
+    groups = {
+        item["group_id"]: item
+        for item in result["evidence_card"]["active_backfill_plan"]["groups"]
+    }
+    assert groups["publish_device"]["status"] != "publish_device_found"
+    assert not any(
+        item.get("field") == "operation_device"
+        for item in groups["publish_device"].get("found_values", [])
+    )
+    assert groups["login_fields"]["status"] != "login_fields_found"
+    assert groups["login_fields"].get("found_values") == []
+
+
+def _assert_login_unexpected_html_response_case(case: dict[str, Any]) -> None:
+    html_case = json.loads(json.dumps(case))
+    login_row = {
+        "source_id": "ato_login_logs_search",
+        "action": "login_logs_search",
+        "http_status": 200,
+        "source_status": "failed",
+        "error_type": "unexpected_html_response",
+        "content_type": "text/html; charset=utf-8",
+        "body_present": True,
+        "body_truncated": True,
+        "observed_bytes": 108115,
+        "raw_body_handling": "omitted",
+        "transport_error": None,
+        "platform_error": None,
+        "invalid_params": False,
+        "timeout": False,
+    }
+    html_case["batch_result"]["transport_status_matrix"]["ato_login_logs_search"] = dict(login_row)
+    html_case["batch_result"]["source_results"]["ato_login_logs_search"] = {
+        "source_id": "ato_login_logs_search",
+        "transport": dict(login_row),
+    }
+    result = _evaluate_case(html_case)
+    login_quality = next(
+        item
+        for item in result["source_quality"]["per_source"]
+        if item["source_id"] == "ato_login_logs_search"
+    )
+    assert login_quality["quality_class"] == "auth_failed"
+    assert login_quality["transport_interpretation"] == "auth_flow_not_completed_in_bound_context"
+    assert "auth_flow_not_completed_in_bound_context" in login_quality["boundary_notes"]
+    login_observation = next(
+        item
+        for item in result["source_observations"]
+        if item["source_id"] == "ato_login_logs_search"
+    )
+    assert login_observation["breakpoint_type"] == "auth_flow_not_completed_in_bound_context"
+    assert "service_body_visibility_gap_for_truncated_login_log" not in login_observation["interpretation_flags"]
+    login_chain = result["evidence_card"]["chain_status"]["web_login_history"]
+    assert "auth_flow_not_completed_in_bound_context" in login_chain["breakpoint_types"]
+    assert "service_body_visibility_gap_for_truncated_login_log" not in login_chain["breakpoint_types"]
 
 
 def _assert_photo_detail_followup_from_primary_only(case: dict[str, Any]) -> None:
@@ -256,11 +347,18 @@ def _assert_photo_detail_followup_from_primary_only(case: dict[str, Any]) -> Non
 
 def main() -> int:
     fixture = json.loads(FIXTURE_PATH.read_text())
+    _assert_source_plan_contract()
     results = [_evaluate_case(case) for case in fixture["cases"]]
     result_by_id = {item["case_id"]: item for item in results}
     _assert_suppressed_case(result_by_id["live_suppressed_body_visibility_gap"])
     _assert_visible_case(result_by_id["visible_capped_body_business_fields_available"])
     _assert_photo_detail_followup_from_primary_only(
+        next(case for case in fixture["cases"] if case["id"] == "visible_capped_body_business_fields_available")
+    )
+    _assert_backfill_source_constraints(
+        next(case for case in fixture["cases"] if case["id"] == "visible_capped_body_business_fields_available")
+    )
+    _assert_login_unexpected_html_response_case(
         next(case for case in fixture["cases"] if case["id"] == "visible_capped_body_business_fields_available")
     )
     print(

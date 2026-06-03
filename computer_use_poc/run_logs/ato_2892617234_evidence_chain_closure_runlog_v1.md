@@ -87,8 +87,31 @@ not a platform transcript, and not a raw source dump.
      consumes `$.source_result.capped_body.data.common.deviceId` as the
      publish device anchor.
    - Boundary: if a live source returns 200 but suppresses the body, this is
-     still `service_body_visibility_gap`; if the body is visible and the field
-     exists, Dennis should no longer call publish device missing.
+   still `service_body_visibility_gap`; if the body is visible and the field
+   exists, Dennis should no longer call publish device missing.
+
+8. Full-runtime live backtest after video meta mapping
+   - Primary path: refreshed `outputs/full_runtime` ran
+     `runtime_case_execution_runner.py --mode live` against local
+     browser-backed `/actions/batch`; no legacy runner, single-action curl, or
+     manual batch fallback was used.
+   - Result: `archives_photo_meta` returned visible body for both parsed
+     `photo_id` anchors. Dennis extracted `publish_device` from live
+     `photoMeta.common.deviceId` / related device fields, and
+     `user_device_entity_resolution` produced ranked candidate devices
+     including `web_c5a2b6bbe230e1ad1c596577d00615c2`.
+   - Result: `web_publish_fact` moved from missing to
+     `partial_consistency` with `photo_id`, `publish_time`, `publish_source`,
+     and `publish_device` extracted; device alignment moved to
+     `partial_consistency` with publish and operation device candidates.
+   - New live gap: `login_logs_search` returned HTTP 200 with an
+     `unexpected_html_response` / HTML body rather than JSON
+     `json_array_capped`. This is an auth-flow / source-context gap, not a
+     row-cap parsing gap and not no-data.
+   - Fix: Dennis now classifies that shape as
+     `auth_flow_not_completed_in_bound_context` before response-too-large /
+     body-visibility logic, so future answers should not suggest shrink-window
+     as the fix for an HTML/SSO login-log response.
 
 ## Current Evidence Chain Interpretation
 

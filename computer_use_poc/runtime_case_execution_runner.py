@@ -193,7 +193,7 @@ def build_ato_single_case_source_plan(
                 "from_timestamp": login_start_ms,
                 "to_timestamp": login_end_ms,
                 "recallSource": DEFAULT_RECALL_SOURCE,
-                "limit": 50,
+                "max_records": 300,
             },
             timeout_ms=30_000,
             required_fields=["user_id"],
@@ -711,6 +711,29 @@ def _explicit_auth_failure(row: dict[str, Any]) -> bool:
     )
 
 
+def _auth_flow_not_completed_gap(row: dict[str, Any]) -> bool:
+    status = str(row.get("source_status") or "").lower()
+    error_type = str(row.get("error_type") or "").lower()
+    platform_error = str(row.get("platform_error") or "").lower()
+    content_type = str(row.get("content_type") or "").lower()
+    raw_body_handling = str(row.get("raw_body_handling") or "").lower()
+    return (
+        "unexpected_html_response" in error_type
+        or "unexpected_html_response" in status
+        or "html_response" in error_type
+        or "html_response" in status
+        or "auth_flow_not_completed" in error_type
+        or "auth_flow_not_completed" in status
+        or "auth_session_issue" in error_type
+        or "auth_session_issue" in status
+        or "sso" in platform_error
+        or (
+            row.get("body_present") is True
+            and ("html" in content_type or raw_body_handling == "html_omitted")
+        )
+    )
+
+
 def _row_has_empty_hint(row: dict[str, Any]) -> bool:
     empty_keys = (
         "empty_result",
@@ -745,6 +768,8 @@ def derive_transport_interpretation(row: dict[str, Any]) -> str:
     transport_error = str(row.get("transport_error") or "").lower()
     platform_error = str(row.get("platform_error") or "").lower()
 
+    if _auth_flow_not_completed_gap(row):
+        return "auth_flow_not_completed_in_bound_context"
     if _success_http_with_body(row) and _row_has_large_response(row):
         return "transport_success_partial_observation_response_too_large"
     if _success_http_with_body(row) and _row_has_empty_hint(row):
@@ -792,6 +817,8 @@ def classify_source(row: dict[str, Any]) -> str:
     platform_error = str(row.get("platform_error") or "").lower()
     transport_error = str(row.get("transport_error") or "").lower()
 
+    if _auth_flow_not_completed_gap(row):
+        return "auth_failed"
     if row.get("timed_out") or row.get("timeout") or "timeout" in status or "timeout" in error_type or "timeout" in transport_error:
         return "timeout"
     if _explicit_auth_failure(row):
@@ -960,6 +987,14 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
             notes.append("login_log_incomplete")
         if str(row.get("cap_reason") or "") == "byte_limit":
             notes.append("byte_limit_partial_source")
+        if transport_interpretation == "auth_flow_not_completed_in_bound_context":
+            notes.extend(
+                [
+                    "auth_flow_not_completed_in_bound_context",
+                    "html_response_not_business_json",
+                    "missing_evidence_not_counter_evidence",
+                ]
+            )
         if classification == "no_data":
             notes.append("no_data_not_risk_exclusion")
         if classification in {"blocked", "timeout", "parse_error", "auth_failed"}:
@@ -1425,6 +1460,8 @@ def _transport_issue_subtype(row: dict[str, Any]) -> str | None:
         "transport_success_partial_observation_response_too_large",
     }:
         return None
+    if interpretation == "auth_flow_not_completed_in_bound_context":
+        return "auth_flow_not_completed_in_bound_context"
     status = str(row.get("source_status") or "").lower()
     error_type = str(row.get("error_type") or "").lower()
     transport_error = str(row.get("transport_error") or "").lower()
@@ -1580,6 +1617,8 @@ def build_source_observations(
             flags.append("service_body_visibility_gap")
 
         if action == "login_logs_search":
+            if str(row.get("transport_interpretation") or "") == "auth_flow_not_completed_in_bound_context":
+                flags.extend(["auth_flow_not_completed_in_bound_context", "html_response_not_business_json"])
             if row_cap_metadata:
                 flags.append("partial_login_log_parsed_from_json_array_capped")
                 if int(row_cap_metadata.get("missing_records") or 0) > 0:
@@ -1605,7 +1644,7 @@ def build_source_observations(
                     "ip_ua",
                 }:
                     flags.append("partial_login_log_parsed_from_capped_body")
-                elif row.get("body_present") is True:
+                elif row.get("body_present") is True and not _auth_flow_not_completed_gap(row):
                     flags.append("service_body_visibility_gap_for_truncated_login_log")
             if quality == "no_data":
                 flags.append("login_no_data_or_window_gap_not_ato_exclusion")
@@ -1704,6 +1743,8 @@ def infer_observation_breakpoint(
     missing_business_fields: list[str],
 ) -> str | None:
     flags = set(str(flag) for flag in safe_observation.get("interpretation_flags", []))
+    if _auth_flow_not_completed_gap(row):
+        return "auth_flow_not_completed_in_bound_context"
     if (
         row.get("body_truncated") is True
         and row.get("body_present") is True
@@ -2475,12 +2516,13 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
         "missing_status": "publish_time_missing_after_backfill",
     },
     "publish_device": {
-        "fields": {"publish_device", "operation_device"},
+        "fields": {"publish_device"},
+        "found_actions": {"archives_photo_search", "archives_photo_profile", "archives_photo_meta", "archives_gallery_photo_list"},
         "sources": [
             ("archives_photo_search", "作品发布设备 / 发布端"),
             ("archives_photo_profile", "作品 profile 详情中的发布来源/设备/IP"),
             ("archives_photo_meta", "作品 meta 详情中的 uploadSource/photoMethod/photoIp/publishDevice"),
-            ("archives_user_analysis", "操作设备 / 发布相关操作设备"),
+            ("archives_user_analysis", "操作设备候选，只能进入设备一致性链，不能当作发布设备已补齐"),
             ("weapon_inventory", "Weapon user-device graph"),
             ("track_analysis_check_data_ready", "Track device readiness"),
         ],
@@ -2490,6 +2532,7 @@ NEXT_HOP_FIELD_GROUPS: dict[str, dict[str, Any]] = {
     },
     "login_fields": {
         "fields": {"login_time", "login_type", "login_source", "device_id", "ip_ua"},
+        "found_actions": {"login_logs_search"},
         "sources": [
             ("login_logs_search", "统一登录日志 capped 前段 / 缩窗重试"),
             ("archives_user_analysis", "安全操作日志候选时间"),
@@ -2595,9 +2638,16 @@ NEXT_HOP_DECISION_TABLE: dict[str, dict[str, Any]] = {
 }
 
 
-def _field_values_from_observations(source_observations: list[dict[str, Any]], fields: set[str]) -> list[dict[str, Any]]:
+def _field_values_from_observations(
+    source_observations: list[dict[str, Any]],
+    fields: set[str],
+    *,
+    allowed_actions: set[str] | None = None,
+) -> list[dict[str, Any]]:
     values: list[dict[str, Any]] = []
     for observation in source_observations:
+        if allowed_actions and str(observation.get("action") or "") not in allowed_actions:
+            continue
         for handle in observation.get("parsed_body_field_handles", []):
             canonical = str(handle.get("canonical_field") or handle.get("field") or "")
             if canonical not in fields:
@@ -2801,7 +2851,12 @@ def build_missing_evidence_next_hops(
         group_fields = set(definition["fields"])
         if not (chain_missing_fields & group_fields):
             continue
-        found_values = _field_values_from_observations(source_observations, group_fields)
+        found_actions = definition.get("found_actions")
+        found_values = _field_values_from_observations(
+            source_observations,
+            group_fields,
+            allowed_actions=set(found_actions) if found_actions else None,
+        )
         attempts: list[dict[str, Any]] = []
         source_visibility_gap = False
         for action, purpose in definition["sources"]:

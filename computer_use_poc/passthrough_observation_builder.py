@@ -258,6 +258,9 @@ ROW_CAP_METADATA_KEYS = (
     "cap_reason",
 )
 
+EMBEDDED_JSON_PARSE_MAX_CHARS = 200_000
+EMBEDDED_JSON_SKIP_KEYS = {"logcontent", "html", "text", "description", "stacktrace"}
+
 PROJECTION_DROP_KEY_FRAGMENTS = {
     "uiconfig",
     "menulist",
@@ -452,10 +455,71 @@ def _parse_nested_json(value: Any) -> Any:
     text = value.strip()
     if not text or text[0] not in "[{":
         return None
+    if len(text) > EMBEDDED_JSON_PARSE_MAX_CHARS:
+        return None
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         return None
+
+
+def _expand_embedded_json_strings(value: Any, *, action: str, depth: int = 0) -> tuple[Any, dict[str, Any]]:
+    """Expand visible JSON strings before safe handle extraction.
+
+    Some passthrough sources expose business data as a JSON string inside an
+    otherwise visible body, for example Archives PhotoMeta. Dennis owns this
+    parsing step; the service remains a raw/capped passthrough and raw strings
+    are not returned in the final answer.
+    """
+
+    meta = {
+        "embedded_json_expanded": False,
+        "embedded_json_expanded_count": 0,
+        "embedded_json_parse_errors": [],
+        "embedded_json_parse_policy": "dennis_side_safe_visible_body_parse",
+    }
+    if depth > 8:
+        return value, meta
+
+    def merge(child_meta: dict[str, Any]) -> None:
+        if child_meta.get("embedded_json_expanded"):
+            meta["embedded_json_expanded"] = True
+        meta["embedded_json_expanded_count"] += int(child_meta.get("embedded_json_expanded_count") or 0)
+        meta["embedded_json_parse_errors"].extend(child_meta.get("embedded_json_parse_errors", []))
+
+    if isinstance(value, dict):
+        expanded: dict[str, Any] = {}
+        for key, child in value.items():
+            normalized = _normalized_key(str(key))
+            if _is_credential_secret_key(str(key)) or _is_strict_pii_key(str(key)):
+                expanded[key] = child
+                continue
+            if isinstance(child, str) and normalized not in EMBEDDED_JSON_SKIP_KEYS:
+                parsed = _parse_nested_json(child)
+                if parsed is not None:
+                    expanded_child, child_meta = _expand_embedded_json_strings(parsed, action=action, depth=depth + 1)
+                    merge(child_meta)
+                    meta["embedded_json_expanded"] = True
+                    meta["embedded_json_expanded_count"] += 1
+                    expanded[key] = expanded_child
+                    continue
+                if child.strip()[:1] in "[{":
+                    meta["embedded_json_parse_errors"].append(str(key))
+            if isinstance(child, (dict, list)):
+                expanded_child, child_meta = _expand_embedded_json_strings(child, action=action, depth=depth + 1)
+                merge(child_meta)
+                expanded[key] = expanded_child
+            else:
+                expanded[key] = child
+        return expanded, meta
+    if isinstance(value, list):
+        expanded_list: list[Any] = []
+        for child in value[:MAX_PROJECTED_ARRAY_ITEMS]:
+            expanded_child, child_meta = _expand_embedded_json_strings(child, action=action, depth=depth + 1)
+            merge(child_meta)
+            expanded_list.append(expanded_child)
+        return expanded_list, meta
+    return value, meta
 
 
 def _safe_value_hash(value: Any) -> str:
@@ -634,13 +698,14 @@ def _aggregate_projection_metadata(items: list[dict[str, Any]]) -> dict[str, Any
     return aggregate
 
 
-def _prepare_body_for_action(action: str, parsed: Any) -> Any:
-    if action != "login_logs_search" or not isinstance(parsed, dict):
-        return parsed
+def _prepare_body_for_action(action: str, parsed: Any) -> tuple[Any, dict[str, Any]]:
+    expanded, embedded_meta = _expand_embedded_json_strings(parsed, action=action)
+    if action != "login_logs_search" or not isinstance(expanded, dict):
+        return expanded, embedded_meta
     candidate_paths = (LOGIN_LOGS_ARRAY_CAP_PATH, ("logSearchModels",))
-    if not any(isinstance(_value_at_path(parsed, path), list) for path in candidate_paths):
-        return parsed
-    cloned = _clone_json(parsed)
+    if not any(isinstance(_value_at_path(expanded, path), list) for path in candidate_paths):
+        return expanded, embedded_meta
+    cloned = _clone_json(expanded)
     for path in candidate_paths:
         cloned_records = _value_at_path(cloned, path)
         if not isinstance(cloned_records, list):
@@ -657,7 +722,7 @@ def _prepare_body_for_action(action: str, parsed: Any) -> Any:
             params = record.get("params")
             if isinstance(params, dict):
                 record["loginParams"] = params
-    return cloned
+    return cloned, embedded_meta
 
 
 def _collect_body_candidates(value: Any, *, path: str = "$", limit: int = 12) -> list[tuple[str, Any]]:
@@ -816,6 +881,7 @@ def build_safe_observation(
     body_parse_statuses: list[str] = []
     parsed_values: list[tuple[str, Any]] = []
     projection_metadata: list[dict[str, Any]] = []
+    embedded_json_metadata: list[dict[str, Any]] = []
     flags: list[str] = []
     row_cap_metadata = _row_cap_metadata(source_payload, transport_row)
 
@@ -826,7 +892,8 @@ def build_safe_observation(
             if parse_status.endswith("parse_error"):
                 flags.append("passthrough_interpretation_gap")
             continue
-        prepared = _prepare_body_for_action(action, parsed)
+        prepared, embedded_meta = _prepare_body_for_action(action, parsed)
+        embedded_json_metadata.append(embedded_meta)
         projected, projection_meta = _project_evidence_body(action, prepared, body_path=body_path)
         projection_metadata.append(projection_meta)
         parsed_values.append((body_path, projected))
@@ -866,6 +933,8 @@ def build_safe_observation(
         flags.append("pii_strict_redacted")
     if any(item.get("projection_errors") for item in projection_metadata):
         flags.append("projection_error")
+    if any(item.get("embedded_json_expanded") for item in embedded_json_metadata):
+        flags.append("embedded_json_string_expanded")
     if not parsed_values and (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
         flags.append("service_body_visibility_gap")
     if body_candidates and not parsed_values:
@@ -913,6 +982,21 @@ def build_safe_observation(
         "candidate_device_ids": _dedupe_device_candidates(candidate_device_ids),
         "passthrough_row_cap": row_cap_metadata,
         "evidence_projection": _aggregate_projection_metadata(projection_metadata),
+        "embedded_json_parse": {
+            "embedded_json_expanded": any(bool(item.get("embedded_json_expanded")) for item in embedded_json_metadata),
+            "embedded_json_expanded_count": sum(
+                int(item.get("embedded_json_expanded_count") or 0) for item in embedded_json_metadata
+            ),
+            "embedded_json_parse_errors": _unique(
+                [
+                    str(error)
+                    for item in embedded_json_metadata
+                    for error in item.get("embedded_json_parse_errors", [])
+                    if error
+                ]
+            ),
+            "embedded_json_parse_policy": "dennis_side_safe_visible_body_parse",
+        },
         "interpretation_flags": _unique(flags),
         "source_quality_hint": _source_quality_hint(flags, missing_business_fields),
         "evidence_chain_tags": _evidence_chain_tags(action, extracted_business_fields),
