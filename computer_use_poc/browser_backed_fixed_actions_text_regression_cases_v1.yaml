@@ -931,8 +931,8 @@ cases:
   - id: PHOTO-DETAIL-NEXT-HOP-PROFILE-META-001
     user_query: "已有 photo_id 197323059879 和 197323443136，但发布链缺 publish_device、uploadSource、photoMethod、photoIp，Dennis 会不会规划 archives_photo_profile 和 archives_photo_meta 下一跳并回填证据链？"
     expected_route_or_actions: [archives_photo_profile, archives_photo_meta]
-    expected_orchestration: "Photo detail next-hop uses archives_photo_profile + archives_photo_meta when photo_id exists and publish fact chain lacks source/device/IP fields."
-    expected_boundary_flags: [archives_photo_detail_next_hop_required, archives_photo_detail_fields_backfill_publish_chain, safe_parser_extracts_publish_fields]
+    expected_orchestration: "Photo detail next-hop uses archives_photo_profile + archives_photo_meta when photo_id exists and publish fact chain lacks source/device/IP fields, before Track/device consistency follow-up."
+    expected_boundary_flags: [archives_photo_detail_next_hop_required, archives_photo_detail_fields_backfill_publish_chain, photo_detail_next_hop_executes_before_track_resolution, safe_parser_extracts_publish_fields]
     expected_execution_groups: []
     should_not_do: [do_not_use_completed_transport_as_business_closure]
     expected_answer_contract: [source_plan, source_observations, evidence_card, final_answer_boundary]

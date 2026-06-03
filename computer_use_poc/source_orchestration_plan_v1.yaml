@@ -708,9 +708,10 @@
                   "content_status"
                 ],
                 "body_visible_but_unparsed": "parser_mapping_gap",
-                "http_200_body_suppressed": "service_body_visibility_gap",
-                "missing_publish_device": "publish_device_missing_after_photo_meta",
-                "alignment_required": "parsed publish_device/did becomes candidate_device_id for Track/Weapon/device consistency chain"
+              "http_200_body_suppressed": "service_body_visibility_gap",
+              "missing_publish_device": "publish_device_missing_after_photo_meta",
+              "alignment_required": "parsed publish_device/did becomes candidate_device_id for Track/Weapon/device consistency chain",
+              "execution_order": "when photo_id is already parsed in execution mode, run photo_profile/photo_meta controlled follow-up before Track/device baseline resolution"
               },
               "track_analysis_check_data_ready": {
                 "not_risk_conclusion_source": true,
@@ -1080,7 +1081,7 @@
               "expected_observation": "recent gallery photo list to discover photo_id and publish_time candidates"
             }
           ],
-          "orchestration": "user_id -> realtime P0 source collection (login/profile/analysis/photo/Track) -> multi-source suspicious anchor derivation -> if photo_id exists and publish fields are missing, plan archives_photo_profile/archives_photo_meta next-hop -> candidate control endpoint extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card",
+          "orchestration": "user_id -> realtime P0 source collection (login/profile/analysis/photo/Track) -> multi-source suspicious anchor derivation -> if photo_id exists and publish fields are missing, run archives_photo_profile/archives_photo_meta controlled next-hop before Track/device alignment -> candidate control endpoint extraction -> device_identity_consistency -> historical_baseline_comparison -> business evidence card",
           "boundary_flags": [
             "suspicious_anchor_derived_from_realtime_p0_sources",
             "anchor_not_found_must_be_explicit",

@@ -489,9 +489,11 @@ ATO 单案用户设备实体层：
 - 候选 device_id 来源：登录日志、档案中心用户分析、作品搜索、Weapon 图谱、Track readiness。
 - 如果初始 source 没有提取到候选 device_id，必须先主动做 `user_device_entity_resolution`：按登录设备、发布设备、用户分析操作设备、历史/画像设备、Weapon graphData、Track getDeviceIds/readiness 的顺序找候选并排序；仍找不到时才输出 `candidate_device_id_missing_after_resolution`，Track / Weapon / 发布设备对齐进入 `missing_evidence`，不得让整个 batch fail，也不得简单写“Track 未执行”。
 - `archives_photo_search` 默认用于作品 / 发布 / 内容承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`。
+- 已有 `photo_id` 且发布链缺发布端 / 发布设备 / IP/UA 时，execution mode 下先通过 controlled batch 自动执行 `archives_photo_profile + archives_photo_meta`，再做 Track / 设备一致性对齐；不要只把 `web_publish_fact` 写成下一步建议。
 - `archives_user_analysis` 到达 transport 层但缺改密、换绑、保护账号、资料修改、发布相关操作等业务字段时标 `behavior_chain_business_fields_missing`。
 - 登录日志 `response_too_large` / `body_truncated` 是 partial observation：若 capped body/snippet 可见，Dennis 先安全解析前段登录字段；若 `body_present=true` 但 Dennis 看不到 capped/snippet，标 `service_body_visibility_gap_for_truncated_login_log`。缩窗锚点优先来自发布时间、用户客诉时间、异常事件时间、策略命中时间和近期作品发布时间；没有锚点时先从作品/用户分析/策略事件找锚点。`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
 - partial 必须分型：`partial_transport`、`partial_fields`、`partial_baseline`、`partial_consistency`、`partial_authorization_required` 分别映射到自动实时下一跳、plan-only 下一跳、用户授权下一跳或 blocked 下一跳；不得只写“多个源 partial”。
+- 用户正文不要只写“档案 / Track 200 返回”；必须写业务字段闭合状态、partial subtype、已执行 / 未执行的 next-hop 和仍缺字段。
 - observation 前允许 Dennis 做 evidence projection：只删 UI/debug/blob/重复/空值等明显低价值字段，保留风控锚点和敏感控制链字段的存在性/路径/hash/长度安全句柄；最终用户正文仍禁止输出 cookie/token/session/header/password 原文。
 
 实时证据不闭合时，离线补证必须按当前 `missing_evidence` 动态生成 `module_id`，不固定输出 1-5 菜单，也不默认请求全量 DataAgent/Hive。典型动态模块包括 `web_publish_fact`、`web_login_history`、`device_history_baseline`、`token_oauth_scan_chain`、`security_action_chain`、`post_action_chain`；用户只授权哪个 `module_id`，只能生成/执行哪个模块的 query plan，未授权模块继续进入 `missing_evidence`。

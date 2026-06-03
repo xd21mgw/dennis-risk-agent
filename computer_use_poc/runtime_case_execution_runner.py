@@ -2082,6 +2082,71 @@ def with_track_device(source_plan: list[SourcePlanItem], device_id: str) -> Sour
     raise ValueError("track source plan missing")
 
 
+def _photo_ids_from_observations(source_observations: list[dict[str, Any]]) -> list[str]:
+    values = _field_values_from_observations(source_observations, {"photo_id"})
+    return unique_strings([str(item.get("value")) for item in values if item.get("value")])[:5]
+
+
+def build_photo_detail_followup_items(
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+) -> list[SourcePlanItem]:
+    """Build registered photo detail next-hop sources from already parsed photo ids.
+
+    This uses the existing controlled batch path. It does not discover new
+    actions, guess URLs, or call platform sources outside the harness.
+    """
+
+    photo_ids = _photo_ids_from_observations(source_observations)
+    if not photo_ids:
+        return []
+
+    existing = {
+        (str(observation.get("action")), str(handle.get("value")))
+        for observation in source_observations
+        if str(observation.get("action")) in {"archives_photo_profile", "archives_photo_meta"}
+        for handle in observation.get("parsed_body_field_handles", [])
+        if str(handle.get("canonical_field") or handle.get("field")) == "photo_id"
+    }
+    items: list[SourcePlanItem] = []
+    for photo_id in photo_ids:
+        for action, suffix, expected in [
+            (
+                "archives_photo_profile",
+                "profile",
+                "photo profile publish source/device/IP/status fields",
+            ),
+            (
+                "archives_photo_meta",
+                "meta",
+                "photo meta uploadSource/photoMethod/photoIp/publishDevice fields",
+            ),
+        ]:
+            if (action, photo_id) in existing:
+                continue
+            items.append(
+                SourcePlanItem(
+                    source_id=f"ato_archives_photo_{suffix}_{photo_id}",
+                    action=action,
+                    execution_group="auth_sensitive_serial",
+                    depends_on=["ato_archives_photo_search"],
+                    timeout_class="auth_sensitive",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P0-next-hop",
+                    expected_observation=expected,
+                    params={"photo_id": photo_id},
+                    timeout_ms=30_000,
+                    required_fields=["photo_id"],
+                    window_policy="photo_detail_no_7d_login_window_constraint",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+    return items
+
+
 def synthetic_track_missing_result(track_item: SourcePlanItem) -> dict[str, Any]:
     row = {
         "source_id": track_item.source_id,
@@ -3283,6 +3348,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError("--browser-backed-base is required in live mode")
         primary_result = call_browser_backed_batch(args.browser_backed_base, batch_payload)
 
+    executed_source_plan = list(source_plan)
     primary_source_quality_matrix = merge_source_quality(primary_source_plan, primary_result)
     primary_source_observations = build_source_observations(
         primary_source_plan,
@@ -3295,19 +3361,52 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         provided_device_id=args.device_id,
         source_observations=primary_source_observations,
     )
-    primary_candidates = primary_user_device_entity_resolution.get("candidate_device_ids", [])
+    followup_batch_payloads: list[dict[str, Any]] = []
+    followup_results: list[dict[str, Any]] = []
+    photo_detail_followup_items = build_photo_detail_followup_items(
+        primary_source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+    )
+    if photo_detail_followup_items:
+        executed_source_plan.extend(photo_detail_followup_items)
+        followup_payload = build_batch_payload(
+            f"{case_id}:photo_detail_followup",
+            photo_detail_followup_items,
+            dry_run=args.mode == "dry_run",
+        )
+        followup_batch_payloads.append(followup_payload)
+        if args.mode == "dry_run":
+            followup_results.append(build_dry_run_batch_result(photo_detail_followup_items))
+        else:
+            followup_results.append(call_browser_backed_batch(args.browser_backed_base, followup_payload))
+
+    pre_track_result = merge_batch_results([primary_result, *followup_results])
+    pre_track_source_quality_matrix = merge_source_quality(executed_source_plan, pre_track_result)
+    pre_track_source_observations = build_source_observations(
+        executed_source_plan,
+        pre_track_source_quality_matrix,
+        pre_track_result,
+    )
+    pre_track_user_device_entity_resolution = build_user_device_entity_resolution(
+        executed_source_plan,
+        pre_track_result,
+        provided_device_id=args.device_id,
+        source_observations=pre_track_source_observations,
+    )
+    primary_candidates = pre_track_user_device_entity_resolution.get("candidate_device_ids", [])
     candidate_device_id = (
         args.device_id
         or (primary_candidates[0]["device_id"] if primary_candidates else None)
-        or extract_candidate_device_id(primary_result)
+        or extract_candidate_device_id(pre_track_result)
     )
-    followup_batch_payloads: list[dict[str, Any]] = []
-    followup_results: list[dict[str, Any]] = []
     track_device_resolution = {
         "device_id_provided": args.device_id is not None,
         "candidate_device_lookup_attempted": track_missing_device_id,
         "candidate_device_found": bool(candidate_device_id),
         "track_missing_device_id_blocks_batch": False,
+        "photo_detail_next_hop_attempted_before_track": bool(photo_detail_followup_items),
+        "photo_detail_next_hop_source_ids": [item.source_id for item in photo_detail_followup_items],
     }
 
     if track_item and track_missing_device_id:
@@ -3327,10 +3426,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             followup_results.append(synthetic_track_missing_result(track_item))
 
     batch_result_raw = merge_batch_results([primary_result, *followup_results])
-    source_quality_matrix = merge_source_quality(source_plan, batch_result_raw)
-    source_observations = build_source_observations(source_plan, source_quality_matrix, batch_result_raw)
+    source_quality_matrix = merge_source_quality(executed_source_plan, batch_result_raw)
+    source_observations = build_source_observations(executed_source_plan, source_quality_matrix, batch_result_raw)
     user_device_entity_resolution = build_user_device_entity_resolution(
-        source_plan,
+        executed_source_plan,
         batch_result_raw,
         provided_device_id=args.device_id,
         source_observations=source_observations,
@@ -3386,6 +3485,9 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         },
         "source_orchestration_check": run_orchestration_check(args.task, 1),
         "source_plan": [item.to_plan_dict() for item in source_plan],
+        "auto_realtime_next_hop_source_plan": [
+            item.to_plan_dict() for item in executed_source_plan if item.source_id not in {source.source_id for source in source_plan}
+        ],
         "execution_groups": [
             {
                 "group_id": group["group_id"],
@@ -3399,6 +3501,13 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "batch_payload": batch_payload,
         "batch_contract_validation": batch_contract_validation,
         "followup_batch_payloads": followup_batch_payloads,
+        "photo_detail_next_hop": {
+            "attempted": bool(photo_detail_followup_items),
+            "source_ids": [item.source_id for item in photo_detail_followup_items],
+            "actions": [item.action for item in photo_detail_followup_items],
+            "execution_path": "controlled_batch_followup_only",
+            "manual_curl_or_single_action_fallback_allowed": False,
+        },
         "track_device_resolution": track_device_resolution,
         "user_device_entity_resolution": user_device_entity_resolution,
         "batch_result": batch_result,

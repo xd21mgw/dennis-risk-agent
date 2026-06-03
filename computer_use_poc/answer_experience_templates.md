@@ -349,7 +349,8 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - 高价值 source 必须优先沉淀 source-specific safe parser：`login_logs_search` 抽登录时间、登录端、登录方式、设备、IP/UA；`archives_photo_search` 抽 photo_id、发布时间、发布端、发布设备、发布 IP/UA；`archives_user_analysis` 抽安全动作、操作时间、操作设备；`archives_related_users` / `weapon_inventory` 抽扩散设备和 user-device 图谱线索。
 - `login_logs_search` 分类先看 transport envelope：`2xx + body_present=true + body_truncated=true` 写 `transport_success + partial_observation_available / response_too_large`；只有 401/403、`auth_redirect_detected=true`、`api_code=302` 或明确 `error_type` 才写 auth/permission；`ok=false + network_error` 才写 service fetch failure。
 - `login_logs_search raw_body_handling=json_array_capped` 时，只把 `returned_records` 对应的 `upstream.capped_body.data.logSearchModels` 当 partial evidence；`observed_records`、`returned_records`、`missing_records`、`cap_reason=byte_limit` 必须进入 source_quality 和证据边界，不能把 missing records 当 no_data。
-- 已有 `photo_id` 且发布事实链缺发布端、发布设备、发布 IP/UA、`uploadSource` 或 `photoMethod` 时，Dennis 应规划 `archives_photo_profile + archives_photo_meta` 作为 controlled next-hop；如果返回 body visible，就把字段回填到发布事实链和设备一致性链；如果 HTTP 200 但 body suppressed 或字段缺失，写 `service_body_visibility_gap` / `parser_mapping_gap` / `publish_device_missing_after_photo_meta`。
+- 已有 `photo_id` 且发布事实链缺发布端、发布设备、发布 IP/UA、`uploadSource` 或 `photoMethod` 时，Dennis 在 execution mode 下应先通过 controlled batch 自动执行 `archives_photo_profile + archives_photo_meta`，再用解析出的发布设备 / DID 驱动 Track / 设备一致性链；如果返回 body visible，就把字段回填到发布事实链和设备一致性链；如果 HTTP 200 但 body suppressed 或字段缺失，写 `service_body_visibility_gap` / `parser_mapping_gap` / `publish_device_missing_after_photo_meta`。
+- 普通用户回答不要只写“档案 / Track 200 返回”。必须写成业务字段闭合状态：哪些字段已抽取，哪些字段仍是 `partial_transport`、`partial_fields`、`partial_baseline` 或 `partial_consistency`，以及对应 next-hop 是否已自动执行、仅计划或需要授权。
 
 ATO evidence card 不按 source 状态平铺，按风险链路组织：
 

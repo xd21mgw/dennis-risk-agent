@@ -239,6 +239,8 @@ source observation 解释边界：
 - `login_logs_search` 的 `response_too_large` / `body_truncated` 是 partial observation，建议围绕可疑锚点缩窗；`no_data` 不排除 ATO；`network_error` 要细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
 - `archives_user_analysis` 到达 transport 层不等于行为链闭合；缺改密、换绑、保护账号、资料修改、发布操作等字段时标 `behavior_chain_business_fields_missing`。
 - `archives_photo_search` 默认用于内容/发布承接；缺 `photo_id`、发布时间、发布设备、发布来源时标 `content_chain_business_fields_missing`，并与登录、用户分析、Track/Weapon 和历史设备基线对齐。
+- 已解析到 `photo_id` 且发布链缺发布设备 / 发布来源 / 发布 IP-UA 时，execution mode 下通过 controlled batch 自动执行 `archives_photo_profile + archives_photo_meta`，再用发布设备 / DID 回填设备一致性和 Track candidate device；不要只把 `web_publish_fact` 写成下一步建议。
+- `HTTP 200` / transport completed 不能作为用户可读 evidence summary。必须转成业务字段闭合状态：已抽字段、缺失字段、partial subtype、已自动执行的 next-hop、仍需授权的补证。
 - `track_analysis_check_data_ready` 是 readiness/provenance，不是本人操作证明。
 
 ATO 用户正文 evidence card 按风险链路组织：控制权入口、账号状态与后置行为、内容/发布承接、前后端活跃对齐、设备/IP/扩散、策略/风控信号、反证与缺口、结论边界。不要按 source 状态平铺。

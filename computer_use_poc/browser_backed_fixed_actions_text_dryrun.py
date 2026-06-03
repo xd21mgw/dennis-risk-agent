@@ -286,6 +286,7 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "external_share_masks_risk_entity_identifiers": "对外分享或更广受众输出时，风险实体按受众策略脱敏",
     "archives_photo_detail_next_hop_required": "已有 photo_id 且发布链缺字段时，规划 archives_photo_profile + archives_photo_meta 作为受控下一跳",
     "archives_photo_detail_fields_backfill_publish_chain": "photo profile/meta 的 uploadSource/photoMethod/photoIp/publishDevice 可回填发布事实链和设备一致性链",
+    "photo_detail_next_hop_executes_before_track_resolution": "ATO 执行模式中，已有 photo_id 时先用 photo profile/meta 回填发布设备，再用候选设备驱动 Track/设备一致性链",
     "login_logs_json_array_capped_partial": "login_logs_search json_array_capped 只把 returned_records 作为 partial evidence，missing_records 仍是缺口",
     "rcp_governance_actions_explicit_only": "RCP governance/helper actions 只在策略命中、策略治理、误伤复核或 event/policy anchor 存在时规划",
     "track_auxiliary_parameter_discovery_only": "Track auxiliary actions 只用于参数/维度/字段发现，不进入风险结论链",
@@ -1174,6 +1175,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             "boundary_flags": [
                 "archives_photo_detail_next_hop_required",
                 "archives_photo_detail_fields_backfill_publish_chain",
+                "photo_detail_next_hop_executes_before_track_resolution",
                 "safe_parser_extracts_publish_fields",
                 "publish_device_login_device_alignment_required",
                 "default_runtime_routing_false",
@@ -1318,6 +1320,7 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
             passthrough_flags += [
                 "archives_photo_detail_next_hop_required",
                 "archives_photo_detail_fields_backfill_publish_chain",
+                "photo_detail_next_hop_executes_before_track_resolution",
                 "safe_parser_extracts_publish_fields",
             ]
             passthrough_actions = ["archives_photo_profile", "archives_photo_meta"]

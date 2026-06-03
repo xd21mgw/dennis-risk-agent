@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime_case_execution_runner import (
+    build_photo_detail_followup_items,
     build_ato_single_case_source_plan,
     build_evidence_card,
     build_live_response_inspection,
@@ -188,6 +189,44 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
     assert result["evidence_card"]["evidence_projection_summary"]
 
 
+def _assert_photo_detail_followup_from_primary_only(case: dict[str, Any]) -> None:
+    source_plan = build_ato_single_case_source_plan(
+        "2892617234",
+        device_id=None,
+        window_start_ms=1777784300000,
+        window_end_ms=1780376300000,
+        include_abnormal_publish=True,
+        include_same_device=False,
+    )
+    primary_only = json.loads(json.dumps(case["batch_result"]))
+    primary_only["source_results"] = {
+        key: value
+        for key, value in primary_only.get("source_results", {}).items()
+        if "photo_profile" not in key and "photo_meta" not in key
+    }
+    primary_only["transport_status_matrix"] = {
+        key: value
+        for key, value in primary_only.get("transport_status_matrix", {}).items()
+        if "photo_profile" not in key and "photo_meta" not in key
+    }
+    source_quality = merge_source_quality(source_plan, primary_only)
+    observations = build_source_observations(source_plan, source_quality, primary_only)
+    followup_items = build_photo_detail_followup_items(
+        observations,
+        window_start_ms=1777784300000,
+        window_end_ms=1780376300000,
+    )
+    source_ids = {item.source_id for item in followup_items}
+    actions = {item.action for item in followup_items}
+    assert actions == {"archives_photo_profile", "archives_photo_meta"}
+    assert "ato_archives_photo_profile_197323059879" in source_ids
+    assert "ato_archives_photo_meta_197323059879" in source_ids
+    assert "ato_archives_photo_profile_197323443136" in source_ids
+    assert "ato_archives_photo_meta_197323443136" in source_ids
+    assert all(item.execution_group == "auth_sensitive_serial" for item in followup_items)
+    assert all(item.failure_policy == "non_blocking_partial" for item in followup_items)
+    assert all(item.required_fields == ["photo_id"] for item in followup_items)
+
 
 def main() -> int:
     fixture = json.loads(FIXTURE_PATH.read_text())
@@ -195,6 +234,9 @@ def main() -> int:
     result_by_id = {item["case_id"]: item for item in results}
     _assert_suppressed_case(result_by_id["live_suppressed_body_visibility_gap"])
     _assert_visible_case(result_by_id["visible_capped_body_business_fields_available"])
+    _assert_photo_detail_followup_from_primary_only(
+        next(case for case in fixture["cases"] if case["id"] == "visible_capped_body_business_fields_available")
+    )
     print(
         json.dumps(
             {
