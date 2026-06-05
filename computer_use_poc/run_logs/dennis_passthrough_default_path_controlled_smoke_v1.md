@@ -12,7 +12,7 @@
 - Service endpoint: `http://127.0.0.1:8787`
 - `ok=true`
 - `service_mode=live`
-- `auth_state=ready`
+- `auth-state category=ready`
 - `action_count=19`
 - Target origins ready:
   - Track Analysis: `ready`

@@ -18,6 +18,7 @@
     "raw_sql",
     "shell_command",
     "full_json",
+    "raw_json",
     "raw_response",
     "raw_result"
   ],
@@ -140,7 +141,7 @@
       "max_entity_count_without_approval": 1,
       "batch_allowed": false,
       "approval_required_if": ["over_reliable_window", "many_users", "raw_log_content_requested"],
-      "denied_requested_fields": ["token", "session", "authorization", "cookie", "raw_log_content", "full_json"],
+      "denied_requested_fields": ["token", "session", "authorization", "cookie", "raw_log_content", "full_json", "raw_json"],
       "redacted_fields": ["user_id", "device_id", "did", "phone", "ip", "user_agent", "log_content"],
       "audit_required": true,
       "current_status": "registered_readonly"
@@ -154,7 +155,7 @@
       "max_entity_count_without_approval": 1,
       "batch_allowed": false,
       "approval_required_if": ["many_source_ids", "raw_event_detail_requested", "long_time_window"],
-      "denied_requested_fields": ["raw_response", "full_json", "internal_trace"],
+      "denied_requested_fields": ["raw_response", "full_json", "raw_json", "internal_trace"],
       "redacted_fields": ["source_id", "request_payload", "sample_hits"],
       "audit_required": true,
       "current_status": "registered_readonly"
@@ -182,7 +183,7 @@
       "max_entity_count_without_approval": 1,
       "batch_allowed": false,
       "approval_required_if": ["new_endpoint", "many_entities", "raw_json_requested"],
-      "denied_requested_fields": ["arbitrary_url", "arbitrary_api", "cookie", "token", "session", "raw_header", "raw_headers", "full_json", "raw_response"],
+      "denied_requested_fields": ["arbitrary_url", "arbitrary_api", "cookie", "token", "session", "raw_header", "raw_headers", "full_json", "raw_json", "raw_response"],
       "redacted_fields": ["registered_endpoint", "requestParam", "extraParam", "user_id", "device_id", "ip"],
       "audit_required": true,
       "current_status": "registered_readonly_only"

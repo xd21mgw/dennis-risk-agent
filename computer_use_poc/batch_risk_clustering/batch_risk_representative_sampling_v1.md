@@ -1,116 +1,142 @@
 # Batch Risk Representative Sampling v1
 
-## 1. Purpose
+Status: runtime_rule
 
-Representative sampling prevents large batch analysis from becoming unsafe or low-quality one-by-one lookup.
+Representative sampling is now the execution loop for
+`sample_expand_validate_mode`. It is not a loose "pick a few examples" note and
+it is not permission to deep-check every entity online.
 
-## 2. Sampling by Scale
+## 1. Default Parameters
 
-### 5-9 entities
+```yaml
+sample_expand_validate_defaults:
+  initial_sample_size: 10
+  sampling_method: random
+  max_rounds: 5
+  max_deep_checked: 50
+  high_coverage_threshold: around_70_percent
+  realtime_deep_check_scope: sampled_entities_only
+```
 
-- Can recommend full investigation or sampling.
-- If sampling, choose 3-5 representative samples.
-- Use sampling when evidence is uneven, cost is unclear, or user asks for pattern first.
+70% is the default threshold for entering full-batch validation or offline
+validation. It is not an automatic disposition threshold.
 
-### 10+ entities
+## 2. Round Result
 
-- Default: choose 3-5 representative samples.
-- Do not investigate every entity online by default.
-- Use samples to validate cluster hypotheses and false-positive boundaries.
+Each round must produce:
 
-## 3. Sample Types
+```yaml
+round_result:
+  round_id:
+  sampled_count:
+  sampled_entities:
+  sampling_method:
+  source_completion:
+  discovered_clusters:
+  main_shared_signals:
+  coverage_in_round:
+  cumulative_coverage:
+  decision:
+    action: continue | offline_validate | stop
+    reason:
+```
 
-### high-confidence positive sample
+## 3. Cumulative Result
 
-- Multiple strong evidence types overlap.
-- Represents the main risk cluster.
-- Use to validate primary attack path.
+```yaml
+cumulative_result:
+  checked_count:
+  total_input_count:
+  cluster_coverage:
+  main_cluster:
+  secondary_clusters:
+  normal_or_counter:
+  current_confidence:
+  next_action:
+```
 
-### boundary / ambiguous sample
+## 4. Stop / Continue Rules
 
-- Has risk clues but incomplete evidence.
-- Use to draw judgement boundary.
-- Good for preventing overblocking.
+Stop and move to validation when:
 
-### suspected false positive sample
+- The main risk cluster reaches about 70% cumulative coverage and is stable
+  across at least two rounds.
+- Multiple clear risk clusters together reach about 70% coverage and each major
+  cluster has a coherent evidence chain.
+- Five rounds have completed or 50 realtime deep checks have been used.
+- Multiple rounds show no stable commonality or source quality is mostly
+  blocked / timeout / no_data; output evidence insufficiency and recommend
+  `wide_table_aggregate_mode` or tighter filters.
 
-- Strategy hit exists but user behavior, profile, or context may be normal.
-- Use for false-positive control and grey release design.
+Continue sampling when:
 
-### high-impact sample
+- Coverage is 40%-70%.
+- Round one is high coverage but round two drops sharply.
+- Multiple candidate clusters exist but evidence chains are incomplete.
+- Normal/counter samples are high enough that the boundary needs validation.
 
-- High value user, high impact behavior, high complaint, high amount, high propagation risk.
-- Use to protect business impact and escalation handling.
+## 5. Sample Types
 
-### source-gap sample
+- `high_confidence_positive_sample`: overlapping raw / behavior / relation
+  evidence for a likely main cluster.
+- `boundary_ambiguous_sample`: has risk clues but incomplete evidence; used to
+  draw false-positive boundary.
+- `suspected_false_positive_sample`: strategy hit or weak clue exists, but
+  profile, history or context may be normal.
+- `source_gap_sample`: key evidence is blocked, over-window, unavailable or
+  needs authorized offline aggregation.
+- `high_impact_sample`: high value / high propagation / high business impact
+  sample for manual review planning.
 
-- Key evidence missing, source blocked, log over window, platform unavailable, DataAgent / Hive needed.
-- Use to define offline query plan.
+## 6. Required Representative Sample Card
 
-## 4. Required Sample Output
+```yaml
+representative_sample_card:
+  sample_id:
+  sample_type:
+  cluster_assignment:
+  why_selected:
+  raw_evidence:
+  derived_evidence:
+  source_quality:
+  missing_evidence:
+  counter_evidence:
+  preliminary_judgement:
+  required_followup:
+```
 
-Each representative sample must generate an evidence card with:
+## 7. ATO Lens Sampling
 
-- case_id.
-- sample_type.
-- cluster_assignment.
-- why_selected.
-- raw evidence.
-- derived evidence.
-- user claim.
-- model inference.
-- missing evidence.
-- blocked evidence.
-- source metadata.
-- preliminary judgement.
-- required follow-up.
-
-## 4A. ATO Cluster Lens Representative Sampling
-
-For batch ATO / compromised-account cluster lens, sampling validates the attack mechanism of a representative cluster. It is not a one-by-one online lookup loop and it is not global proof for the full batch.
-
-Each suspected ATO cluster should select:
+For compromised-account / stolen-account posting clusters, select:
 
 - 2-3 high-suspicion samples.
 - 1-2 medium-suspicion samples.
-- 1 boundary / ambiguous sample.
-- 1 counter-example sample when available.
+- 1 boundary sample.
+- 1 counter-example when available.
 
-Selection priorities:
+Selection priority:
 
-- WEB / H5 / PC non-trusted login is clearest.
-- `login_to_action_delta` is shortest.
-- `device_identity_inconsistency` is strongest.
-- diversion content is most typical.
-- source gap is smallest.
-- sample best represents the cluster pattern.
+- WEB / H5 / PC non-trusted login is clear.
+- `login_to_action_delta` is short.
+- `device_identity_inconsistency` is strong.
+- diversion content is typical.
+- source gap is small.
 
-Representative samples then run the single-case ATO chain:
-
-```text
-login_logs_search + archives_user_profile + archives_user_analysis + archives_photo_search + track_analysis_check_data_ready
--> multi-source suspicious anchor derivation
--> candidate_control_endpoint_extraction
--> device_identity_consistency
--> historical_baseline_comparison
--> business evidence card
-```
-
-Backfill fields from representative deep dive to the cluster:
+Representative ATO samples run the current single-case evidence chain through
+the controlled runtime harness, then backfill cluster-level fields:
 
 - `login_to_action_delta` distribution.
 - `device_identity_inconsistency` coverage.
-- `possible_device_id_spoofing` coverage.
 - shared IP / UA / ASN / browser fingerprint coverage.
 - content similarity and diversion wording coverage.
 - historical behavior shift coverage.
 - strategy-hit combination coverage.
 - source quality and missing evidence coverage.
 
-## 5. Boundary
+## 8. Boundaries
 
 - Sampling is not proof that all cluster members are risky.
-- A sample can validate a hypothesis only for the represented cluster when common evidence is present.
-- If clusters are heterogeneous, each major cluster needs at least one representative sample.
-- If only one sample supports a cluster, output confidence limit and required follow-up.
-- ATO representative samples cannot be generalized to the full batch without coverage, similarity, source quality and counter-example checks.
+- Heterogeneous clusters need representative samples per major cluster.
+- One sample cannot prove a full batch.
+- DataAgent/Hive validation requires explicit authorization and is not executed
+  by this contract.

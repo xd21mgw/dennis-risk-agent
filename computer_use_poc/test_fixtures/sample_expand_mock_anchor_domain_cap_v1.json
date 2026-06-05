@@ -1,0 +1,78 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 5,
+  "round_size": 5,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 5,
+  "sampling_method": "mock_anchor_domain_cap",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "anchor_domain_cap",
+    "many_content_anchors"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_cap_user_a",
+        "mock_cap_user_b",
+        "mock_cap_user_c",
+        "mock_cap_user_d",
+        "mock_cap_user_e"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_cap_user_a",
+            "candidate_photo_id": "mock_cap_photo_a",
+            "candidate_device_id": "mock_cap_device_shared",
+            "content_template_signal": "same_content_template"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_cap_user_b",
+            "candidate_photo_id": "mock_cap_photo_b",
+            "candidate_device_id": "mock_cap_device_shared",
+            "content_template_signal": "same_content_template"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_cap_user_c",
+            "candidate_photo_id": "mock_cap_photo_c",
+            "candidate_device_id": "mock_cap_device_shared",
+            "content_template_signal": "same_content_template"
+          }
+        },
+        {
+          "source_id": "round_1_entity_4_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_cap_user_d",
+            "candidate_photo_id": "mock_cap_photo_d",
+            "candidate_device_id": "mock_cap_device_secondary",
+            "content_template_signal": "same_content_template"
+          }
+        },
+        {
+          "source_id": "round_1_entity_5_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_cap_user_e",
+            "candidate_photo_id": "mock_cap_photo_e",
+            "candidate_device_id": "mock_cap_device_secondary",
+            "content_template_signal": "same_content_template"
+          }
+        }
+      ]
+    }
+  ]
+}

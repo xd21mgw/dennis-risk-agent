@@ -4,14 +4,14 @@
 
 本轮因 DataAgent local live dry-run 出现 HTTP 200 但 `missing_model_answer`，先推进 cloud Skill parity 复用优先，再补安全的 response envelope shape probe fallback，并增强 normalizer 的 envelope 兼容层。
 
-repo 中已找到云上 DataAgent Skill 成功解析契约与脱敏 fixture：`computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md` 和 `computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json`。目标是优先复用该 step-based JSON / `MODEL_ANSWER` 解析逻辑；如果后续仍无法解释本地 HTTP 200 response，再在授权后执行 shape probe，只看 sanitized shape，不输出 raw response。
+repo 中已找到云上 DataAgent Skill 成功解析契约与脱敏 fixture：`computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md` 和 `computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json`。目标是优先复用该 step-based JSON / `MODEL_ANSWER` 解析逻辑；如果后续仍无法解释本地 HTTP 200 response，再在授权后执行 shape probe，只看 sanitized shape，不输出 source response summary。
 
 Follow-up probe attempt:
 
 - sandbox execution: DNS resolution failed before HTTP request.
 - escalated execution: HTTP request sent, then read timeout before response body.
 - escalated retry with 90s timeout: HTTP 200, sanitized shape summary received.
-- raw response body printed: false.
+- source response summary body printed: false.
 - text fields printed: path + length only.
 - SQL / query_id / trace_id printed: present=true/false only.
 - hive_called=false.
@@ -52,7 +52,7 @@ Normalizer adaptation from live shape:
 - 更新 `computer_use_poc/dataagent_local_dryrun_parity_check.py`：
   - 新增 `--probe-response-shape`。
   - probe 只在 `--live-dry-run --allow-live-dry-run` 下可用。
-  - probe 不输出 raw response body，只输出 sanitized shape summary。
+  - probe 不输出 source response summary body，只输出 sanitized shape summary。
   - SQL / query_id / trace_id 只输出 present=true/false，不输出原值。
 - 更新 `computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md`：
   - 记录 cloud Skill parity fixture 作为本地解析优先来源。

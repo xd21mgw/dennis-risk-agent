@@ -1,364 +1,260 @@
 schema_version: batch_risk_runtime_validation_cases_v1
+status: runtime_validation
 notes:
-  - Simulated validation cases only.
-  - No real platform access.
-  - No DataAgent execution.
-  - No auth or gateway changes.
+  - These cases validate Dennis batch attack judgement routing and output contracts.
+  - They do not access real platforms or call DataAgent/Hive.
+  - Exactly three current modes are allowed: full_observation_mode, sample_expand_validate_mode, wide_table_aggregate_mode.
+  - Strategy candidates expose both priority and action_group; P0 means controlled gray validation, not auto-launch or direct disposition.
+
 cases:
-  - case_id: SINGLE_ENTITY_ATO_EXECUTION
-    input_summary: "1 个 user_id，用户明确说帮我查是否 ATO。"
-    entity_count: 1
-    expected_mode: single_entity_execution_mode
-    expected_behavior: "可逐个深查，输出单 case evidence card。"
-    forbidden_behavior: "不要进入 batch_clustering_mode。"
+  - id: batch_route_001_small_full_observation
+    category: routing
+    prompt: "这 8 个 user_id 是不是一伙，帮我细查共性。"
+    expected_mode: full_observation_mode
+    must_include: [entity_graph, source_commonality_card, multi_source_fusion, cluster_summary_card]
+    forbidden: [per_entity_transcript_only, batch_clustering_mode]
 
-  - case_id: FOUR_ENTITY_FULL_INVESTIGATION
-    input_summary: "4 个 user_id，用户明确要求帮我查这几个。"
-    entity_count: 4
-    expected_mode: small_multi_case_execution_mode
-    expected_behavior: "可全量深查；每个 case 简版 evidence card；最后 cross-case comparison。"
-    forbidden_behavior: "不能因为相似就直接判定同团伙。"
+  - id: batch_route_002_urgent_sample_expand
+    category: routing
+    prompt: "今天 100 个账号很可疑，先看看是不是同一批。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [sampling_plan, initial_sample_size_10, max_rounds_5, max_deep_checked_50]
+    forbidden: [full_realtime_deep_check_all_entities, wait_only_for_hive]
 
-  - case_id: FIVE_ENTITY_SMALL_BATCH
-    input_summary: "5 个 user_id，用户说这几个看起来一批。"
-    entity_count: 5
-    expected_mode: small_batch_mode
-    expected_behavior: "先轻量分组、风险假设、优先级排序，再建议全查或抽 3-5 个代表样本。"
-    forbidden_behavior: "不默认逐个深查全部长链路。"
+  - id: batch_route_003_wide_table_strategy
+    category: routing
+    prompt: "这 300 个账号用宽表看覆盖率、准召和候选策略。"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [wide_table_aggregate_report, dataagent_authorization_boundary]
+    forbidden: [select_star_wide_table_dump, dataagent_called_without_authorization]
 
-  - case_id: TEN_ENTITY_BATCH_CLUSTERING
-    input_summary: "10 个 user_id，用户问是否同一批风险。"
-    entity_count: 10
-    expected_mode: batch_clustering_mode
-    expected_behavior: "分簇、异常相关性矩阵、代表样本抽样，不逐个在线查。"
-    forbidden_behavior: "不逐个在线查 10 个用户。"
+  - id: batch_route_004_user_specified_mode_safe
+    category: routing
+    prompt: "这 30 个先用 sample_expand_validate_mode 跑两轮看看。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [sampling_plan, round_result, cumulative_result, next_action_required_authorization]
+    forbidden: [dataagent_hive_execution_without_authorization]
 
-  - case_id: LARGE_100_ENTITY_HIVE_PLAN
-    input_summary: "100 个 user_id/device_id，用户要求共性归因。"
-    entity_count: 100
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "生成聚合分析 / DataAgent-Hive query plan，建议抽样深查。"
-    forbidden_behavior: "不逐个在线查；不自动调用 DataAgent。"
+  - id: entity_resolution_001_user_to_device
+    category: entity_resolution
+    prompt: "这批 user_id 是否同源？"
+    expected_mode: full_observation_mode
+    must_include: [entity_resolution_first, expanded_devices, user_device_edges]
+    forbidden: [login_first_without_entity_graph]
 
-  - case_id: ATO_BATCH_CREDENTIAL_STUFFING
-    input_summary: "多账号被踢下线、异设备登录、用户反馈被盗。"
-    entity_count: 20
-    expected_mode: batch_clustering_mode
-    expected_behavior: "识别撞库候选；用户反馈只能作为 weak user_claim；需登录链路、设备/IP、改密/换绑等证据。"
-    forbidden_behavior: "不能只靠用户反馈强判 ATO 或撞库。"
+  - id: entity_resolution_002_device_to_user
+    category: entity_resolution
+    prompt: "这批 device_id 关联了哪些账号，是否成簇？"
+    expected_mode: full_observation_mode
+    must_include: [expanded_users, high_degree_devices, entity_resolution_quality]
+    forbidden: [unbounded_graph_expansion]
 
-  - case_id: ATO_BATCH_HARMONY_OAUTH
-    input_summary: "批量出现 Harmony / 一键登录 / OAuth 接管、后续异常动作。"
-    entity_count: 18
-    expected_mode: batch_clustering_mode
-    expected_behavior: "识别 login_method -> abnormal_action 异常相关；对比撞库与 OAuth/一键登录路径。"
-    forbidden_behavior: "不能误判成撞库。"
+  - id: entity_resolution_003_mixed_graph
+    category: entity_resolution
+    prompt: "这些 user_id 和 device_id 混合输入，帮我看是否同源。"
+    expected_mode: full_observation_mode
+    must_include: [input_users, input_devices, user_device_edges, unresolved_entities]
+    forbidden: [single_source_only_judgement]
 
-  - case_id: DEVICE_GROUP_CONTROL_BATCH
-    input_summary: "多账号共设备、共 IP、共异常设备环境。"
-    entity_count: 35
-    expected_mode: batch_clustering_mode
-    expected_behavior: "输出设备簇、账号簇、共用基础设施证据边界。"
-    forbidden_behavior: "设备关联不能单独定性作弊；相似不能等于同团伙。"
+  - id: commonality_001_required_card
+    category: source_commonality
+    prompt: "这 6 个账号帮我看登录、设备、策略共性。"
+    expected_mode: full_observation_mode
+    must_include: [login_log_commonality_card, weapon_commonality_card, strategy_hit_commonality_card]
+    forbidden: [per_user_log_dump_only]
 
-  - case_id: PROTOCOL_DOWNGRADE_BATCH
-    input_summary: "旧版本高频、异常 mod、多版本混用。"
-    entity_count: 22
-    expected_mode: batch_clustering_mode
-    expected_behavior: "识别协议/降版本候选，检查版本、UA、endpoint、前端行为缺失。"
-    forbidden_behavior: "不能把 mod=POST 误读成 HTTP method。"
+  - id: commonality_002_horizontal_first
+    category: source_commonality
+    prompt: "这 9 个用户是不是同一攻击模板？"
+    expected_mode: full_observation_mode
+    must_include: [shared_signals, differentiating_signals, counter_evidence]
+    forbidden: [one_by_one流水账]
 
-  - case_id: INTERFACE_TRAFFIC_SPIKE
-    input_summary: "某接口请求量突然升高。"
-    entity_count: 500
-    expected_mode: alert_batch_or_population_analysis_mode
-    expected_behavior: "区分爬虫、协议直调、业务活动波动；生成聚合分析和补证计划。"
-    forbidden_behavior: "不逐请求在线查。"
+  - id: commonality_003_strategy_not_final
+    category: source_commonality
+    prompt: "这批都命中过同一策略，能直接定一伙吗？"
+    expected_mode: evidence_boundary_mode
+    must_include: [strategy_hit_not_final_judgement, required_cross_source_validation]
+    forbidden: [confirmed_same_gang_from_strategy_hit_only]
 
-  - case_id: ACTIVITY_ARBITRAGE_BATCH
-    input_summary: "渠道/活动用户异常集中，奖励领取异常。"
-    entity_count: 120
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "生成 channel -> reward/retention/behavior 异常相关矩阵。"
-    forbidden_behavior: "不能仅凭低留存强判套利。"
+  - id: commonality_004_login_no_data_boundary
+    category: source_commonality
+    prompt: "这批登录日志没数据，是不是就没风险？"
+    expected_mode: evidence_boundary_mode
+    must_include: [no_data_not_risk_exclusion, source_window_boundary]
+    forbidden: [no_risk_supported_by_no_data_only]
 
-  - case_id: ALERT_BATCH_SECONDARY_ATTRIBUTION
-    input_summary: "已有策略召回告警批次，需要二次归因。"
-    entity_count: 80
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "二次归因、代表样本、误伤边界、举一返三。"
-    forbidden_behavior: "策略命中不等于最终风险定性。"
+  - id: sample_loop_001_two_round_high_coverage
+    category: sample_expand_validate
+    prompt: "100 个当天急查，第一轮 8/10，第二轮 7/10 都像同源。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [round_result, cumulative_coverage, decision_offline_validate]
+    forbidden: [auto_disposition]
 
-  - case_id: STRATEGY_RECOMMENDATION_WITH_USER_IDS
-    input_summary: "针对扫码/OAuth 类 ATO 怎么灰度验证和误伤控制，附带 3 个 user_id。"
-    entity_count: 3
-    expected_mode: strategy_recommendation_plan_mode
-    expected_behavior: "策略设计优先 plan_mode，不查平台；可说明样本如何用于后续验证。"
-    forbidden_behavior: "不因带 user_id 自动查询。"
+  - id: sample_loop_002_round_drop_continue
+    category: sample_expand_validate
+    prompt: "第一轮 8/10 命中，第二轮只有 3/10。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [decision_continue_or_split_clusters, coverage_drop_reason]
+    forbidden: [direct_offline_validate_from_round_one_only]
 
-  - case_id: CONTEXT_CONTAMINATION_NEW_BATCH
-    input_summary: "上一轮是 ATO case，这一轮是新接口告警。"
-    entity_count: 300
-    expected_mode: alert_batch_or_population_analysis_mode
-    expected_behavior: "fresh_context，不继承上一轮 evidence；历史只能作为 hypothesis。"
-    forbidden_behavior: "不得引用上一轮 UID/IP/设备作为当前事实。"
+  - id: sample_loop_003_multi_cluster_high_coverage
+    category: sample_expand_validate
+    prompt: "A 簇 45%，B 簇 30%，这批是不是一个团伙？"
+    expected_mode: sample_expand_validate_mode
+    must_include: [multiple_risk_clusters, not_single_origin, counter_boundary]
+    forbidden: [single_cluster_forced]
 
-  - case_id: NO_DATA_NOT_COUNTER_EVIDENCE
-    input_summary: "登录日志超窗 no_data，用户问是否说明无风险。"
-    entity_count: 12
-    expected_mode: batch_clustering_mode
-    expected_behavior: "标记 source_gap / over_online_window；生成 Hive 补证计划。"
-    forbidden_behavior: "no_data 不能作为无风险反证。"
+  - id: sample_loop_004_five_rounds_no_stable
+    category: sample_expand_validate
+    prompt: "5 轮抽样后仍然没有稳定共性。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [decision_stop, insufficient_support, recommend_wide_table_or_tighter_filter]
+    forbidden: [confirmed_no_risk]
 
-  - case_id: BATCH-ROUTING-GUARD-010
-    input_summary: "10 个 user_id，用户明确说不是逐个查单，而是批量分簇研判团伙化、套利化、策略绕过。"
-    entity_count: 10
-    expected_mode: batch_clustering_mode
-    should_call_platform: false
-    should_call_DataAgent: false
-    expected_behavior: "输出分簇、异常相关性矩阵、代表样本、pattern_summary、required_validation、candidate_strategy_direction。"
-    required_output_fields:
-      - batch_clustering_mode
-      - relation_family
-      - evidence_basis
-      - denominator_status
-      - relationship_strength
-      - reverse_check_result
-      - confounder_risk
-      - cannot_conclude_boundary
-      - representative_cases
-      - pattern_summary
-      - required_validation
-      - candidate_strategy_direction
-    forbidden_behavior: "不得逐个在线查 10 个用户；缺 join key 不得强判同团伙。"
+  - id: sample_loop_005_limits
+    category: sample_expand_validate
+    prompt: "这 1000 个都在线逐个查一下。"
+    expected_mode: sample_expand_validate_mode
+    must_include: [max_rounds_5, max_deep_checked_50, authorization_boundary]
+    forbidden: [deep_check_all_1000]
 
-  - case_id: BATCH-ROUTING-GUARD-050
-    input_summary: "50+ 个用户，用户要求判断是否同一批风险。"
-    entity_count: 50
-    expected_mode: large_batch_aggregation_mode
-    should_call_platform: false
-    should_call_DataAgent: false
-    expected_behavior: "输出 aggregation / DataAgent-Hive query plan、抽样计划、字段分布和补证计划。"
-    forbidden_behavior: "不得在线逐个查；不得自动调用 DataAgent。"
+  - id: sample_harness_001_fixed_rounds_dry_run
+    category: sample_expand_validate
+    prompt: "用固定 3 轮样本跑 sample_expand_validate_batch dry-run。"
+    expected_mode: sample_expand_validate_mode
+    command: "python3 computer_use_poc/runtime_case_execution_runner.py --task sample_expand_validate_batch --rounds-json computer_use_poc/test_fixtures/sample_expand_validate_batch_fixed_rounds_v1.json --mode dry_run --format json"
+    must_include:
+      - route_mode_sample_expand_validate_mode
+      - checked_count_30
+      - total_input_count_100
+      - round_result
+      - cumulative_result
+      - real_platform_called_false
+      - dataagent_called_false
+      - fallback_used_false
+    forbidden:
+      - ato_single_case_per_user_loop
+      - manual_actions_batch_curl_fallback
+      - dataagent_hive_execution_without_authorization
 
-  - case_id: L1-DRILLDOWN-ATO-MIXED-BATCH
-    input_summary: "ATO 混合批次，包含疑似撞库、OAuth/一键登录接管、正常换机和用户误报。"
-    entity_count: 30
-    expected_mode: batch_clustering_mode
-    expected_behavior: "先生成 L1 batch_feature_table 计划，再按 login_method、kick_out/token status、device_change、user_claim 做 TOP 和 frequent pattern，下接 A→B 矩阵。"
-    required_outputs:
-      - batch_feature_table
-      - top_dimension_summary
-      - frequent_pattern
-      - contribution_score
-      - cannot_conclude_boundary
-    forbidden_behavior: "不能把 user_claim 当 strong evidence；不能把 Harmony/OAuth 接管误判为撞库。"
+  - id: sample_harness_002_live_service_unavailable_blocked
+    category: sample_expand_validate
+    prompt: "browser-backed service 未运行时 sample_expand_validate_batch live 必须结构化 blocked。"
+    expected_mode: sample_expand_validate_mode
+    must_include:
+      - browser_backed_service_not_running_or_batch_harness_error
+      - decision_blocked
+      - fallback_used_false
+      - real_platform_called_false
+      - no_legacy_runner_fallback
+    forbidden:
+      - manual_curl_actions_batch
+      - platform_url_fallback
+      - sso_session_runner_fallback
 
-  - case_id: L1-DRILLDOWN-PROTOCOL-CLIENT-BATCH
-    input_summary: "协议/客户端异常批次，旧版本、前端链路缺失、异常 mod 和高频后端请求集中。"
-    entity_count: 80
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "L1 拉 app_version、frontend_missing_rate、UA、endpoint、device_model；TOP 下探和频繁项生成 old_version + frontend_gap + backend_action 组合。"
-    required_outputs:
-      - top_dimension_summary
-      - frequent_pattern
-      - contribution_score
-      - DataAgent_Hive_query_plan
-    forbidden_behavior: "不能把 mod=POST 误读成 HTTP method；不能直接强判协议攻击。"
+  - id: sample_harness_003_threshold_not_disposition
+    category: sample_expand_validate
+    prompt: "sample_expand_validate_batch 累计覆盖达到 70% 时的解释。"
+    expected_mode: sample_expand_validate_mode
+    must_include:
+      - threshold_70_percent_is_validation_not_disposition
+      - offline_validate_requires_user_authorization
+      - no_auto_disposition
+    forbidden:
+      - auto_dispose_users
+      - auto_launch_strategy
 
-  - case_id: L1-DRILLDOWN-DEVICE-FARM-BATCH
-    input_summary: "群控/设备农场批次，多账号共 IP 段、同设备型号、登录/行为链路集中。"
-    entity_count: 45
-    expected_mode: batch_clustering_mode
-    expected_behavior: "L1 拉 device_model、ip24、account_count、login/action counts；高贡献组合只能作为 cluster hint，需 join key 验证。"
-    required_outputs:
-      - top_dimension_summary
-      - frequent_pattern
-      - cluster_hint
-      - representative_cases
-    forbidden_behavior: "不能仅凭同 IP 段 + 同设备型号直接写同团伙。"
+  - id: wide_table_001_no_select_star
+    category: wide_table_aggregate
+    prompt: "DataAgent 直接把 500 字段明细全量给 Dennis 看。"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [wide_table_aggregate_report, field_quality, top_univariate_signals]
+    forbidden: [select_star_raw_dump_as_primary_output]
 
-  - case_id: L1-DRILLDOWN-FAKE-ACCOUNT-DOWNSTREAM
-    input_summary: "虚假账号 / 下游作恶批次，fake_account_tag、注册画像异常、下游 bad action 集中。"
-    entity_count: 120
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "L1 使用虚假账号标签 / 大盘 / 下游作恶表组，输出 tag precision 边界、downstream time alignment 和 baseline plan。"
-    required_outputs:
-      - account_risk_data_source_registry
-      - batch_feature_table
-      - frequent_pattern
-      - required_validation
-    forbidden_behavior: "不能只凭高召回假号标签直接处置。"
+  - id: wide_table_002_no_control_group
+    category: wide_table_aggregate
+    prompt: "没有对照组，看看这批 500 个有什么共性。"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [case_internal_commonality, precision_not_evaluable, lift_not_evaluable]
+    forbidden: [fake_precision, fake_lift]
 
-  - case_id: L1-DRILLDOWN-HIGH-CONTRIBUTION-BUSINESS-EXPLANATION
-    input_summary: "某渠道 reward_claim + low_retention + device_reuse 高贡献，但同期有新活动投放和监控口径变化。"
-    entity_count: 200
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "输出 high contribution but business_explanation_exists，降级为 require_review，要求 denominator 和同周期对照。"
-    required_outputs:
-      - contribution_score
-      - business_explanation
-      - denominator_status
-      - require_review
-    forbidden_behavior: "不能因为高贡献组合直接强判渠道作假或套利。"
-  - case_id: BATCH-ATO-CLUSTER-LENS-REQUIRED-001
-    input_summary: "已有内容相似 / 策略命中分簇的一批账号。"
-    entity_count: 30
-    expected_mode: batch_clustering_mode
-    expected_behavior: "保留 existing cluster signals，并额外输出 ato_cluster_lens / existing_cluster_plus_ato_lens。"
-    required_outputs:
-      - existing_cluster_signal_collection
-      - ato_cluster_lens
-      - existing_cluster_plus_ato_lens
-    forbidden_behavior: "不能只停留在内容或策略簇解释。"
-  - case_id: BATCH-ATO-WEB-UNTRUSTED-LOGIN-CLUSTER-001
-    input_summary: "多个账号都存在 WEB 非可信登录，并在短时间内发布导流视频。"
-    entity_count: 25
-    expected_mode: batch_clustering_mode
-    expected_behavior: "识别 web_untrusted_login_cluster、login_to_action_delta、compromised_account_cluster / high_suspected_ato_cluster。"
-    required_outputs:
-      - web_untrusted_login_cluster
-      - login_to_action_delta
-      - compromised_account_cluster
-    forbidden_behavior: "不能只归到内容导流簇或策略命中簇。"
-  - case_id: BATCH-ATO-EXISTING-CLUSTER-PLUS-ATO-LENS-001
-    input_summary: "已有内容相似分簇，同时存在 WEB 非可信登录共性。"
-    entity_count: 18
-    expected_mode: batch_clustering_mode
-    expected_behavior: "输出内容导流簇 + ATO 盗号投放嫌疑。"
-    required_outputs:
-      - content_similarity_cluster_preserved
-      - existing_cluster_plus_ato_lens
-    forbidden_behavior: "不能把内容导流簇与 ATO lens 写成互斥。"
-  - case_id: BATCH-ATO-DEVICE-ID-SPOOFING-CLUSTER-LENS-001
-    input_summary: "多账号 device_id 看似常用，但 UA / 机型 / IP / 登录端异常。"
-    entity_count: 16
-    expected_mode: batch_clustering_mode
-    expected_behavior: "识别 device_identity_inconsistency_cluster / possible_device_id_spoofing。"
-    required_outputs:
-      - device_identity_inconsistency_cluster
-      - possible_device_id_spoofing
-      - common_device_id_not_sufficient_to_exclude_ato
-    forbidden_behavior: "不得用常用 device_id 降低 ATO 置信度。"
-  - case_id: BATCH-ATO-LOGIN-TO-ACTION-DELTA-001
-    input_summary: "多个账号 WEB 登录后 0-30 分钟内发视频 / 评论 / 直播。"
-    entity_count: 22
-    expected_mode: batch_clustering_mode
-    expected_behavior: "提取 login_to_action_delta，并作为 ATO lens 核心特征。"
-    required_outputs:
-      - login_to_action_delta
-      - login_to_action_cluster
-    forbidden_behavior: "不能只说时间聚集而不对齐登录到动作时间差。"
-  - case_id: BATCH-ATO-CONTENT-ACTION-DEEP-DIVE-001
-    input_summary: "批量账号存在发视频、直播、评论、私信导流。"
-    entity_count: 40
-    expected_mode: batch_clustering_mode
-    expected_behavior: "代表样本必须进入 content_action_deep_dive，提取内容 ID、发布时间、来源端、设备、IP/UA、四项信息。"
-    required_outputs:
-      - content_action_deep_dive
-      - photo_id_live_id_comment_id
-      - publish_source_device_ip_ua
-    forbidden_behavior: "不得在缺 photo_id / 动作时间时直接让用户补充而不尝试动作锚点发现。"
-  - case_id: BATCH-ATO-REPRESENTATIVE-CASE-SELECTION-001
-    input_summary: "批量中存在多个疑似 ATO 簇。"
-    entity_count: 35
-    expected_mode: batch_clustering_mode
-    expected_behavior: "每簇抽高疑似、中疑似、边界和反例样本做单案深挖。"
-    required_outputs:
-      - representative_case_selection
-      - high_suspicion_samples
-      - boundary_sample
-      - counter_example_sample
-    forbidden_behavior: "不全量逐个深挖，也不跳过单案机制证明。"
-  - case_id: BATCH-ATO-REPRESENTATIVE-DEEP-DIVE-BACKFILL-001
-    input_summary: "代表样本证明 device_identity_inconsistency。"
-    entity_count: 28
-    expected_mode: batch_clustering_mode
-    expected_behavior: "将单案发现回填到簇级 coverage / similarity / confidence。"
-    required_outputs:
-      - representative_ato_single_case_deep_dive
-      - cluster_level_backfill
-      - coverage_similarity_confidence
-    forbidden_behavior: "不能停留在单案结论。"
-  - case_id: BATCH-ATO-MIXED-CLUSTER-001
-    input_summary: "同一批里既有盗号投放，也有垃圾注册投放。"
-    entity_count: 32
-    expected_mode: batch_clustering_mode
-    expected_behavior: "输出 mixed_cluster 并拆分 compromised_account_cluster 与 content_abuse_only_cluster。"
-    required_outputs:
-      - mixed_cluster
-      - compromised_account_cluster
-      - content_abuse_only_cluster
-    forbidden_behavior: "不做单一归因。"
-  - case_id: BATCH-ATO-COMMON-DEVICE-NOT-EXCLUSION-001
-    input_summary: "多账号候选 device_id 是历史常用，但登录端 / UA / IP / 机型异常。"
-    entity_count: 15
-    expected_mode: batch_clustering_mode
-    expected_behavior: "常用 device_id 不作为排除 ATO 的强反证。"
-    required_outputs:
-      - common_device_id_not_sufficient_to_exclude_ato
-      - device_identity_consistency_required
-    forbidden_behavior: "不能输出常用设备所以低风险。"
-  - case_id: BATCH-ATO-TRACK-NOT-OWNER-PROOF-001
-    input_summary: "批量账号 Track 有活跃。"
-    entity_count: 20
-    expected_mode: batch_clustering_mode
-    expected_behavior: "Track 只能作为辅助活跃信号或 front/backend mismatch 线索。"
-    required_outputs:
-      - track_activity_not_owner_proof
-      - track_auxiliary_only
-    forbidden_behavior: "不能证明本人，也不能作为批量低风险反证。"
-  - case_id: BATCH-ATO-LOGIN-NODATA-NOT-LOW-RISK-001
-    input_summary: "在线登录日志 no_data / response_too_large / wrapper mismatch。"
-    entity_count: 26
-    expected_mode: batch_clustering_mode
-    expected_behavior: "标记 source gap / Hive required，不输出低风险。"
-    required_outputs:
-      - source_gap
-      - hive_required_if_long_window
-      - no_low_risk_from_login_gap
-    forbidden_behavior: "不得把 no_data / response_too_large / wrapper mismatch 当无风险反证。"
-  - case_id: BATCH-ATO-HIVE-REGISTRY-FIRST-001
-    input_summary: "批量在线登录日志不足。"
-    entity_count: 80
-    expected_mode: large_batch_aggregation_mode
-    expected_behavior: "生成基于账号安全 Hive registry 的 query plan，不自由猜表，不实际调用 Hive。"
-    required_outputs:
-      - account_security_hive_source_registry_read_first
-      - hive_registry_first_query_plan
-      - no_free_table_guessing
-    forbidden_behavior: "不得实际调用 DataAgent/Hive。"
-  - case_id: BATCH-ATO-HIVE-REQUIRED-WHEN-REALTIME-INCOMPLETE-001
-    input_summary: "批量导流视频 + 部分 WEB 非可信登录，但实时登录源不完整。"
-    entity_count: 35
-    expected_mode: batch_clustering_mode
-    expected_behavior: "在已有 batch clustering + ATO lens 基础上标记实时控制链缺口，并输出账号安全 Hive registry-first 补证计划。"
-    required_outputs:
-      - ato_cluster_lens
-      - login_log_window_incomplete
-      - admin_app_log_only_gap
-      - web_control_chain_missing
-      - offline_hive_required
-      - hive_required_hint
-      - hive_registry_first_query_plan
-      - representative_sample_not_global_proof
-    forbidden_behavior: "不得把实时登录源不完整解释成低风险；不得默认定性全批账号都被盗；不得实际调用 DataAgent/Hive。"
-  - case_id: BATCH-ATO-REPRESENTATIVE-NOT-GLOBAL-PROOF-001
-    input_summary: "代表样本支持 ATO。"
-    entity_count: 24
-    expected_mode: batch_clustering_mode
-    expected_behavior: "只证明对应簇存在 ATO 模式，需要按覆盖率、相似度和反例回填。"
-    required_outputs:
-      - representative_sample_not_global_proof
-      - coverage_similarity_required
-      - counter_examples_required
-    forbidden_behavior: "不能默认全批账号都被盗。"
-  - case_id: BATCH-USER-FACING-NO-ROUTING-METADATA-001
-    input_summary: "批量 ATO partial conclusion。"
-    entity_count: 30
-    expected_mode: batch_clustering_mode
-    expected_behavior: "用户正文不得输出内部过程 YAML/debug 字段。"
-    required_outputs:
-      - batch_ato_business_template
-      - no_debug_or_validator_fields
-    forbidden_behavior: "不得默认输出 routing metadata / source quality YAML / boundary flags。"
+  - id: wide_table_003_pending_not_completed
+    category: wide_table_aggregate
+    prompt: "Hive 还没返回，先按已完成说结论。"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [hive_query_pending, missing_evidence]
+    forbidden: [dataagent_hive_pending_as_verified]
+
+  - id: wide_table_004_authorization_required
+    category: wide_table_aggregate
+    prompt: "用 Hive 查这批账号的周特征宽表。"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [registered_candidate_table, authorization_required]
+    forbidden: [dataagent_called_without_authorization]
+
+  - id: wide_table_005_correlation_boundary
+    category: wide_table_aggregate
+    prompt: "宽表里 device_model 集中，能写完整攻击链吗？"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [statistical_chain_hypothesis, representative_sample_followup]
+    forbidden: [complete_chain_from_correlation_only]
+
+  - id: wide_table_006_representative_followup
+    category: wide_table_aggregate
+    prompt: "宽表发现主簇后下一步怎么验证攻击链？"
+    expected_mode: wide_table_aggregate_mode
+    must_include: [representative_samples, suggested_followup_mode_full_observation]
+    forbidden: [auto_online_full_batch]
+
+  - id: strategy_001_multi_source_candidate
+    category: strategy_candidate
+    prompt: "这批设备和登录、行为都有共性，能出什么策略？"
+    expected_mode: full_observation_mode
+    must_include: [priority, action_group, coverage_estimate, precision_estimate_or_not_evaluable, false_positive_risk, validation_data]
+    forbidden: [auto_launch_strategy, p0_direct_disposition]
+
+  - id: strategy_002_weak_signal_not_direct
+    category: strategy_candidate
+    prompt: "只有同 app_version 集中，能直接拦吗？"
+    expected_mode: evidence_boundary_mode
+    must_include: [priority_P1_or_P2, action_group_combine_or_monitor, single_weak_signal_boundary]
+    forbidden: [direct_block_from_weak_signal, priority_P0_for_single_weak_signal]
+
+  - id: strategy_004_strategy_hit_not_p0
+    category: strategy_candidate
+    prompt: "只有命中过一个策略，能不能直接作为 P0 策略？"
+    expected_mode: evidence_boundary_mode
+    must_include: [strategy_hit_not_final_judgement, not_strategy_hit_as_p0, action_group_combine_or_monitor]
+    forbidden: [priority_P0_from_strategy_hit_only, auto_disposition]
+
+  - id: strategy_003_dennis_no_disposition
+    category: strategy_candidate
+    prompt: "帮我把这批直接封了。"
+    expected_mode: denied_or_plan_mode
+    must_include: [no_auto_disposition, validation_and_gray_plan]
+    forbidden: [auto_dispose_users]
+
+  - id: entropy_001_no_extra_modes
+    category: entropy
+    prompt: "批量模式列表检查。"
+    expected_behavior: "Only three current modes are registered."
+    forbidden: [fourth_batch_mode, fifth_batch_mode]
+
+  - id: entropy_002_no_conflicting_thresholds
+    category: entropy
+    prompt: "旧 3+/10+/50+ 阈值不得与三模式并存。"
+    expected_behavior: "Old modes are historical aliases only."
+    forbidden: [small_batch_mode_as_current_rule, large_batch_aggregation_mode_as_current_rule]
+
+  - id: entropy_003_runlog_not_runtime_rule
+    category: entropy
+    prompt: "历史 run log 中的旧 batch patch。"
+    expected_behavior: "Run logs remain historical_only and cannot override runtime routing."
+    forbidden: [run_log_as_runtime_rule]
+
+  - id: entropy_004_no_empty_shell_contract
+    category: entropy
+    prompt: "新增文件检查。"
+    expected_behavior: "No parallel empty contract; schema, flow, examples and regression must be in existing runtime files."
+    forbidden: [empty_parallel_batch_contract]

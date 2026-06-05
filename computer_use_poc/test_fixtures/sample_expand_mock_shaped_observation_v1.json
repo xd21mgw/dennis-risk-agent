@@ -1,0 +1,130 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_shaped_business_observation",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "色导",
+    "黑产小号",
+    "内容导流",
+    "接口编排 Phase 3.1 mock"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "5523610476",
+        "5521017647",
+        "5523516661"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_photo_id": "mock_photo_5523610476_a",
+            "candidate_device_id": "mock_device_cluster_a",
+            "publish_time": "2026-05-31T10:15:00+08:00",
+            "content_template_signal": "template_profile_teaser_qr_like",
+            "content_type": "diversion_short_video"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_photo_id": "mock_photo_5521017647_a",
+            "candidate_device_id": "mock_device_cluster_a",
+            "publish_time": "2026-05-31T10:21:00+08:00",
+            "content_template_signal": "template_profile_teaser_qr_like",
+            "content_type": "diversion_short_video"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "5523516661",
+            "candidate_photo_id": "mock_photo_5523516661_a",
+            "candidate_device_id": "mock_device_cluster_b",
+            "publish_time": "2026-05-31T10:43:00+08:00",
+            "content_template_signal": "template_profile_teaser_qr_like",
+            "content_type": "diversion_short_video"
+          }
+        },
+        {
+          "source_id": "round_1_entity_1_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_device_id": "mock_device_cluster_a",
+            "login_ip": "10.24.31.8",
+            "login_ua": "MockBrowser/1.0 Android",
+            "network_signal": "same_asn_proxy_like",
+            "backend_action_signal": "publish_after_login"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_device_id": "mock_device_cluster_a",
+            "login_ip": "10.24.31.9",
+            "login_ua": "MockBrowser/1.0 Android",
+            "network_signal": "same_asn_proxy_like",
+            "backend_action_signal": "publish_after_login"
+          }
+        },
+        {
+          "source_id": "round_1_entity_1_strategy",
+          "action": "rcp_fast_query_hbase",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_policy_code": "mock_policy_content_diversion_matrix",
+            "candidate_event_id": "mock_event_5523610476",
+            "policy_hit_signal": "same_policy_family_recent_hit"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_strategy",
+          "action": "rcp_fast_query_hbase",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_policy_code": "mock_policy_content_diversion_matrix",
+            "candidate_event_id": "mock_event_5521017647",
+            "policy_hit_signal": "same_policy_family_recent_hit"
+          }
+        },
+        {
+          "source_id": "round_1_entity_1_track",
+          "action": "track_analysis_check_data_ready",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_device_id": "mock_device_cluster_a",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "publish_after_login",
+            "frontend_backend_consistency": "backend_action_frontend_weak"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_track",
+          "action": "track_analysis_check_data_ready",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_device_id": "mock_device_cluster_a",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "publish_after_login",
+            "frontend_backend_consistency": "backend_action_frontend_weak"
+          }
+        }
+      ]
+    }
+  ]
+}

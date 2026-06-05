@@ -41,7 +41,7 @@ readonly_safety_check: required
 
 - 在已登录档案中心 browser session 内，通过 same-origin fetch 直接 POST 成功。
 - 不需要导出 cookie / token / session。
-- 不需要额外 CSRF header。
+- 不需要额外 anti-forgery marker header。
 - response JSON 成功返回。
 - `data.totalCount` 返回总数。
 - `data.dataList` 返回列表。
@@ -185,7 +185,7 @@ never_output_raw：
 - KIM code
 - password
 - authorization
-- CSRF / XSRF
+- anti-forgery marker / anti-forgery marker
 - refresh_token
 - sig
 - open_id 明文

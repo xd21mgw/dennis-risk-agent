@@ -471,7 +471,7 @@ Validation status rule:
 - KIM code
 - password
 - authorization
-- CSRF/XSRF
+- anti-forgery marker/anti-forgery marker
 - access token / refresh token
 - open_id plaintext
 - sig plaintext

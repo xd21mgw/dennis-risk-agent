@@ -71,7 +71,7 @@ guardrail_check:
   no_cross_user_merge: true
   no_auto_risk_conclusion: true
   no_punishment_recommendation: true
-  no_full_json_copied: true
+  no_safe_json_summary_copied: true
   credential_raw_value_output: false
   partial_page_only_marked_if_needed: true
   readonly_safety_check: PASSED

@@ -1,0 +1,79 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 4,
+  "round_size": 4,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 4,
+  "sampling_method": "mock_anchor_competition",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "anchor_competition",
+    "content_device_strategy_network_social"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_user_a",
+        "mock_user_b",
+        "mock_user_c",
+        "mock_user_d"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_user_a",
+            "candidate_photo_id": "mock_photo_a",
+            "candidate_device_id": "mock_device_shared_a",
+            "candidate_policy_code": "mock_policy_shared_a",
+            "candidate_ip": "203.0.113.10",
+            "candidate_relation_anchor": "mock_relation_shared_a",
+            "content_template_signal": "same_template_a"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_user_b",
+            "candidate_photo_id": "mock_photo_b",
+            "candidate_device_id": "mock_device_shared_a",
+            "candidate_policy_code": "mock_policy_shared_a",
+            "candidate_ip": "203.0.113.11",
+            "candidate_relation_anchor": "mock_relation_shared_a",
+            "content_template_signal": "same_template_a"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "mock_user_c",
+            "candidate_photo_id": "mock_photo_c",
+            "candidate_device_id": "mock_device_shared_b",
+            "candidate_policy_code": "mock_policy_secondary",
+            "candidate_ip": "203.0.113.12",
+            "candidate_relation_anchor": "mock_relation_secondary",
+            "content_template_signal": "same_template_a"
+          }
+        },
+        {
+          "source_id": "round_1_entity_4_track",
+          "action": "track_analysis_check_data_ready",
+          "fields": {
+            "user_id": "mock_user_d",
+            "candidate_device_id": "mock_device_shared_b",
+            "candidate_policy_code": "mock_policy_secondary",
+            "candidate_ip": "203.0.113.13",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "backend_publish_signal",
+            "frontend_backend_consistency": "backend_action_frontend_weak"
+          }
+        }
+      ]
+    }
+  ]
+}

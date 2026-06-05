@@ -3,7 +3,7 @@
 | protected_asset_type | risk_request_type | current_protection_strategy | regression_case_coverage | release_minimization_coverage | current_limitations | next_todo |
 |---|---|---|---|---|---|---|
 | source code | direct source / full implementation request | deny_raw_extraction | AEG-001, AEG-012 | exclude development helper files unless runtime required | no runtime file-read interceptor yet | add runtime preflight for file read |
-| system / developer prompt | prompt extraction | deny_raw_extraction | AEG-003 | do not include raw prompts in semi-open package | prompt may be loaded in runtime memory | runtime refusal template |
+| system / developer 提示词 | prompt extraction | deny_raw_extraction | AEG-003 | do not include raw prompts in semi-open package | prompt may be loaded in runtime memory | runtime refusal template |
 | skill prompt/source | skill raw text request | deny_raw_extraction / degrade_to_outline | AEG-004, AEG-022 | replace with skill summary | runtime may require selected skill text | create runtime-safe skill summaries |
 | routing rules | raw routing export | deny_raw_extraction / summary only | AEG-005 | include runtime guard summary | some routing docs still detailed | split runtime summary vs dev docs |
 | capability registry | full registry export | degrade_to_outline | AEG-006 | include runtime-safe registry summary | current registry may be verbose | create minimized registry |

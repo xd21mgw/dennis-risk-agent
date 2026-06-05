@@ -150,7 +150,7 @@ v2.6.1 smoke-test 关键结果：
 
 敏感字段策略：
 
-- 不输出 cookie、token、tokenId、session、KIM code、password、authorization、CSRF/XSRF、access token / refresh token 明文。
+- 不输出 cookie、token、tokenId、session、KIM code、password、authorization、anti-forgery marker/anti-forgery marker、access token / refresh token 明文。
 - 不输出 open_id、sig、deviceId、IP、手机号明文。
 - 不输出完整 `requestParam` / `extraParam` / response JSON / video meta JSON / `userRouteTrace`。
 - 不输出完整私信内容、完整评论内容、关联用户 ID / 昵称 / device 明文、头像 / 背景 / 媒体 URL 明文。

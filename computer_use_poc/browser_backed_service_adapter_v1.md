@@ -141,7 +141,7 @@ The HAR inventory also tracks auxiliary actions that are intentionally not in th
 - `login_log_filter_options`: blocked until a safe HAR confirms a separate filter/config option path and response shape; current default remains `recallSource=2,0,1,3`.
 - `login_logs_search_page`: not a standalone action for the current `/rest/unified/log/search` contract because validated API responses can return the full current-window result and UI pagination is frontend-only.
 
-Current `browser-backed-api-poc` parity note: the adjacent service action registry now reports `action_count=37` in live smoke, including Archives photo detail, login log `json_array_capped`, RCP governance helpers, and Track auxiliary discovery actions. Registration parity does not imply default routing: every action still requires an explicit source plan, and no caller-provided URL/path/header/cookie/token/session input is accepted.
+Current `browser-backed-api-poc` parity note: the adjacent service action registry now reports `action_count=70` in `ACTION_REGISTRY.md` and `src/actions.js`, including Archives profile / analysis / photo / live / fans / follow / collect / comment / private message / report / four-items interfaces, login log `json_array_capped`, RCP event / feature / policy / policy-tree / attribution helpers, and Track sequence device / duration / profile / readiness / parameter discovery interfaces. Registration parity does not imply default routing: every interface still requires an explicit source plan, dependency anchor, cap, and stop reason; no caller-provided URL/path/header/cookie/token/session input is accepted. Dennis maps these service actions as business interfaces through `interface_orchestration_contract_v1.md` and `browser_backed_interface_asset_table_v1.yaml`, not as 70 default call nodes.
 
 ## Controlled Parallel Batch Contract
 
@@ -345,7 +345,7 @@ forbidden_input_keys:
 
 Pure passthrough service responses are expected to contain the envelope fields defined above: action/source identity, platform, HTTP/content metadata, body presence and truncation, observed byte count, elapsed time, transport/platform/parameter/timeout/auth redirect signals, and raw body handling. Batch responses additionally contain `batch_status`, `source_results`, `transport_status_matrix`, and `missing_or_failed_sources`.
 
-Dennis must not persist or display raw response full bodies. `output_scope` defaults to `internal_risk_review`; callers may request `external_share` when the evidence card is meant for sharing outside internal risk review.
+Dennis must not persist or display source response summary full bodies. `output_scope` defaults to `internal_risk_review`; callers may request `external_share` when the evidence card is meant for sharing outside internal risk review.
 
 ## Dennis-Generated Output
 
@@ -816,7 +816,7 @@ partial_evidence_card:
   no_data_not_risk_exclusion: true
 ```
 
-The adapter does not persist raw response full bodies, raw login records full dumps, raw `labelInfo`, or raw `originalLog`. It relies on pure passthrough envelope fields, transport metadata, capped body snippets, and Dennis-generated local observations/source quality. Compact risk entity identifiers follow `output_scope`.
+The adapter does not persist source response summary full bodies, raw login records full dumps, raw `labelInfo`, or raw `originalLog`. It relies on pure passthrough envelope fields, transport metadata, capped body snippets, and Dennis-generated local observations/source quality. Compact risk entity identifiers follow `output_scope`.
 
 ## Evidence Display Summary
 

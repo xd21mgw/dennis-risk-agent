@@ -1,0 +1,100 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 20,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 2,
+  "max_deep_checked_this_run": 6,
+  "sampling_method": "mock_rolling_anchor_summary",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "rolling_batch_anchor_summary",
+    "stable_dropped_new_anchor_delta"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "rolling_user_a",
+        "rolling_user_b",
+        "rolling_user_c"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "rolling_user_a",
+            "candidate_photo_id": "rolling_photo_a",
+            "candidate_device_id": "rolling_shared_device",
+            "candidate_policy_code": "rolling_policy_old",
+            "content_template_signal": "rolling_template_a"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "rolling_user_b",
+            "candidate_photo_id": "rolling_photo_b",
+            "candidate_device_id": "rolling_shared_device",
+            "candidate_policy_code": "rolling_policy_old",
+            "content_template_signal": "rolling_template_a"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_profile",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "rolling_user_c",
+            "candidate_device_id": "rolling_device_only_round1",
+            "candidate_policy_code": "rolling_policy_side",
+            "content_template_signal": "rolling_template_b"
+          }
+        }
+      ]
+    },
+    {
+      "round_id": 2,
+      "sampled_entities": [
+        "rolling_user_d",
+        "rolling_user_e",
+        "rolling_user_f"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_2_entity_1_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "rolling_user_d",
+            "candidate_photo_id": "rolling_photo_new",
+            "candidate_device_id": "rolling_shared_device",
+            "candidate_policy_code": "rolling_policy_new",
+            "content_template_signal": "rolling_template_a"
+          }
+        },
+        {
+          "source_id": "round_2_entity_2_photo",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "rolling_user_e",
+            "candidate_photo_id": "rolling_photo_new",
+            "candidate_device_id": "rolling_shared_device",
+            "candidate_policy_code": "rolling_policy_new",
+            "content_template_signal": "rolling_template_a"
+          }
+        },
+        {
+          "source_id": "round_2_entity_3_profile",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "rolling_user_f",
+            "candidate_device_id": "rolling_device_only_round2",
+            "candidate_policy_code": "rolling_policy_new",
+            "content_template_signal": "rolling_template_c"
+          }
+        }
+      ]
+    }
+  ]
+}

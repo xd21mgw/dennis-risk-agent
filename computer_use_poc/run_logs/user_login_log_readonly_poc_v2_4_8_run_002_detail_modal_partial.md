@@ -78,8 +78,8 @@ detail_modal:
     userIp: present_redacted
     userIpv6: present_redacted
     serverIp: present_redacted
-    token: never_collect
-    session: never_collect
+    token field  never_collect
+    session field  never_collect
     ticket: never_collect
     params: key_presence_only_if_needed
 ```
@@ -103,7 +103,7 @@ page_stability:
 ```yaml
 readonly_safety_check: PASSED
 unsafe_actions_avoided:
-  - copy_full_json
+  - copy_safe_json_summary
   - export
   - batch_download
   - mutation_or_enforcement

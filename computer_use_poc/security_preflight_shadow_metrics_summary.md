@@ -37,7 +37,7 @@ Shadow 阶段指标用于观察 preflight policy 在真实或模拟 tool-call �
 - false positive 可接受，且有人工复核与 policy 修正规则。
 - redaction gap 已修复，输出层可稳定执行脱敏。
 - `require_approval` 默认阻断策略明确，不能当作 allow。
-- audit_event 不包含 cookie / token / session / storageState / raw response。
+- audit_event 不包含 cookie / token / session / browser_storage_state_marker / source response summary。
 - shadow mode 覆盖正常只读、批量扩散、直接指定底层工具、任意 URL / JS、prompt exfiltration、系统逻辑修改和敏感字段请求。
 
 ## 4. 模拟汇总表

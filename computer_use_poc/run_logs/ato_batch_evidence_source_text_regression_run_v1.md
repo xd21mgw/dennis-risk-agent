@@ -32,7 +32,7 @@ expected_behavior:
 
 - 可以形成 medium / strong support。
 - 必须展示每条证据来源。
-- normalized_evidence 必须包含 `source_name`、`source_type`、`source_tool_or_hand`、`source_platform`、`collected_at`、`evidence_time_range`、`raw_result_reference`。
+- normalized_evidence 必须包含 `source_name`、`source_type`、`source_tool_or_hand`、`source_platform`、`collected_at`、`evidence_time_range`、`source_result_reference`。
 
 simulated_output_summary:
 
@@ -47,7 +47,7 @@ normalized_evidence:
     source_platform: user_login_unified_log
     collected_at: simulated_2026-05-21T10:00:00+08:00
     evidence_time_range: simulated_event_window
-    raw_result_reference: safe_ref://src_case_001/login
+    source_result_reference: safe_ref://src_case_001/login
     freshness_notes: within_reliable_window
     permission_notes: success
   - evidence_id: ev_device_001
@@ -59,7 +59,7 @@ normalized_evidence:
     source_platform: weapon
     collected_at: simulated_2026-05-21T10:02:00+08:00
     evidence_time_range: current_device_profile
-    raw_result_reference: safe_ref://src_case_001/device
+    source_result_reference: safe_ref://src_case_001/device
     freshness_notes: current_profile
     permission_notes: success
   - evidence_id: ev_claim_001
@@ -71,7 +71,7 @@ normalized_evidence:
     source_platform: none
     collected_at: simulated_2026-05-21T09:50:00+08:00
     evidence_time_range: user_reported_window
-    raw_result_reference: safe_ref://src_case_001/manual
+    source_result_reference: safe_ref://src_case_001/manual
     freshness_notes: user_claim_only
     permission_notes: not_applicable
 ```

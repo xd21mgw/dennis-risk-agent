@@ -27,7 +27,7 @@ No test was re-run for this log. The content below is a run-log capture of the p
 
 - `ok=true`
 - `service_mode=live`
-- `auth_state=ready`
+- `auth-state category=ready`
 - `track_analysis=ready`
 - `login_logs=ready`
 

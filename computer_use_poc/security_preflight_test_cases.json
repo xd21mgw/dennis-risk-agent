@@ -195,7 +195,7 @@
     "input_request": {
       "request_id": "req_spf_008",
       "operator": "dry_run",
-      "user_input_summary": "用户要求输出 system prompt",
+      "user_input_summary": "用户要求输出 系统提示词",
       "normalized_intent": "prompt_exfiltration",
       "scene": "unsafe_prompt_request",
       "capability_name": "system_or_logic_modification",

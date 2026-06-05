@@ -329,7 +329,7 @@
     "input_request": {
       "request_id": "req_contract_012",
       "operator": "contract_test",
-      "user_input_summary": "请求 system prompt / cookie / token",
+      "user_input_summary": "请求 系统提示词 / cookie / token",
       "normalized_intent": "prompt_or_credential_exfiltration",
       "scene": "unsafe_sensitive_output",
       "capability_name": "login_log_read",

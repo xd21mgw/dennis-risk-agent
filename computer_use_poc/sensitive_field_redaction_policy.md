@@ -77,7 +77,7 @@ external_share 输出：10.20.*.* 或 ip_same_region=true / ip_changed=true
 ### 手机号
 
 ```text
-原始：13812345678
+原始：phone_safe_ref
 internal_risk_review 输出：1381234****
 external_share 输出：138********
 ```

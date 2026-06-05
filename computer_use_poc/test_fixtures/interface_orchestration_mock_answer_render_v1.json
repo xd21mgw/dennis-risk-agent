@@ -1,0 +1,100 @@
+{
+  "schema_version": "interface_orchestration_mock_answer_render_v1",
+  "artifact_consumption": {
+    "base_summary_card": true,
+    "candidate_anchor_pool": true,
+    "drilldown_evidence_card": true,
+    "commonality_matrix": true,
+    "relation_expansion_result": true,
+    "group_profile_candidate": true,
+    "validation_plan": true,
+    "final_evidence_card": true
+  },
+  "rendered_answer_sections": {
+    "input_recognition": "一、输入识别：本轮是 sample_expand_validate_mode，seed_entity 为一批 user_id，禁止 70 action 笛卡尔积。",
+    "base_summary": "二、基础摘要：已消费 base_summary_card，基础接口只做低成本 anchor discovery，不把 no_data/skipped/timeout 当作反证。",
+    "candidate_anchors": "三、候选锚点：已消费 candidate_anchor_pool，包含 current_observation 产生的 device/content/strategy anchor。",
+    "drilldown": "四、追踪下钻：已消费 drilldown_evidence_card；本 fixture 只输出 planned/not_executed，未启动真实接口。",
+    "cross_domain_commonality": "五、交叉共性：已消费 commonality_matrix；expert signal 只作为 hypothesis/signal input，不能替代当前证据。",
+    "relation_expansion": "六、关联扩散：已消费 relation_expansion_result；扩散有 entity_cap 和 stop_reason，不做全图扫描。",
+    "group_profile_candidate": "七、团伙候选：已消费 group_profile_candidate；group_profile_candidate 不等于 confirmed_group，当前只能是候选。",
+    "validation": "八、补证验证：已消费 validation_plan；DataAgent/Hive 未完成取数，不能写成已验证。",
+    "judgement_output": "九、研判输出：已消费 final_evidence_card；缺口进入 missing_evidence，no_data/skipped/timeout/missing_contract 不是反证。"
+  },
+  "orchestration_artifacts_excerpt": {
+    "candidate_features": [
+      {
+        "feature_name": "multi_domain_anchor_overlap_candidate",
+        "source_domains": ["device_domain", "content_domain", "strategy_domain"],
+        "supporting_current_evidence": ["content_action_anchor_business_fields_extracted"],
+        "supporting_selected_anchors": ["mock_device_shared_a", "mock_photo_a", "mock_policy_a"],
+        "unselected_signal_hypothesis": false,
+        "signal_inputs": [
+          {
+            "evidence_source": "current_observation",
+            "signals": ["content_action_anchor_business_fields_extracted"],
+            "supporting_selected_anchors": ["mock_device_shared_a", "mock_photo_a", "mock_policy_a"],
+            "usage_boundary": "supports_candidate_feature_only_not_final_conclusion"
+          }
+        ],
+        "hypothesis_inputs": [
+          {
+            "evidence_source": "expert_hypothesis",
+            "signal": "small account matrices may share device/content/strategy anchors",
+            "usage_boundary": "expert_hypothesis_only_not_current_evidence"
+          }
+        ],
+        "expert_risk_signal_input": {
+          "compatibility_alias_only": true,
+          "usage_boundary": "compatibility_alias_for_hypothesis_inputs_only_not_evidence"
+        },
+        "confidence": "medium_partial",
+        "validation_needed": true,
+        "false_positive_risk": "medium_high_until_validation",
+        "not_final_conclusion": true
+      }
+    ],
+    "group_profile_candidate": {
+      "representative_entities": ["seed_entity_1", "seed_entity_2"],
+      "shared_domains": ["device_domain", "content_domain", "strategy_domain"],
+      "shared_signals": [
+        {
+          "signal_name": "batch_device_anchor",
+          "evidence_source": "current_observation",
+          "commonality_type": "anchor_commonality",
+          "commonality_anchor": true,
+          "eligible_for_group_candidate": true,
+          "not_final_conclusion": true
+        }
+      ],
+      "supporting_selected_anchors": ["mock_device_shared_a", "mock_policy_a"],
+      "supporting_selected_batch_anchors": ["mock_device_shared_a", "mock_policy_a"],
+      "context_selected_anchors": ["mock_photo_a"],
+      "supporting_anchor_boundary": "supporting_selected_batch_anchors can support group candidate; context_selected_anchors are explanatory only",
+      "missing_evidence": ["validation_layer_required"],
+      "confidence": "medium_partial",
+      "not_confirmed_as_group": true,
+      "required_validation": ["coverage_replay", "counter_sample_check"]
+    },
+    "validation_plan": {
+      "validation_goal": "validate coverage and false-positive risk",
+      "required_data": ["wide_table_aggregate_report", "control_group"],
+      "dataagent_or_hive_required": true,
+      "authorization_required": true,
+      "expected_output": "coverage_and_false_positive_report",
+      "validation_status": "planned"
+    },
+    "final_evidence_card": {
+      "strong_evidence": [],
+      "medium_evidence": ["content_action_anchor_business_fields_extracted"],
+      "weak_evidence": [],
+      "counter_evidence": [],
+      "missing_evidence": ["validation_layer_not_executed", "source_gap_not_closed"],
+      "source_quality": {
+        "not_executed": ["planned_l2_drilldown"],
+        "boundary": ["no_data_skipped_timeout_missing_contract_not_low_risk_counter_evidence"]
+      },
+      "boundary": ["not_final_conclusion", "not_confirmed_as_group"]
+    }
+  }
+}

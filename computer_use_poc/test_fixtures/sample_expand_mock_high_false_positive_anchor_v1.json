@@ -1,0 +1,71 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 4,
+  "round_size": 4,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 4,
+  "sampling_method": "mock_high_false_positive_anchor",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "high_false_positive_anchor",
+    "ip_social_downrank"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_fp_user_a",
+        "mock_fp_user_b",
+        "mock_fp_user_c",
+        "mock_fp_user_d"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "mock_fp_user_a",
+            "candidate_device_id": "mock_fp_device_shared",
+            "candidate_ip": "198.51.100.10",
+            "candidate_relation_anchor": "mock_fp_relation_a",
+            "network_signal": "shared_public_proxy_like",
+            "backend_action_signal": "comment_after_login"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "mock_fp_user_b",
+            "candidate_device_id": "mock_fp_device_shared",
+            "candidate_ip": "198.51.100.11",
+            "candidate_relation_anchor": "mock_fp_relation_b",
+            "network_signal": "shared_public_proxy_like",
+            "backend_action_signal": "comment_after_login"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_social",
+          "action": "archives_follow_list",
+          "fields": {
+            "user_id": "mock_fp_user_c",
+            "candidate_relation_anchor": "mock_fp_relation_c",
+            "candidate_ip": "198.51.100.12",
+            "frontend_activity_signal": "normal_frontend_activity"
+          }
+        },
+        {
+          "source_id": "round_1_entity_4_social",
+          "action": "archives_fans_list",
+          "fields": {
+            "user_id": "mock_fp_user_d",
+            "candidate_relation_anchor": "mock_fp_relation_d",
+            "candidate_ip": "198.51.100.13",
+            "frontend_activity_signal": "normal_frontend_activity"
+          }
+        }
+      ]
+    }
+  ]
+}

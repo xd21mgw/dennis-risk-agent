@@ -18,7 +18,7 @@ Semi-open release packages should not include:
 - full asset extraction regression case library
 - raw internal platform screenshots
 - auth state files
-- cookie / token / session / storageState
+- cookie / token / session / browser_storage_state_marker
 - local temporary files
 - unredacted observation raw text
 - unnecessary development helper source files
@@ -78,7 +78,7 @@ Semi-open release packages may include:
 Before packaging:
 
 1. Run asset minimization checklist.
-2. Verify no auth state, cookie, token, session, storageState or headers.
+2. Verify no auth state, cookie, token, session, browser_storage_state_marker or headers.
 3. Verify no full case library / test suite.
 4. Verify no full run log dump.
 5. Verify only selected redacted readiness logs are included.

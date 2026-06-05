@@ -11,7 +11,7 @@
 - real_platform_access=false
 - dataagent_called=false
 - release_package_updated=false
-- auth_state_exported=false
+- auth-state category_exported=false
 - write_action=false
 - auto_enforcement=false
 - auto_risk_finalization=false

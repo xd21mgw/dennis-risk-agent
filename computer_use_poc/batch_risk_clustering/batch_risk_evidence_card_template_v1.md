@@ -113,4 +113,4 @@ required_followup:
 
 - Do not output cookie / token / session / header / phone / API key.
 - UID / DID / IP can be internal risk analysis entity fields, but cross-team output should use safe_ref or aggregation.
-- raw_reference must be a safe internal reference, not raw response.
+- raw_reference must be a safe internal reference, not source response summary.

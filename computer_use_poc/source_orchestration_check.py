@@ -1161,11 +1161,11 @@ def validate_matrix(
                     }
                 )
 
-    if names == {"user_login_unified_log"}:
+    if names in ({"user_login_unified_log"}, {"login_logs_search"}):
         failures.append(
             {
                 "rule": "login_log_only_cannot_conclude",
-                "reason": "login log only is not enough for single-user account security / ATO judgement",
+                "reason": "login_logs_search only is not enough for single-user account security / ATO judgement",
             }
         )
 

@@ -373,7 +373,7 @@ unified_log_api_pagination_discovery:
 字段输出分层：
 
 - IP / UID / DID / deviceId 是风控实体字段，不默认等同 P0 credential leakage。
-- token / cookie / session / password / authorization / storageState / header 等认证凭证明文才是 P0 credential class。
+- token / cookie / session / password / authorization / browser_storage_state_marker / header 等认证凭证明文才是 P0 credential class。
 - KIM E2E / runtime validation 必须按 `field_output_classification_policy_v1.md` 判定，不得用 `no_sensitive_plaintext` 一刀切覆盖所有风控实体字段。
 
 ### 2.0.-4 tianshi_strategy_hit_observation
@@ -1023,25 +1023,25 @@ user_login_unified_log:
     visible_json_keys:
     key_count:
     credential_fields:
-      token:
-      session:
+      token field
+      session field
       ticket:
-      authorization:
-      refresh_token:
-      access_token:
+      authorization field
+      refresh_token_field:
+      access_token_field:
   multi_account_login_detail_observation:
     validation_status: validated
     perspective: client_login_environment
     representative_json_keys:
     key_count:
     credential_fields:
-      token:
-      loginToken:
-      session:
+      token field
+      login_credential_field:
+      session field
       ticket:
-      authorization:
-      refresh_token:
-      access_token:
+      authorization field
+      refresh_token_field:
+      access_token_field:
     risk_entity_identifier_fields:
       tokenId:
 ```
@@ -1244,13 +1244,13 @@ user_login_unified_log:
         - ticket
         - authorization
         - cookie
-      current_refreshToken_sample:
-        token: absent
-        session: absent
+      current_refresh_credential_sample:
+        token field  absent
+        session field  absent
         ticket: absent
-        authorization: absent
-        refreshToken: absent
-        accessToken: absent
+        authorization field  absent
+        refresh_credential_field: absent
+        access_credential_field: absent
 ```
 
 解释规则：

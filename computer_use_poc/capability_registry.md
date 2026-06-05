@@ -22,7 +22,7 @@
 全局输出字段分层：
 
 - 所有 capability 的输出必须遵守 `computer_use_poc/field_output_classification_policy_v1.md`。
-- token / cookie / session / password / authorization / storageState / header 等认证凭证明文永远不得明文输出。
+- token / cookie / session / password / authorization / browser_storage_state_marker / header 等认证凭证明文永远不得明文输出。
 - IP / UID / DID / deviceId / requestId / sourceId / strategyId / adminaction 等是风控实体字段；内部可信分析可作为 evidence card、pattern summary、case table 的分析实体，KIM 半开放和跨团队分享需按受众范围选择原值、safe_ref、partial mask、count 或 distribution。
 - `tokenId` 若只是事件标识符，不等于 token secret；`internal_risk_review` 默认作为风险实体锚点保留，`external_share` 再按受众策略脱敏。
 - `no_sensitive_plaintext` 不能一刀切覆盖所有风控实体字段；KIM E2E / runtime validation 必须按字段分层判定。
@@ -48,8 +48,8 @@
 | `universal_risk_evidence_workflow` | 把单案和批量风险研判统一到“实时 source 优先 -> 证据链闭合检查 -> partial/missing evidence -> 分场景离线补证计划 -> 必要时分簇扩展”的 Dennis 大脑工作模式 | `source_orchestration_plan_v1.yaml`、`multi_entry_runtime_guard_v1.md`、runtime summaries、answer templates | orchestration contract | documented | 不新增平台 action，不默认查 Hive/DataAgent，不把 ATO/Hive 登录表口径泛化成唯一补证路径；source_quality 边界适用于所有风险场景 |
 | `multi_evidence_orchestration_contracts` | 综合风险研判时编排天狮、登录日志、档案中心等多源证据，输出 evidence summary | `computer_use_poc/multi_evidence_orchestration_contracts/` | planner / template only | documented | 不新增真实查询，不因单源强证据给 definitive conclusion |
 | `batch_analysis_framework` | 抽象不同 batch 场景共用流程：registry、evidence card、pattern summary、missing evidence、strategy draft | `eval/dennis_risk_agent_skills_v2_2_tested/batch_analysis_framework_v1.md` | framework only | documented | 不是执行能力，不调用 DataAgent / 平台，不自动上线策略 |
-| `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 做分簇、异常相关性矩阵、代表样本抽样、证据缺口和策略建议 | `computer_use_poc/batch_risk_clustering/` templates | batch_plan_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙 |
-| `batch_ato_cluster_lens` | 在已有 batch clustering 之上叠加 compromised-account / ATO 盗号投放 lens，识别 WEB 非可信登录、login_to_action_delta、设备身份漂移、代表样本单案深挖和簇级回填 | `computer_use_poc/batch_risk_clustering/batch_ato_cluster_lens_v1.md` | batch_clustering_mode overlay | documented | 不是从零分簇，不逐用户 for-loop，不把代表样本无脑泛化到全批；实时登录 / 控制链不完整时只生成账号安全 Hive registry-first 补证计划，不调用 DataAgent/Hive |
+| `batch_risk_clustering_analysis` | 对一批 user/device/event/interface/channel/alert case 按三模式做 entity graph、source commonality / wide-table statistics、多源融合、分簇、攻击链和策略候选 | `computer_use_poc/batch_risk_clustering/` templates | full_observation_mode / sample_expand_validate_mode / wide_table_aggregate_mode | documented | 不默认逐个在线查大批量实体，不自动调用 DataAgent，不基于相似性直接判断同团伙；策略候选必须同时输出 priority 与 action_group，P0 仅表示可进入受控灰度验证 |
+| `batch_ato_cluster_lens` | 在三模式 batch judgement 之上叠加 compromised-account / ATO 盗号投放 lens，识别 WEB 非可信登录、login_to_action_delta、设备身份漂移、代表样本单案深挖和簇级回填 | `computer_use_poc/batch_risk_clustering/batch_ato_cluster_lens_v1.md` | overlay on current three-mode batch analysis | documented | 不是从零分簇，不逐用户 for-loop，不把代表样本无脑泛化到全批；实时登录 / 控制链不完整时只生成账号安全 Hive registry-first 补证计划，不调用 DataAgent/Hive |
 | `batch_case_analysis` | 对 5-20 个 ATO case 做半自动归因、证据卡聚合、模式总结、缺口识别和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/19_ato_batch_case_management/` templates | 5-20 cases offline template analysis | mvp_template_ready | 不调用真实 DataAgent，不自动上线策略，不自动处置 |
 | `ato_case_expansion_planning` | 对单个或少量 ATO case 设计举一返三扩展路径和 Hive 取数问题 | `ato_case_expansion_plan_v1.md` | plan only | documented | 围绕账号控制权异常和攻击链路扩展，不按昵称/简介扩展，不执行真实查询 |
 | `black_market_account_matrix_batch_analysis` | 对黑产账号矩阵 / 导流互动 / 互粉互动 / 养号账号池做批量归因和候选策略方向 | `eval/dennis_risk_agent_skills_v2_2_tested/20_black_market_account_matrix_batch/` templates | small batch offline template analysis | mvp_template_ready | 不是 ATO，不调用真实 DataAgent，不自动上线策略 |
@@ -124,7 +124,7 @@
   - ATO single-case realtime P0：`browser_backed_fixed_actions_v1` 在 ATO 裸问中必须先收集登录 / 档案画像 / 档案用户分析 / 作品发布 / Track readiness 五类实时 P0 source，再由 Dennis 从多源观察中推导可疑锚点、候选控制端、`device_identity_consistency` 和历史基线。不能把 `suspicious_anchor_discovery` 当独立 source，也不能把 Track / RCP / Weapon / 登录日志 / 档案中心平铺 source 状态当成 ATO 研判主线。
   - ATO suspicious source priority：登录链路和内容 / 行为链路是可疑来源发现主入口；Track / Weapon / RCP 是补证 source。在线统一登录日志不可用、窗口不足、admin 侧仅 APP 日志、WEB/H5/PC/token/OAuth/扫码链路缺失、`response_too_large` 或 UI/wrapper 不一致时，只能生成基于 `account_security_hive_source_registry_v1.md` 的 Hive query plan，等待用户逐次授权，不得让 DataAgent 自由猜表。
   - `device_identity_consistency` 是 ATO 设备判断能力：比较 `device_id`、首次出现、30/90/180 天出现天数、机型、系统、app 版本、UA、browser fingerprint、IP/省市/ASN、登录端和登录方式。风险标签包括 `device_identity_inconsistency`、`possible_device_id_spoofing`、`common_device_id_but_abnormal_fingerprint`、`common_device_id_not_sufficient_to_exclude_ato`。
-  - browser-backed action contract v1 live-smoke extension：Dennis registry 消费 service `action_count=37` 中的新只读 actions，但不改变 `default_runtime_routing=false`。Archives content forensics：`archives_photo_profile`、`archives_photo_meta`、`archives_photo_report_aggregate`、`archives_photo_user_autonomy`、`archives_gallery_photo_list`；ATO 已有 `photo_id` 且发布事实链缺 `publish_source` / `publish_device` / `publish_ip_ua` 时，规划 `archives_photo_profile + archives_photo_meta` 作为 auth-sensitive next-hop。Login logs：`login_logs_search` 支持 `raw_body_handling=json_array_capped` / `capped_json_path=data.logSearchModels` / `observed_records` / `returned_records` / `missing_records` / `cap_reason=byte_limit`，Dennis 只把 returned records 当 partial evidence。RCP governance：`rcp_event_tree_or_decision`、`rcp_fast_query_hbase`、`rcp_feature_info_by_keys`、`rcp_policy_basic_info`、`rcp_relation_policy_tree`、`rcp_policy_binding_info_list`、`rcp_policy_search`、`rcp_policy_blur_search`、`rcp_policy_all_version`、`rcp_pipeline_policy_versions_by_code` 只在策略命中解释、策略治理、误伤复核或 event/policy anchor 已存在时规划，不进入普通 ATO 默认主链。Track auxiliary：`track_analysis_product_list`、`track_sequence_dimension_list`、`track_data_type_list` 只用于参数发现 / 字段解释，不进入风险结论链。
+  - browser-backed interface contract v1 phase1：Dennis registry 消费相邻 service `ACTION_REGISTRY.md` / `src/actions.js` 中的当前 `action_count=70` registered interfaces，但不改变 `default_runtime_routing=false`。业务命名统一称为“接口”，不把 70 个接口直接作为 70 个默认调用节点；按 `computer_use_poc/interface_orchestration_contract_v1.md` 和 `computer_use_poc/browser_backed_interface_asset_table_v1.yaml` 的业务观察域、调用角色和依赖锚点编排。Archives 已扩展到 profile / analysis / photo / live / fans / follow / collect / comment / private message / report / four-items 等接口；RCP 已扩展到 event / feature / policy / policy tree / attribution / governance 接口；Track 已扩展到 sequence device ids / use duration / profile / readiness / parameter discovery。ATO 已有 `photo_id` 且发布事实链缺 `publish_source` / `publish_device` / `publish_ip_ua` 时，规划 `archives_photo_profile + archives_photo_meta` 作为 auth-sensitive next-hop。Login logs：`login_logs_search` 支持 `raw_body_handling=json_array_capped` / `capped_json_path=data.logSearchModels` / `observed_records` / `returned_records` / `missing_records` / `cap_reason=byte_limit`，Dennis 只把 returned records 当 partial evidence。RCP governance 接口只在策略命中解释、策略治理、误伤复核或 event/policy anchor 已存在时规划，不进入普通 ATO 默认主链。Track parameter interfaces 只用于参数发现 / 字段解释，不进入风险结论链。
   - Track 表述：当前 v1 裸问优先写 `track_analysis_check_data_ready / Track 活跃与数据可用性`；历史 `track_analysis_summary` 只作为 Track 活跃画像泛化能力描述，避免混成当前 action 名。
   - 未稳定 source：private message、资料四件套 / 过往四项、related_devices 等不作为默认已验证 source；只有已有稳定接口、显式 source plan 或用户补充线索时，才写“可进一步查看”。
   - 风控实体字段 `user_id`、`device_id`、`ip`、`event_id`、`strategy_id`、`photo_id`、`policyCode`、`policyTreeCode` 可在内部研判和 source chaining 保留；cookie/token/session/header/password、手机号、身份证、姓名、地址严禁输出或保存。
@@ -139,7 +139,7 @@
 - ATO / account_security 场景中，如果登录日志、Hive、Weapon 或档案中心发现异常手机端设备、非历史设备、新设备登录、扫码后新设备或设备风险标签，默认触发 `track_analysis_activity_profile_api_direct` 作为低成本补证 source，优先检查登录成功日 / 扫码日 / 设备切换日 / 策略命中日的 `getUseDuration`。
 - 单例 case 风险研判输出必须使用 `single_case_evidence_card`，每条 strong / medium / weak / counter evidence 都要带 `evidence_source` / `source_quality`；该口径与 ATO batch evidence source schema 对齐。
 - `batch_analysis_framework` 是 batch 方法论抽象，不是新平台手脚，不直接执行 observation。
-- `batch_risk_clustering_analysis` 是跨场景批量风险分簇研判包，用于 10+ 标准批量分簇、50+ aggregation / DataAgent-Hive query plan、异常相关性矩阵和代表样本抽样；不表示已开放大批量在线查询。
+- `batch_risk_clustering_analysis` 是跨场景批量攻击研判包，只使用 `full_observation_mode`、`sample_expand_validate_mode`、`wide_table_aggregate_mode` 三种当前模式；不表示已开放大批量在线查询或 DataAgent/Hive 自动执行。
 - `batch_case_analysis` 当前是 ATO 批量 case 半自动归因的文档与模板闭环，服务 5-20 个 case 的 case 标准化、证据卡聚合、模式总结和候选策略方向；不表示已接真实 DataAgent 或自动策略上线。
 - `ato_case_expansion_planning` 服务单个或少量 ATO case 的举一返三扩展设计，核心锚点是凭证 / token / OAuth / 登录态异常、改密 / 换绑 / 安全操作、基础设施和后置动作回连，不按相同昵称 / 简介扩展。
 - `black_market_account_matrix_batch_analysis` 当前是非 ATO 的账号矩阵 / 导流互动 / 养号池归因样板，不应污染 ATO 的账号控制权异常定义。
@@ -155,10 +155,11 @@
 | `single_entity_execution_mode` | 明确单个 `user_id` / `device_id` / case 查询；“帮我查 / 帮我看 / 看近期登录 / 看设备关联 / 看策略命中” | 在线只读 observation，输出 evidence card 或 partial evidence card；每条证据带 `evidence_type` / `strength`；ATO 单案 source timeout / auth blocked / parse error 时仍输出 completed / blocked / timeout / parse_error / missing evidence、source_quality 和 next_action | 不默认 DataAgent，不空研判；不把 user_claim / behavior_event / inference 写成 raw_evidence；不把 no_data / timeout / blocked 当无风险反证 |
 | `single_ato_source_checkpoint` | ATO 单案多 source 编排；已有 source completed 但后续 source 可能 timeout / blocked | 每个 source 结束即记录 checkpoint；P0/P1 completed 后可输出 partial evidence card；P2 browser 不阻塞已完成 evidence | completed source 不得丢失；no_data 标 `no_data_not_risk_exclusion`；默认 180s，总 deadline 前必须输出 |
 | `unified_login_auth_bridge_guard` | 统一登录日志认证态桥接、子 agent timeout 后 main agent 行为 | 统一登录日志只读查询走受控 wrapper / dennis source orchestration；main agent 只记录 timeout 并返回 partial / retry plan | 禁止 main agent direct exec curl/cookie/browser 查询；302 / same-origin / profile lock / auth_failed 进入 source_quality |
-| `small_batch_execution_with_checkpoint` | 2-9 个 ATO 客诉用户 | 默认允许逐个查 P0 source，优先统一登录日志；异常用户再补 P1 source；每个 user/source 独立 checkpoint | 不是纯 plan-only；不默认 P2 browser；不因单用户 auth 失败导致整体无输出；登录日志窗口和 APP-only source gap 必须显式标注 |
+| `full_observation_mode` | 2-10 个小批量风险实体 | 先做 entity graph，再观察当前安全 realtime source 范围内的样本，输出 source commonality、fusion、cluster 和 attack-chain boundary | 不是逐个流水账；单 source/source gap 不得变成无风险反证 |
 | `evidence_boundary_mode` | no_data / timeout / blocked / 设备关联 / 模型分 / 用户反馈是否能定性 | 纯分析，30s 内短答 | 不自动查平台，不把弱信号当强证据 |
 | `strategy_recommendation_plan_mode` | 灰度验证、误伤控制、策略推荐、举一返三、监控指标、治理方案 | 输出策略框架、补证字段、DataAgent/Hive query plan | 即使带 user_id 也不自动 execution |
-| `batch_plan_mode` | 3+ 用户 / 设备、批量、共性归因、分层判断 | 输出 batch plan、case registry 字段、证据分层框架 | 不逐个在线查，确认后才 batch execution |
+| `sample_expand_validate_mode` | 10+ urgent / unknown / no-wide-table 批量风险 | 抽 10 个样本，最多 5 轮 / 50 个 realtime deep checks，输出 round_result/cumulative_result | 不全量逐个在线查；高覆盖进入验证建议，不自动处置 |
+| `wide_table_aggregate_mode` | 宽表 / 统计 / 覆盖 / 准召 / 策略 / 历史复盘 / DataAgent-Hive 意图 | 要求 `wide_table_aggregate_report`，Dennis 解释统计包和代表样本 follow-up | DataAgent/Hive 必须逐次授权；统计相关性不是完整攻击链事实 |
 | `non_ato_expert_mode` | 反爬、协议、导流截流、活动作弊、渠道套利、群控泛化 | 专家分析 + 取证计划 + 策略建议 | 不默认 browser / 档案中心 |
 | `partial_evidence_card_fallback` | source timeout / blocked / parse error / auth issue | 输出 completed / blocked / timeout / missing evidence 和 next action | 不裸 timeout，不把失败当反证 |
 | `browser_spa_loop_guard` | track-analysis / 档案中心 / 天狮同一 SPA 操作失败超过 3 次 | 停止该 source，标 `operation_loop_detected` / `platform_access_partial` / `browser_overuse`，输出 partial evidence card | 不无限点击 / 截图 / 下拉 / 导入 |
@@ -264,33 +265,27 @@ capability_type:
   - evidence_structuring
 layer: evidence_orchestration
 status: documented
-default_mode: batch_plan_mode
+default_mode: three_mode_batch_attack_judgement
 supported_modes:
-  - single_entity_execution_mode
-  - small_multi_case_execution_mode
-  - small_batch_mode
-  - batch_clustering_mode
-  - large_batch_aggregation_mode
-  - alert_batch_or_population_analysis_mode
+  - full_observation_mode
+  - sample_expand_validate_mode
+  - wide_table_aggregate_mode
 purpose: 对多 case / 多实体 / 告警批次 / 接口请求激增 / 渠道异常 / 设备群控 / ATO 批量 / 活动套利 / 策略召回批次做分簇、异常相关性矩阵、代表样本抽样、证据缺口识别、举一返三和策略建议
 threshold_policy:
-  1_2_entities: single_entity_execution_mode
-  3_4_entities: small_multi_case_execution_mode
-  5_9_entities: small_batch_mode
-  10_49_entities: batch_clustering_mode
-  50_499_entities: large_batch_aggregation_mode
-  500_plus_entities: alert_batch_or_population_analysis_mode
+  entity_count_lte_10: full_observation_mode
+  entity_count_gt_10_urgent_unknown_no_wide_table: sample_expand_validate_mode
+  entity_count_gt_10_wide_table_strategy_history_dataagent_hive: wide_table_aggregate_mode
 requires:
   - batch input schema
+  - entity_resolution_first
+  - source_commonality_card
+  - multi_source_fusion
+  - cluster_summary_card
+  - attack_chain_renderer
+  - strategy_recommendation_card with priority and action_group mapping
   - account risk data source registry
-  - batch L1 feature query contract
-  - top dimension drilldown
-  - frequent pattern contribution analysis
+  - wide_table_aggregate_report for warehouse mode
   - ATO cluster lens overlay when compromised-account / stolen-account posting is suspected
-  - evidence source metadata
-  - representative sampling
-  - abnormal correlation matrix
-  - pattern summary
 does_not_do:
   - no_default_large_batch_online_lookup
   - no_auto_dataagent_call
@@ -300,10 +295,10 @@ does_not_do:
   - no_same_gang_judgement_from_similarity_only
   - no_historical_case_evidence_as_current_batch_fact
 boundaries:
-  - 5 个以下可全量深查
-  - 10+ 强制 batch_clustering_mode / plan_mode，不逐个在线查
-  - 50+ 强制 aggregation / DataAgent-Hive query plan
-  - explicit_per_entity_online_execution_required_for_10_plus
+  - 2-10 defaults to full_observation_mode with source commonality, not per-entity transcript
+  - 10+ urgent unknown no-wide-table defaults to sample_expand_validate_mode, max 5 rounds / 50 realtime deep checks
+  - 10+ wide-table strategy historical DataAgent/Hive intent defaults to wide_table_aggregate_mode
+  - DataAgent/Hive execution requires explicit per-call authorization
   - strategy_recommendation_or_expansion_with_ids_stays_plan_mode
   - DataAgent only for Hive / warehouse query planning when needed
   - no_data cannot be no-risk counter evidence
@@ -313,38 +308,27 @@ boundaries:
   - representative_sample_not_global_proof
 workflow:
   - batch_input
-  - L1_wide_table_profile_shallow_query_plan
-  - batch_feature_table
-  - top_dimension_summary
-  - frequent_pattern_contribution_score
-  - A_to_B_directed_abnormal_correlation
-  - cluster_hint
+  - selected_three_mode
+  - entity_resolution_first
+  - source_commonality_card_or_wide_table_aggregate_report
+  - multi_source_fusion
+  - cluster_summary_card
+  - attack_chain_renderer
   - ato_cluster_lens_overlay_when_relevant
-  - compromised_account_cluster_detection
-  - representative_sampling
-  - representative_ato_single_case_deep_dive_when_relevant
-  - cluster_level_backfill
-  - cluster_evidence_card
-  - expansion_and_strategy_recommendation
-required_output_fields_for_10_plus:
-  - batch_clustering_mode
-  - relation_family
-  - evidence_basis
-  - denominator_status
-  - relationship_strength
-  - reverse_check_result
-  - confounder_risk
-  - cannot_conclude_boundary
-  - representative_cases
-  - pattern_summary
-  - required_validation
-  - candidate_strategy_direction
-  - batch_feature_table
-  - top_dimension_summary
-  - frequent_pattern
-  - contribution_score
+  - sample_expand_validate_loop_when_relevant
+  - strategy_candidates
+required_output_fields:
+  - selected_mode
+  - entity_graph
+  - source_commonality_card_or_wide_table_aggregate_report
+  - multi_source_fusion
+  - cluster_summary_card
+  - attack_chain_renderer
+  - strategy_recommendation_card
+  - source_quality
+  - missing_evidence
+  - conclusion_boundary
   - ato_cluster_lens_when_relevant
-  - cluster_level_backfill_when_relevant
 templates:
   - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
   - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md

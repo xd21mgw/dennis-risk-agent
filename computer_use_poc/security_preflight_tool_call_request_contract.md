@@ -36,7 +36,7 @@
 | `requested_time_range` | string | 是 | `recent_7d` | `unknown_time_range` + warning | 识别超窗、长窗口、批量风险 |
 | `direct_tool_requested_by_user` | boolean | 是 | `false` | 默认 `false` 但记录 warning | 标记用户是否试图直接指定底层工具 |
 | `attempts_to_override_policy` | boolean | 是 | `false` | 默认 `false` 但记录 warning | 标记 prompt injection / 绕过规则 |
-| `requested_raw_output` | boolean | 是 | `false` | 默认 `false` 但记录 warning | 标记 raw response / full JSON 风险 |
+| `requested_raw_output` | boolean | 是 | `false` | 默认 `false` 但记录 warning | 标记 source response summary / full JSON 风险 |
 | `source_agent` | string | 是 | `dennis_main_agent` | `unknown_source_agent` + warning | 标识 request 来源 |
 | `runtime_mode` | string | 是 | `shadow_mode` | `unknown` => require_approval | 区分 dry_run / shadow / enforce |
 
@@ -146,7 +146,7 @@ input_entities:
 - `session`
 - `authorization`
 - `header`
-- `storageState`
+- `browser_storage_state_marker`
 - `system_prompt`
 - `routing_prompt`
 - `skill_prompt`
@@ -156,8 +156,8 @@ input_entities:
 默认 deny：
 
 - `raw_response`
-- `raw_result`
-- `full_json`
+- `source_result`
+- `safe_json_summary`
 - `raw_log_content`
 - `raw_graph_payload`
 - `arbitrary_url`
@@ -300,7 +300,7 @@ tool_call_request:
 说明：
 
 - `api_direct_read` 必须绑定已登记 endpoint / payload shape。
-- 不允许 `arbitrary_url`、`arbitrary_api`、`raw_header`、`full_json`。
+- 不允许 `arbitrary_url`、`arbitrary_api`、`raw_header`、`safe_json_summary`。
 
 ### browser_dom_read
 
@@ -321,7 +321,7 @@ tool_call_request:
 说明：
 
 - `browser_dom_read` 必须绑定已登记页面模块和 scoped selector。
-- 不允许 `arbitrary_js`、`localStorage`、`cookie`、`storageState`。
+- 不允许 `arbitrary_js`、`localStorage`、`cookie`、`browser_storage_state_marker`。
 
 ## 8. 缺失字段处理策略
 

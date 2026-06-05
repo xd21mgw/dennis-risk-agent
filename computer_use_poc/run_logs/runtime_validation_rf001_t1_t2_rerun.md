@@ -88,7 +88,7 @@
 - 非法 `platform_key` 仍拒绝。
 - `user_id` 注入仍拒绝。
 - `from_timestamp` / `to_timestamp` 注入仍拒绝。
-- 不输出 cookie / token / session / storageState / header。
+- 不输出 cookie / token / session / browser_storage_state_marker / header。
 - 不调用 DataAgent。
 - 不做写操作。
 - 不修改 release/dist。

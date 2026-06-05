@@ -1,0 +1,70 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_shaped_strategy_governance_observation",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "策略治理",
+    "策略命中解释",
+    "误伤复核",
+    "灰度验证"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "5522927552",
+        "5523226974",
+        "5523825632"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "strategy_round_1_entity_1_hit",
+          "action": "rcp_fast_query_hbase",
+          "fields": {
+            "user_id": "5522927552",
+            "candidate_policy_code": "mock_policy_diversion_governance",
+            "candidate_event_id": "mock_event_strategy_5522927552",
+            "event_type": "CONTENT_DIVERSION_RECALL",
+            "policy_hit_signal": "same_policy_family_recent_hit"
+          }
+        },
+        {
+          "source_id": "strategy_round_1_entity_2_hit",
+          "action": "rcp_fast_query_hbase",
+          "fields": {
+            "user_id": "5523226974",
+            "candidate_policy_code": "mock_policy_diversion_governance",
+            "candidate_event_id": "mock_event_strategy_5523226974",
+            "event_type": "CONTENT_DIVERSION_RECALL",
+            "policy_hit_signal": "same_policy_family_recent_hit"
+          }
+        },
+        {
+          "source_id": "strategy_round_1_snapshot",
+          "action": "rcp_snapshot",
+          "fields": {
+            "candidate_policy_code": "mock_policy_diversion_governance",
+            "event_type": "CONTENT_DIVERSION_RECALL",
+            "risk_decision": "review_or_gray_validation_candidate",
+            "policy_hit_signal": "requires_coverage_and_false_positive_validation"
+          }
+        },
+        {
+          "source_id": "strategy_round_1_review",
+          "action": "archives_review_logs",
+          "fields": {
+            "user_id": "5522927552",
+            "candidate_review_id": "mock_review_strategy_001",
+            "review_result": "manual_review_pending",
+            "enforcement_action": "gray_validation_only"
+          }
+        }
+      ]
+    }
+  ]
+}

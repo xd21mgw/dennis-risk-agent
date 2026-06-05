@@ -31,12 +31,12 @@ Core questions:
 - Which signals are weak clues or hypotheses only?
 - Is expansion / 举一返三 needed?
 - Is DataAgent / Hive offline aggregation needed?
-- What strategy, monitoring, grey release or manual review action is appropriate?
+- What strategy candidate, monitoring, grey release or manual review action is appropriate?
 
 ## 2. Files
 
 - `batch_risk_case_schema_v1.md`: batch input schema.
-- `batch_risk_threshold_policy_v1.md`: entity count threshold policy and routing modes.
+- `batch_risk_threshold_policy_v1.md`: three-mode routing policy.
 - `account_risk_data_source_registry_v1.md`: account-risk L1 data source registry.
 - `account_security_hive_source_registry_v1.md`: account-security Hive source registry for ATO / login-chain / successful login / failed login / resetPwd / Web RCP / App RCP.
 - `account_security_hive_query_plan_templates_v1.md`: DataAgent/Hive query plan templates for account-security offline evidence.
@@ -65,26 +65,22 @@ DataAgent is only a future Hive / warehouse query planning path when batch scale
 
 ## 4. Minimal Flow
 
-1. Intake batch schema and threshold policy.
-2. Select mode by entity count and user intent.
-3. Generate L1 wide table / profile shallow query plan.
-4. Produce `batch_feature_table` from DataAgent/Hive when executed by the data layer.
-5. Run TOP dimension drilldown.
-6. Run frequent pattern / contribution analysis.
-7. Build abnormal A -> B correlation matrix.
-8. Convert L1 results into cluster hints.
-9. Apply domain lens overlays when relevant, including `ato_cluster_lens` for compromised-account / stolen-account posting analysis.
-10. Select representative samples.
-11. Produce cluster evidence cards for representative samples.
-12. Produce pattern summary and attack-path hypotheses.
-13. Produce missing evidence, source gap and follow-up plan.
-14. Produce expansion, strategy, monitoring, grey release and manual review suggestions.
+1. Intake batch schema and select one of the three current modes.
+2. Run `entity_resolution_first` and build `entity_graph`.
+3. In realtime modes, produce per-source `source_commonality_card`.
+4. In warehouse mode, require a `wide_table_aggregate_report` statistics package.
+5. Run `multi_source_fusion`.
+6. Produce `cluster_summary_card` per risk / boundary / counter cluster.
+7. Render cluster-level attack chains.
+8. Apply domain overlays when relevant, including `ato_cluster_lens`.
+9. Produce strategy candidates, missing evidence, source gaps and next actions.
 
 ## 5. Hard Boundaries
 
-- 5 个以下可全量深查.
-- 10+ 默认 `batch_clustering_mode`，不逐个在线查.
-- 50+ 默认 aggregation / DataAgent-Hive query plan.
+- Current modes are exactly `full_observation_mode`, `sample_expand_validate_mode`, and `wide_table_aggregate_mode`.
+- 2-10 entities default to `full_observation_mode`.
+- 10+ urgent / unknown / no-wide-table batches default to `sample_expand_validate_mode`.
+- 10+ wide-table / strategy / coverage / retrospective / DataAgent-Hive intent defaults to `wide_table_aggregate_mode`.
 - `no_data` 不能作为无风险反证.
 - blocked / timeout / partial source 必须标记 `source_gap`.
 - manual_input 不能单独支撑 strong conclusion.
@@ -95,3 +91,7 @@ DataAgent is only a future Hive / warehouse query planning path when batch scale
 - L1 high-contribution pattern can only be cluster hint / candidate feature hint before validation.
 - ATO batch is not "no clustering"; existing clusters remain, then `ato_cluster_lens` checks WEB non-trusted login, `login_to_action_delta`, device identity drift, content-action deep dive, representative single-case proof, and `cluster_level_backfill`.
 - Dennis explains and reasons; DataAgent/Hive extracts and aggregates batch data.
+- Strategy candidates expose both `priority` and `action_group`: `P0` =
+  `ready_for_controlled_gray_validation`, `P1` = `combine_before_use`, and
+  `P2` = `monitor_or_expand_only`. `P0` means controlled gray validation, not
+  auto-launch or direct disposition.

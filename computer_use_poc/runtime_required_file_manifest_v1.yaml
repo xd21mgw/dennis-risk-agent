@@ -3,18 +3,25 @@ manifest_version: runtime_required_file_manifest_v1
 full_runtime_required:
   generated_files:
     - AGENTS.md
+    - README.md
     - RUNTIME_MANIFEST.md
   files:
     - computer_use_poc/source_executability_inventory_v1.yaml
     - computer_use_poc/full_runtime_inference_contract_v1.md
     - computer_use_poc/runtime_required_file_manifest_v1.yaml
     - computer_use_poc/runtime_semi_open_user_guide_v1.md
+    - computer_use_poc/runtime_preflight_check.py
     - computer_use_poc/multi_entry_runtime_guard_v1.md
     - computer_use_poc/scene_to_capability_routing.md
     - computer_use_poc/capability_registry.md
     - computer_use_poc/answer_experience_templates.md
     - computer_use_poc/source_orchestration_plan_v1.yaml
     - computer_use_poc/source_orchestration_check.py
+    - computer_use_poc/interface_asset_table_check.py
+    - computer_use_poc/interface_orchestration_contract_check.py
+    - computer_use_poc/sample_expand_orchestration_artifact_check.py
+    - computer_use_poc/fact_table_contract_v1.md
+    - computer_use_poc/fact_table_contract_check.py
     - computer_use_poc/platform_call_playbook_index.md
     - computer_use_poc/runtime_validation_cases_v1.yaml
     - computer_use_poc/smoke_tests.md
@@ -24,6 +31,7 @@ full_runtime_required:
     - computer_use_poc/field_output_classification_policy_v1.md
     - computer_use_poc/security_preflight_policy.yaml
     - computer_use_poc/security_preflight_request_contract_validator.py
+    - computer_use_poc/security_preflight_request_contract_test_cases.json
     - computer_use_poc/general_evidence_reasoning_contract_v1.md
     - computer_use_poc/raw_reference_redaction_contract_v1.md
     - computer_use_poc/sensitive_field_redaction_policy.md
@@ -36,6 +44,8 @@ full_runtime_required:
     - computer_use_poc/bin_runner_contract_v1.md
     - computer_use_poc/browser_backed_service_client.py
     - computer_use_poc/browser_backed_service_adapter_v1.md
+    - computer_use_poc/interface_orchestration_contract_v1.md
+    - computer_use_poc/browser_backed_interface_asset_table_v1.yaml
     - computer_use_poc/runtime_case_execution_runner.py
     - computer_use_poc/passthrough_observation_builder.py
     - computer_use_poc/har_platform_interface_inventory_v1.md
@@ -46,6 +56,18 @@ full_runtime_required:
     - computer_use_poc/browser_backed_fixed_actions_text_demo_v1.md
     - computer_use_poc/ato_live_evidence_chain_fixture_check.py
     - computer_use_poc/test_fixtures/ato_live_evidence_chain_2892617234_shape_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_shaped_observation_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_shaped_ato_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_shaped_strategy_governance_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_shaped_feedback_enforcement_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_anchor_competition_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_anchor_domain_cap_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_high_false_positive_anchor_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_single_entity_social_anchor_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_mock_rolling_anchor_summary_v1.json
+    - computer_use_poc/test_fixtures/sample_expand_validate_batch_fixed_rounds_v1.json
+    - computer_use_poc/test_fixtures/interface_orchestration_mock_answer_render_v1.json
+    - computer_use_poc/test_fixtures/fact_table_minimal_batch_v1.json
     - computer_use_poc/platform_access/observation_schema_v0_1.yaml
     - computer_use_poc/failure_triage_card_template_v1.md
     - computer_use_poc/plan_mode_capability_v1.md
@@ -74,19 +96,6 @@ full_runtime_required:
     - computer_use_poc/e2e_multi_evidence_readonly_test_v2_5_8.md
     - computer_use_poc/multi_evidence_orchestration_example_v2_5_7.md
     - computer_use_poc/batch_risk_clustering/account_risk_data_source_registry_v1.md
-    - computer_use_poc/dataagent_connector_contract_v1.md
-    - computer_use_poc/dataagent_cloud_skill_parity_contract_v1.md
-    - computer_use_poc/dataagent_request_schema_v1.yaml
-    - computer_use_poc/dataagent_response_schema_v1.yaml
-    - computer_use_poc/dataagent_prompt_templates_v1.md
-    - computer_use_poc/dataagent_response_normalizer.py
-    - computer_use_poc/dataagent_connector_check.py
-    - computer_use_poc/dataagent_local_dryrun_parity_plan_v1.md
-    - computer_use_poc/dataagent_local_dryrun_invocation_template_v1.md
-    - computer_use_poc/dataagent_local_dryrun_parity_check.py
-    - computer_use_poc/setup_dataagent_local_env.py
-    - computer_use_poc/dataagent_local_env_setup_guide_v1.md
-    - computer_use_poc/test_fixtures/dataagent_cloud_skill_response_mock.json
     - computer_use_poc/batch_risk_clustering/account_security_hive_source_registry_v1.md
     - computer_use_poc/batch_risk_clustering/account_security_hive_query_plan_templates_v1.md
     - computer_use_poc/batch_risk_clustering/batch_l1_feature_query_contract_v1.md
@@ -101,17 +110,12 @@ full_runtime_required:
     - computer_use_poc/batch_risk_clustering/batch_frequent_pattern_contribution_template_v1.md
     - computer_use_poc/batch_risk_clustering/abnormal_correlation_matrix_v1.md
     - computer_use_poc/batch_risk_clustering/README.md
-    - computer_use_poc/question_collection/pilot_observation_writer.py
-    - computer_use_poc/question_collection/runtime_question_record_collector_stub_v1.py
-    - computer_use_poc/question_collection/question_record_schema_v1.md
-    - computer_use_poc/question_collection/runtime_append_only_logging_contract_v1.md
-    - computer_use_poc/question_collection/user_feedback_capture_v1.md
-    - computer_use_poc/question_collection/question_learning_policy_v1.md
-    - computer_use_poc/question_collection/case_learning_note_template_v1.md
-    - computer_use_poc/question_collection/README.md
   optional_files:
     - computer_use_poc/runtime_integration_validation_checklist.md
     - computer_use_poc/user_login_log_reliable_window_contract_v1.md
+  release_excluded_not_capability_removed:
+    - DataAgent local parity, local setup, and response-normalizer assets are excluded from this release snapshot only; DataAgent/Hive planning remains governed by registry and explicit authorization.
+    - question_collection run-time learning logs and append-only collectors are excluded from this release snapshot only; this does not remove the future feedback/candidate-queue capability from the mother repo.
   globs:
     - skills/dennis_risk_agent_skills_v2_1_focused_deep/11_runtime_summaries/*.md
     - computer_use_poc/tool_contracts/**
@@ -121,6 +125,13 @@ full_runtime_required:
     - computer_use_poc/multi_evidence_orchestration_contracts/**
   optional_globs:
     - computer_use_poc/observation_contract*.md
+
+release_safe_projection:
+  same_path:
+    - computer_use_poc/security_preflight_policy.yaml <- computer_use_poc/release_projections/security_preflight_policy.full_runtime.yaml
+    - computer_use_poc/sensitive_field_redaction_policy.md <- computer_use_poc/release_projections/sensitive_field_redaction_policy.full_runtime.md
+    - computer_use_poc/capability_security_policy.md <- computer_use_poc/release_projections/capability_security_policy.full_runtime.md
+    - computer_use_poc/multi_entry_runtime_guard_v1.md <- computer_use_poc/release_projections/multi_entry_runtime_guard_v1.full_runtime.md
 
 online_release_overlay_required:
   files:

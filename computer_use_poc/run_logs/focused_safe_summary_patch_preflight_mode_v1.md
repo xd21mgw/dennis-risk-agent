@@ -63,6 +63,6 @@ Expected:
 
 - No full runtime release was rebuilt.
 - No complete mother-body file was copied into the patch package.
-- No run_logs / POC / raw observation were introduced into the safe package.
+- No run_logs / POC / source observation were introduced into the safe package.
 - No real platform access.
 - No DataAgent call.

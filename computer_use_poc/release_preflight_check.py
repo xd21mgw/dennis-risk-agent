@@ -38,9 +38,17 @@ FOCUSED_SAFE_SUMMARY_PATCH_REQUIRED_FILES = [
     "SAFETY_BOUNDARIES.md",
     "PATCH_CHECKLIST.md",
 ]
+OVERLAY_DELTA_REQUIRED_FILES = [
+    "README.md",
+    "SAFE_DELTA_SUMMARY.md",
+    "INTERNAL_AGENT_VALIDATION_LIST.md",
+    "OVERLAY_MANIFEST.md",
+    "SAFE_DELTA_CHANGELOG.md",
+]
 RELEASE_TYPES = {
     "full_runtime_release": DEFAULT_REQUIRED_FILES,
     "focused_safe_summary_patch": FOCUSED_SAFE_SUMMARY_PATCH_REQUIRED_FILES,
+    "overlay_delta": OVERLAY_DELTA_REQUIRED_FILES,
 }
 MANIFEST_PATTERNS = ["*manifest*.md", "*manifest*.json", "*manifest*.yaml", "*manifest*.yml"]
 EXPLICITLY_ALLOWED_HIGH_RULES: set[str] = set()
@@ -182,7 +190,7 @@ def parse_args() -> argparse.Namespace:
         "--package-type",
         choices=sorted(RELEASE_TYPES),
         default="full_runtime_release",
-        help="Package type to validate. full_runtime_release checks runtime files; focused_safe_summary_patch checks summary patch files only.",
+        help="Package type to validate. full_runtime_release checks runtime files; focused_safe_summary_patch and overlay_delta check summary files only.",
     )
     parser.add_argument("--json", action="store_true", help="Output safe summary JSON.")
     return parser.parse_args()

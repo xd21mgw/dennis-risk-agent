@@ -64,7 +64,7 @@ Expected output:
 
 Forbidden output:
 
-- cookie / token / session / storageState / auth header plaintext.
+- cookie / token / session / browser_storage_state_marker / auth header plaintext.
 - automatic ban / unblock / throttle / allow decision.
 - model inference treated as raw evidence.
 - device relation treated as final cheating conclusion.

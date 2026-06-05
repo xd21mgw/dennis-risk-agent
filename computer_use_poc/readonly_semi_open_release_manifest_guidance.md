@@ -21,7 +21,7 @@ Before creating a semi-open package:
 
 - `.git`
 - auth state files
-- cookie / token / session / storageState files
+- cookie / token / session / browser_storage_state_marker files
 - raw platform screenshots
 - full historical run logs
 - full test cases

@@ -1,112 +1,109 @@
-# Batch Risk Threshold Policy v1
+# Batch Risk Three-Mode Routing Policy v1
 
-## 1. Purpose
+Status: runtime_rule
 
-Thresholds decide whether Dennis should run single-case execution, small multi-case comparison, batch clustering, or aggregation planning.
+This policy replaces the old 1-2 / 3-4 / 5-9 / 10-49 / 50+ batch mode ladder.
+Dennis uses exactly three batch attack-judgement modes. Do not add a fourth
+or fifth mode.
 
-This policy prevents accidental large-scale online lookups and keeps batch reasoning separate from single-case evidence closure.
+## 1. Three Modes
 
-## 2. Threshold Table
+| entity_count / intent | selected_mode | default behavior | boundary |
+|---|---|---|---|
+| `entity_count <= 10` | `full_observation_mode` | Small-batch full observation: resolve entities first, run available realtime readonly sources for each sample, compare horizontally, output clusters, attack chain and strategy candidates. | Not a single-case transcript loop; every source result must feed `source_commonality_card`. |
+| `entity_count > 10` and urgent / same-origin / unknown / "先看看" / no wide table yet | `sample_expand_validate_mode` | Randomly sample 10, run `full_observation_mode` on the sample, expand up to 5 rounds / 50 deep-checked entities, then stop / continue / offline validate. | Never realtime-deep-check the whole batch by default. 70% is a validation threshold, not an auto-action threshold. |
+| `entity_count > 10` and wide table / feature / coverage / precision / strategy / retrospective / DataAgent/Hive intent | `wide_table_aggregate_mode` | DataAgent/Hive returns `wide_table_aggregate_report`; Dennis explains clusters, attack-chain hypotheses and strategy candidates. | DataAgent does statistics and retrieval, not final risk judgement. Execution requires per-call authorization. |
 
-| entity_count | selected_mode | default behavior | key boundary |
-|---:|---|---|---|
-| 1-2 | `single_entity_execution_mode` | 可逐个深查，输出单 case evidence card。 | 如用户明确要求批量视角，可补轻量对比，但不进入正式分簇。 |
-| 3-4 | `small_multi_case_execution_mode` | 默认仍可全量深查；每个 case 输出简版 evidence card。 | 最后增加 cross-case comparison；不能因为相似就直接判定同团伙。 |
-| 5-9 | `small_batch_mode` | 不默认逐个深查全部长链路；先轻量分组、风险假设、优先级排序。 | 可全查或抽 3-5 个代表样本，取决于用户要求和成本。 |
-| 10-49 | `batch_clustering_mode` | 默认标准批量分簇研判。 | 不逐个在线查；先做分簇、异常相关性矩阵、代表样本抽样。 |
-| 50-499 | `large_batch_aggregation_mode` | 必须优先生成聚合分析 / DataAgent-Hive query plan。 | 不逐个在线查；只建议抽样深查。 |
-| 500+ | `alert_batch_or_population_analysis_mode` | 只做批次级分布、异常相关性、代表样本抽样、策略建议。 | 必须生成离线取数 / 聚合分析计划。 |
+User-specified mode wins when safe, but cannot override DataAgent/Hive
+authorization, no-data boundaries, source-quality requirements, or the ban on
+large realtime one-by-one lookup.
 
-## Hard Live Routing Guard
+## 2. Routing Rules
 
-- 10+ detected entities must select `batch_clustering_mode` or plan mode before any online execution branch.
-- 10-49 entities: `batch_clustering_mode`; one-by-one online execution is forbidden by default.
-- 50+ entities: aggregation / DataAgent-Hive query plan; one-by-one online execution is forbidden.
-- 3-9 entities: default `batch_plan_mode` / `small_batch_mode`; if user wants small-sample online checks, ask for confirmation or sample 3-5 representatives.
-- Only explicit wording such as "逐个查每个用户", "逐个在线查询", or "每个都调平台查" can move 10+ entities toward an execution planning branch, and even then scope/cost confirmation is required.
-- Strategy recommendation, expansion, grey release, false-positive control, and monitoring requests stay plan mode even when ids are attached.
-- Required 10+ output fields: `batch_clustering_mode`, `relation_family`, `evidence_basis`, `denominator_status`, `relationship_strength`, `reverse_check_result`, `confounder_risk`, `cannot_conclude_boundary`, `representative_cases`, `pattern_summary`, `required_validation`, `candidate_strategy_direction`.
+### full_observation_mode
 
-## 3. Detailed Rules
+Use when:
 
-### 1-2 entities
+- 2-10 `user_id` / `device_id` / mixed entities.
+- User asks "这几个是不是一伙 / 这几个设备有没有共性 / 帮我细查这批小样本".
 
-- Mode: `single_entity_execution_mode`.
-- 可逐个深查.
-- 输出单 case evidence card.
-- 如果用户问“这两个是否相似”，只做轻量对比，不升级为团伙判断.
+Required flow:
 
-### 3-4 entities
+1. `entity_resolution_first`.
+2. Realtime readonly source plan.
+3. Source-specific evidence cards.
+4. `source_commonality_card` per source.
+5. `multi_source_fusion`.
+6. `cluster_summary_card`.
+7. `attack_chain_renderer`.
+8. Strategy candidates with evidence / coverage / false-positive boundary.
 
-- Mode: `small_multi_case_execution_mode`.
-- 可全量深查.
-- 每个 case 输出简版 evidence card.
-- 增加 cross-case comparison:
-  - 共设备.
-  - 共 IP / subnet / ASN.
-  - 共入口.
-  - 共版本.
-  - 共策略命中.
-  - 共行为链路.
-- 必须有 join key 或共用基础设施证据，才可升级为同源风险；不能仅凭相似性判断同团伙.
+### sample_expand_validate_mode
 
-### 5-9 entities
+Use when:
 
-- Mode: `small_batch_mode`.
-- 5 个以下可全量深查；5-9 个是小批量，应先轻量分组.
-- 默认先分组、排序、提出风险假设.
-- 若用户明确要求且成本可控，可以深查全部.
-- 否则建议抽 3-5 个代表样本.
-- 输出 small batch summary + representative evidence cards.
+- More than 10 entities.
+- User asks urgent same-source / unknown-risk / "先看看" / no wide-table result yet.
 
-### 10-49 entities
+Defaults:
 
-- Mode: `batch_clustering_mode`.
-- 10+ batch_clustering_mode 是标准批量分簇默认触发点.
-- 不逐个在线查.
-- 先做:
-  - entity cluster.
-  - time cluster.
-  - behavior cluster.
-  - environment cluster.
-  - strategy cluster.
-  - entry/path cluster.
-  - interface/request cluster.
-  - abnormal correlation matrix.
-- 抽 3-5 个代表样本做 evidence card.
+```yaml
+initial_sample_size: 10
+sampling_method: random
+max_rounds: 5
+max_deep_checked: 50
+high_coverage_threshold: around_70_percent
+```
 
-### 50-499 entities
+Stop / continue:
 
-- Mode: `large_batch_aggregation_mode`.
-- 50+ aggregation / DataAgent-Hive query plan 是默认路径.
-- 必须优先生成聚合分析 / DataAgent-Hive query plan.
-- 不逐个在线查.
-- 重点分析:
-  - 字段分布.
-  - 条件分布.
-  - 异常富集.
-  - 时间爆发.
-  - 策略命中.
-  - 渠道 / 版本 / 设备 / IP 聚集.
+- Stop to offline validate when the main risk cluster covers about 70% across
+  at least two rounds.
+- Continue when coverage is 40%-70%, the second round drops sharply, or there
+  are multiple candidate clusters.
+- Stop with insufficient support after 5 rounds or no stable commonality.
 
-### 500+ entities
+### wide_table_aggregate_mode
 
-- Mode: `alert_batch_or_population_analysis_mode`.
-- 只做批次级分布、异常相关性、代表样本抽样、策略建议.
-- 不做逐个研判.
-- 必须生成离线取数 / 聚合分析计划.
-- 如用户要求逐个查，应降级说明成本与不可行性，建议抽样或分批.
+Use when:
 
-## 4. Intent Overrides
+- User mentions wide table, features, coverage, precision, recall, strategy,
+  historical review, DataAgent/Hive, control group, or large feature set.
+- Large samples already have or need aggregate statistics.
 
-- 如果用户问“策略怎么做 / 如何灰度 / 如何误伤控制 / 举一返三 / 监控怎么建”，即使带了 user_id，也优先 plan mode，不查平台.
-- 如果用户明确说“帮我查这几个用户”，且实体数 <5，可以全量深查.
-- 如果用户明确说“帮我查这批用户”，且实体数 >=10，默认先批量分簇和抽样，不逐个查.
-- 如果用户说“这些接口请求量突然升高”，默认 interface/request batch clustering.
-- 如果用户说“这批告警帮我归因”，默认 alert batch clustering.
+Default registered wide-table starting point:
 
-## 5. DataAgent Boundary
+```yaml
+registered_candidate_table:
+  table: ks_rc_bs.dws_risk_register_gang_user_week_feature_wide_di
+  status: registered_candidate_not_executed
+  use: register/gang/user weekly feature wide table candidate for aggregate mode
+  boundary: table availability and field semantics must be confirmed by DataAgent/Hive before execution
+```
 
-- DataAgent 只能定位为 Hive / 公司数仓取数分析能力.
-- DataAgent 不是万能数据底座.
-- 真实平台 observation、DataAgent 查询、Hive 离线取数都只作为后续补证路径，本 pack 不执行.
+DataAgent/Hive execution is not automatic. Dennis may produce a registry-first
+query plan and the required `wide_table_aggregate_report` shape only.
+
+## 3. Hard Guards
+
+- Do not default to per-entity transcripts for batch questions.
+- Do not realtime-deep-check every entity in large batches.
+- Do not force large batches to wait for offline wide tables when the user is
+  asking for urgent sampling.
+- Do not execute DataAgent/Hive without explicit per-call authorization.
+- Do not use strategy hits, no-data, same IP, same device, app version, model
+  score, or a single weak device tag as final judgement.
+- Do not let run logs or historical patches override this policy.
+
+## 4. Legacy Mapping
+
+The old modes are historical aliases only:
+
+| old mode | current mapping |
+|---|---|
+| `small_multi_case_execution_mode`, `small_batch_mode`, `small_batch_execution_with_checkpoint` | `full_observation_mode` when entity_count <= 10 |
+| `batch_clustering_mode` | `sample_expand_validate_mode` or `wide_table_aggregate_mode` depending on intent |
+| `large_batch_aggregation_mode`, `alert_batch_or_population_analysis_mode` | `wide_table_aggregate_mode` |
+
+Do not emit the old aliases in user-facing output unless explaining historical
+compatibility in debug/run-log context.

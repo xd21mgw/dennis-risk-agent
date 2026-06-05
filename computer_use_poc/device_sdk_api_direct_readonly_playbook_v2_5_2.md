@@ -66,7 +66,7 @@ api_direct_sequence:
 核心顺序：
 
 1. 先完成 browser auth / API auth preflight。
-2. 先查 `/apiv2/riskData`，确认 canonical device、user_id、platform、weaponPlatform 和原始日志字段。
+2. 先查 `/apiv2/riskData`，确认 canonical device、user_id、platform、weaponPlatform 和日志摘要字段。
 3. 再查 `appList`，补应用安装 / 标识摘要。
 4. 再查 `klink`，补关系 / 链路结果摘要。
 5. 再查 `graphData`，补点边关系结构。

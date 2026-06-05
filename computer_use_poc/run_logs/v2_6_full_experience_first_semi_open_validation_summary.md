@@ -19,7 +19,7 @@ git_commit_created: false
 - SSO state preflight 已通过。
 - 登录失败 / 被验证原因解释真实只读回归已通过。
 - Weapon `/apiv2/*` 调用路径已复核并修正此前错误的 `permission_blocked` 结论。
-- Q3-Q8 半开放自测结果已进入本摘要，不合并原始日志全文。
+- Q3-Q8 半开放自测结果已进入本摘要，不合并日志摘要全文。
 
 ## 3. capability_status_matrix
 
@@ -34,7 +34,7 @@ git_commit_created: false
 | `tianshi eventList POST` | partial_todo | fastQueryHbase 可用；请求级详情需要封装 eventList POST。 |
 | `frontend_activity_profile` | not_open_for_real_execution | 当前只保留 design / TODO，不作为半开放真实执行能力。 |
 
-## 4. auth_state_preflight_result
+## 4. auth-state category_preflight_result
 
 ```yaml
 sso_state_file: workspace/.ks_sso/sso-state.json
@@ -49,7 +49,7 @@ covered_domains:
 expired_cookie_detected: false
 platform_specific_state_required_for_preflight: false
 clarification:
-  - archives_auth_state.json / weapon_platform_auth_state.json may be subset backups.
+  - archives_auth-state category.json / weapon_platform_auth-state category.json may be subset backups.
   - Missing platform-specific *_state.json must not be treated as full state loss.
 ```
 

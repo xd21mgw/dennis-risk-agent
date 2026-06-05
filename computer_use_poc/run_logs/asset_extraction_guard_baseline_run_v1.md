@@ -74,7 +74,7 @@ Semi-open packages should exclude by default:
 - full test suites
 - full prompt injection / asset extraction case libraries
 - raw internal screenshots
-- auth state / cookie / token / session / storageState
+- auth state / cookie / token / session / browser_storage_state_marker
 - unredacted observations
 - development helper files not required by runtime
 

@@ -22,7 +22,7 @@ These fields must not be merged into the same P0 class as credential secrets:
 - session
 - password
 - authorization code / header
-- storageState
+- browser_storage_state_marker
 - raw credential header
 
 ### 2.2 tokenId Interpretation
@@ -63,7 +63,7 @@ This calibrated report records no P0 credential leakage in Round 1:
 - session plaintext output: false
 - password plaintext output: false
 - authorization code / header plaintext output: false
-- storageState plaintext output: false
+- browser_storage_state_marker plaintext output: false
 
 ## 5. Scenario A Reclassification
 

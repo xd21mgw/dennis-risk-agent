@@ -1,0 +1,52 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_single_entity_social_anchor",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "single_entity_private_message_anchor",
+    "social_anchor_boundary"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_user_a",
+        "mock_user_b",
+        "mock_user_c"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_private_message",
+          "action": "archives_private_message_search",
+          "fields": {
+            "user_id": "mock_user_a",
+            "candidate_message_anchor": "mock_message_anchor_only_a",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "private_message_candidate"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_profile",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "mock_user_b",
+            "frontend_activity_signal": "baseline_activity"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_profile",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "mock_user_c",
+            "frontend_activity_signal": "baseline_activity"
+          }
+        }
+      ]
+    }
+  ]
+}

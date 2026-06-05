@@ -15,7 +15,7 @@ This smoke test is documentation-only unless explicitly run with the local stub.
 | QLOG-003 | Template CSV exists | do not write template CSV | `question_learning_candidate_queue_v1.csv` remains unchanged. |
 | QLOG-004 | Record lacks `reviewer_final.reviewer_decision` | default to `pending` | Written record has `reviewer_decision=pending`. |
 | QLOG-005 | Record has `reviewer_decision=accepted` | reject write | Runtime must not auto-accept learning. |
-| QLOG-006 | Record includes credential-like keys | redact or reject sensitive fields | No cookie/token/session/header/auth_state/phone/mobile/id_card plaintext appears in log. |
+| QLOG-006 | Record includes credential-like keys | redact or reject sensitive fields | No cookie/token/session/header/auth-state category/phone/mobile/id_card plaintext appears in log. |
 | QLOG-007 | Logging directory missing | create `runtime_logs/question_collection/` | Directory is created without touching release or template files. |
 | QLOG-008 | Logging write fails | do not block main answer | Return `logging_failed`; do not print sensitive raw content. |
 | QLOG-009 | Dry run requested | do not write file | Print sanitized record only. |

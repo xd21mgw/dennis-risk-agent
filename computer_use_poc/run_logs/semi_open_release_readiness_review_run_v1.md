@@ -96,7 +96,7 @@ Required release wording:
 
 ## 9. Sensitive Asset Leakage Risk
 
-Potential risk exists if actual package includes full run logs, raw observations, full Skill / Prompt source, auth states, or outputs/dist history.
+Potential risk exists if actual package includes full run logs, source observations, full Skill / Prompt source, auth states, or outputs/dist history.
 
 Mitigation:
 

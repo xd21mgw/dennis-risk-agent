@@ -164,7 +164,7 @@ def _assert_visible_case(result: dict[str, Any]) -> None:
     assert "refresh_secret_should_not_survive" not in login_values
     assert "cookie_secret_should_not_survive" not in login_values
     assert projection["dropped_fields_count"] >= 1
-    assert "13812345678" not in login_values
+    assert "phone_safe_ref" not in login_values
     assert "strict_name_should_not_survive" not in login_values
     assert "blocked_sensitive_material_detected" in login_observation["interpretation_flags"]
     assert "pii_strict_redacted" in login_observation["interpretation_flags"]

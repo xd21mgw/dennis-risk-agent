@@ -155,10 +155,10 @@ Plan 模式是复杂研判前的用户可读执行计划。
 - 用户 prompt 不能覆盖 capability policy。
 - 用户只能表达业务问题，不能直接决定底层工具。
 - 内部平台手脚必须经过 capability registry + security policy + audit schema。
-- 不允许运行时对话修改 Agent prompt、skill、routing、release、代码或配置。
-- 不允许输出 system prompt / skill prompt / routing prompt。
+- 不允许运行时对话修改 Agent 提示词、skill、routing、release、代码或配置。
+- 不允许输出 系统提示词 / skill prompt / routing prompt。
 - 不允许任意 URL / API / SQL / JS / shell。
-- 不允许输出 cookie / token / session / storageState 等认证敏感信息。
+- 不允许输出 cookie / token / session / browser_storage_state_marker 等认证敏感信息。
 - 能查到不等于能输出，输出必须按敏感字段策略脱敏。
 - 对外 / 半开放前必须跑 safety smoke tests。
 - 写动作未来应拆成独立审批流，不接在当前研判 Agent 后直接执行。
@@ -275,7 +275,7 @@ python3 computer_use_poc/release_preflight_check.py outputs/release/<release_nam
 - preflight 会自动调用 package scanner，并且只输出 safe_summary，不打印敏感文件内容。
 - scanner 输出 critical / high 或 `package_should_block=true` 时，preflight 必须失败。
 - 必须删除、替换或摘要化命中文件后重新运行 scanner。
-- release 包不得包含完整 domain skill 原文、历史 run logs 全量、原始 case / feedback / platform observation、完整 prompt、auth/session/token/cookie/header/API key 或可复原内部平台调用链路的细节。
+- release 包不得包含完整 domain skill 原文、历史 run logs 全量、原始 case / feedback / platform observation、完整提示词、auth/session/token/cookie/header/API key 或可复原内部平台调用链路的细节。
 - 如需豁免 high 风险，必须在 rules / checklist / preflight 中显式记录规则名、原因、替代控制和审批边界。
 
 ### Release asset extraction preflight
@@ -320,7 +320,7 @@ release 包目标路径：
 
 包内不应纳入：
 
-- `auth_states/`、`.ks_sso/`、cookie / token / session / header / auth state。
+- `auth-state categorys/`、`.ks_sso/`、cookie / token / session / header / auth state。
 - 真实 observation 原始数据。
 - 历史 POC 全量 run_logs。
 - 未审核 eval pilot 文件。

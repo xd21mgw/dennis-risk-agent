@@ -12,11 +12,11 @@ and historical golden materials.
 | `batch_risk_clustering_methodology_v1.md` | Batch clustering method and workflow. | high |
 | `batch_ato_cluster_lens_v1.md` | ATO / compromised-account cluster lens overlay. | high |
 | `batch_risk_case_schema_v1.md` | Batch case schema. | high |
-| `batch_risk_threshold_policy_v1.md` | Threshold and confidence policy. | high |
+| `batch_risk_threshold_policy_v1.md` | Three-mode routing policy. | high |
 | `batch_risk_response_template_v1.md` | Batch answer template. | high |
 | `batch_risk_evidence_card_template_v1.md` | Batch evidence card template. | high |
 | `batch_risk_pattern_summary_template_v1.md` | Pattern summary template. | high |
-| `batch_risk_representative_sampling_v1.md` | Representative sample selection. | high |
+| `batch_risk_representative_sampling_v1.md` | `sample_expand_validate_mode` sampling loop and representative validation. | high |
 | `batch_top_dimension_drilldown_template_v1.md` | Top-dimension drilldown template. | high |
 | `batch_frequent_pattern_contribution_template_v1.md` | Frequent-pattern contribution template. | high |
 | `abnormal_correlation_matrix_v1.md` | Abnormal correlation matrix. | high |
@@ -36,7 +36,7 @@ and historical golden materials.
 |---|---|---|
 | `batch_risk_runtime_validation_cases_v1.yaml` | Batch runtime validation cases. | validation |
 | `batch_risk_runtime_prompt_examples_v1.md` | Prompt examples. | validation aid |
-| `batch_risk_text_dry_run_v1.md` | Text dry-run record. | historical / validation |
+| `batch_risk_text_dry_run_v1.md` | Three-mode text dry-run record. | validation |
 | `batch_risk_quality_rubric_v1.md` | Quality rubric. | validation |
 | `batch_risk_golden_answers_v1.md` | Golden answers. | regression_source / historical |
 | `batch_risk_golden_samples_v1.md` | Golden samples. | regression_source / historical |
@@ -48,4 +48,7 @@ and historical golden materials.
   references.
 - Golden and text dry-run files are historical/regression assets, not runtime
   source truth.
+- Golden files may still preserve legacy mode names for historical comparison;
+  current runtime truth is the three-mode policy in
+  `batch_risk_threshold_policy_v1.md`.
 - This index follows `docs/architecture/runtime_directory_consolidation_plan_v1.md`.

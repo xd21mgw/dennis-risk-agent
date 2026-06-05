@@ -1,0 +1,68 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_shaped_feedback_enforcement_observation",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "反馈域",
+    "处置域",
+    "举报申诉",
+    "处罚下架分离"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "5521601797",
+        "5520053509",
+        "5523394618"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "feedback_round_1_entity_1_report",
+          "action": "archives_user_report_search",
+          "fields": {
+            "user_id": "5521601797",
+            "candidate_report_id": "mock_report_5521601797",
+            "report_type": "content_diversion_report",
+            "feedback_signal": "user_reported_diversion_content"
+          }
+        },
+        {
+          "source_id": "feedback_round_1_entity_2_report",
+          "action": "archives_negative_report",
+          "fields": {
+            "user_id": "5520053509",
+            "candidate_report_id": "mock_report_5520053509",
+            "report_type": "content_diversion_report",
+            "feedback_signal": "user_reported_diversion_content"
+          }
+        },
+        {
+          "source_id": "enforcement_round_1_entity_1_punish",
+          "action": "archives_punish_status",
+          "fields": {
+            "user_id": "5521601797",
+            "candidate_punish_id": "mock_punish_5521601797",
+            "punish_type": "content_takedown",
+            "enforcement_action": "content_removed_after_review"
+          }
+        },
+        {
+          "source_id": "enforcement_round_1_entity_2_review",
+          "action": "archives_review_logs",
+          "fields": {
+            "user_id": "5520053509",
+            "candidate_review_id": "mock_review_5520053509",
+            "review_result": "review_confirmed_content_issue",
+            "enforcement_action": "limited_distribution"
+          }
+        }
+      ]
+    }
+  ]
+}

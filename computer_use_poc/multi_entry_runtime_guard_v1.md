@@ -308,7 +308,23 @@ Behavior:
 - Main agent must not take over direct platform execution after dennis-risk-agent timeout. It may record `subagent_timeout` and return partial / retry plan, but must not run `sso_session.py`, curl with cookie, agent-browser state load, or same-origin fetch by itself.
 - Unified login log readonly observation must use the controlled wrapper / dennis-risk-agent source orchestration. Temporary curl + cookie is not an allowed fallback.
 - SSO state presence does not prove API direct availability. Redirect / 302, same-origin failure, browser profile lock, and auth failure must be recorded as source quality issues: `auth_session_issue`, `same_origin_error`, `profile_lock`, or `auth_failed`.
-- For 2-9 user ATO complaint batches, default to `small_batch_execution_with_checkpoint`, not pure plan-only. Query P0 sources per user, starting with unified login log. Add P1 sources only for anomalous users. P2 browser sources are excluded from the default small-batch path.
+- Batch attack judgement uses the three-mode guard below. Legacy
+  `small_batch_execution_with_checkpoint`, `batch_clustering_mode`, and
+  `large_batch_aggregation_mode` names are historical aliases only and must not
+  be emitted as current user-facing modes.
+- For 2-10 entities, use `full_observation_mode`: run entity resolution first,
+  observe all samples within the current safe realtime scope, compare sources
+  horizontally, then output clusters, attack-chain status and strategy
+  candidates. Do not answer as one entity transcript after another.
+- For >10 entities with urgent / unknown / "先看看" / same-origin intent and no
+  wide-table result, use `sample_expand_validate_mode`: sample 10, run full
+  observation on sampled entities, repeat up to 5 rounds / 50 realtime deep
+  checks, then continue, stop, or recommend authorized offline validation.
+- For >10 entities with wide table / feature / coverage / precision / strategy /
+  historical review / DataAgent/Hive intent, use `wide_table_aggregate_mode`:
+  produce or consume a `wide_table_aggregate_report`; DataAgent/Hive does
+  statistics and retrieval only, never final risk judgement, and execution
+  requires explicit per-call authorization.
 - Single user/source auth failure, timeout, blocked, or parse error must not collapse the whole small batch into no output.
 - Unified login log online API is reliable only for about 7 days and mainly covers APP login / refresh token / password verification. Complaint time outside that window must be marked `login_log_window_incomplete` and `source_time_range_gap`.
 - APP login no_data, single DID, or stable IP can only support `app_login_visible_window_no_strong_anomaly`; it cannot output low risk, no risk, or ATO exclusion without other counter evidence.
@@ -327,17 +343,22 @@ Applies to:
 - Expansion planning.
 - Strategy evaluation / kill-vs-review separation / batch expansion.
 - Strategy recommendation / monitoring metrics / grey release / false-positive control / governance design even when the prompt contains `user_id`.
-- 3+ `user_id` or `device_id` batch analysis unless the user has explicitly confirmed real batch execution cost and scope.
-- 10+ detected entities of type `user_id` / `device_id` / `did` / `ip` / `account` / generic entity. This is a hard guard: route to `batch_clustering_mode` or plan mode, never one-by-one online execution by default.
+- Batch attack judgement when the prompt asks for strategy, expansion, grey
+  release, false-positive control, monitoring, governance, or warehouse
+  analysis. Route by the three-mode guard; do not default to one-by-one online
+  execution or DataAgent/Hive execution.
 
 Behavior:
 
 - Do not call tools.
 - Do not call DataAgent.
-- Do not query more users.
-- Only output DataAgent / Hive query plan.
-- Must explicitly include `offline_hive_required=true` and `DataAgent_plan_needed=true`.
-- For batch prompts, output case registry requirements, pattern summary plan, evidence layering, missing evidence, and DataAgent/Hive query plan.
+- Do not query more users unless the selected three-mode path permits sampled
+  realtime observation and the current prompt is execution mode.
+- Only output DataAgent / Hive query plan unless the user explicitly authorizes
+  the current query scope.
+- For batch prompts, output mode selection, entity graph requirements, source
+  commonality, fusion plan, missing evidence, and DataAgent/Hive query plan when
+  needed.
 
 ### B1. hard batch routing guard
 
@@ -345,21 +366,35 @@ This guard runs before execution mode selection.
 
 ```yaml
 batch_routing_guard:
-  entity_count_3_9: batch_plan_mode
-  entity_count_10_49: batch_clustering_mode
-  entity_count_50_plus: large_batch_aggregation_mode_or_DataAgent_Hive_query_plan
-  default_online_execution_allowed: false
+  allowed_modes:
+    - full_observation_mode
+    - sample_expand_validate_mode
+    - wide_table_aggregate_mode
+  entity_count_lte_10: full_observation_mode
+  entity_count_gt_10_urgent_unknown_no_wide_table: sample_expand_validate_mode
+  entity_count_gt_10_wide_table_strategy_history_dataagent_hive: wide_table_aggregate_mode
+  default_large_batch_one_by_one_execution_allowed: false
+  dataagent_hive_requires_explicit_authorization: true
 ```
 
 Rules:
 
-- If the input contains 10 or more `user_id`, `device_id`, `did`, `ip`, `account`, or entity identifiers, execution mode is blocked unless the user explicitly says "逐个查每个用户", "逐个在线查询", or "每个都调平台查".
-- For 10-49 entities, select `batch_clustering_mode`.
-- For 50+ entities, select aggregation / DataAgent-Hive query plan and do not run online one-by-one checks.
-- For 2-9 ATO complaint users, use `small_batch_execution_with_checkpoint` and P0-only default execution.
-- For 3-9 non-ATO entities, default to `batch_plan_mode`; if the user asks for small-sample execution, ask for confirmation or limit to representative samples.
-- Strategy recommendation, expansion, grey release, false-positive control, monitoring, and governance requests remain plan mode even when user ids are attached.
-- Required batch output fields: `batch_clustering_mode`, `relation_family`, `evidence_basis`, `denominator_status`, `relationship_strength`, `reverse_check_result`, `confounder_risk`, `cannot_conclude_boundary`, `representative_cases`, `pattern_summary`, `required_validation`, `candidate_strategy_direction`.
+- If the input contains more than 10 entities, do not deep-check every entity
+  online by default.
+- `full_observation_mode` still requires `entity_resolution_first` and
+  `source_commonality_card`; it is not a per-user transcript.
+- `sample_expand_validate_mode` samples and validates coverage; it must not
+  silently inspect all 50/100/1000 entities.
+- `wide_table_aggregate_mode` expects a `wide_table_aggregate_report`; a
+  pending DataAgent/Hive job is not evidence.
+- Strategy recommendation, expansion, grey release, false-positive control,
+  monitoring, and governance requests remain plan / report mode even when ids
+  are attached.
+- Required batch output fields: selected mode, `entity_graph`,
+  `source_commonality_card` or `wide_table_aggregate_report`,
+  `multi_source_fusion`, `cluster_summary_card`, `attack_chain_renderer`,
+  strategy candidates, `source_quality`, `missing_evidence` and conclusion
+  boundary.
 
 ### B2. evidence boundary mode
 

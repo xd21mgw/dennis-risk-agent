@@ -79,7 +79,7 @@
 注意：
 
 - 进入 release 前仍必须运行 `release_preflight_check.py`。
-- 若 release 包包含本目录，应确保不带出真实 run logs、raw observation、case 原始样本或敏感字段。
+- 若 release 包包含本目录，应确保不带出真实 run logs、source observation、case 原始样本或敏感字段。
 
 ## 未做事项
 

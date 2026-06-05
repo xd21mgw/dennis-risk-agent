@@ -40,7 +40,7 @@ This checklist is the release and live-overlay gate for Dennis Risk Agent runtim
 - Focused overlays must not include top-level `AGENTS.md` or `TOOLS.md` unless explicitly declared as a `main-entry patch`.
 - `TOOLS.md` must contain `TOOLS_MAIN_ENTRY_GUARD_FULL`; a focused overlay must not replace it with a short stub.
 - Verify overlay file list is generated from the canonical baseline, not from historical patch folders.
-- Verify no full deep skill source, full prompt, historical run logs, raw observations, auth state, cookie, token, session, header, or risky fixtures are included.
+- Verify no full deep skill source, full prompt, historical run logs, source observations, auth state, cookie, token, session, header, or risky fixtures are included.
 - Verify release notes explicitly distinguish:
   - template exists
   - release overlay copied

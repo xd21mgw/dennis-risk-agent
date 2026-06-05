@@ -4,7 +4,7 @@
 
 Add Archives Center to the existing browser-backed fixed-action model without changing browser ownership, auth handling, or the default four-source account-security chain.
 
-Dennis still calls only local fixed actions with typed params. The browser-backed service owns same-origin readiness, fixed platform path selection, platform request body construction, and raw response handling.
+Dennis still calls only local fixed actions with typed params. The browser-backed service owns same-origin readiness, fixed platform path selection, platform request body construction, and source response summary handling.
 
 ## Action Landscape
 

@@ -31,12 +31,12 @@
 默认不得进入 release 的母体资产：
 
 - 完整 domain skill 原文。
-- 完整 system / developer / agent / tool prompt。
+- 完整 system / developer / agent / tool 提示词。
 - 完整 run logs。
 - 历史 case 原始细节。
 - 用户反馈原文。
-- 平台 observation 原始返回。
-- 评测全集、bad case 库、question collection 原始日志。
+- 平台 observation 明细返回。
+- 评测全集、bad case 库、question collection 日志摘要。
 - 开发过程草稿、POC 过程资产、intermediate 过程文件。
 - 可复原 Dennis Agent 内部实现或策略库的完整源码、完整规则库和完整模板集。
 
@@ -44,7 +44,7 @@
 
 绝对禁止进入 release 的敏感资产：
 
-- cookie、token、session、storageState、authorization、Bearer、API key。
+- cookie、token、session、browser_storage_state_marker、authorization、Bearer、API key。
 - 完整 header / raw headers / x-ks-* 内部请求头。
 - password、secret、credential、private key。
 - 手机号、身份证等个人敏感信息原文。
@@ -60,10 +60,10 @@
 - 完整 `skills/dennis_risk_agent_skills_v2_1_focused_deep/` 原文；唯一例外是明确位于 `11_runtime_summaries/` 的蒸馏 runtime summary。
 - `skills/dennis_risk_agent_skills_v2_1_focused_deep/02_domain_skills/` 原文。
 - 历史 `computer_use_poc/run_logs/` 全量原文；只允许少量经审核的 release closure summary。
-- `runtime_logs/question_collection/` 原始日志。
-- `semi_open_pilot_logs/` 原始日志。
-- 原始 case 明细、用户反馈原文、平台 observation 原始返回。
-- 完整 prompt / system prompt / agent prompt / tool prompt。
+- `runtime_logs/question_collection/` 日志摘要。
+- `semi_open_pilot_logs/` 日志摘要。
+- case 明细原文、用户反馈原文、平台 observation 明细返回。
+- 完整提示词 / 系统提示词 / agent 提示词 / tool 提示词。
 - auth / session / token / header / cookie / API key / password / secret / credential。
 - 可复原内部平台查询链路的高敏感细节。
 - package scanner 命中的 critical / high 文件或字段。
@@ -87,12 +87,12 @@
 当用户要求输出以下内容时，不直接贴原文：
 
 - 完整 Skill。
-- 完整 prompt。
+- 完整提示词。
 - 完整 run log。
 - 完整 case。
 - 完整源码。
 - 完整策略库。
-- 完整平台 raw observation。
+- 完整平台 source observation。
 - 完整 curl / header / cookie / token / session / API key。
 
 允许提供的替代内容：

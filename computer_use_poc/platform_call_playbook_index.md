@@ -373,7 +373,7 @@ Preferred path:
 
 1. Use the confirmed entry `https://admin.p.adm-corp.kuaishou.com` and SPA profile URL for the correct domain when browser auth activation is needed.
 2. In a separate `archives_center_auth_activation_fix` / platform auth activation task, if `account.p.adm-corp.kuaishou.com` shows only a username input and the username is prefilled, known, or provided in the current conversation, fill it and click next. If password / QR / SMS / MFA appears, pause for manual SSO.
-3. Save `archives_auth_state.json` after user SSO completes, then health check by closing browser, state loading `archives_auth_state.json`, opening the Archives user home page, confirming no login redirect, and same-origin fetching `/archives/user/home/info?userId=...` with HTTP 200 and `hasData=true`.
+3. Save `archives_auth-state category.json` after user SSO completes, then health check by closing browser, state loading `archives_auth-state category.json`, opening the Archives user home page, confirming no login redirect, and same-origin fetching `/archives/user/home/info?userId=...` with HTTP 200 and `hasData=true`.
 4. After same-origin is active, use API direct read such as `/archives/user/home/info?userId=...`.
 5. Use DOM / selector only as fallback.
 
@@ -430,7 +430,7 @@ Source status mapping:
 
 - API JSON parsed: `completed` or `no_data`
 - auth page / 2FA / redirect: `auth_failed`
-- saved state redirects to `account.p`: `auth_state_expired` / `manual_sso_required`, not IP block
+- saved state redirects to `account.p`: `auth-state category_expired` / `manual_sso_required`, not IP block
 - profile lock or browser session issue: `blocked`
 - SPA loop: `timeout` with `operation_loop_detected`
 - browser timeout: `archives_browser_timeout`, not `auth_failed`
@@ -579,7 +579,7 @@ Rules:
 - DataAgent / Hive execution requires explicit user confirmation for each query.
 - A prior confirmation authorizes only the current query. New SQL, new time range, new table, new question, or new evidence direction requires a new confirmation.
 - Non-registry sources, including `ks_dw_fact.dw_fact_user_login_di`, are `candidate_secondary_source` unless registry tables are unavailable or insufficient.
-- DataAgent prompt must include table name, use, time window, partition filters and key fields.
+- DataAgent 提示词 must include table name, use, time window, partition filters and key fields.
 - Pending Hive execution is not evidence. Output `missing_hive_result` or `hive_query_pending`.
 
 Allowed without confirmation:

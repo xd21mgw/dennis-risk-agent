@@ -4,7 +4,7 @@
 
 所有内部平台手脚和 capability 调用都必须留下可审计记录，用于复盘、问责、权限排查和安全评估。
 
-审计日志不存放敏感原文。`raw_result_reference` 只能是内部安全引用，不能包含 cookie、token、session、storageState、手机号、精确 IP、完整设备指纹、完整 header、完整 JSON 或内部密钥。
+审计日志不存放敏感原文。`source_result_reference` 只能是内部安全引用，不能包含 cookie、token、session、browser_storage_state_marker、手机号、精确 IP、完整设备指纹、完整 header、完整 JSON 或内部密钥。
 
 ## 2. 标准字段
 
@@ -40,7 +40,7 @@ tool_call_audit:
   prompt_injection_suspected:
   policy_flags:
   fallback_used:
-  raw_result_reference:
+  source_result_reference:
   manual_review_required:
 ```
 
@@ -73,7 +73,7 @@ tool_call_audit:
 - `prompt_injection_suspected`: 是否疑似提示词攻击。
 - `policy_flags`: 命中的安全策略标记。
 - `fallback_used`: 是否使用 fallback。
-- `raw_result_reference`: 内部安全引用，不含敏感原文。
+- `source_result_reference`: 内部安全引用，不含敏感原文。
 - `manual_review_required`: 是否需要人工复核。
 
 ## 4. YAML 示例
@@ -112,7 +112,7 @@ tool_call_audit:
     - readonly_first
     - sensitive_field_redaction_applied
   fallback_used: false
-  raw_result_reference: secure_internal_ref://audit/audit_20260520_000001
+  source_result_reference: secure_internal_ref://audit/audit_20260520_000001
   manual_review_required: false
 ```
 

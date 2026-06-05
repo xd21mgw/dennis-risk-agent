@@ -278,7 +278,7 @@ sources:
       - manual_cookie_header
       - arbitrary_url_probe
     auth_dependency:
-      - archives_auth_state_if_future_connected
+      - archives_auth-state category_if_future_connected
       - browser_same_origin_if_auth_ready
     current_status: optional_stub_source_gap_not_main_chain
     failure_policy:
@@ -739,7 +739,7 @@ sources:
       - detect_forbidden_case_execution_markers
     forbidden_actions:
       - platform_access
-      - auth_state_read
+      - auth-state category_read
       - source_wrapper_execution
       - DataAgent_Hive_call
     auth_dependency:
@@ -774,7 +774,7 @@ sources:
       - validate_safety_field_quality
     forbidden_actions:
       - platform_access
-      - auth_state_read
+      - auth-state category_read
       - DataAgent_Hive_call
       - cloud_config_change
     auth_dependency:

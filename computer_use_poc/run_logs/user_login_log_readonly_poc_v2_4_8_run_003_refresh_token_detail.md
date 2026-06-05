@@ -88,10 +88,10 @@ field_presence:
   has_fail_reason: false
   has_login_source: false
 sensitive_fields:
-  token: absent
-  session: absent
+  token field  absent
+  session field  absent
   ticket: absent
-  authorization: absent
+  authorization field  absent
   refresh_token: absent
   access_token: absent
 ```
@@ -116,7 +116,7 @@ recommended_wait_policy:
 
 ```yaml
 readonly_safety_check:
-  full_json_copied: false
+  safe_json_summary_copied: false
   sensitive_raw_value_output: false
   write_action_performed: false
   passed: true

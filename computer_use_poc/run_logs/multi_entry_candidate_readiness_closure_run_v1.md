@@ -30,7 +30,7 @@ Closure points:
 - success / failed / partial envelope schema is documented.
 - `json.loads(stdout)` can parse success and validation failure outputs.
 - `recallSource=2,0,1,3` is preserved in constructed unified login URL.
-- no cookie / token / session / storageState / header is output.
+- no cookie / token / session / browser_storage_state_marker / header is output.
 - wrapper remains dry-run local URL construction in this repository; no real platform call.
 
 Envelope:

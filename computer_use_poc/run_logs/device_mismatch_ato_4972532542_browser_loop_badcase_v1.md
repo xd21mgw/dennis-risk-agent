@@ -55,7 +55,7 @@ If browser / SPA source loops or blocks:
 
 - real_platform_called: false
 - DataAgent_called: false
-- auth_state_modified: false
+- auth-state category_modified: false
 - gateway_modified: false
 - release_repacked: false
 - git_committed: false

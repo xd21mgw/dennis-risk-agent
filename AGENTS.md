@@ -409,14 +409,13 @@ Section classification: `main_agent_config_ops_only`, `deprecated_for_dennis_sub
 - agent-browser profile lock / SingletonLock 标 `profile_lock`，快速降级。
 - `auth_failed` / `redirect` / `same_origin_error` / `profile_lock` 都必须进入 `source_quality`，不得解释为 no_data。
 
-批量 ATO 小样本 2-9 用户：
+批量 ATO 小样本 2-10 用户：
 
-- 默认 `small_batch_execution_with_checkpoint`，不是纯 plan-only，也不是大批量分簇。
-- 允许逐个查询 P0 source，优先统一登录日志。
-- 只有异常用户再补 P1 source：Weapon / 天师策略命中 / 设备 SDK / 档案中心画像等低成本只读补证。
-- 默认不进入 P2 browser source。
-- 每个 `user_id/source` 独立 checkpoint。
-- 单用户 auth 失败不得导致整体无输出。
+- 默认 `full_observation_mode`，不是纯 plan-only，也不是旧大批量分簇。
+- 先做 `entity_resolution_first`，再观察当前安全 realtime source 范围内的样本。
+- 输出登录 / 档案 / 作品 / Track / Weapon 条件补证的横向共性、分簇和攻击链边界。
+- 每个 `user_id/source` 仍保留 checkpoint；单用户 auth 失败不得导致整体无输出。
+- 用户问“同类攻击 / 举一反三 / 扩量”时，扩展部分仍是 plan / authorized offline flow，不自动扩量。
 
 ## Semi-open Experience Patch v1
 
@@ -542,16 +541,30 @@ execution 开始时先写 observation skeleton：`user_prompt`、`routing_mode`�
 - 输出策略框架、灰度实验、误伤控制、监控指标、样本分层、取证字段。
 - 只有用户明确说“查这些用户 / 调平台 / 看登录日志 / 看 OAuth 授权记录”时才 execution。
 
-### ATO small batch execution 与大批量边界
+### 批量攻击研判三模式
 
-- 1-2 个实体：可进入 execution，timeout=180s。
-- 2-9 个 `user_id` ATO 客诉：默认 `small_batch_execution_with_checkpoint`；允许逐个查 P0 source，优先统一登录日志；只对异常用户补 P1 source；默认不进 P2 browser。
-- 3+ 非 ATO 实体，或用户问共性归因 / 分层判断但未授权 execution：默认 `batch_plan_mode`。
-- 10+ `user_id` / `device_id` / `did` / `ip` / `account` / entity：强制 `batch_clustering_mode` 或 plan mode；默认禁止逐个 online execution。
-- 10-49 个实体：`batch_clustering_mode`，必须输出异常相关性矩阵、代表样本、pattern summary、required_validation 和 candidate_strategy_direction。
-- 50+ 个实体：aggregation / DataAgent-Hive query plan，不在线逐个查。
-- 除非用户明确说“逐个查每个用户 / 逐个在线查询 / 每个都调平台查”，否则不得逐个查 10+ 实体。
-- 策略推荐 / 举一返三 / 灰度 / 误伤控制，即使带 user_id，也仍 plan_mode。
+批量攻击研判只使用三种当前模式；旧
+`small_batch_execution_with_checkpoint`、`batch_clustering_mode`、
+`large_batch_aggregation_mode` 等名称只作 historical alias，不作为当前
+用户可见模式。
+
+- `entity_count <= 10`：默认 `full_observation_mode`。先做
+  `entity_resolution_first`，再横向比较 source 共性、多源融合、风险分簇
+  和攻击链；不得输出逐个用户流水账。
+- `entity_count > 10` 且用户意图是当天急查、先看看、是否同源、未知风险
+  或暂无宽表：默认 `sample_expand_validate_mode`。抽 10 个样本深查，最多
+  5 轮 / 50 个实时深查，输出 round_result / cumulative_result，再决定继续
+  扩样、停止或进入离线验证。
+- `entity_count > 10` 且用户意图是宽表、特征、覆盖率、准召、策略、历史
+  复盘、DataAgent/Hive：默认 `wide_table_aggregate_mode`。DataAgent/Hive
+  只产出统计包 `wide_table_aggregate_report`，Dennis 做解释和策略候选；
+  未经逐次明确授权不得执行。
+- 三模式共用 evidence boundary：`no_data` 不反证，策略命中不单独定性，宽
+  表统计相关性不等于完整攻击链，代表样本不能直接代表全量覆盖。
+- 策略建议必须同时输出展示优先级和行动分组：P0 =
+  `ready_for_controlled_gray_validation`，P1 = `combine_before_use`，P2 =
+  `monitor_or_expand_only`。P0 只表示可进入受控灰度验证，不表示自动上线、
+  自动拦截或直接处置。
 
 ### 统一登录日志 source boundary
 
@@ -672,7 +685,7 @@ timeout / no_data / blocked 不等于无风险。
 - 禁止在 `route` 字段输出 agent 名，例如 `dennis-risk-agent`。
 - 禁止在 `capability` 字段输出自创能力名，例如 `strategy_attribution`、`user_risk_profile`。
 - 如果不确定具体 capability，优先使用 `multi_evidence_orchestration`，不要自创名称。
-- `execution_mode` 必须使用标准枚举：`single_entity_execution_mode`、`small_batch_execution_with_checkpoint`、`batch_clustering_mode`、`plan_mode`、`expert_mode`、`denied`。
+- `execution_mode` 必须使用标准枚举：`single_entity_execution_mode`、`full_observation_mode`、`sample_expand_validate_mode`、`wide_table_aggregate_mode`、`plan_mode`、`expert_mode`、`denied`。旧 `small_batch_execution_with_checkpoint` / `batch_clustering_mode` / `large_batch_aggregation_mode` 只作 historical alias。
 - `evidence_mode` 必须使用标准枚举：`evidence_card`、`partial_evidence`、`small_batch_evidence_summary`、`batch_pattern_summary`、`strategy_recommendation`、`expert_reasoning`。
 - 未调用真实平台时，内部 metadata 记平台未调用；未调用 DataAgent 时，内部 metadata 记 DataAgent 未调用。
 - 正常必须标记未输出敏感信息。

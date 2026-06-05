@@ -84,7 +84,7 @@ runners:
       - /rest/unified/log/search
       - /apiv2/graphData
       - /apiv2/riskData
-    auth_state_dependency:
+    auth-state category_dependency:
       - SmartSSOSession
       - controlled_cookie_state_fallback
     downstream_source_chaining:
@@ -136,8 +136,8 @@ runners:
       - admin.p.adm-corp.kuaishou.com
     fixed_endpoints:
       - /archives/user/home/info
-    auth_state_dependency:
-      - archives_auth_state
+    auth-state category_dependency:
+      - archives_auth-state category
       - browser_same_origin_if_auth_ready
     downstream_source_chaining:
       - login_device_to_weapon_riskData_when_device_id_available
@@ -201,7 +201,7 @@ runners:
     fixed_endpoints:
       - fastQueryHbase
       - eventList
-    auth_state_dependency:
+    auth-state category_dependency:
       - future_live_readonly_adapter_disabled_by_default
     downstream_source_chaining:
       - event_id_to_rcp_detail
@@ -250,7 +250,7 @@ runners:
       - /dp/platform/app/analytics/v2/sequence/getDeviceIds
       - /dp/platform/app/analytics/v2/sequence/getUseDuration
       - /dp/platform/app/analytics/v2/sequence/profile
-    auth_state_dependency:
+    auth-state category_dependency:
       - future_runner_contract
     downstream_source_chaining:
       - device_ids_to_weapon_riskData

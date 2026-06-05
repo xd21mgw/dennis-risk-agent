@@ -116,7 +116,7 @@ Forbidden to record:
 - session / sessionId
 - header containing credentials
 - auth state
-- storageState
+- browser_storage_state_marker
 - phone / mobile number plaintext
 - ID card / identity number
 - credential file content

@@ -56,7 +56,7 @@ user_feedback:
 
 Security rules:
 
-- Do not store cookie, token, session, storageState, header, password, auth code, or credential secret.
+- Do not store cookie, token, session, browser_storage_state_marker, header, password, auth code, or credential secret.
 - Phone number and personal identity data must be removed or converted to safe reference.
 - UID / DID / IP can appear as internal risk entities only when necessary and should be safe-refed for wider sharing.
 - Feedback text should be sanitized before it enters candidate queue or case learning note.

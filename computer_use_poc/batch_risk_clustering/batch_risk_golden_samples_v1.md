@@ -1,6 +1,9 @@
 # Batch Risk Golden Samples v1
 
-These are simulated text-level golden samples. They contain no real platform data, no real user identifiers, no credentials, and no raw internal observations.
+These are simulated text-level golden samples. They contain no real platform
+data, no real user identifiers, no credentials, and no raw internal
+observations. Older mode names in this file are `historical_only` regression
+material and must not override the current three-mode runtime routing.
 
 Purpose:
 

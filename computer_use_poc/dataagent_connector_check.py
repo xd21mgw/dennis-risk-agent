@@ -45,10 +45,10 @@ def read_file(name: str) -> str:
     return (COMPUTER_USE_POC / name).read_text(encoding="utf-8")
 
 
-def make_step_answer(answer: str, *, session_id: str = "mock_session") -> dict[str, Any]:
+def make_step_answer(answer: str, *, runtime_scope_id: str = "mock_runtime_scope") -> dict[str, Any]:
     return {
         "request_id": "mock_request",
-        "session_id": session_id,
+        "session_id": runtime_scope_id,
         "query_id": "mock_query",
         "steps": [
             {"type": "MODEL_THINKING", "content": "planning is not evidence"},
@@ -93,13 +93,13 @@ GROUP BY user_id;
     ),
     "sensitive": make_step_answer(
         """```sql
-SELECT user_id, phone, token
+SELECT user_id, phone, token_field
 FROM ks_rc_bs.dwd_risk_usr_accnt_login_orign_info;
 ```
 
-| user_id | phone | token | login_type |
+| user_id | phone | token_field | login_type |
 | --- | --- | --- | --- |
-| 544963630 | 13800000000 | abc-token | password |
+| 544963630 | phone_safe_ref | redacted_token_ref | password_auth_type |
 """
     ),
 }

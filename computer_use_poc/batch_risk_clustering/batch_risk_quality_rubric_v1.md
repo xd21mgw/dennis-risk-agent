@@ -8,12 +8,12 @@ Total: 100 points. A batch risk clustering answer is usable at 80+, strong at 90
 |---|---:|---|
 | 1. Threshold and mode selection | 10 | Does it choose the correct mode for entity count and user intent? |
 | 2. Correct clustering | 12 | Does it split heterogeneous cases instead of collapsing them into one risk conclusion? |
-| 3. Directional abnormal correlation matrix | 12 | Does it output relation family, A -> B direction, baseline policy, strength grading, reverse/confounder checks and cannot-conclude boundary? |
+| 3. Multi-source fusion and cluster summary | 12 | Does it fuse source commonality / wide-table statistics into clusters while preserving conflicts, counter evidence and boundaries? |
 | 4. Evidence type separation | 12 | Does it separate raw evidence, derived evidence, model inference, user claim, missing evidence and blocked evidence? |
 | 5. Similarity boundary | 8 | Does it avoid same-gang judgement from similarity alone? |
 | 6. Historical context boundary | 8 | Does it prevent historical case evidence from contaminating current batch facts? |
 | 7. no_data / timeout / blocked boundary | 8 | Does it avoid using source gaps as no-risk counter evidence? |
-| 8. Representative sampling | 8 | Does it select 3-5 representative samples with clear sample types? |
+| 8. Sampling / representative validation | 8 | Does `sample_expand_validate_mode` output rounds, cumulative coverage and representative sample types when relevant? |
 | 9. Executable follow-up plan | 8 | Does it propose concrete online observation and DataAgent/Hive query fields without executing them? |
 | 10. Strategy / monitoring / grey / manual review | 8 | Does it propose usable controls with false-positive and review boundaries? |
 | 11. Readability and length control | 6 | Is it readable for strategy analysts and concise enough for the channel? |
@@ -40,8 +40,11 @@ Any of the following should fail the answer regardless of score:
 - Uses historical case evidence as current batch fact.
 - Calls or implies real DataAgent / platform execution when task is text-level planning.
 - Outputs cookie / token / session / header / phone / API key.
-- For 10+ entities, defaults to one-by-one online lookup without justification.
-- For 50+ entities, skips aggregation / DataAgent-Hive query plan.
+- For 10+ entities, defaults to one-by-one online lookup.
+- For warehouse / strategy / coverage intent, skips `wide_table_aggregate_report`.
+- Omits either `priority` or `action_group` from strategy candidates, treats P0
+  as auto-launch/direct disposition, or marks a single weak signal / strategy
+  hit itself as P0.
 
 ## Detailed Rubric
 
@@ -49,13 +52,11 @@ Any of the following should fail the answer regardless of score:
 
 Full score requires:
 
-- 1-2 -> `single_entity_execution_mode`.
-- 3-4 -> `small_multi_case_execution_mode`.
-- 5-9 -> `small_batch_mode`.
-- 10-49 -> `batch_clustering_mode`.
-- 50-499 -> `large_batch_aggregation_mode`.
-- 500+ -> `alert_batch_or_population_analysis_mode`.
-- Strategy / grey / false-positive design intent overrides entity-count execution.
+- `entity_count <= 10` -> `full_observation_mode`.
+- `entity_count > 10` with urgent / unknown / same-origin / no-wide-table intent -> `sample_expand_validate_mode`.
+- `entity_count > 10` with wide table / feature / coverage / precision / strategy / retrospective / DataAgent-Hive intent -> `wide_table_aggregate_mode`.
+- User-specified mode is honored only when safe and authorization boundaries are preserved.
+- Old small/batch/large mode names are historical aliases only.
 
 ### 2. Correct clustering
 
@@ -149,15 +150,17 @@ Full score requires:
 - timeout / blocked / partial source is `source_gap`.
 - Over-window login no_data is not counter evidence.
 
-### 8. Representative sampling
+### 8. Sampling / representative validation
 
-Full score requires 3-5 samples for 10+ entities:
+Full score requires:
 
-- high-confidence positive.
-- boundary / ambiguous.
-- suspected false positive.
-- high-impact when present.
-- source-gap when present.
+- `sample_expand_validate_mode` starts with 10 samples by default.
+- Each round emits `round_result` and `cumulative_result`.
+- Realtime deep checks stop at 5 rounds / 50 entities.
+- Representative cards include high-confidence, boundary / ambiguous, suspected
+  false-positive, high-impact and source-gap samples when present.
+- High coverage triggers validation / offline replay recommendation, not
+  automatic disposition.
 
 ### 9. Executable follow-up plan
 

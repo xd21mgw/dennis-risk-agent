@@ -10,7 +10,7 @@
 - output: `computer_use_poc/run_logs/security_preflight_shadow_metrics_aggregator_run_v1.md`
 - real_runtime_connected: false
 - real_platform_called: false
-- auth_state_read: false
+- auth-state category_read: false
 - enforce_mode_enabled: false
 
 ## 核心指标

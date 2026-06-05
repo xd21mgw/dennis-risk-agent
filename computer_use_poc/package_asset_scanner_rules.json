@@ -59,6 +59,41 @@
       "reason": "Runtime wrapper is required for readonly validation."
     },
     {
+      "name": "allow_sso_runner_bin_wrapper",
+      "pattern": "computer_use_poc/bin/sso_session_runner",
+      "reason": "Reviewed runtime overlay wrapper; contains no credential material and forwards to the controlled runner."
+    },
+    {
+      "name": "allow_platform_access_execution_run_log",
+      "pattern": "computer_use_poc/run_logs/platform_access_execution_v0_1_hardening.md",
+      "reason": "Selected redacted Platform Access Execution overlay run log; no raw platform observations or auth material."
+    },
+    {
+      "name": "allow_track_analysis_contract_correction_run_log",
+      "pattern": "computer_use_poc/run_logs/track_analysis_contract_correction_v0_1.md",
+      "reason": "Selected redacted track-analysis contract correction run log; contains contract deltas only."
+    },
+    {
+      "name": "allow_platform_access_overlay_packaging_run_log",
+      "pattern": "computer_use_poc/run_logs/platform_access_execution_overlay_packaging_v0_1.md",
+      "reason": "Selected redacted Platform Access Execution overlay packaging run log."
+    },
+    {
+      "name": "allow_platform_access_overlay_packaging_run_log_v0_1_1",
+      "pattern": "computer_use_poc/run_logs/platform_access_execution_overlay_packaging_v0_1_1.md",
+      "reason": "Selected redacted Platform Access Execution v0.1.1 overlay packaging run log."
+    },
+    {
+      "name": "allow_source_execution_guard_run_log",
+      "pattern": "computer_use_poc/run_logs/source_execution_guard_patch_v1.md",
+      "reason": "Selected redacted source execution guard patch run log; contains guard deltas only."
+    },
+    {
+      "name": "allow_platform_access_run_logs_dir",
+      "pattern": "computer_use_poc/run_logs/",
+      "reason": "Container directory for a single allowlisted Platform Access Execution overlay run log."
+    },
+    {
       "name": "allow_runtime_summaries",
       "pattern": "skills/dennis_risk_agent_skills_v2_1_focused_deep/11_runtime_summaries/**",
       "reason": "Distilled runtime summaries are allowed; full mother-body skills are not."

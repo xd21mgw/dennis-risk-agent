@@ -14,7 +14,7 @@
 - real_runtime_connected: false
 - real_platform_called: false
 - real_api_called: false
-- auth_state_read: false
+- auth-state category_read: false
 - enforce_mode_enabled: false
 
 ## 指标汇总

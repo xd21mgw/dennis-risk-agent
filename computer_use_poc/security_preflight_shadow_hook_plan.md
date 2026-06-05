@@ -123,9 +123,9 @@ preflight 要求脱敏，但真实输出仍含敏感字段。
 
 典型场景：
 
-- 输出包含 cookie / token / session / storageState。
+- 输出包含 cookie / token / session / browser_storage_state_marker。
 - 输出包含手机号、精确 IP、完整 device fingerprint。
-- 输出包含完整 requestParam / extraParam / raw response。
+- 输出包含完整 requestParam / extraParam / source response summary。
 
 ### unknown_capability_event
 

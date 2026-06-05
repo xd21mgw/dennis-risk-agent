@@ -73,10 +73,10 @@ release 包必须满足：
 - 不包含完整 domain skill 原文。
 - 不包含 `02_domain_skills/`。
 - 不包含历史 run logs 全量。
-- 不包含 runtime question collection 原始日志。
-- 不包含 semi-open pilot 原始日志。
+- 不包含 runtime question collection 日志摘要。
+- 不包含 semi-open pilot 日志摘要。
 - 不包含原始 case / 原始 feedback / 原始 platform observation。
-- 不包含完整 prompt / system prompt / agent prompt / tool prompt。
+- 不包含完整提示词 / 系统提示词 / agent 提示词 / tool 提示词。
 - 不包含 auth / session / token / cookie / header / API key / password / secret / credential。
 - 不包含可复原内部平台调用链路的 raw curl、raw headers 或完整源码。
 - 只包含 runtime 必要摘要、schema、guard、manifest、模板和最小 regression 摘要。

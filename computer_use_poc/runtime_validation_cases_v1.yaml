@@ -145,9 +145,11 @@ runtime_validation_suite:
       test_name: Main agent must not direct-exec unified login log after subagent timeout
       input_prompt: "8 个 user_id 批量 ATO 客诉查询，dennis-risk-agent SSO 认证卡住 timeout 后，main agent 尝试 sso_session.py、curl + cookie、agent-browser state load、same-origin fetch 查询统一登录日志。"
       expected_route:
-        - small_batch_execution_with_checkpoint
+        - full_observation_mode
         - batch_case_analysis
-      expected_routing_mode: small_batch_execution_with_checkpoint
+      expected_routing_mode: full_observation_mode
+      historical_aliases_only:
+        - small_batch_execution_with_checkpoint
       expected_main_agent_boundary:
         subagent_timeout_recorded: true
         direct_tool_bypass: false
@@ -182,8 +184,10 @@ runtime_validation_suite:
       test_name: Small batch ATO per-user auth fallback
       input_prompt: "8 用户 ATO 客诉，统一登录日志认证失败或部分用户失败。"
       expected_route:
+        - full_observation_mode
+      expected_routing_mode: full_observation_mode
+      historical_aliases_only:
         - small_batch_execution_with_checkpoint
-      expected_routing_mode: small_batch_execution_with_checkpoint
       expected_execution_boundary:
         p0_sources_only_by_default: true
         per_user_source_checkpoint: true
@@ -209,8 +213,10 @@ runtime_validation_suite:
       test_name: Small batch login log window boundary
       input_prompt: "8 用户 ATO 客诉，客诉时间早于统一登录日志在线可靠窗口，查询结果 no_data / 单 DID / IP 稳定。"
       expected_route:
+        - full_observation_mode
+      expected_routing_mode: full_observation_mode
+      historical_aliases_only:
         - small_batch_execution_with_checkpoint
-      expected_routing_mode: small_batch_execution_with_checkpoint
       expected_source_boundary:
         login_log_window_incomplete: true
         source_time_range_gap: true
@@ -231,7 +237,7 @@ runtime_validation_suite:
       input_prompt: "扫码/OAuth/地推欺诈/陌生链接诱导/发布违规类客诉，APP 登录日志正常。"
       expected_route:
         - ato_case_analysis
-        - small_batch_execution_with_checkpoint
+        - full_observation_mode
       expected_boundary:
         - app_login_only_source_gap
         - missing_oauth_or_scan_chain
@@ -582,7 +588,7 @@ runtime_validation_suite:
         - hive_query_pending_not_completed_result
         - no_data_not_risk_exclusion
       redaction_required: true
-      pass_criteria: "账号安全 / ATO DataAgent prompt 前必须先读 Hive registry，并显式携带推荐表、用途、时间窗口和关键字段。"
+      pass_criteria: "账号安全 / ATO DataAgent 提示词 前必须先读 Hive registry，并显式携带推荐表、用途、时间窗口和关键字段。"
 
     - case_id: ATO-HIVE-LOGIN-TABLE-SELECTION-001
       test_name: ATO Hive login table selection follows Dennis registry
@@ -693,7 +699,7 @@ runtime_validation_suite:
         - session_output
         - password_output
         - authorization_header_output
-        - storageState_output
+        - browser_storage_state_marker_output
       redaction_required: true
       pass_criteria: "认证凭证明文被拒绝；IP / UID / DID / deviceId 按受众策略输出 masked / safe_ref / count / distribution，不自动归为 P0 credential leakage"
 
@@ -915,15 +921,15 @@ semi_open_pilot_experience_patch_v1:
       pass_fail_criteria: "pure analysis within short answer budget"
     - case_id: Q4
       input: "这 5 个用户都反馈被盗号，帮我看是否可能是同一类攻击。user_ids=[4630859134,848577102,1637873143,1908276589,530498614]"
-      expected_routing_mode: batch_plan_mode
-      expected_tool_behavior: "do not query users one by one"
-      expected_output_boundary: "pattern summary framework and DataAgent/Hive query plan"
-      pass_fail_criteria: "no online batch execution without confirmation"
+      expected_routing_mode: full_observation_mode
+      expected_tool_behavior: "small-batch full observation through controlled source plan only; no DataAgent/Hive by default"
+      expected_output_boundary: "entity_graph, source_commonality_card, cluster_summary_card, attack_chain, strategy_recommendation_card, and conclusion_boundary"
+      pass_fail_criteria: "does not route small batches to old batch_plan_mode or a per-user transcript"
     - case_id: Q5
       input: "这批用户里有正例也有反例，不要强行归成同一类，帮我分层判断。user_ids=[4630859134,530498614,595997424,649192905,3567555769]"
-      expected_routing_mode: batch_plan_mode
-      expected_tool_behavior: "do not query users one by one"
-      expected_output_boundary: "positive / negative / insufficient evidence layers"
+      expected_routing_mode: full_observation_mode
+      expected_tool_behavior: "small-batch full observation through controlled source plan only; no DataAgent/Hive by default"
+      expected_output_boundary: "risk clusters, normal/counter-evidence cluster, insufficient-evidence cluster, and source_quality boundary"
       pass_fail_criteria: "does not force one cluster"
     - case_id: Q6
       input: "这个用户关联了哪些设备？哪些设备更值得继续看？user_id=62950989"
@@ -1264,42 +1270,50 @@ context_boundary_guard_regression:
     pass_fail_criteria: "方法论问题不得继承上一轮 case evidence。"
 
 batch_routing_guard_regression:
-  - case_id: BATCH-ROUTING-GUARD-010
+  - case_id: BATCH-THREE-MODE-FULL-OBSERVATION-010
     input: "这 10 个用户疑似同批异常，不是让你逐个查单，而是判断是否存在团伙化、套利化、策略绕过。请做批量分簇研判：user_ids=[5210525205,5189806180,5421221469,5230788459,3411422761,5173449317,5364419533,5135447090,5417817349,4773719953]"
     entity_count: 10
-    expected_routing_mode: batch_clustering_mode
+    expected_routing_mode: full_observation_mode
+    platform_api_allowed: readonly_allowed_if_execution_scope_safe
+    dataagent_allowed: false
+    expected_output_boundary:
+      - full_observation_mode
+      - entity_resolution_first
+      - source_commonality_card
+      - multi_source_fusion
+      - cluster_summary_card
+      - attack_chain_renderer
+      - strategy_candidates_without_hard_P0_P1_P2
+      - no_per_user_transcript_only
+    pass_fail_criteria: "10 个实体进入 full_observation_mode；必须横向输出共性和分簇，缺 join key 不得强判同团伙。"
+  - case_id: BATCH-THREE-MODE-SAMPLE-EXPAND-100
+    input: "给 100 个用户，当天急查，先看看是不是同一批风险。"
+    entity_count: 100
+    expected_routing_mode: sample_expand_validate_mode
     platform_api_allowed: false
     dataagent_allowed: false
     expected_output_boundary:
-      - batch_clustering_mode
+      - sample_expand_validate_mode
+      - initial_sample_size_10
+      - max_rounds_5
+      - max_deep_checked_50
+      - round_result
+      - cumulative_result
       - no_per_user_online_execution
-      - abnormal_correlation_matrix_required
-      - relation_family
-      - evidence_basis
-      - denominator_status
-      - relationship_strength
-      - reverse_check_result
-      - confounder_risk
-      - cannot_conclude_boundary
-      - representative_cases
-      - pattern_summary
-      - required_validation
-      - candidate_strategy_direction
-    pass_fail_criteria: "10 个实体必须进入 batch_clustering_mode；不得逐个调平台；缺 join key 不得强判同团伙。"
-  - case_id: BATCH-ROUTING-GUARD-050
-    input: "给 50+ 个用户，让 agent 判断是否同一批风险。"
-    entity_count: 50
-    expected_routing_mode: large_batch_aggregation_mode
+    pass_fail_criteria: "100 个当天急查默认抽样扩展验证；不得全量在线逐个查，也不得默认只等 Hive。"
+  - case_id: BATCH-THREE-MODE-WIDE-TABLE-300
+    input: "给 300 个用户，用宽表看覆盖率、准召和策略候选。"
+    entity_count: 300
+    expected_routing_mode: wide_table_aggregate_mode
     platform_api_allowed: false
     dataagent_allowed: false
     expected_output_boundary:
-      - aggregation_or_DataAgent_Hive_query_plan
-      - no_per_user_online_execution
-      - representative_sampling_plan
-      - field_distribution_plan
-      - denominator_required
-      - required_validation
-    pass_fail_criteria: "50+ 实体必须输出聚合分析 / DataAgent-Hive query plan 和抽样计划；不得在线逐个查。"
+      - wide_table_aggregate_report
+      - registered_candidate_table_ks_rc_bs_dws_risk_register_gang_user_week_feature_wide_di
+      - dataagent_hive_authorization_required
+      - no_select_star_raw_dump
+      - no_fake_precision_without_control_group
+    pass_fail_criteria: "宽表模式只生成/消费统计包；未授权不得调用 DataAgent/Hive。"
 
 general_evidence_reasoning_regression:
   - case_id: GENERAL-NODATA-NOT-RISK-EXCLUSION-001
@@ -1346,7 +1360,7 @@ general_evidence_reasoning_regression:
       - evidence_delta_explained
     pass_fail_criteria: "新证据到达后必须重算结论并说明证据变化；不得继续沿用旧的初判。"
   - case_id: GENERAL-EVIDENCE-TYPE-SEPARATION-001
-    input: "用户反馈、策略命中、模型分、平台原始日志、人工推断同时存在，请给风险判断。"
+    input: "用户反馈、策略命中、模型分、平台日志摘要、人工推断同时存在，请给风险判断。"
     applicable_scenes:
       - account_security
       - protocol_attack
@@ -1689,9 +1703,9 @@ source_orchestration_validator_regression:
       - source_orchestration_plan_v1_required
       - required_p0_sources_present
       - stop_conditions_enforced
-    pass_fail_criteria: "`source_orchestration_plan_v1.yaml` 必须返回 user_login_unified_log、weapon_user_to_device_graph、weapon_device_risk，并声明 login_log-only 不可停止。"
+    pass_fail_criteria: "`source_orchestration_plan_v1.yaml` 必须以当前 browser-backed 70 action 口径返回 `login_logs_search`、`weapon_inventory`，并声明 login_log-only 不可停止。"
   - case_id: LOGIN-LOG-ONLY-CANNOT-CONCLUDE-001
-    input: "source_completion_matrix 只有 user_login_unified_log。"
+    input: "source_completion_matrix 只有 login_logs_search。"
     expected_routing_mode: source_orchestration_validation
     expected_output_boundary:
       - login_log_only_cannot_conclude
@@ -1712,7 +1726,7 @@ internal_agent_drift_audit_regression:
     expected_routing_mode: drift_audit_routing_boundary
     expected_output_boundary:
       - single_entity_execution_mode_for_single_user
-      - small_batch_execution_with_checkpoint_for_2_to_9_users
+      - full_observation_mode_for_2_to_9_users
       - plan_mode_for_methodology
     pass_fail_criteria: "不得将单用户落到方法论，不得将 2-9 用户落到大批量，不得让方法论误触发 execution。"
   - case_id: DRIFT-SOURCE-ORCHESTRATION-MATRIX-001
@@ -1926,20 +1940,20 @@ archives_auth_recovery_username_prefill_regression:
       - no_cookie_token_session_header_output
     pass_fail_criteria: "auth recovery 任务中可使用已知 username 自动填入并点击下一步；后续密码/二维码/短信/MFA 必须暂停等待用户，不能输出认证敏感信息。"
   - case_id: ARCHIVES-AUTH-STATE-EXPIRED-NOT-IP-BLOCK-001
-    input: "state load archives_auth_state.json 后仍跳转到 account.p 登录页。"
+    input: "state load archives_auth-state category.json 后仍跳转到 account.p 登录页。"
     expected_routing_mode: platform_auth_health_check
     expected_output_boundary:
-      - auth_state_expired
+      - auth-state category_expired
       - manual_sso_required
       - not_ip_whitelist_blocked_without_explicit_accessproxy
       - not_platform_unavailable
-    pass_fail_criteria: "档案中心 saved state 过期应标 auth_state_expired/manual_sso_required，不得泛化成 agent IP 不通内网或平台不可用。"
+    pass_fail_criteria: "档案中心 saved state 过期应标 auth-state category_expired/manual_sso_required，不得泛化成 agent IP 不通内网或平台不可用。"
   - case_id: ARCHIVES-AUTH-HEALTH-CHECK-001
-    input: "用户完成员工 SSO 后保存 archives_auth_state.json。"
+    input: "用户完成员工 SSO 后保存 archives_auth-state category.json。"
     expected_routing_mode: platform_auth_health_check
     expected_output_boundary:
       - browser_close_required
-      - state_load_archives_auth_state_json
+      - state_load_archives_auth-state category_json
       - open_archives_user_home
       - no_login_redirect
       - same_origin_fetch_user_home_info
@@ -2083,7 +2097,7 @@ plan_only_diagnostic_regression:
     input: "以下 5 个用户反馈疑似被盗号：123456001,123456002,123456003,123456004,123456005。帮我判断是否可能是同一类攻击，并给出后续举一反三方向。"
     expected_routing_mode: mixed_request_decomposition
     expected_output_boundary:
-      - split_small_batch_execution_with_checkpoint
+      - split_full_observation_mode
       - split_expansion_plan_mode_only
       - no_automatic_expansion_beyond_provided_users
       - dataagent_hive_query_plan_only_without_authorization
@@ -2913,7 +2927,7 @@ platform_access_execution_v0_1_regression:
   - case_id: SMALL-BATCH-INTERNAL-RISK-REVIEW-RAW-USER-TITLES-001
     input: "small batch evidence output, user_id=[772671837,3481089791], output_scope=internal_risk_review。"
     expected_output_boundary:
-      - small_batch_execution_with_checkpoint
+      - full_observation_mode_with_checkpoints
       - user_title_contains_raw_user_id_772671837
       - user_title_contains_raw_user_id_3481089791
       - no_u1_u2_only_title
@@ -3432,3 +3446,431 @@ generalized_workflow_validation_cases_v1:
         - same_policy_hit_not_gang_conclusion
         - cluster_evidence_chain_required
       pass_fail_criteria: "策略命中不能单独把一批账号定性为 ATO 团伙。"
+    - case_id: INTERFACE-ORCHESTRATION-ACTION-COUNT-70-001
+      input: "浏览器受控接口资产表。"
+      expected_output_boundary:
+        - action_count_70_from_service_registry
+        - do_not_use_37_action_inventory_as_current_fact
+        - browser_backed_interface_asset_table_v1
+      pass_fail_criteria: "Dennis 当前接口资产事实必须来自相邻 service ACTION_REGISTRY.md / src/actions.js 的 70 registered interfaces，不得回退到旧 37 口径。"
+    - case_id: INTERFACE-ASSET-TABLE-DRIFT-CHECK-001
+      input: "运行 `python3 computer_use_poc/interface_asset_table_check.py --format json`。"
+      expected_output_boundary:
+        - service_allowlist_count_70
+        - asset_table_count_70
+        - missing_in_asset_empty
+        - extra_in_asset_empty
+        - required_asset_fields_present
+        - service_called_false
+        - platform_called_false
+        - dataagent_called_false
+      pass_fail_criteria: "静态校验必须证明 service ACTION_ALLOWLIST 与 Dennis interface asset table 名称集合一致，且每个接口都有 observation_domain / default_call_role / required_anchor / possible_outputs / cap_policy / stop_reason_policy / prohibited_usage / status / notes。"
+    - case_id: INTERFACE-ORCHESTRATION-LAYER-DYNAMIC-ROLE-001
+      input: "同一个接口在不同输入下的层级。"
+      expected_output_boundary:
+        - input_route_layer
+        - base_summary_layer
+        - anchor_drilldown_layer
+        - photo_detail_l1_when_seed_photo_id
+        - photo_detail_l2_when_triggered_by_user_id_photo_anchor
+        - device_risk_l1_when_seed_device_id
+        - device_risk_l2_when_triggered_by_user_id_device_anchor
+      pass_fail_criteria: "接口不固定死为 L1/L2；调用层级由输入和锚点动态决定。"
+    - case_id: INTERFACE-ORCHESTRATION-NO-CARTESIAN-EXPANSION-001
+      input: "给定 user_id 批量样本和 70 registered interfaces。"
+      expected_output_boundary:
+        - base_summary_layer_not_all_interfaces
+        - user_id_input_does_not_chase_all_photo_ip_event_policy
+        - max_l1_interfaces_per_entity
+        - max_l2_interfaces_per_anchor_type
+        - stop_reason_required
+      pass_fail_criteria: "user_id 输入不得全量追所有 photo/IP/event/policy；L2 多轮追踪必须有 cap 和 stop_reason。"
+    - case_id: INTERFACE-ORCHESTRATION-DOMAIN-SEPARATION-001
+      input: "批量风险簇、处置和反馈同时出现。"
+      expected_output_boundary:
+        - group_domain_is_aggregate_object_domain
+        - group_profile_candidate_not_confirmed_group
+        - confirmed_group_requires_strong_multisource_validation
+        - enforcement_domain_feedback_domain_separated
+        - strategy_domain_not_unique_center
+      pass_fail_criteria: "团伙域必须是聚合对象域；处置域和反馈域分开；策略只是风控信号之一。"
+    - case_id: INTERFACE-ORCHESTRATION-RELATION-EXPANSION-CAP-001
+      input: "粉关、评论、私信、同设备关系扩散。"
+      expected_output_boundary:
+        - relation_expansion
+        - expansion_depth
+        - entity_cap
+        - edge_type
+        - edge_strength
+        - stop_reason
+        - no_full_graph_scan
+      pass_fail_criteria: "关联扩散必须有 depth/cap/edge/stop_reason，不得变成全图扫描。"
+    - case_id: INTERFACE-ORCHESTRATION-MISSING-CONTRACT-BOUNDARY-001
+      input: "comment/fans/follow/collect/live 等接口有的 registered，有的 future missing。"
+      expected_output_boundary:
+        - registered_interface_can_attach_to_observation_domain
+        - inventory_only_or_missing_contract_not_checked
+        - skipped_unavailable_action_enters_missing_evidence
+        - no_data_skipped_timeout_missing_contract_not_counter_evidence
+      pass_fail_criteria: "registered 接口可以挂到对象域；missing_contract / skipped / no_data / timeout 不得伪造成已查或低风险反证。"
+    - case_id: ACTION-COUNT-70-NOT-37
+      input: "当前 browser-backed service 和 Dennis interface asset table。"
+      expected_output_boundary:
+        - service_allowlist_count_70
+        - asset_table_count_70
+        - action_count_70_not_37
+        - interface_asset_table_check_validation_pass
+      pass_fail_criteria: "`interface_asset_table_check.py` 必须通过；不得引用旧 37 action inventory 作为当前事实。"
+    - case_id: USER-ID-NO-FULL-EXPANSION
+      input: "给单个或批量 user_id，要求先看看共性。"
+      expected_output_boundary:
+        - input_route_layer_only_routes_seed
+        - base_summary_card
+        - candidate_anchor_pool
+        - no_full_photo_ip_event_policy_expansion
+        - no_70_interface_cartesian_execution
+      pass_fail_criteria: "user_id 输入先产出 base_summary_card / candidate_anchor_pool；不得全量追所有 photo/IP/event/policy。"
+    - case_id: DYNAMIC-L1-L2-PHOTO
+      input: "直接输入 photo_id；以及 user_id 场景中先发现 candidate_photo_id。"
+      expected_output_boundary:
+        - photo_detail_l1_when_seed_photo_id
+        - photo_meta_l1_when_seed_photo_id
+        - photo_detail_l2_when_triggered_by_candidate_photo_id
+        - photo_meta_l2_when_triggered_by_candidate_photo_id
+      pass_fail_criteria: "photo detail/meta 的层级由 seed 或 candidate anchor 决定，不固定死为 L1 或 L2。"
+    - case_id: DYNAMIC-L1-L2-DEVICE
+      input: "直接输入 device_id；以及 user_id 场景中先发现 candidate_device_id。"
+      expected_output_boundary:
+        - device_risk_l1_when_seed_device_id
+        - track_device_l1_when_seed_device_id
+        - device_risk_l2_when_triggered_by_candidate_device_id
+        - track_device_l2_when_triggered_by_candidate_device_id
+      pass_fail_criteria: "device risk / Track device 的层级由 seed 或 candidate anchor 决定，不固定死为 L1 或 L2。"
+    - case_id: L2-DRILLDOWN-CAP-STOP
+      input: "L2 围绕 photo/comment/fans/follow/private-message/policy/tree anchors 多轮下钻。"
+      expected_output_boundary:
+        - cap_policy_required
+        - stop_reason_required
+        - skipped_missing_anchor
+        - skipped_by_cap
+        - no_full_expansion
+      pass_fail_criteria: "L2 多轮追踪必须有 cap 和 stop_reason；无 stop_reason 判失败。"
+    - case_id: RELATION-EXPANSION-BOUNDED
+      input: "从同设备、粉关、评论、私信、同策略命中做关联扩散。"
+      expected_output_boundary:
+        - relation_expansion
+        - expansion_depth
+        - entity_cap
+        - edge_type
+        - edge_strength
+        - stop_reason
+        - source_quality
+        - cannot_conclude_boundary
+      pass_fail_criteria: "relation_expansion 必须有 depth/cap/edge/strength/stop/source_quality/boundary，不得全图扫描。"
+    - case_id: GROUP-DOMAIN-AGGREGATE-OBJECT
+      input: "一批样本存在同设备、同 IP、同内容模板、同策略命中。"
+      expected_output_boundary:
+        - group_domain_is_aggregate_object_domain
+        - group_profile_candidate
+        - risk_cluster_candidate
+        - not_confirmed_group_without_validation
+        - not_fraud_ring_without_strong_multisource_closure
+      pass_fail_criteria: "group_domain 是聚合对象域；默认输出 group_profile_candidate，不能直接写 confirmed_group / fraud_ring。"
+    - case_id: ENFORCEMENT-FEEDBACK-SEPARATION
+      input: "同一批样本同时有处罚、封禁、内容下架、举报、客诉、申诉、误伤反馈。"
+      expected_output_boundary:
+        - enforcement_domain_contains_punish_ban_limit_secondary_verification_takedown_gray_rollout
+        - feedback_domain_contains_report_complaint_appeal_manual_review_false_positive_feedback
+        - enforcement_feedback_domains_separated
+      pass_fail_criteria: "处置域和反馈域不得混写。"
+    - case_id: BEHAVIOR-DOMAIN-SUBTYPES
+      input: "同一批样本有 Track 前端行为、后端登录/发布/评论/私信、以及前后端不一致。"
+      expected_output_boundary:
+        - behavior_domain
+        - frontend_behavior
+        - backend_behavior
+        - frontend_backend_consistency
+        - front_backend_mismatch_not_standalone_final_judgement
+      pass_fail_criteria: "behavior_domain 必须区分前端行为、后端行为、前后端一致性。"
+    - case_id: MISSING-CONTRACT-NOT-CHECKED
+      input: "某些接口 inventory_only / missing_contract / skipped_by_cap / skipped_missing_anchor。"
+      expected_output_boundary:
+        - inventory_only_not_checked
+        - missing_contract_not_checked
+        - skipped_by_cap_not_checked
+        - skipped_missing_anchor_not_checked
+        - enters_missing_evidence_or_source_quality
+      pass_fail_criteria: "inventory_only / missing_contract / skipped_by_cap / skipped_missing_anchor 不能伪装成已查。"
+    - case_id: NODATA-NOT-LOW-RISK
+      input: "某些接口 no_data、skipped、timeout、missing_contract。"
+      expected_output_boundary:
+        - no_data_not_risk_exclusion
+        - skipped_not_counter_evidence
+        - timeout_not_counter_evidence
+        - missing_contract_not_counter_evidence
+      pass_fail_criteria: "no_data / skipped / timeout / missing_contract 不得作为低风险反证。"
+    - case_id: STRATEGY-NOT-FINAL-JUDGEMENT
+      input: "一批样本命中同一 policy_code / source_id / event_type。"
+      expected_output_boundary:
+        - strategy_domain_signal_only
+        - strategy_hit_not_final_judgement
+        - requires_cross_domain_current_evidence
+        - requires_validation_before_strategy_recommendation
+      pass_fail_criteria: "策略命中只是 strategy_domain 信号，不能单独定性风险。"
+    - case_id: EXPERT-SIGNAL-NOT-FINAL-CONCLUSION
+      input: "共性特征或候选特征引用 Dennis 历史风险模式和专家经验。"
+      expected_output_boundary:
+        - expert_risk_signal_input
+        - evidence_source_current_observation_or_historical_risk_pattern_or_expert_hypothesis
+        - expert_hypothesis_not_current_evidence
+        - not_final_conclusion_true
+        - l4_validation_required
+      pass_fail_criteria: "专家经验只能作为 signal input / expert_hypothesis；不得替代当前接口证据，不得直接升级为风险结论或策略建议，必须进入 L4 validation_layer。"
+    - case_id: PHASE3-SAMPLE-EXPAND-RUNTIME-ARTIFACTS
+      input: "运行 `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`。"
+      expected_output_boundary:
+        - task_route
+        - seed_entity
+        - base_interface_plan
+        - base_summary_card
+        - base_commonality
+        - candidate_anchor_pool
+        - drilldown_evidence_card
+        - new_anchor_pool
+        - tracking_commonality
+        - stop_reason
+        - commonality_matrix
+        - abnormal_correlation
+        - relation_expansion_result
+        - group_profile_candidate
+        - candidate_features
+        - validation_plan
+        - final_evidence_card
+        - missing_evidence
+        - source_quality
+      pass_fail_criteria: "sample_expand_validate_batch dry-run 每轮必须输出 Phase 3 orchestration_artifacts；candidate_features 字段完整；validation_plan 状态为 planned/pending/not_executed。"
+    - case_id: PHASE3-1-MOCK-SHAPED-CURRENT-OBSERVATION-CLOSURE
+      input: "运行 `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`，其中包含 `sample_expand_mock_shaped_observation_v1.json`。"
+      expected_output_boundary:
+        - candidate_anchor_pool_evidence_source_current_observation
+        - commonality_matrix_shared_signals_not_empty
+        - shared_signal_evidence_source_current_observation
+        - group_profile_candidate_shared_signals_not_empty
+        - relation_expansion_missing_value_depth_zero_or_planned_only_missing_value
+        - l2_status_summarized_in_source_quality
+        - expert_signal_not_weak_evidence
+        - candidate_features_supporting_current_evidence
+        - signal_inputs_or_hypothesis_inputs_not_final_conclusion
+      pass_fail_criteria: "mock-shaped fixture 必须从 current_observation 抽出 photo/device/policy anchor，形成非空 shared_signals 和 group_profile_candidate；专家风险认知只能进入 signal_inputs/hypothesis_inputs，不能进入 weak_evidence 或替代当前证据。"
+    - case_id: PHASE3-2-FIELD-LEVEL-CONTRACT-CHECK
+      input: "运行 `python3 computer_use_poc/interface_orchestration_contract_check.py --format json`。"
+      expected_output_boundary:
+        - layer_required_fields_checked
+        - candidate_features_signal_inputs_or_hypothesis_inputs
+        - group_profile_candidate_required_fields_checked
+        - validation_plan_status_planned_pending_or_not_executed
+        - final_evidence_card_expert_signal_not_weak_evidence
+        - answer_fixture_artifact_consumption_checked
+      pass_fail_criteria: "checker 必须输出 field_check_summary；L1-L5 每层校验 purpose/input/allowed_interface_roles/output_artifacts/stop_condition/forbidden_behavior；用户可见 answer fixture 必须消费 artifacts。"
+    - case_id: PHASE3-2-MULTI-SCENE-MOCK-FIXTURES
+      input: "运行 `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`。"
+      expected_output_boundary:
+        - mock_shaped_ato_current_observation
+        - mock_shaped_strategy_governance_current_observation
+        - mock_shaped_feedback_enforcement_current_observation
+        - feedback_domain_enforcement_domain_separated
+        - strategy_hit_not_final_judgement
+        - candidate_ip_device_policy_report_review_punish_anchors
+      pass_fail_criteria: "sample checker 必须覆盖 ATO、策略治理、反馈/处置分离三个新增 mock-shaped fixtures；每个 fixture 都必须有 current_observation anchor、shared_signals、group_profile_candidate 和 planned validation。"
+    - case_id: PHASE4-1-LIVE-SAFE-SUMMARY-RESPONSE-LIMITED
+      input: "sample_expand live-shaped `login_logs_search` returns response_too_large / json_array_capped with upstream capped records."
+      expected_output_boundary:
+        - live_summary_safe_projection_applied
+        - no_upstream_body_in_stdout
+        - no_capped_body_in_stdout
+        - no_logContent_in_stdout
+        - no_credential_like_raw_key_value
+        - response_too_large_maps_to_partial_response_limited
+        - source_quality_partial_contains_login_logs_search
+        - remaining_records_not_parsed_enters_missing_evidence
+        - cap_metadata_status_available_or_explicit_unavailable
+        - gap_partial_not_low_risk_counter_evidence
+      pass_fail_criteria: "live summary 只能输出 envelope/counts/cap metadata/safe anchor summary；`login_logs_search` response_too_large/json_array_capped 必须是 partial/response_limited，不能作为 failed final 或低风险反证。"
+    - case_id: PHASE4-3-ANCHOR-SCORING-SELECTION
+      input: "运行 `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`。"
+      expected_output_boundary:
+        - anchor_scoring_summary
+        - candidate_anchor_pool_anchor_score
+        - selected_drilldown_anchors
+        - skipped_anchors
+        - l2_drilldown_only_from_selected_anchors
+        - skipped_by_cap_or_skipped_low_score_explained
+        - batch_support_count
+        - commonality_anchor_requires_batch_support
+        - single_sample_limited_commonality_true
+        - source_quality_partial_lowers_anchor_evidence_quality
+        - relation_expansion_seed_from_selected_anchor_or_planned_only
+      pass_fail_criteria: "candidate_anchor_pool 只负责收集；L2 必须从 selected_drilldown_anchors top-K 进入，未追锚点进入 skipped_anchors 并给原因；单样本只能 limited_commonality，partial/response_limited 会降低 anchor evidence_quality。"
+    - case_id: PHASE4-4-ANCHOR-SCORING-DIVERSITY-CAPS
+      input: "运行 `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`，覆盖 anchor competition / domain cap / high false positive fixtures。"
+      expected_output_boundary:
+        - batch_support_count_distinct_sampled_entity_count
+        - max_selected_per_domain
+        - max_selected_per_anchor_type
+        - selected_domain_distribution
+        - skipped_by_domain_cap_or_skipped_by_type_cap
+        - policy_code_not_all_selected_slots
+        - high_false_positive_anchor_downranked_or_explained
+        - candidate_features_supporting_selected_anchors
+        - group_profile_candidate_supporting_selected_anchors
+      pass_fail_criteria: "anchor scoring 必须按 distinct sampled entity 统计 batch_support_count；selected_drilldown_anchors 必须满足 domain/type cap 和多域 diversity；policy_code/IP/social 高误伤或单域锚点不能独占 L2；candidate_features/group_profile_candidate 必须绑定 selected anchors 或显式 unselected_signal_hypothesis。"
+    - case_id: PHASE4-5-SOURCE-QUALITY-ARTIFACT-QUALITY-SPLIT
+      input: "Phase 4.5 三样本 live safe summary / synthetic regression。"
+      expected_output_boundary:
+        - top_level_source_quality_counts_real_source_completion_only
+        - round_level_source_quality_present
+        - artifact_quality_summary_present
+        - skipped_by_domain_cap_not_counted_as_source_partial
+        - missing_contract_not_counted_as_source_completed_or_partial
+        - response_limited_partial_not_failed_final
+      pass_fail_criteria: "top-level `source_quality` 和 `round_level_source_quality` 只能统计真实 source completed/partial/no_data/timeout/auth_failed/parse_error；L2 skipped、missing_contract、candidate_features_not_final、validation_pending 必须进入 `artifact_quality_summary`，不得混入 source completion 统计。"
+    - case_id: PHASE5-STRATEGY-READABLE-ANSWER-TEMPLATE
+      input: "Phase 4.5 三样本 live readonly 结果进入用户可见答案体验验收。"
+      expected_output_boundary:
+        - initial_conclusion_first
+        - main_evidence_natural_language
+        - key_commonality_candidates
+        - current_boundary_explains_partial_and_validation_gap
+        - next_steps_include_authorized_validation_and_false_positive_control
+        - one_sentence_summary
+        - no_engineering_yaml_by_default
+        - group_profile_candidate_not_confirmed_group
+        - strategy_hit_not_final_judgement
+        - dataagent_hive_not_claimed_without_authorization
+      pass_fail_criteria: "策略同学可读答案必须使用 6 段结构：初步结论 / 主要证据 / 关键共性 / 当前边界 / 下一步建议 / 一句话摘要；默认少写 runtime/artifact/source_quality 内部字段，不把策略命中、专家经验、partial/no_data/skipped 或 group candidate 写成最终结论。"
+    - case_id: COVERAGE-COMMONALITY-NOT-RISK-COMMONALITY
+      input: "commonality_matrix 只有 login_log_business_fields_extracted / weapon_graph_risk_business_fields_extracted / strategy_hit_business_fields_extracted 等字段覆盖信号。"
+      expected_output_boundary:
+        - coverage_commonality_only
+        - evidence_availability_allowed
+        - risk_commonality_forbidden_without_shared_anchor
+        - group_candidate_forbidden_without_anchor_or_chain_commonality
+        - stable_same_origin_cluster_forbidden
+        - attack_chain_closure_forbidden
+        - must_say_not_stable_same_origin_cluster
+      pass_fail_criteria: "只有 `*_business_fields_extracted` 或 source/字段可见性信号时，只能写 source coverage / evidence availability；不得写同源、团伙候选、多源风险簇、攻击链闭合或稳定风险模式。只有 anchor_commonality / chain_commonality / group_candidate_commonality 达标时才能升级表达。"
+    - case_id: RUNTIME-COVERAGE-COMMONALITY-NOT-GROUP-SUPPORT
+      input: "sample_expand_validate_batch 输出 commonality_matrix 和 group_profile_candidate。"
+      expected_output_boundary:
+        - business_fields_extracted_commonality_type_coverage_commonality
+        - business_fields_extracted_commonality_anchor_false
+        - business_fields_extracted_risk_commonality_false
+        - group_profile_candidate_shared_signals_excludes_coverage_commonality
+        - coverage_only_group_candidate_missing_evidence_insufficient_risk_commonality
+      pass_fail_criteria: "`*_business_fields_extracted` 在 runtime artifact 中必须只作为 coverage_commonality；不得标 commonality_anchor=true，不得进入 group_profile_candidate.shared_signals。只有 coverage_commonality 时，group_profile_candidate 必须写 insufficient_risk_commonality。"
+    - case_id: RUNTIME-SELECTED-ANCHOR-PER-ENTITY-DIVERSITY
+      input: "3 个 sampled entity 都有可用 anchor，且 selected_drilldown_anchors top-K 存在分数接近的候选。"
+      expected_output_boundary:
+        - selected_entity_distribution_present
+        - eligible_entity_count_present
+        - selected_entity_count_present
+        - entity_diversity_reason_present
+        - selected_anchors_cover_multiple_entities_when_available
+        - skipped_by_entity_diversity_explained_when_replaced
+        - domain_type_caps_still_respected
+      pass_fail_criteria: "当多个 sampled entity 有有效 anchor 且 selected slots 足够时，selected_drilldown_anchors 不得全部来自单个 entity；若因只有一个 entity 有有效 anchor 或 cap/score 不允许，必须在 anchor_scoring_summary 输出 eligible_entity_count / selected_entity_count / target_selected_entity_count / entity_diversity_reason，或在 skipped_anchors 说明原因。"
+    - case_id: BATCH-ANCHOR-POOL-BEFORE-L2-DRILLDOWN
+      input: "批量实时研判中，多个样本产生 candidate_anchor_pool；单轮状态和滚动状态共用同一套锚点聚合逻辑。"
+      expected_output_boundary:
+        - batch_anchor_pool_generated_before_l2
+        - aggregate_before_drilldown_for_single_round_and_rolling_rounds
+        - anchor_supporting_entities_present
+        - single_entity_anchor_vs_batch_anchor_separated
+        - l2_only_for_entities_with_anchor
+        - skipped_missing_anchor_for_entities_without_anchor
+      pass_fail_criteria: "批量实时研判必须先把单样本 candidate_anchor_pool 聚合成 batch_anchor_pool，再选择 selected_drilldown_anchors；L2 只能对拥有该锚点的样本执行，其他样本必须 skipped_missing_anchor。单轮状态只是 max_rounds=1，滚动状态只是 max_rounds>1。"
+    - case_id: BATCH-REALTIME-SINGLE-ROUND-LIMITED-COMMONALITY
+      input: "少于 10 个样本或用户只要求看当前样本，批量实时研判只跑一轮。"
+      expected_output_boundary:
+        - batch_anchor_pool_generated_before_l2
+        - selected_drilldown_anchors_from_batch_anchor_pool
+        - limited_commonality_only
+        - no_stable_commonality
+        - rolling_anchor_summary_current_status_insufficient_rounds
+      pass_fail_criteria: "单轮状态必须先聚合 batch_anchor_pool，再下钻 selected_drilldown_anchors；commonality_matrix 只能表达 limited_commonality，不得输出 stable_commonality；rolling_anchor_summary 必须 current_status=insufficient_rounds。"
+    - case_id: BATCH-REALTIME-ROLLING-ROUND-STABILITY
+      input: "至少两轮批量实时研判，用扩样验证共性是否稳定。"
+      expected_output_boundary:
+        - rolling_anchor_summary_present
+        - stable_anchors_present_when_multi_round_supported
+        - dropped_anchors_present
+        - new_anchor_delta_present
+        - support_ratio_present
+        - support_rounds_present
+      pass_fail_criteria: "只有滚动状态才允许用 stable_anchors / dropped_anchors / new_anchor_delta / support_ratio / support_rounds 表达稳定性；stable_commonality 必须依赖多轮稳定锚点，不能由单轮字段覆盖或单用户锚点推出。"
+    - case_id: SINGLE-ENTITY-SOCIAL-ANCHOR-NOT-SOCIAL-COMMONALITY
+      input: "10 个用户中只有 1 个用户有 private_message_anchor / message_anchor。"
+      expected_output_boundary:
+        - single_entity_private_message_signal
+        - not_social_commonality
+        - not_group_profile_candidate_support
+        - batch_social_anchor_requires_multiple_supported_users_or_similar_social_path
+      pass_fail_criteria: "只有一个用户有私信/社交锚点时，只能写 single_entity_private_message_signal；不得写 social_commonality，不得支撑 group_profile_candidate。只有多个用户共享相似私信对象、话术或社交承接路径时，才可升级 batch_social_anchor。"
+    - case_id: GROUP-CANDIDATE-SUPPORTING-BATCH-ANCHORS-ONLY
+      input: "group_profile_candidate 同时存在 batch anchor 与 single_entity_anchor 上下文锚点。"
+      expected_output_boundary:
+        - supporting_selected_batch_anchors_present
+        - context_selected_anchors_present
+        - single_entity_anchor_only_in_context_selected_anchors
+        - supporting_selected_anchors_legacy_field_batch_only
+      pass_fail_criteria: "group_profile_candidate 只能由 supporting_selected_batch_anchors 支撑；single_entity_anchor 可以作为 context_selected_anchors 解释材料，但不得进入 supporting_selected_batch_anchors 或被展示成团伙/风险簇支撑。"
+    - case_id: ROLLING-ANCHOR-SUMMARY-RUNTIME-MINIMUM
+      input: "两轮 sample_expand_validate_batch mock fixture：第一轮有 shared_device + old_policy，第二轮保留 shared_device、移除 old_policy、加入 new_policy/new_photo。"
+      expected_output_boundary:
+        - rolling_anchor_summary
+        - stable_anchors
+        - dropped_anchors
+        - new_anchor_delta
+        - support_ratio
+        - support_rounds
+        - current_status_stable_or_emerging_or_weakening
+        - single_round_current_status_insufficient_rounds
+      pass_fail_criteria: "runtime cumulative artifacts 必须输出 rolling_anchor_summary；单轮状态标 insufficient_rounds，不得伪装稳定；两轮以上滚动状态 mock 必须能产出 stable_anchors / dropped_anchors / new_anchor_delta，support_ratio 按本轮支持用户数 / 本轮样本数计算。"
+    - case_id: PHASE4-6-STRUCTURED-FACT-TABLE-CONTRACT
+      input: "运行 `python3 computer_use_poc/fact_table_contract_check.py --format json`，检查 fact table contract 与最小 batch fixture。"
+      expected_output_boundary:
+        - fact_table_contract_v1
+        - safe_projected_records
+        - standard_detail_table
+        - anchor_table
+        - feature_table
+        - relation_table
+        - source_quality_table
+        - round_support_table
+        - rolling_anchor_summary
+        - round_support_count
+        - cumulative_support_count
+        - support_ratio
+        - stability_across_rounds
+        - new_anchor_delta
+        - stable_anchors
+        - dropped_anchors
+        - batch_commonality_not_based_only_on_per_user_observation
+      pass_fail_criteria: "批量共性主输入必须是结构化事实表；per_user_observation 只能作为解释材料；safe_projected_records 不得包含 raw_body / capped_body / logContent / credential-like 原文；批量实时研判的滚动状态必须依赖 round_support_table 和 rolling_anchor_summary。"
+    - case_id: PHASE3-NO-GAP-AS-COUNTER-EVIDENCE
+      input: "sample_expand_validate_batch dry-run 中出现 no_data / skipped / timeout / missing_contract。"
+      expected_output_boundary:
+        - no_data_not_risk_exclusion
+        - skipped_missing_anchor_not_counter_evidence
+        - skipped_by_cap_not_counter_evidence
+        - missing_contract_not_counter_evidence
+        - final_evidence_card_counter_evidence_empty_when_only_gaps_exist
+      pass_fail_criteria: "no_data/skipped/timeout/missing_contract 只能进入 source_quality 或 missing_evidence，不得进入 counter_evidence 当低风险反证。"
+    - case_id: PHASE3-GROUP-CANDIDATE-NOT-CONFIRMED
+      input: "sample_expand_validate_batch dry-run 形成 group_profile_candidate。"
+      expected_output_boundary:
+        - group_profile_candidate
+        - not_confirmed_as_group_true
+        - validation_plan_required
+        - confirmed_group_not_allowed_in_dry_run_without_validation_result
+      pass_fail_criteria: "dry-run / sampled evidence 只能输出 group_profile_candidate，必须 not_confirmed_as_group=true，不能输出 confirmed_group / fraud_ring。"

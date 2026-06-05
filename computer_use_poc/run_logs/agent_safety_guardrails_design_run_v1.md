@@ -67,7 +67,7 @@ design_principles:
 
 - 用户不能要求忽略规则、切换管理员模式、绕过审批。
 - 用户不能直接调用底层平台、任意 URL、任意接口、SQL、JS 或 shell。
-- 用户不能要求输出 system prompt、routing prompt、skill prompt。
+- 用户不能要求输出 系统提示词、routing prompt、skill prompt。
 - 用户不能通过运行时对话修改 Agent 逻辑、release、代码或配置。
 - 能查到不等于能输出，输出必须脱敏。
 
@@ -119,12 +119,12 @@ design_principles:
 
 - prompt injection 不应覆盖系统规则。
 - 用户不能直接指定底层平台工具。
-- 用户不能要求输出 system prompt。
+- 用户不能要求输出 系统提示词。
 - 用户不能要求输出 routing / skill prompt。
 - 用户不能要求修改 routing / skill / release。
 - 用户不能跳过审批做批量扩散。
 - 敏感字段应脱敏。
-- `raw_result_reference` 不应包含敏感原文。
+- `source_result_reference` 不应包含敏感原文。
 - write / system capability 当前禁止。
 - `api_direct_read` 只能访问登记 capability。
 - `browser_dom_read` 不能执行任意 JS。

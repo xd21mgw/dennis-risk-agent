@@ -1,0 +1,335 @@
+{
+  "fixture_id": "fact_table_minimal_batch_v1",
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 6,
+  "rounds": [
+    {
+      "round_id": 1,
+      "sample_ids": ["r1_u1", "r1_u2", "r1_u3"]
+    },
+    {
+      "round_id": 2,
+      "sample_ids": ["r2_u1", "r2_u2", "r2_u3"]
+    }
+  ],
+  "raw_detail_retention_layer": {
+    "status": "retained_for_traceback_only",
+    "raw_body_in_model_context": false,
+    "user_visible_raw_output": false,
+    "traceback_handles": ["src_archives_photo_search_r1", "src_weapon_inventory_r1"]
+  },
+  "safe_projected_records": [
+    {
+      "sample_id": "r1_u1",
+      "entity_id": "5523610476",
+      "entity_type": "user_id",
+      "round_id": 1,
+      "source_id": "archives_photo_search",
+      "action": "archives_photo_search",
+      "observation_domain": "content_domain",
+      "projected_fields": {
+        "candidate_photo_id": "photo_ref_A1",
+        "content_template_signal": "template_diversion_A",
+        "publish_time": "2026-06-01T10:00:00+08:00"
+      },
+      "source_quality": {
+        "quality_class": "completed",
+        "reason": "mock_visible_body"
+      },
+      "evidence_source": "current_observation"
+    },
+    {
+      "sample_id": "r1_u2",
+      "entity_id": "5521017647",
+      "entity_type": "user_id",
+      "round_id": 1,
+      "source_id": "weapon_inventory",
+      "action": "weapon_inventory",
+      "observation_domain": "device_domain",
+      "projected_fields": {
+        "candidate_device_id": "device_ref_cluster_A",
+        "device_risk_hint": "high_degree_device_candidate"
+      },
+      "source_quality": {
+        "quality_class": "completed",
+        "reason": "mock_graph_visible"
+      },
+      "evidence_source": "current_observation"
+    },
+    {
+      "sample_id": "r2_u1",
+      "entity_id": "5522927552",
+      "entity_type": "user_id",
+      "round_id": 2,
+      "source_id": "rcp_snapshot",
+      "action": "rcp_snapshot",
+      "observation_domain": "strategy_domain",
+      "projected_fields": {
+        "candidate_policy_code": "policy_ref_diversion_A",
+        "policy_hit_signal": "same_policy_family"
+      },
+      "source_quality": {
+        "quality_class": "partial",
+        "reason": "mock_partial_policy_window"
+      },
+      "evidence_source": "current_observation"
+    }
+  ],
+  "standard_detail_table": [
+    {
+      "sample_id": "r1_u1",
+      "entity_id": "5523610476",
+      "entity_type": "user_id",
+      "round_id": 1,
+      "source_id": "archives_photo_search",
+      "action": "archives_photo_search",
+      "observation_domain": "content_domain",
+      "field_name": "content_template_signal",
+      "field_value_or_safe_ref": "template_diversion_A",
+      "event_time": "2026-06-01T10:00:00+08:00",
+      "source_quality": "completed",
+      "evidence_source": "current_observation"
+    },
+    {
+      "sample_id": "r1_u2",
+      "entity_id": "5521017647",
+      "entity_type": "user_id",
+      "round_id": 1,
+      "source_id": "weapon_inventory",
+      "action": "weapon_inventory",
+      "observation_domain": "device_domain",
+      "field_name": "candidate_device_id",
+      "field_value_or_safe_ref": "device_ref_cluster_A",
+      "event_time": "2026-06-01T10:03:00+08:00",
+      "source_quality": "completed",
+      "evidence_source": "current_observation"
+    }
+  ],
+  "anchor_table": [
+    {
+      "round_id": 1,
+      "sample_id": "r1_u2",
+      "entity_id": "5521017647",
+      "anchor_type": "device_id",
+      "anchor_value_or_safe_ref": "device_ref_cluster_A",
+      "source_id": "weapon_inventory",
+      "field_path": "projected_fields.candidate_device_id",
+      "source_quality": "completed",
+      "anchor_class": "commonality_anchor",
+      "anchor_score": {
+        "batch_support_count": 2,
+        "total_score": 7.2
+      },
+      "selection_status": "selected",
+      "anchor_priority_reason": "shared by two sampled entities and supports device-domain drilldown"
+    },
+    {
+      "round_id": 2,
+      "sample_id": "r2_u1",
+      "entity_id": "5522927552",
+      "anchor_type": "policy_code",
+      "anchor_value_or_safe_ref": "policy_ref_diversion_A",
+      "source_id": "rcp_snapshot",
+      "field_path": "projected_fields.candidate_policy_code",
+      "source_quality": "partial",
+      "anchor_class": "presence_anchor",
+      "anchor_score": {
+        "batch_support_count": 1,
+        "total_score": 4.1
+      },
+      "selection_status": "skipped_low_score",
+      "anchor_priority_reason": "strategy signal is partial and must not consume all drilldown slots"
+    }
+  ],
+  "feature_table": [
+    {
+      "feature_name": "same_content_template_plus_device_anchor",
+      "source_domains": ["content_domain", "device_domain"],
+      "supporting_current_evidence": [
+        {
+          "sample_id": "r1_u1",
+          "entity_id": "5523610476",
+          "round_id": 1,
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        },
+        {
+          "sample_id": "r1_u2",
+          "entity_id": "5521017647",
+          "round_id": 1,
+          "source_id": "weapon_inventory",
+          "source_quality": "completed"
+        }
+      ],
+      "supporting_selected_anchors": ["device_id:device_ref_cluster_A"],
+      "signal_inputs": [
+        {
+          "evidence_source": "current_observation",
+          "signal": "content template and device anchor co-occur in sampled records"
+        }
+      ],
+      "hypothesis_inputs": [
+        {
+          "evidence_source": "expert_hypothesis",
+          "signal": "content diversion clusters often reuse templates and device infrastructure",
+          "usage_boundary": "signal_input_only"
+        }
+      ],
+      "validation_needed": true,
+      "false_positive_risk": "medium",
+      "not_final_conclusion": true
+    }
+  ],
+  "relation_table": [
+    {
+      "sample_id": "r1_u2",
+      "entity_id": "5521017647",
+      "from_entity": "5521017647",
+      "to_entity": "device_ref_cluster_A",
+      "relation_type": "user_device",
+      "edge_type": "device_anchor",
+      "edge_strength": "medium",
+      "source_id": "weapon_inventory",
+      "source_quality": "completed",
+      "round_id": 1,
+      "expansion_depth": 1,
+      "stop_reason": "entity_cap_reached"
+    }
+  ],
+  "source_quality_table": [
+    {
+      "round_id": 1,
+      "sample_id": "r1_u1",
+      "entity_id": "5523610476",
+      "source_id": "archives_photo_search",
+      "action": "archives_photo_search",
+      "source_quality": "completed",
+      "quality_class": "completed",
+      "reason": "mock_visible_body",
+      "partial_subtype": null,
+      "missing_fields": [],
+      "response_limited": false
+    },
+    {
+      "round_id": 2,
+      "sample_id": "r2_u1",
+      "entity_id": "5522927552",
+      "source_id": "rcp_snapshot",
+      "action": "rcp_snapshot",
+      "source_quality": "partial",
+      "quality_class": "partial",
+      "reason": "mock_partial_policy_window",
+      "partial_subtype": "partial_fields",
+      "missing_fields": ["full_policy_context"],
+      "response_limited": false
+    }
+  ],
+  "round_support_table": [
+    {
+      "signal_name": "template_diversion_A",
+      "round_id": 1,
+      "support_entities": [
+        {
+          "sample_id": "r1_u1",
+          "entity_id": "5523610476",
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        },
+        {
+          "sample_id": "r1_u3",
+          "entity_id": "5523516661",
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        }
+      ],
+      "support_count": 2,
+      "round_support_count": 2,
+      "support_ratio": 0.67,
+      "source_quality_summary": {
+        "completed": 2,
+        "partial": 0
+      }
+    },
+    {
+      "signal_name": "template_diversion_A",
+      "round_id": 2,
+      "support_entities": [
+        {
+          "sample_id": "r2_u1",
+          "entity_id": "5522927552",
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        }
+      ],
+      "support_count": 1,
+      "round_support_count": 1,
+      "support_ratio": 0.33,
+      "source_quality_summary": {
+        "completed": 1,
+        "partial": 0
+      }
+    }
+  ],
+  "rolling_anchor_summary": [
+    {
+      "anchor_type": "content_template",
+      "anchor_value_or_safe_ref": "template_diversion_A",
+      "cumulative_support_count": 3,
+      "support_rounds": [1, 2],
+      "stability_across_rounds": "stable",
+      "new_anchor_delta": ["policy_code:policy_ref_diversion_A"],
+      "dropped_anchor_reason": null,
+      "current_status": "stable",
+      "supporting_rounds_detail": [
+        {
+          "round_id": 1,
+          "sample_id": "r1_u1",
+          "entity_id": "5523610476",
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        },
+        {
+          "round_id": 2,
+          "sample_id": "r2_u1",
+          "entity_id": "5522927552",
+          "source_id": "archives_photo_search",
+          "source_quality": "completed"
+        }
+      ]
+    }
+  ],
+  "rolling_batch_summary": {
+    "round_support_count": {
+      "1": 2,
+      "2": 1
+    },
+    "cumulative_support_count": 3,
+    "support_ratio": 0.5,
+    "stability_across_rounds": "stable",
+    "new_anchor_delta": ["policy_code:policy_ref_diversion_A"],
+    "stable_anchors": ["content_template:template_diversion_A"],
+    "dropped_anchors": []
+  },
+  "batch_commonality_inputs": {
+    "primary_tables": [
+      "anchor_table",
+      "feature_table",
+      "relation_table",
+      "source_quality_table",
+      "round_support_table",
+      "rolling_anchor_summary"
+    ],
+    "per_user_observation_role": "explanation_only",
+    "batch_commonality_not_based_only_on_per_user_observation": true
+  },
+  "mode_consumption": {
+    "full_observation_mode": {
+      "allowed_inputs": ["standard_detail_table", "anchor_table", "feature_table", "per_user_evidence_card"],
+      "per_user_observation_role": "human_explanation_not_only_commonality_source"
+    },
+    "sample_expand_validate_mode": {
+      "required_inputs": ["anchor_table", "feature_table", "relation_table", "source_quality_table", "round_support_table", "rolling_anchor_summary"],
+      "must_not_depend_only_on_per_user_observation": true
+    }
+  }
+}

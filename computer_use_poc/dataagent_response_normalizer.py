@@ -249,34 +249,34 @@ def parse_markdown_table(answer: str) -> tuple[list[str], list[dict[str, Any]], 
     for index, line in enumerate(lines[:-1]):
         if "|" not in line or "|" not in lines[index + 1] or not is_separator_row(lines[index + 1]):
             continue
-        headers = split_table_row(line)
-        safe_headers: list[str] = []
+        columns = split_table_row(line)
+        safe_columns: list[str] = []
         keep_indexes: list[int] = []
-        for header_index, header in enumerate(headers):
-            if SENSITIVE_FIELD_RE.search(header):
+        for column_index, column in enumerate(columns):
+            if SENSITIVE_FIELD_RE.search(column):
                 sensitive_blocked += 1
                 continue
-            safe_header, count = redact_sensitive_text(header)
+            safe_column, count = redact_sensitive_text(column)
             sensitive_blocked += count
-            safe_headers.append(safe_header)
-            keep_indexes.append(header_index)
+            safe_columns.append(safe_column)
+            keep_indexes.append(column_index)
 
         rows: list[dict[str, Any]] = []
         for row_line in lines[index + 2 :]:
             if "|" not in row_line or is_separator_row(row_line):
                 break
             cells = split_table_row(row_line)
-            if len(cells) < len(headers):
+            if len(cells) < len(columns):
                 break
             row: dict[str, Any] = {}
             for output_index, original_index in enumerate(keep_indexes):
                 value = cells[original_index]
                 safe_value, count = redact_sensitive_text(value)
                 sensitive_blocked += count
-                row[safe_headers[output_index]] = safe_value
+                row[safe_columns[output_index]] = safe_value
             if row:
                 rows.append(row)
-        return safe_headers, rows, sensitive_blocked
+        return safe_columns, rows, sensitive_blocked
     return [], [], 0
 
 
@@ -366,12 +366,12 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
         warnings.append(f"{status}_not_no_risk_evidence")
 
     request_id = None
-    session_id = None
+    runtime_scope_id = None
     query_id = None
     trace_id = None
     if isinstance(payload, dict):
         request_id = payload.get("request_id")
-        session_id = payload.get("session_id")
+        runtime_scope_id = payload.get("session_id")
         query_id = payload.get("query_id") or tool_call_provenance.get("query_id")
         trace_id = payload.get("trace_id") or tool_call_provenance.get("trace_id")
 
@@ -420,7 +420,7 @@ def normalize_dataagent_response(payload: Any) -> dict[str, Any]:
     return {
         "schema_version": "dataagent_normalized_response_v1",
         "request_id": request_id,
-        "session_id": session_id,
+        "session_id": runtime_scope_id,
         "query_id": query_id,
         "status": status,
         "model_answer_source": model_answer_source,

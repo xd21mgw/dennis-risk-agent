@@ -74,6 +74,7 @@ failure_layer_enum:
   - user_action_required
   - user_permission
   - parser
+  - network
   - query_window
   - timeout
   - extraction_timeout

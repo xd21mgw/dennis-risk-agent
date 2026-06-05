@@ -12,7 +12,7 @@ platform: user_center_workbench_unified_log_search
 validation_status: partially_validated
 validated_scope:
   - page_accessibility
-  - auth_state_reuse
+  - auth-state category_reuse
   - basic_form_query
   - default_log_source_checkbox
   - result_table_visibility
@@ -105,8 +105,8 @@ derived_features:
 readonly_safety_check: PASSED
 sensitive_fields_policy:
   did: redacted
-  token: never_collect
-  session: never_collect
+  token field  never_collect
+  session field  never_collect
   detail_json: not_opened
   copy_button_clicked: false
 ```

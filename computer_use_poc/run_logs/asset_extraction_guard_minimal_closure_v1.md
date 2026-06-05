@@ -21,18 +21,18 @@
 ## Scanner 规则摘要
 
 - 路径级阻断：`02_domain_skills/`、全量 `run_logs/`、`runtime_logs/question_collection/`、`semi_open_pilot_logs/`、auth/session/cookie/token/secret/credential/key 命名文件、嵌套 `outputs/dist` / `outputs/release`。
-- 内容级阻断：cookie、token、session、authorization、bearer、api_key、x-ks-*、header、password、secret、手机号、auth state、完整 prompt、raw observation / raw response / full platform response。
+- 内容级阻断：cookie、token、session、authorization、bearer、api_key、x-ks-*、header、password、secret、手机号、auth state、完整提示词、source observation / source response summary / platform response summary。
 - 输出增强：severity 使用 `critical / high / medium / low`；critical / high 时 `package_should_block=true`；finding 包含命中文件、规则名、原因和建议处理方式。
 
 ## Regression 覆盖
 
 新增 `asset_extraction_regression_cases_v1.md`，覆盖 26 条样例：
 
-- 完整 Skill / prompt / run log / case / raw observation 抽取。
+- 完整 Skill / prompt / run log / case / source observation 抽取。
 - cookie / token / session / header / API key 抽取。
 - 完整源码包、完整母体包、绕过 scanner、改名夹带。
 - 手机号 / IP 输出边界。
-- 完整策略库、bad case 库、question_collection 原始日志。
+- 完整策略库、bad case 库、question_collection 日志摘要。
 - 合法的能力摘要、脱敏样例、schema、manifest 请求。
 
 ## 本地验证命令

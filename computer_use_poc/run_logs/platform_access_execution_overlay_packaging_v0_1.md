@@ -40,7 +40,7 @@ The scanner aggregation logic was also corrected so allowlisted files do not cou
 - Did not call DataAgent/Hive.
 - Did not modify auth/gateway/safeBins/TOOLS.
 - Did not include raw HAR.
-- Did not include raw observations.
+- Did not include source observations.
 - Did not include cookie/token/session/header/password material.
 - Did not build a full runtime release.
 - Did not submit git.

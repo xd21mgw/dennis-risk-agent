@@ -78,11 +78,16 @@ def main() -> int:
     playbook_index = read_text(REPO_ROOT / "computer_use_poc" / "platform_call_playbook_index.md")
     source_plan = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_plan_v1.yaml")
     source_check = read_text(REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py")
+    interface_asset_table = read_text(REPO_ROOT / "computer_use_poc" / "browser_backed_interface_asset_table_v1.yaml")
+    capability_registry = read_text(REPO_ROOT / "computer_use_poc" / "capability_registry.md")
+    service_adapter = read_text(REPO_ROOT / "computer_use_poc" / "browser_backed_service_adapter_v1.md")
+    runtime_runner = read_text(REPO_ROOT / "computer_use_poc" / "runtime_case_execution_runner.py")
     drift_audit = read_text(REPO_ROOT / "computer_use_poc" / "internal_agent_drift_audit_v1.md")
     tools = read_text(REPO_ROOT / "TOOLS.md")
     validation = read_text(REPO_ROOT / "computer_use_poc" / "runtime_validation_cases_v1.yaml")
     readiness = read_text(REPO_ROOT / "computer_use_poc" / "release_overlay_readiness_checklist.md")
     bin_runner = read_text(REPO_ROOT / "bin" / "sso_session_runner")
+    raw_reference_contract = read_text(REPO_ROOT / "computer_use_poc" / "raw_reference_redaction_contract_v1.md")
 
     findings: list[dict[str, Any]] = []
 
@@ -183,6 +188,24 @@ def main() -> int:
             "source_card",
             "response_type",
             "records_count",
+            "raw_device_ids_for_chaining",
+            "masked_device_ids",
+            "device_id_redaction_policy",
+            "pointInfoMap",
+        ],
+    )
+    findings += check_contains(
+        "raw_reference_redaction_contract",
+        raw_reference_contract + "\n" + source_check + "\n" + validation,
+        [
+            "Raw Reference Retention",
+            "tool_call_internal",
+            "source_checkpoint_private",
+            "source_chaining",
+            "masked_device_id",
+            "masked_event_id",
+            "redacted_ip",
+            "CREDENTIAL-NEVER-RETAIN-001",
         ],
     )
     findings += check_absent(
@@ -351,12 +374,31 @@ def main() -> int:
         source_plan,
         [
             "single_user_account_security",
-            "user_login_unified_log",
-            "weapon_user_to_device_graph",
-            "weapon_device_risk",
             "allow_stop_after_login_log_only",
             "allow_final_conclusion_without_source_completion_matrix",
             "allow_low_risk_from_no_data_only",
+        ],
+    )
+    current_interface_contract = "\n".join(
+        [
+            interface_asset_table,
+            capability_registry,
+            service_adapter,
+            source_plan,
+            runtime_runner,
+        ]
+    )
+    findings += check_contains(
+        "current_browser_backed_interface_contract",
+        current_interface_contract,
+        [
+            "interface_count: 70",
+            "action_count=70",
+            "browser_backed_interface_asset_table_v1.yaml",
+            "login_logs_search",
+            "weapon_inventory",
+            "/actions/batch",
+            "browser_backed_actions_batch_v1",
         ],
     )
     findings += check_contains(
@@ -408,6 +450,67 @@ def main() -> int:
         ],
     )
     source_check_path = REPO_ROOT / "computer_use_poc" / "source_orchestration_check.py"
+    asset_check_path = REPO_ROOT / "computer_use_poc" / "interface_asset_table_check.py"
+    if not interface_asset_table or not asset_check_path.exists():
+        findings.append(
+            {
+                "check": "interface_asset_table_check_available",
+                "severity": "critical",
+                "status": "fail",
+                "reason": "browser_backed_interface_asset_table_v1.yaml or interface_asset_table_check.py missing",
+            }
+        )
+    else:
+        try:
+            asset_proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(asset_check_path),
+                    "--format",
+                    "json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if asset_proc.returncode != 0:
+                findings.append(
+                    {
+                        "check": "interface_asset_table_check_passes",
+                        "severity": "critical",
+                        "status": "fail",
+                        "reason": f"interface_asset_table_check.py returned {asset_proc.returncode}: {asset_proc.stderr.strip()}",
+                    }
+                )
+            else:
+                asset_output = json.loads(asset_proc.stdout)
+                if (
+                    not asset_output.get("validation_pass")
+                    or asset_output.get("service_allowlist_count") != 70
+                    or asset_output.get("asset_table_count") != 70
+                    or asset_output.get("missing_in_asset")
+                    or asset_output.get("extra_in_asset")
+                ):
+                    findings.append(
+                        {
+                            "check": "interface_asset_table_check_passes",
+                            "severity": "critical",
+                            "status": "fail",
+                            "reason": "interface asset table must match 70 service actions with no missing/extra entries",
+                        }
+                    )
+        except Exception as exc:  # noqa: BLE001 - preflight should report fail-closed reason.
+            findings.append(
+                {
+                    "check": "interface_asset_table_check_passes",
+                    "severity": "critical",
+                    "status": "fail",
+                    "reason": f"interface_asset_table_check.py failed to run: {exc}",
+                }
+            )
+
     if not source_check_path.exists():
         findings.append(
             {
@@ -466,7 +569,7 @@ def main() -> int:
                     "--entity-count",
                     "1",
                     "--source-completion-matrix",
-                    '[{"source_name":"user_login_unified_log","source_status":"no_data","source_quality":"no_data_not_risk_exclusion","evidence_time_range":"last_30_days","collected_at":"2026-05-27T00:00:00+08:00","source_provenance":"realtime"}]',
+                    '[{"source_name":"login_logs_search","source_status":"no_data","source_quality":"no_data_not_risk_exclusion","evidence_time_range":"last_30_days","collected_at":"2026-05-27T00:00:00+08:00","source_provenance":"realtime"}]',
                     "--format",
                     "json",
                 ],
@@ -512,11 +615,17 @@ def main() -> int:
             "computer_use_poc/platform_call_playbook_index.md",
             "computer_use_poc/source_orchestration_plan_v1.yaml",
             "computer_use_poc/source_orchestration_check.py",
+            "computer_use_poc/browser_backed_interface_asset_table_v1.yaml",
+            "computer_use_poc/interface_asset_table_check.py",
+            "computer_use_poc/capability_registry.md",
+            "computer_use_poc/browser_backed_service_adapter_v1.md",
+            "computer_use_poc/runtime_case_execution_runner.py",
             "computer_use_poc/internal_agent_drift_audit_v1.md",
             "computer_use_poc/runtime_validation_cases_v1.yaml",
             "TOOLS.md",
             "bin/sso_session_runner",
             "computer_use_poc/release_overlay_readiness_checklist.md",
+            "computer_use_poc/raw_reference_redaction_contract_v1.md",
         ],
         "tools_md_status": tools_status,
         "real_platform_called": False,

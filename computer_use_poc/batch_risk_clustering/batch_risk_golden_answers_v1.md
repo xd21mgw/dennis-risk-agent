@@ -1,6 +1,9 @@
 # Batch Risk Golden Answers v1
 
-These are text-level golden answers for user-facing Batch Risk Clustering Analysis. They contain simulated inputs only and no real platform data.
+These are text-level golden answers for user-facing Batch Risk Clustering
+Analysis. They contain simulated inputs only and no real platform data. Older
+mode names in this file are `historical_only` regression material and must not
+override the current three-mode runtime routing.
 
 ## Golden Answer 1: ATO Mixed Batch
 

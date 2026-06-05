@@ -1,0 +1,86 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_shaped_ato_observation",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "ATO",
+    "账号安全",
+    "WEB 登录态接管",
+    "前后端行为差异"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "5523610476",
+        "5521017647",
+        "5523516661"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "ato_round_1_entity_1_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_device_id": "web_did_cluster_ato_a",
+            "candidate_ip": "10.31.21.8",
+            "login_type": "WEB_SMS_LOGIN",
+            "login_source": "WEB",
+            "network_signal": "same_proxy_asn",
+            "backend_action_signal": "quick_login_then_publish"
+          }
+        },
+        {
+          "source_id": "ato_round_1_entity_2_login",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_device_id": "web_did_cluster_ato_a",
+            "candidate_ip": "10.31.21.9",
+            "login_type": "WEB_SMS_LOGIN",
+            "login_source": "WEB",
+            "network_signal": "same_proxy_asn",
+            "backend_action_signal": "quick_login_then_publish"
+          }
+        },
+        {
+          "source_id": "ato_round_1_entity_1_track",
+          "action": "track_analysis_check_data_ready",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_device_id": "web_did_cluster_ato_a",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "publish_after_login",
+            "frontend_backend_consistency": "backend_action_frontend_weak"
+          }
+        },
+        {
+          "source_id": "ato_round_1_entity_2_track",
+          "action": "track_analysis_check_data_ready",
+          "fields": {
+            "user_id": "5521017647",
+            "candidate_device_id": "web_did_cluster_ato_a",
+            "frontend_activity_signal": "weak_frontend_activity",
+            "backend_action_signal": "publish_after_login",
+            "frontend_backend_consistency": "backend_action_frontend_weak"
+          }
+        },
+        {
+          "source_id": "ato_round_1_entity_1_strategy",
+          "action": "rcp_fast_query_hbase",
+          "fields": {
+            "user_id": "5523610476",
+            "candidate_policy_code": "mock_policy_web_control_publish",
+            "candidate_event_id": "mock_event_ato_5523610476",
+            "policy_hit_signal": "web_login_publish_chain_candidate"
+          }
+        }
+      ]
+    }
+  ]
+}

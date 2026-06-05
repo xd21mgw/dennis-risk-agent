@@ -106,6 +106,147 @@
         "plan_mode_must_not_claim_offline_data_checked": true
       }
     },
+    "batch_attack_three_modes_v1": {
+      "applies_to": [
+        "batch_attack_judgement",
+        "batch_risk_clustering",
+        "batch_ato",
+        "device_farm",
+        "group_control",
+        "content_diversion_batch",
+        "anti_crawler_batch",
+        "strategy_recall_batch"
+      ],
+      "primary_access_method": "three_mode_orchestration_contract",
+      "default_runtime_routing": false,
+      "real_platform_access": false,
+      "dataagent_hive_execution": false,
+      "allowed_modes": [
+        "full_observation_mode",
+        "sample_expand_validate_mode",
+        "wide_table_aggregate_mode"
+      ],
+      "legacy_modes_historical_only": [
+        "small_multi_case_execution_mode",
+        "small_batch_mode",
+        "small_batch_execution_with_checkpoint",
+        "batch_clustering_mode",
+        "large_batch_aggregation_mode",
+        "alert_batch_or_population_analysis_mode"
+      ],
+      "routing_rules": {
+        "entity_count_lte_10": "full_observation_mode",
+        "entity_count_gt_10_urgent_unknown_no_wide_table": "sample_expand_validate_mode",
+        "entity_count_gt_10_wide_table_strategy_history_dataagent_hive": "wide_table_aggregate_mode",
+        "user_specified_mode": "honor_when_safe_with_authorization_boundary"
+      },
+      "batch_commonality_boundary": {
+        "concept": "batch_realtime_review",
+        "single_round_state": "sample_count_under_10_or_user_requests_current_sample_only; aggregate candidate anchors into batch_anchor_pool before L2 drilldown; output limited_commonality only",
+        "rolling_rounds_state": "when commonality_stability_requires_validation; expand by bounded rounds and use rolling_anchor_summary for stable_anchors/dropped_anchors/new_anchor_delta/support_ratio",
+        "shared_rule": "single_round and rolling_rounds use the same aggregate-first flow; L2 drilldown never selects directly from per-user candidate_anchor_pool order",
+        "single_entity_anchor_rule": "an anchor supported by only one sampled entity is single_entity_anchor and cannot support group_profile_candidate",
+        "batch_anchor_rule": "batch_anchor requires multiple sampled entities sharing the same or similar anchor value/path/template",
+        "missing_anchor_rule": "only entities with the selected anchor can enter that drilldown interface; other sampled entities are skipped_missing_anchor"
+      },
+      "entity_resolution_first": {
+        "input_user_id": "expand_user_to_device",
+        "input_device_id": "expand_device_to_user",
+        "mixed_input": "build_user_device_entity_graph",
+        "schema_fields": [
+          "input_users",
+          "input_devices",
+          "expanded_users",
+          "expanded_devices",
+          "user_device_edges",
+          "high_degree_devices",
+          "high_degree_users",
+          "unresolved_entities",
+          "entity_resolution_source",
+          "entity_resolution_quality",
+          "missing_or_blocked_reason"
+        ],
+        "high_degree_policy": "mark_and_cap_not_unbounded_expand"
+      },
+      "source_commonality_card_required_for": [
+        "full_observation_mode",
+        "sample_expand_validate_mode"
+      ],
+      "source_commonality_card_schema": [
+        "source_name",
+        "entity_coverage",
+        "records_coverage",
+        "shared_signals",
+        "differentiating_signals",
+        "counter_evidence",
+        "missing_data",
+        "source_quality",
+        "boundary_notes"
+      ],
+      "multi_source_fusion_schema": [
+        "strong_shared_signals",
+        "medium_shared_signals",
+        "weak_signals",
+        "conflicting_signals",
+        "counter_evidence",
+        "possible_normal_mixed_entities",
+        "risk_clusters",
+        "conclusion_boundary"
+      ],
+      "cluster_summary_card_schema": [
+        "cluster_id",
+        "sample_count",
+        "sample_ratio",
+        "representative_entities",
+        "boundary_entities",
+        "counter_evidence_entities",
+        "risk_type",
+        "shared_signals",
+        "confidence",
+        "attack_chain_status",
+        "missing_evidence",
+        "counter_evidence",
+        "recommended_next_action"
+      ],
+      "sample_expand_validate_defaults": {
+        "initial_sample_size": 10,
+        "sampling_method": "random",
+        "max_rounds": 5,
+        "max_deep_checked": 50,
+        "high_coverage_threshold": "around_70_percent"
+      },
+      "wide_table_aggregate_report": {
+        "registered_candidate_table": "ks_rc_bs.dws_risk_register_gang_user_week_feature_wide_di",
+        "table_status": "registered_candidate_not_executed",
+        "required_sections": [
+          "input_summary",
+          "field_quality",
+          "top_univariate_signals",
+          "candidate_feature_combinations",
+          "cluster_candidates",
+          "representative_samples",
+          "missing_or_unreliable",
+          "recommended_next_queries"
+        ],
+        "dataagent_role": "statistics_and_retrieval_not_final_judgement",
+        "authorization_required": true
+      },
+      "strategy_candidate_groups": [
+        "ready_for_controlled_gray_validation",
+        "combine_before_use",
+        "monitor_or_expand_only"
+      ],
+      "shared_boundaries": [
+        "no_data_not_risk_exclusion",
+        "strategy_hit_not_final_judgement",
+        "source_window_boundary",
+        "partial_not_final",
+        "dataagent_hive_pending_not_verified",
+        "wide_table_correlation_not_complete_attack_chain",
+        "representative_sample_not_full_population_proof",
+        "no_auto_strategy_launch_or_disposition"
+      ]
+    },
     "browser_backed_fixed_actions_v1": {
       "applies_to": [
         "ATO",
@@ -2029,7 +2170,8 @@
         "batch_ato_cluster_lens",
         "batch_compromised_account_analysis",
         "batch_stolen_account_posting",
-        "batch_clustering_mode",
+        "sample_expand_validate_mode",
+        "wide_table_aggregate_mode",
         "batch_account_security"
       ],
       "primary_access_method": "planning_only",
@@ -2316,6 +2458,300 @@
         "cluster_level_backfill_features",
         "evidence_gaps",
         "next_actions"
+      ]
+    },
+    "interface_orchestration_phase2_v1": {
+      "status": "phase2_plan_template_contract_only",
+      "historical_aliases": [
+        "interface_orchestration_phase1_v1"
+      ],
+      "applies_to": [
+        "batch_attack_judgement",
+        "batch_risk_clustering",
+        "single_entity_execution_mode",
+        "sample_expand_validate_mode",
+        "full_observation_mode",
+        "strategy_governance",
+        "content_diversion_batch"
+      ],
+      "primary_access_method": "interface_orchestration_contract",
+      "contract_file": "computer_use_poc/interface_orchestration_contract_v1.md",
+      "asset_table_file": "computer_use_poc/browser_backed_interface_asset_table_v1.yaml",
+      "fact_table_contract_file": "computer_use_poc/fact_table_contract_v1.md",
+      "fact_table_checker": "python3 computer_use_poc/fact_table_contract_check.py --format json",
+      "service_source_of_truth": [
+        "/Users/pengcheng/dennis-local/browser-backed-api-poc/ACTION_REGISTRY.md",
+        "/Users/pengcheng/dennis-local/browser-backed-api-poc/src/actions.js"
+      ],
+      "current_registered_interface_count": 70,
+      "default_runtime_routing": false,
+      "runtime_runner_changed": false,
+      "business_naming_rule": "Business orchestration calls browser-backed actions and HAR inventory rows interfaces.",
+      "structured_fact_table_input_layer": {
+        "status": "phase4_6_contract_only",
+        "purpose": "make batch commonality consume structured facts instead of compressed per-user observations only",
+        "raw_detail_retention_layer": "traceback_only_not_model_context",
+        "safe_projected_records_boundary": "no_raw_body_no_capped_body_no_logContent_no_credential_like_raw_values",
+        "tables": [
+          "standard_detail_table",
+          "anchor_table",
+          "feature_table",
+          "relation_table",
+          "source_quality_table",
+          "round_support_table",
+          "rolling_anchor_summary"
+        ],
+        "table_mapping_from_existing_artifacts": {
+          "standard_detail_table": ["base_summary_card", "drilldown_evidence_card"],
+          "anchor_table": ["candidate_anchor_pool", "selected_drilldown_anchors", "skipped_anchors"],
+          "feature_table": ["candidate_features"],
+          "relation_table": ["relation_expansion_result"],
+          "source_quality_table": ["source_quality"],
+          "round_support_table": ["commonality_matrix.shared_signals"],
+          "rolling_anchor_summary": ["anchor_scoring_summary", "cross_round_anchor_delta"]
+        },
+        "mode_consumption": {
+          "full_observation_mode": {
+            "allowed_human_explanation": ["per_user_evidence_card", "per_user_observation"],
+            "required_structured_inputs": ["standard_detail_table", "anchor_table", "feature_table", "source_quality_table"],
+            "boundary": "per_user_observation_may_explain_but_must_not_be_only_commonality_source"
+          },
+          "sample_expand_validate_mode": {
+            "required_structured_inputs": ["anchor_table", "feature_table", "relation_table", "source_quality_table", "round_support_table", "rolling_anchor_summary"],
+            "rolling_required_fields": ["round_support_count", "cumulative_support_count", "support_ratio", "stability_across_rounds", "new_anchor_delta", "stable_anchors", "dropped_anchors"],
+            "boundary": "batch_realtime_review_commonality_must_not_depend_only_on_per_user_observation"
+          }
+        },
+        "forbidden_behavior": [
+          "raw_body_in_model_context",
+          "capped_body_in_model_context",
+          "logContent_in_user_visible_or_batch_commonality_input",
+          "batch_commonality_from_per_user_observation_only",
+          "gap_status_as_low_risk_counter_evidence"
+        ]
+      },
+      "implementation_layers": [
+        {
+          "layer_id": "input_route_layer",
+          "zh_name": "输入识别与路由",
+          "purpose": "classify seed entity, route mode, allowed interface families, and forbidden expansion before any source planning",
+          "input": ["user_prompt", "seed_entity_candidates", "declared_scene_hint", "execution_mode"],
+          "allowed_interface_roles": ["first_hop_candidate", "parameter_only"],
+          "output_artifacts": ["task_route", "seed_entity", "base_interface_plan"],
+          "stop_condition": "route_selected_or_validation_failed",
+          "forbidden_behavior": [
+            "full_entity_expansion",
+            "chase_all_photo_ip_event_policy_from_user_id",
+            "run_all_70_interfaces",
+            "platform_access_before_source_plan"
+          ],
+          "boundary": "route seed entity and allowed interface families; do not perform full entity expansion"
+        },
+        {
+          "layer_id": "base_summary_layer",
+          "zh_name": "基础摘要层",
+          "purpose": "run low-cost, low-dependency, summary-style interfaces and discover first anchors",
+          "input": ["task_route", "seed_entity", "base_interface_plan", "browser_backed_interface_asset_table_v1"],
+          "allowed_interface_roles": ["first_hop_candidate", "parameter_only"],
+          "output_artifacts": ["base_summary_card", "base_commonality", "candidate_anchor_pool", "anchor_scoring_summary", "selected_drilldown_anchors", "skipped_anchors"],
+          "candidate_anchor_required_fields": ["anchor_type", "value", "produced_by", "confidence", "next_allowed_interfaces", "cap_key", "anchor_class", "anchor_score", "selection_status", "anchor_priority_reason"],
+          "anchor_score_required_fields": ["anchor_presence", "anomaly_strength", "batch_support_count", "cross_domain_support", "chain_value", "cost_level", "expansion_risk", "false_positive_risk", "evidence_quality", "current_observation_support", "total_score", "supporting_entities", "supporting_sources"],
+          "anchor_selection_caps": {
+            "batch_support_count_semantics": "distinct_sampled_entity_count",
+            "max_selected_drilldown_anchors": 5,
+            "max_selected_per_domain": 2,
+            "max_selected_per_anchor_type": 2,
+            "selection_policy": "batch_anchor_pool_first_then_domain_entity_diversity_and_score_with_domain_type_caps"
+          },
+          "stop_condition": "candidate_anchor_pool_created_or_source_quality_gap_recorded",
+          "forbidden_behavior": [
+            "full_photo_expansion",
+            "full_ip_expansion",
+            "full_event_policy_expansion",
+            "full_relation_expansion",
+            "treat_no_data_as_counter_evidence"
+          ],
+          "boundary": "low-cost low-dependency summary only; not run all interfaces"
+        },
+        {
+          "layer_id": "anchor_drilldown_layer",
+          "zh_name": "追踪下钻层",
+          "purpose": "follow high-value anchors from candidate_anchor_pool and extract bounded details",
+          "input": ["candidate_anchor_pool", "anchor_scoring_summary", "selected_drilldown_anchors", "skipped_anchors", "cap_policy", "stop_reason_policy"],
+          "allowed_interface_roles": ["anchor_triggered_drilldown", "multi_round_drilldown", "governance_only", "validation_only", "parameter_only"],
+          "output_artifacts": ["drilldown_evidence_card", "new_anchor_pool", "tracking_commonality", "stop_reason"],
+          "multi_round_allowed": true,
+          "stop_condition": "cap_reached_or_no_new_evidence_or_missing_anchor_or_missing_contract_or_low_value_anchor",
+          "forbidden_behavior": [
+            "full_fans_expansion",
+            "full_follow_expansion",
+            "full_comment_expansion",
+            "full_private_message_expansion",
+            "full_photo_expansion",
+            "full_policy_tree_expansion",
+            "ignore_stop_reason",
+            "drilldown_unselected_anchor",
+            "run_inventory_only_as_checked"
+          ],
+          "boundary": "anchor-triggered multi-round tracking only with cap and stop_reason"
+        },
+        {
+          "layer_id": "cross_domain_commonality_layer",
+          "zh_name": "交叉共性分析层",
+          "purpose": "merge base_commonality and tracking_commonality across business observation domains",
+          "input": ["base_commonality", "tracking_commonality", "source_quality", "relation_expansion_result", "expert_risk_signal_input"],
+          "allowed_interface_roles": [],
+          "output_artifacts": ["commonality_matrix", "abnormal_correlation", "representative_samples", "candidate_features", "relation_expansion_result", "group_profile_candidate"],
+          "expert_risk_signal_input": {
+            "allowed_inputs": ["historical_risk_pattern", "attack_chain_experience", "abnormal_correlation_experience", "black_market_tactic_knowledge", "expert_hypothesis"],
+            "allowed_usage": "assist_commonality_matrix_abnormal_correlation_candidate_features",
+            "required_evidence_source_labels": ["current_observation", "historical_risk_pattern", "expert_hypothesis"],
+            "must_combine_with": ["current_interface_evidence", "sample_commonality", "source_quality"],
+            "forbidden_usage": ["replace_current_observation", "direct_final_conclusion", "direct_strategy_recommendation", "confirm_risk_because_pattern_looks_similar"]
+          },
+          "candidate_features_required_fields": ["feature_name", "source_domains", "supporting_current_evidence", "supporting_selected_anchors_or_unselected_signal_hypothesis", "signal_inputs_or_hypothesis_inputs", "confidence", "validation_needed", "false_positive_risk", "not_final_conclusion"],
+          "candidate_features_compatibility_alias": "expert_risk_signal_input may be retained only as compatibility alias for hypothesis_inputs; it is not evidence, not weak_evidence, and not final conclusion",
+          "group_profile_candidate_required_fields": ["representative_entities", "shared_domains", "shared_signals", "supporting_selected_anchors", "supporting_selected_batch_anchors", "context_selected_anchors", "missing_evidence", "confidence", "not_confirmed_as_group", "required_validation"],
+          "group_profile_candidate_support_boundary": "supporting_selected_batch_anchors can support group_profile_candidate; context_selected_anchors are single-entity or explanatory anchors only and cannot support group conclusion",
+          "stop_condition": "commonality_matrix_and_boundary_completed",
+          "forbidden_behavior": [
+            "single_signal_to_group_conclusion",
+            "strategy_hit_as_final_judgement",
+            "expert_hypothesis_as_final_judgement",
+            "historical_risk_pattern_as_current_evidence",
+            "same_device_same_ip_same_policy_as_confirmed_group",
+            "drop_conflicting_signals",
+            "hide_normal_mixed_entities"
+          ],
+          "boundary": "aggregate domain commonality and abnormal correlations; group_domain remains candidate until validated"
+        },
+        {
+          "layer_id": "validation_layer",
+          "zh_name": "补证验证层",
+          "purpose": "validate L1/L2/L3 risk hypotheses with authorized wide-table, replay, control group, and false-positive analysis",
+          "input": ["group_profile_candidate", "candidate_features", "representative_samples", "validation_request"],
+          "allowed_interface_roles": ["validation_only", "governance_only"],
+          "output_artifacts": ["validation_plan", "validation_result", "coverage_gap", "false_positive_risk"],
+          "stop_condition": "validation_plan_generated_or_authorized_validation_result_received",
+          "forbidden_behavior": [
+            "call_dataagent_without_user_authorization",
+            "call_hive_without_user_authorization",
+            "render_validation_plan_as_completed_data",
+            "statistical_correlation_as_complete_attack_chain"
+          ],
+          "boundary": "DataAgent/Hive/wide-table validation requires explicit authorization"
+        },
+        {
+          "layer_id": "judgement_output_layer",
+          "zh_name": "研判输出层",
+          "purpose": "render final evidence, pattern summary, group candidate, strategy recommendation, source quality, missing evidence, and boundaries",
+          "input": ["commonality_matrix", "group_profile_candidate", "validation_plan", "validation_result", "source_quality", "missing_evidence"],
+          "allowed_interface_roles": [],
+          "output_artifacts": ["final_evidence_card", "pattern_summary", "group_profile", "strategy_recommendation", "missing_evidence"],
+          "stop_condition": "answer_boundary_rendered",
+          "forbidden_behavior": [
+            "auto_disposition",
+            "confirmed_group_without_validation",
+            "no_data_as_low_risk",
+            "skipped_as_counter_evidence",
+            "timeout_as_counter_evidence",
+            "missing_contract_as_counter_evidence",
+            "inventory_only_as_checked"
+          ],
+          "boundary": "render evidence and boundaries; no auto-disposition"
+        }
+      ],
+      "business_observation_dimensions": {
+        "risk_object_domains": [
+          "account_domain",
+          "device_domain",
+          "network_domain",
+          "content_domain",
+        "social_domain",
+        "behavior_domain"
+        ],
+        "behavior_domain_subtypes": [
+          "frontend_behavior",
+          "backend_behavior",
+          "frontend_backend_consistency"
+        ],
+        "aggregate_object_domains": [
+          "group_domain"
+        ],
+        "risk_signal_domains": [
+          "strategy_domain",
+          "enforcement_domain",
+          "feedback_domain"
+        ],
+        "horizontal_capabilities": [
+          "relation_expansion",
+          "commonality_discovery",
+          "abnormal_correlation",
+          "representative_sampling",
+          "candidate_feature_mining"
+        ]
+      },
+      "interface_call_roles": [
+        "first_hop_candidate",
+        "anchor_triggered_drilldown",
+        "multi_round_drilldown",
+        "validation_only",
+        "governance_only",
+        "parameter_only",
+        "unavailable_or_missing_contract"
+      ],
+      "required_cap_and_stop_reason_fields": [
+        "cap_policy",
+        "stop_reason_policy",
+        "required_anchor",
+        "prohibited_usage",
+        "status"
+      ],
+      "required_stop_reasons": [
+        "cap_reached",
+        "missing_anchor",
+        "missing_contract",
+        "skipped_missing_anchor",
+        "skipped_by_cap",
+        "skipped_unavailable_action",
+        "source_timeout",
+        "source_no_data_not_counter_evidence",
+        "low_value_anchor",
+        "duplicate_anchor",
+        "authorization_required",
+        "no_new_evidence_after_round",
+        "service_contract_gap",
+        "parse_error"
+      ],
+      "group_domain_boundary": {
+        "default_cluster_object": "group_profile_candidate",
+        "confirmed_terms": ["confirmed_group", "fraud_ring"],
+        "confirmed_terms_allowed_only_when": "strong multi-source evidence plus validation or explicit review closure",
+        "same_device_same_ip_same_policy_alone_not_group": true
+      },
+      "relation_expansion_rules": {
+        "required_fields": ["expansion_depth", "entity_cap", "edge_type", "edge_strength", "stop_reason", "source_quality", "cannot_conclude_boundary"],
+        "default_expansion_depth": 1,
+        "default_entity_cap": 20,
+        "prohibited_behavior": ["full_graph_scan", "recursive_expansion_without_new_authorization", "single_relation_edge_as_group_conclusion"],
+        "missing_or_blocked_boundary": "missing_contract_skipped_timeout_no_data_are_not_no_relation_counter_evidence"
+      },
+      "enforcement_feedback_separation": {
+        "enforcement_domain": ["punish", "ban", "limit", "secondary_verification", "content_takedown", "gray_rollout", "policy_tuning"],
+        "feedback_domain": ["report", "complaint", "appeal", "manual_review_feedback", "false_positive_feedback"],
+        "must_not_merge": true
+      },
+      "hard_boundaries": [
+        "do_not_use_37_action_inventory_as_current_fact",
+        "do_not_run_70_interfaces_as_default_nodes",
+        "input_route_layer_is_not_full_entity_expansion",
+        "base_summary_layer_is_not_all_relation_expansion",
+        "anchor_drilldown_layer_requires_cap_and_stop_reason",
+        "relation_expansion_requires_expansion_depth_entity_cap_edge_type_edge_strength_stop_reason",
+        "strategy_hit_not_final_judgement",
+        "group_profile_candidate_not_confirmed_group",
+        "no_data_skipped_timeout_missing_contract_not_counter_evidence",
+        "inventory_only_or_missing_contract_not_checked"
       ]
     }
   }

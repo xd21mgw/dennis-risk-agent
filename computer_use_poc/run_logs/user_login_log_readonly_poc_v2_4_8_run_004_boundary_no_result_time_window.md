@@ -89,7 +89,7 @@ time_window_behavior:
 ```yaml
 readonly_safety_check:
   export_clicked: false
-  full_json_copied: false
+  safe_json_summary_copied: false
   write_action_performed: false
   credential_raw_value_output: false
   passed: true

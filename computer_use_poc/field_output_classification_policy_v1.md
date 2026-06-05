@@ -25,7 +25,7 @@ Runtime and evidence-card code uses these canonical class names:
 
 | canonical class | examples | default_output_policy | severity_if_plaintext |
 |---|---|---|---|
-| `credential_secret` | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, storageState, auth credential in headers, KIM code, login ticket, credential secret | never plaintext; `present_redacted` / `credential_present_redacted` only | P0 |
+| `credential_secret` | token secret, accessToken, refreshToken, cookie, session, sessionId, authorization header, authToken, password, salt, browser_storage_state_marker, auth credential in headers, KIM code, login ticket, credential secret | never plaintext; `present_redacted` / `credential_present_redacted` only | P0 |
 | `pii_strict` | phone number, ID card, real-name identity information, precise personal identity fields, verification code | limited masking / presence summary; no full plaintext | P1/P0 depending exposure |
 | `risk_entity_identifier` | UID / user_id, DID, device_id / deviceId, deviceceid, IP, UA / user_agent, photo_id, event_id / eventId, source_id / sourceId, policy_code / strategyId / hitFusePolicyCode, tokenId when it is an event identifier rather than a token secret, login method, logSource, timestamp / `_occurTime`, device model, app version, coarse geo | internal risk review keeps the raw risk entity by default for evidence chaining; external share masks by audience scope | P1 if audience policy is wrong; not P0 credential leakage by default |
 | `source_summary_metric` | IP subnet, ASN, carrier, geo cluster, device risk tags, same-device count, registration cohort, behavior-object cluster, risk label distribution, success/failure counts, time-series summary | preferred output for reports and KIM responses | usually safe if no raw sensitive values |
@@ -39,7 +39,7 @@ Never output plaintext:
 - cookie / session / sessionId plaintext.
 - authorization header / authToken plaintext.
 - password / salt.
-- storageState.
+- browser_storage_state_marker.
 - authentication credentials inside headers.
 - KIM code / login ticket / credential secret.
 

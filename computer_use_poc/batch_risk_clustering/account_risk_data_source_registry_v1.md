@@ -145,7 +145,7 @@ No source below can directly authorize disposal. High-precision tags and admin h
 |---|---|---|---|---|---|---|
 | `ks_rc_bs.dwd_risk_usr_accnt_login_orign_info` | main | user / login request event | 9999 天 / 日增量 / 明细 | 高 | ATO, 登录失败, 撞库, 暴力破解, resetPwd, 批量分簇 | 表名是 `orign`，不能改成 `origin`；必须带 `p_date`，建议带 `p_action_type`；`finalloginresult=1` 才是成功，其他为失败，null 为未走完流程 / 不确定。 |
 | `ks_rc_bs.ks_account_login_basic_info` | auxiliary | user / successful login event | 9999 天 / 日增量 / 明细 | 高 | ATO, OAuth/一键登录接管, 异设备成功登录, 批量分簇 | 成功登录专用表；不适合分析登录失败、撞库失败或暴力破解失败。 |
-| `ks_raw_log_v3.infra_user_action_log` | auxiliary | action / event | 全量 / 原始日志 | 高 | ATO, 行为链路, 协议, 群控, 批量分簇 | 先聚合再解释；动作语义需确认；不能输出原始日志全文。 |
+| `ks_raw_log_v3.infra_user_action_log` | auxiliary | action / event | 全量 / 日志摘要 | 高 | ATO, 行为链路, 协议, 群控, 批量分簇 | 先聚合再解释；动作语义需确认；不能输出日志摘要全文。 |
 | `ks_rc_bs.user_login_infos` | auxiliary | user / login summary | 日增量 / 快照 | 中 | ATO, 登录环境聚集, 账号安全 | 适合 L1 计数和最新上下文；不足以单独支撑 token 链路结论。 |
 
 ATO / 盗号离线取数路由：
@@ -217,7 +217,7 @@ ATO / 盗号离线取数路由：
 
 | table_name | role | grain | freshness | field_richness | applicable_scenarios | notes |
 |---|---|---|---|---|---|---|
-| `ks_raw_log_v3.passport_action_log` | main | action | 全量 / 原始日志 | 中 | ATO, 改密/换绑/申诉, 策略评估, 判罚复核 | admin/action log 是事件证据；需要确认 actor、action_type、时间顺序。 |
+| `ks_raw_log_v3.passport_action_log` | main | action | 全量 / 日志摘要 | 中 | ATO, 改密/换绑/申诉, 策略评估, 判罚复核 | admin/action log 是事件证据；需要确认 actor、action_type、时间顺序。 |
 | `ks_db_origin.gifshow_admin_user_log_dt_snapshot` | auxiliary | user / admin action snapshot | 快照 | 中 | 判罚复核, 误伤评估, 策略评估 | 解释历史处置和人工操作；不是当前批次风险事实本身。 |
 
 ## Capability Domain 6: 虚假账号标签

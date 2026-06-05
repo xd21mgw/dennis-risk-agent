@@ -1,0 +1,735 @@
+schema_version: browser_backed_interface_asset_table_v1
+status: phase1_contract_only
+source_of_truth:
+  service_action_registry: /Users/pengcheng/dennis-local/browser-backed-api-poc/ACTION_REGISTRY.md
+  service_actions_file: /Users/pengcheng/dennis-local/browser-backed-api-poc/src/actions.js
+  service_mock_tests: /Users/pengcheng/dennis-local/browser-backed-api-poc/test/mock.test.js
+interface_count: 70
+business_naming_rule: "Business orchestration calls service actions and inventory rows interfaces."
+default_boundaries:
+  default_runtime_routing: false
+  no_cartesian_execution: true
+  no_data_skipped_timeout_missing_contract_not_counter_evidence: true
+  service_passthrough_only: true
+  dennis_owns_observation_source_quality_and_evidence: true
+  credential_material_output_forbidden: true
+default_cap_policy:
+  max_l1_interfaces_per_entity: 6
+  max_l2_interfaces_per_anchor_type: 2
+  max_anchor_items_per_domain: 5
+  max_relation_expansion_depth: 1
+  max_relation_entities_per_edge_type: 20
+stop_reason_policy_allowed:
+  - cap_reached
+  - missing_anchor
+  - missing_contract
+  - skipped_unavailable_action
+  - source_timeout
+  - source_no_data_not_counter_evidence
+  - low_value_anchor
+  - duplicate_anchor
+  - authorization_required
+  - no_new_evidence_after_round
+  - service_contract_gap
+  - parse_error
+interfaces:
+  - interface_name: track_analysis_summary
+    observation_domain: [behavior_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id_or_device_id, appName]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, frontend_activity_anchor]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not treat frontend activity summary as final risk judgement."
+    status: registered
+    notes: "Open default Track sequence summary facade."
+  - interface_name: login_logs_search
+    observation_domain: [behavior_domain, network_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id, time_window]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, login_control_chain_anchor, network_anchor]
+    cap_policy: "Use max_records/window cap; json_array_capped rows are partial."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "Do not treat no_data, byte_limit, or response_too_large as low-risk counter-evidence."
+    status: registered
+    notes: "Supports structured capped body at data.logSearchModels."
+  - interface_name: weapon_inventory
+    observation_domain: [device_domain, group_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id_or_device_id]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, relation_expansion_result, group_profile_candidate]
+    cap_policy: "Limit device ids and graph edges; no unbounded graph expansion."
+    stop_reason_policy: [cap_reached, missing_anchor, source_timeout, service_contract_gap]
+    prohibited_usage: "Same-device relation is not a gang conclusion by itself."
+    status: registered
+    notes: "Service-owned graphData -> riskData follow-up."
+  - interface_name: rcp_snapshot
+    observation_domain: [strategy_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [source_id_or_event_filter, time_window]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, strategy_anchor]
+    cap_policy: "Limit event rows and columns."
+    stop_reason_policy: [cap_reached, missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Strategy hit is not final judgement."
+    status: registered
+    notes: "Open default RCP event list snapshot."
+  - interface_name: archives_user_profile
+    observation_domain: [account_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, account_status_anchor]
+    cap_policy: one_profile_per_seed_entity
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not claim this is a complete user overview card."
+    status: registered
+    notes: "Closest account profile interface, but derived overview still needs other domains."
+  - interface_name: archives_user_analysis
+    observation_domain: [account_domain, behavior_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id, time_window]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, behavior_anchor, account_change_anchor]
+    cap_policy: "Bound page/time window."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "Completed transport is not behavior-chain closure."
+    status: registered
+    notes: "Legacy ATO P0 behavior/user log source."
+  - interface_name: archives_photo_search
+    observation_domain: [content_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id, time_window]
+    possible_outputs: [candidate_anchor_pool, content_anchor, base_commonality]
+    cap_policy: "Top page only by default; no full content traversal."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "no_data does not exclude abnormal publish or diversion."
+    status: registered
+    notes: "Primary content_action_anchor_probe for user_id seeds."
+  - interface_name: archives_photo_profile
+    observation_domain: [content_domain, network_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [photo_id]
+    possible_outputs: [drilldown_evidence_card, new_anchor_pool, publish_source_anchor, publish_ip_anchor]
+    cap_policy: "Top-K photo anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Do not call without photo_id."
+    status: registered
+    notes: "Publish fact chain and report/status auxiliary fields."
+  - interface_name: archives_photo_meta
+    observation_domain: [content_domain, device_domain, network_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [photo_id]
+    possible_outputs: [drilldown_evidence_card, new_anchor_pool, publish_device_anchor, publish_source_anchor]
+    cap_policy: "Top-K photo anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Do not call without photo_id or treat absent device field as no risk."
+    status: registered
+    notes: "Key interface for publish device/source/IP/UA if body exposes fields."
+  - interface_name: archives_photo_report_aggregate
+    observation_domain: [feedback_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [photo_id]
+    possible_outputs: [drilldown_evidence_card, feedback_anchor]
+    cap_policy: "Only selected photo anchors."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Report aggregate alone is not risk conclusion."
+    status: registered
+    notes: "Content feedback signal."
+  - interface_name: archives_photo_user_autonomy
+    observation_domain: [content_domain, enforcement_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [photo_id]
+    possible_outputs: [drilldown_evidence_card, enforcement_anchor]
+    cap_policy: "Only selected photo anchors."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not treat autonomy/status as final judgement alone."
+    status: registered
+    notes: "Content state auxiliary evidence."
+  - interface_name: archives_gallery_photo_list
+    observation_domain: [content_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, content_anchor, base_commonality]
+    cap_policy: "pageSize <= 20; retain top candidate photo ids only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not expand full gallery by default."
+    status: registered
+    notes: "Photo anchor discovery when photo_search lacks anchors."
+  - interface_name: archives_photo_gallery_top
+    observation_domain: [content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, top_content_anchor]
+    cap_policy: "Top only."
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not treat top photo as representative without validation."
+    status: registered
+    notes: "Optional top content anchor."
+  - interface_name: archives_negative_report
+    observation_domain: [feedback_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [feedback_anchor, base_summary_card]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Negative feedback is not enforcement."
+    status: registered
+    notes: "Keep feedback_domain separate from enforcement_domain."
+  - interface_name: archives_negative_uninterested
+    observation_domain: [feedback_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [feedback_anchor]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not use uninterested feedback alone as risk proof."
+    status: registered
+    notes: "Weak negative feedback signal."
+  - interface_name: archives_risk_info
+    observation_domain: [account_domain, strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [base_summary_card, strategy_anchor]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "Risk info is a signal, not final judgement."
+    status: registered
+    notes: "May contribute to derived user overview."
+  - interface_name: archives_user_label
+    observation_domain: [account_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [base_summary_card, account_label_anchor]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Label alone cannot conclude risk."
+    status: registered
+    notes: "Account label/status fields."
+  - interface_name: archives_user_shop_info
+    observation_domain: [account_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [base_summary_card, commerce_context_anchor]
+    cap_policy: one_summary_per_seed_entity
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Commerce context is auxiliary only."
+    status: registered
+    notes: "Account commerce context."
+  - interface_name: archives_punish_status
+    observation_domain: [enforcement_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [photo_id_or_live_stream_id]
+    possible_outputs: [drilldown_evidence_card, enforcement_anchor]
+    cap_policy: "Only selected content/live anchors."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "No generic user-level punish guessing."
+    status: registered
+    notes: "PHOTO/LIVE_STREAM target only."
+  - interface_name: archives_review_logs
+    observation_domain: [behavior_domain, enforcement_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id, time_window]
+    possible_outputs: [base_summary_card, behavior_anchor, enforcement_anchor]
+    cap_policy: "Bound page/time window."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not full-page crawl by default."
+    status: registered
+    notes: "Review log list."
+  - interface_name: archives_user_analyze_summary
+    observation_domain: [behavior_domain, account_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id, time_window]
+    possible_outputs: [base_summary_card, behavior_anchor, account_change_anchor]
+    cap_policy: "Bound page/time window."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not replace wide-table validation."
+    status: registered
+    notes: "User analysis summary/matrix."
+  - interface_name: archives_live_gallery
+    observation_domain: [content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, live_anchor]
+    cap_policy: "Top live anchors only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not expand full live history by default."
+    status: registered
+    notes: "Live stream id discovery."
+  - interface_name: archives_fans_list
+    observation_domain: [social_domain, relation_expansion]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [relation_expansion_result, social_anchor, group_profile_candidate]
+    cap_policy: "pageSize <= 20; expansion_depth default 1."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not full-scan fans or conclude gang from fan relation alone."
+    status: registered
+    notes: "Registered in current 70-action service; mock only status."
+  - interface_name: archives_follow_list
+    observation_domain: [social_domain, relation_expansion]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [relation_expansion_result, social_anchor, group_profile_candidate]
+    cap_policy: "pageSize <= 20; expansion_depth default 1."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not full-scan follows or conclude gang from follow relation alone."
+    status: registered
+    notes: "Registered in current 70-action service; mock only status."
+  - interface_name: archives_collect_photo_list
+    observation_domain: [social_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, social_anchor, content_anchor]
+    cap_policy: "Top collected photo anchors only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not full-scan collected photos by default."
+    status: registered
+    notes: "Collection/like-style content relation."
+  - interface_name: archives_collection_list
+    observation_domain: [content_domain, social_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, collection_anchor]
+    cap_policy: "Top collection folders only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not full-scan collection folders by default."
+    status: registered
+    notes: "Collection/folder list."
+  - interface_name: archives_comment_search
+    observation_domain: [social_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id_or_photo_id]
+    possible_outputs: [relation_expansion_result, social_anchor, content_anchor, tracking_commonality]
+    cap_policy: "page/count bounded; summarize comments, no plaintext dump."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "Do not output raw comment text or full comment expansion."
+    status: registered
+    notes: "Supports user_id or photo_id mode."
+  - interface_name: archives_livestream_home_info
+    observation_domain: [content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [live_stream_id]
+    possible_outputs: [drilldown_evidence_card, live_anchor]
+    cap_policy: "Selected live anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not call without live_stream_id."
+    status: registered
+    notes: "Live home info."
+  - interface_name: archives_livestream_home_meta
+    observation_domain: [content_domain, network_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [live_stream_id]
+    possible_outputs: [drilldown_evidence_card, live_meta_anchor]
+    cap_policy: "Selected live anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not call without live_stream_id."
+    status: registered
+    notes: "Live metadata."
+  - interface_name: archives_livestream_home_log
+    observation_domain: [behavior_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [live_stream_id, optional_time_window]
+    possible_outputs: [drilldown_evidence_card, behavior_anchor]
+    cap_policy: "Bound page/time window."
+    stop_reason_policy: [cap_reached, missing_anchor, source_timeout]
+    prohibited_usage: "Do not full-scan live logs by default."
+    status: registered
+    notes: "Live audit/log list."
+  - interface_name: archives_livestream_comment_statistics
+    observation_domain: [social_domain, content_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [live_stream_id]
+    possible_outputs: [base_commonality, social_anchor]
+    cap_policy: "Aggregate preferred over full detail."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Statistics are not full comment evidence."
+    status: registered
+    notes: "Live comment aggregate."
+  - interface_name: archives_livestream_comment_detail
+    observation_domain: [social_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [live_stream_id]
+    possible_outputs: [relation_expansion_result, social_anchor]
+    cap_policy: "page/count bounded; top-K only."
+    stop_reason_policy: [cap_reached, missing_anchor, source_timeout]
+    prohibited_usage: "Do not output full live comment detail or plaintext."
+    status: registered
+    notes: "Live comment detail list."
+  - interface_name: archives_user_report_search
+    observation_domain: [feedback_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id, optional_time_window]
+    possible_outputs: [feedback_anchor, base_summary_card]
+    cap_policy: "Bound time/page window."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Report signal is not final judgement."
+    status: registered
+    notes: "User report search."
+  - interface_name: archives_moment_list
+    observation_domain: [content_domain, social_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [candidate_anchor_pool, content_anchor]
+    cap_policy: "Top moment anchors only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "no_data is not counter-evidence."
+    status: registered
+    notes: "Moment list."
+  - interface_name: archives_related_users
+    observation_domain: [relation_expansion, group_domain, device_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id, relation_type]
+    possible_outputs: [relation_expansion_result, group_profile_candidate]
+    cap_policy: "Bound relation type/page; expansion_depth default 1."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Same-device relation is a spread clue, not gang conclusion."
+    status: registered
+    notes: "relation_type fixed enum only."
+  - interface_name: archives_private_message_search
+    observation_domain: [social_domain, relation_expansion]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id, direction]
+    possible_outputs: [relation_expansion_result, social_anchor, tracking_commonality]
+    cap_policy: "Bound direction/page/count; summarize only."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not output private message plaintext."
+    status: registered
+    notes: "sent/received fixed directions."
+  - interface_name: archives_past_four_items
+    observation_domain: [account_domain, behavior_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [user_id]
+    possible_outputs: [account_change_anchor, drilldown_evidence_card]
+    cap_policy: "Bound page and info_type."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not output old/new profile text, avatar URLs, or raw body."
+    status: registered
+    notes: "Username/avatar/profile/background changes."
+  - interface_name: rcp_event_detail
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, queryTime]
+    possible_outputs: [drilldown_evidence_card, strategy_anchor]
+    cap_policy: "Selected event anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Do not call without exact event identity."
+    status: registered
+    notes: "Event detail."
+  - interface_name: rcp_event_feature_list
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, queryTime]
+    possible_outputs: [drilldown_evidence_card, candidate_features]
+    cap_policy: "Large response may be capped; selected event only."
+    stop_reason_policy: [cap_reached, missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Partial feature list is not full feature proof."
+    status: registered
+    notes: "Size-limited smoke status."
+  - interface_name: rcp_event_tree_or_decision
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, queryTime]
+    possible_outputs: [drilldown_evidence_card, strategy_anchor]
+    cap_policy: "Selected event anchors only."
+    stop_reason_policy: [missing_anchor, source_timeout, parse_error]
+    prohibited_usage: "Not ordinary ATO default evidence."
+    status: registered
+    notes: "Strategy tree or decision-chain follow-up."
+  - interface_name: rcp_fast_query_hbase
+    observation_domain: [strategy_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [source_id, time_window]
+    possible_outputs: [candidate_anchor_pool, strategy_anchor, base_commonality]
+    cap_policy: "Limit rows."
+    stop_reason_policy: [cap_reached, missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Strategy hit alone is not final judgement."
+    status: registered
+    notes: "Event underlying detail / sourceId discovery."
+  - interface_name: rcp_feature_info_by_keys
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, queryTime, featureKeys]
+    possible_outputs: [candidate_features, drilldown_evidence_card]
+    cap_policy: "Bound feature key list."
+    stop_reason_policy: [missing_anchor, cap_reached, source_timeout]
+    prohibited_usage: "Do not query broad feature keys without anchor."
+    status: registered
+    notes: "Feature-key detail explanation."
+  - interface_name: rcp_policy_basic_info
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode, policyTreeCode]
+    possible_outputs: [strategy_recommendation, validation_plan]
+    cap_policy: "Selected policy only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Governance metadata is not user risk evidence."
+    status: registered
+    notes: "Policy basic information."
+  - interface_name: rcp_relation_policy_tree
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Selected policy only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Do not use policy-tree relation as case hit proof."
+    status: registered
+    notes: "Related policy tree lookup."
+  - interface_name: rcp_policy_binding_info_list
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode, policyVersion]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [missing_anchor, cap_reached, source_timeout]
+    prohibited_usage: "Governance only unless policy anchor requested."
+    status: registered
+    notes: "Policy binding relation."
+  - interface_name: rcp_policy_search
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode_or_policyTreeCode_optional]
+    possible_outputs: [candidate_anchor_pool, strategy_anchor]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Search result is not evidence of case hit."
+    status: registered
+    notes: "Policy lookup by code/tree."
+  - interface_name: rcp_policy_blur_search
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode_or_policyTreeCode_optional]
+    possible_outputs: [candidate_anchor_pool, strategy_anchor]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Fuzzy search is not evidence."
+    status: registered
+    notes: "Policy fuzzy lookup."
+  - interface_name: rcp_policy_all_version
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [missing_anchor, cap_reached, source_timeout]
+    prohibited_usage: "Version list is governance metadata."
+    status: registered
+    notes: "Policy version list."
+  - interface_name: rcp_pipeline_policy_versions_by_code
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Selected policy only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Pipeline version metadata is not risk proof."
+    status: registered
+    notes: "Pipeline policy-version metadata."
+  - interface_name: rcp_policy_tree_list
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyTreeCode_or_policyCode_optional]
+    possible_outputs: [candidate_anchor_pool, strategy_anchor]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not enumerate full policy tree by default."
+    status: registered
+    notes: "Coarse policy-tree discovery."
+  - interface_name: rcp_policy_tree_node_binding
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyTreeCode, policyTreeVersion, policyTreeNodeCode]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Bound page controls."
+    stop_reason_policy: [missing_anchor, cap_reached, source_timeout]
+    prohibited_usage: "Node binding is governance metadata unless explicitly requested."
+    status: registered
+    notes: "Node-level bound policy list."
+  - interface_name: rcp_policy_tree_policy_codes
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyTreeCode, policyTreeVersion]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Bound page controls."
+    stop_reason_policy: [missing_anchor, cap_reached, source_timeout]
+    prohibited_usage: "Do not full-enumerate policy codes by default."
+    status: registered
+    notes: "Full-tree policy-code list."
+  - interface_name: rcp_policy_tree_max_version
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyTreeCode]
+    possible_outputs: [strategy_anchor]
+    cap_policy: "Single tree lookup."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Version helper only."
+    status: registered
+    notes: "Max policy-tree version lookup."
+  - interface_name: rcp_event_type_list
+    observation_domain: [strategy_domain]
+    default_call_role: parameter_only
+    required_anchor: [optional_keyword]
+    possible_outputs: [candidate_anchor_pool]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_timeout]
+    prohibited_usage: "Parameter discovery only; not risk evidence."
+    status: registered
+    notes: "Event type option discovery."
+  - interface_name: rcp_realtime_op_list
+    observation_domain: [strategy_domain]
+    default_call_role: parameter_only
+    required_anchor: [eventType]
+    possible_outputs: [candidate_anchor_pool]
+    cap_policy: "Single event type."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Option list only."
+    status: registered
+    notes: "Realtime operation option discovery."
+  - interface_name: rcp_event_query_max_duration
+    observation_domain: [strategy_domain]
+    default_call_role: parameter_only
+    required_anchor: [eventType]
+    possible_outputs: [validation_plan]
+    cap_policy: "Single event type."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Boundary helper only."
+    status: registered
+    notes: "Event query max-duration helper."
+  - interface_name: rcp_event_save_ratios
+    observation_domain: [strategy_domain]
+    default_call_role: parameter_only
+    required_anchor: [eventType]
+    possible_outputs: [validation_plan]
+    cap_policy: "Single event type."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Save-ratio helper only."
+    status: registered
+    notes: "Event save-ratio helper."
+  - interface_name: rcp_policy_version_lookup
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, policyCode, policyVersion, queryTime]
+    possible_outputs: [strategy_anchor, validation_plan]
+    cap_policy: "Selected event/policy only."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Do not call without event/policy identity."
+    status: registered
+    notes: "Policy version lookup."
+  - interface_name: rcp_policy_detail_lookup
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [policyCode, policyVersion]
+    possible_outputs: [strategy_anchor, strategy_recommendation]
+    cap_policy: "Selected policy version only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Policy detail does not prove case hit."
+    status: registered
+    notes: "Policy detail lookup."
+  - interface_name: rcp_policy_release_record_lookup
+    observation_domain: [strategy_domain, enforcement_domain]
+    default_call_role: governance_only
+    required_anchor: [policyCode]
+    possible_outputs: [validation_plan, enforcement_anchor]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Release record is governance data, not user risk proof."
+    status: registered
+    notes: "Policy release-record lookup."
+  - interface_name: rcp_policy_tree_lookup
+    observation_domain: [strategy_domain]
+    default_call_role: governance_only
+    required_anchor: [policyTreeCode, policyTreeVersion]
+    possible_outputs: [strategy_anchor, strategy_recommendation]
+    cap_policy: "Selected tree only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Policy tree lookup is asset explanation, not event hit evidence."
+    status: registered
+    notes: "Policy-tree query."
+  - interface_name: rcp_node_policy_attribution
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, policyCode, policyVersion, queryTime]
+    possible_outputs: [drilldown_evidence_card, strategy_anchor]
+    cap_policy: "Selected event/policy only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Do not call without exact attribution anchor."
+    status: registered
+    notes: "Node-policy attribution."
+  - interface_name: rcp_node_bind_policy_attribution
+    observation_domain: [strategy_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [eventType, eventId, queryTime, policyTreeCode, policyTreeVersion, policyTreeNodeCode]
+    possible_outputs: [drilldown_evidence_card, strategy_anchor]
+    cap_policy: "Selected event/tree node only."
+    stop_reason_policy: [missing_anchor, source_timeout]
+    prohibited_usage: "Do not call without exact node bind anchor."
+    status: registered
+    notes: "Node-bind attribution."
+  - interface_name: track_analysis_check_data_ready
+    observation_domain: [behavior_domain]
+    default_call_role: validation_only
+    required_anchor: [device_id, appName, time_window]
+    possible_outputs: [drilldown_evidence_card, frontend_activity_anchor]
+    cap_policy: "Selected device/time only."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Track readiness is not standalone risk conclusion."
+    status: registered
+    notes: "Front-backend activity alignment helper."
+  - interface_name: track_analysis_product_list
+    observation_domain: [behavior_domain]
+    default_call_role: parameter_only
+    required_anchor: [optional_product]
+    possible_outputs: [candidate_anchor_pool]
+    cap_policy: "Bound page/size."
+    stop_reason_policy: [cap_reached, source_timeout]
+    prohibited_usage: "Parameter discovery only."
+    status: registered
+    notes: "Product/app discovery."
+  - interface_name: track_sequence_dimension_list
+    observation_domain: [behavior_domain]
+    default_call_role: parameter_only
+    required_anchor: [optional_product]
+    possible_outputs: [candidate_anchor_pool]
+    cap_policy: "Single product."
+    stop_reason_policy: [source_timeout]
+    prohibited_usage: "Dimension discovery only."
+    status: registered
+    notes: "Sequence dimension discovery."
+  - interface_name: track_data_type_list
+    observation_domain: [behavior_domain]
+    default_call_role: parameter_only
+    required_anchor: [optional_product]
+    possible_outputs: [candidate_anchor_pool]
+    cap_policy: "Single product."
+    stop_reason_policy: [source_timeout]
+    prohibited_usage: "Data type discovery only."
+    status: registered
+    notes: "Track data type discovery."
+  - interface_name: track_sequence_get_device_ids
+    observation_domain: [device_domain, behavior_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id_or_device_id, appName]
+    possible_outputs: [candidate_anchor_pool, device_anchor]
+    cap_policy: "Limit returned device ids; no unbounded device expansion."
+    stop_reason_policy: [cap_reached, missing_anchor, source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Device list is a candidate anchor pool, not final risk evidence."
+    status: registered
+    notes: "Standalone device-id list subinterface."
+  - interface_name: track_sequence_get_use_duration
+    observation_domain: [behavior_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id_or_device_id, appName]
+    possible_outputs: [base_summary_card, frontend_activity_anchor]
+    cap_policy: "Bound date/time window."
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout]
+    prohibited_usage: "Duration is auxiliary; mismatch needs cross-domain evidence."
+    status: registered
+    notes: "Standalone use-duration subinterface."
+  - interface_name: track_sequence_profile
+    observation_domain: [behavior_domain, account_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id_or_device_id, appName]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, frontend_activity_anchor]
+    cap_policy: "One profile per seed entity."
+    stop_reason_policy: [source_no_data_not_counter_evidence, source_timeout, parse_error]
+    prohibited_usage: "Profile card cannot alone decide risk."
+    status: registered
+    notes: "Standalone Track profile subinterface."

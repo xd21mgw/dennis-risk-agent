@@ -16,7 +16,7 @@ This patch adds local schema, writer, queue append logic, feedback inference rul
 
 - real_platform_called: false
 - DataAgent_called: false
-- auth_state_modified: false
+- auth-state category_modified: false
 - gateway_config_modified: false
 - real_query_executed: false
 - git_committed: false

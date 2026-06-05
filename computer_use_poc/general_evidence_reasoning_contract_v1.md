@@ -30,7 +30,7 @@ Every evidence item must identify its type:
 - `counter_evidence`
 - `missing_evidence`
 
-Do not mix inference with raw observation. Do not write hypotheses as confirmed facts.
+Do not mix inference with source observation. Do not write hypotheses as confirmed facts.
 
 ### conclusion_recompute_after_new_evidence
 
@@ -50,15 +50,18 @@ When sources are incomplete, blocked, stale, timed out, or partial, the conclusi
 
 Do not make final strong conclusions from partial evidence.
 
-### template_hard_gate
+### user_visible_evidence_gate
 
-In evidence mode, the final answer must include:
+In evidence mode, the user-visible answer must include:
 
-- `evidence_card`
-- `source_quality`
-- `routing_metadata`
+- a natural-language `evidence_card` or evidence-chain summary;
+- concise `source_quality` boundary;
+- `missing_evidence` and `next_action`;
+- conclusion boundary.
 
-If any is missing, revise before output. Natural-language conclusion alone is not sufficient.
+Full `routing_metadata` is internal audit material. It appears only in debug,
+run log, regression, YAML output, or when the user explicitly requests raw
+routing / execution metadata.
 
 ## Scenario Examples
 
@@ -98,6 +101,34 @@ Policy attribution explains why a policy hit in an event. It does not prove user
 
 Co-occurrence, top strategy, top node, shared IP/BSSID/device, or historical context is only a cluster lead until joined with current-batch evidence and denominator checks.
 
+Batch attack judgement uses exactly three runtime modes:
+
+- `full_observation_mode` for 2-10 entities.
+- `sample_expand_validate_mode` for >10 urgent / unknown / same-origin
+  validation when no wide-table result exists yet.
+- `wide_table_aggregate_mode` for wide table, feature, coverage, precision,
+  strategy, historical review, DataAgent/Hive or large statistical analysis
+  intent.
+
+Shared batch evidence boundaries:
+
+- `entity_resolution_first` is required before login, Weapon, Track, content,
+  strategy or warehouse aggregation reasoning.
+- `source_commonality_card` must precede multi-source fusion for realtime batch
+  observation.
+- `wide_table_aggregate_report` is a statistics package, not a final risk
+  judgement.
+- DataAgent/Hive pending or planned queries are not verified evidence.
+- DataAgent/Hive execution requires explicit authorization for each query scope.
+- Strategy hit alone is not final judgement.
+- no_data, timeout, auth_failed, blocked, body gap and source window gaps are not
+  no-risk counter evidence.
+- Representative samples do not prove full population coverage; full-batch
+  coverage requires offline validation or replay.
+- Wide-table correlation does not equal a complete attack-chain fact.
+- Dennis recommends strategy candidates and validation paths; it does not
+  auto-launch strategy or dispose users.
+
 ## General Evidence Card Schema
 
 ```yaml
@@ -131,5 +162,7 @@ evidence_card:
     previous_conclusion:
     changed_by:
   next_action:
-routing_metadata:
+  routing_metadata:
+    user_visible_default: false
+    shown_only_when: debug | run_log | regression | explicit_metadata_request
 ```

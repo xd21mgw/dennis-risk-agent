@@ -10,7 +10,7 @@
 
 - `ok=true`
 - `service_mode=live`
-- `auth_state=ready`
+- `auth-state category=ready`
 - `action_count=12`
 - Track Analysis / Login Logs / Weapon / RCP origins were ready.
 

@@ -190,7 +190,7 @@
                       "tokenId": "token_event_safe_1",
                       "refreshToken": "refresh_secret_should_not_survive",
                       "sessionCookie": "cookie_secret_should_not_survive",
-                      "phone": "13812345678",
+                      "phone": "phone_safe_ref",
                       "realName": "strict_name_should_not_survive",
                       "uiConfig": {
                         "theme": "drop_me",

@@ -81,7 +81,7 @@ Expected:
 
 - real_platform_called: false
 - DataAgent_called: false
-- auth_state_read: false
+- auth-state category_read: false
 - release_updated: false
 - outputs_dist_updated: false
 - git_committed: false

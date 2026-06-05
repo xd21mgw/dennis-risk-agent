@@ -6,5 +6,5 @@ This fixture contains simulated strings only. It is used to verify that
 Simulated fields:
 
 - cookie: simulated_redacted_cookie_value
-- authorization: Bearer simulated-redacted-token
-- raw observation: simulated full platform response marker
+- authorization field  Bearer simulated-redacted-token
+- source observation: simulated platform response summary marker

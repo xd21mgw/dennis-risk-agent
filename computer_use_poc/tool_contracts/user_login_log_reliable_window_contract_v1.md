@@ -126,7 +126,7 @@ stdout 规则：
 stderr / log 规则：
 
 - 人类可读诊断、认证日志、wrapper 运行日志进入 stderr 或独立 log file。
-- 不得输出 cookie / token / session / storageState / header 明文。
+- 不得输出 cookie / token / session / browser_storage_state_marker / header 明文。
 
 envelope schema:
 
@@ -204,4 +204,4 @@ Partial envelope:
 Boundary:
 
 - `logs` must contain only non-sensitive summaries if used.
-- Raw auth state, credential headers, cookies, token values, session values and storageState must never appear in stdout, stderr, log file, run log or response.
+- Raw auth state, credential headers, cookies, token values, session values and browser_storage_state_marker must never appear in stdout, stderr, log file, run log or response.

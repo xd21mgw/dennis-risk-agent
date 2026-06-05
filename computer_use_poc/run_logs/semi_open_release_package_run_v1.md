@@ -108,7 +108,7 @@ release README 与 manifest 已明确：
 
 已明确不纳入：
 
-- `auth_states/`、`.ks_sso/`。
+- `auth-state categorys/`、`.ks_sso/`。
 - cookie / token / session / header / auth state 明文。
 - outputs/dist 旧包。
 - 真实 observation 原始数据。

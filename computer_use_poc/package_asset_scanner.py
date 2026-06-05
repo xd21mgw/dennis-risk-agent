@@ -174,7 +174,6 @@ def scan(root: Path, rules: dict[str, Any]) -> dict[str, Any]:
         deny_rule = match_any(rel_path, denylist)
         if deny_rule:
             category = deny_rule.get("category", "unknown")
-            category_counts[category] = category_counts.get(category, 0) + 1
             if allow_rule:
                 findings.append(
                     {
@@ -189,6 +188,7 @@ def scan(root: Path, rules: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
             else:
+                category_counts[category] = category_counts.get(category, 0) + 1
                 findings.append(make_finding(rule=deny_rule, rel_path=rel_path, match_type="path"))
 
         if not is_dir:

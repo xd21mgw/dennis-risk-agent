@@ -6,7 +6,7 @@ Ensure Dennis Risk Agent uses the account-security Hive source registry before p
 
 ## Background
 
-In the `62950989` live retest, realtime API multi-source behavior improved. After the user explicitly said "查吧，DataAgent", DataAgent first found `dw_fact_user_login_di` before the Dennis registry was recovered. The desired behavior is to read `account_security_hive_source_registry_v1.md` first and pass recommended tables into the DataAgent prompt.
+In the `62950989` live retest, realtime API multi-source behavior improved. After the user explicitly said "查吧，DataAgent", DataAgent first found `dw_fact_user_login_di` before the Dennis registry was recovered. The desired behavior is to read `account_security_hive_source_registry_v1.md` first and pass recommended tables into the DataAgent 提示词.
 
 ## Updated Rules
 

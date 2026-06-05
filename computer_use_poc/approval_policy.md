@@ -47,14 +47,14 @@
 
 - 修改策略。
 - 修改规则。
-- 修改 Agent prompt / skill / routing。
+- 修改 Agent 提示词 / skill / routing。
 - 修改 release 包。
 - 执行封禁 / 解封 / 限流 / 放过。
 - 执行 shell / SQL / JS 任意命令。
 - 任意 URL / API 访问。
 - 写数据库。
 - 删除数据。
-- 导出 cookie / token / session / storageState。
+- 导出 cookie / token / session / browser_storage_state_marker。
 - 绕过权限、绕过审批。
 
 ## 6. approval_required 判断表

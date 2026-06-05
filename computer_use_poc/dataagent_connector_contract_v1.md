@@ -234,7 +234,7 @@ source_quality:
 
 ## Table Source Layering
 
-DataAgent prompts may recommend tables, but Dennis must preserve the existing Hive registry layers:
+DataAgent 提示词s may recommend tables, but Dennis must preserve the existing Hive registry layers:
 
 - `recommended_source`: tables selected from Dennis registry / playbook.
 - `candidate_source`: DataAgent-suggested table or additional table requiring review.

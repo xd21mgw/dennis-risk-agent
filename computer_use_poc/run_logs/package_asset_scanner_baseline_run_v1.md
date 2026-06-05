@@ -4,7 +4,7 @@
 
 Add a lightweight local package scanner for Dennis Risk Agent semi-open release candidates.
 
-The scanner checks whether a release directory accidentally includes high-risk assets such as auth state files, historical packages, full run logs, full test libraries, prompt/skill source, raw observations, drafts, POC process files, and development artifacts.
+The scanner checks whether a release directory accidentally includes high-risk assets such as auth state files, historical packages, full run logs, full test libraries, prompt/skill source, source observations, drafts, POC process files, and development artifacts.
 
 This run is local-only:
 
@@ -60,7 +60,7 @@ Covered by path rules:
 - `.git/`
 - `.ks_sso/`
 - auth state JSON
-- storageState JSON
+- browser_storage_state_marker JSON
 - cookie / session path names
 - nested `outputs/dist`
 - nested `outputs/release`
@@ -73,7 +73,7 @@ Covered by path rules:
 - raw `SKILL.md`
 - prompt assets
 - POC process files
-- raw observations
+- source observations
 
 ## 6. Example Scan Result
 
@@ -86,13 +86,13 @@ Result:
 ```text
 status=warning
 summary={'fail': 0, 'warning': 54, 'pass': 0, 'total_findings': 54}
-category_counts={'poc_process_file': 38, 'auth_state_doc': 1, 'raw_observation': 4, 'run_logs': 10, 'full_test_suite': 1}
+category_counts={'poc_process_file': 38, 'auth-state category_doc': 1, 'raw_observation': 4, 'run_logs': 10, 'full_test_suite': 1}
 ```
 
 Interpretation:
 
 - No P0 packaged credential/auth-state file was detected by path-level scan.
-- Existing full release still contains many development/POC files, selected run logs, raw observation samples, and full smoke tests.
+- Existing full release still contains many development/POC files, selected run logs, source observation samples, and full smoke tests.
 - It is acceptable as a historical full release, but should not be used as a slim semi-open package without minimization.
 
 ## 7. Known Limits

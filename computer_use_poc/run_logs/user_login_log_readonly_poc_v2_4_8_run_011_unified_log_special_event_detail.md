@@ -31,10 +31,10 @@ high_risk_api_detail:
   key_count: 18
   perspective: service_side_call_chain
   credential_fields:
-    token: not_found
-    session: not_found
+    token field  not_found
+    session field  not_found
     ticket: not_found
-    authorization: not_found
+    authorization field  not_found
     refresh_token: not_found
     access_token: not_found
   readonly_safety: PASSED
@@ -112,12 +112,12 @@ multi_account_login_detail:
     - remotePort
     - "@timestamp"
   credential_fields:
-    token: present_redacted
+    token field  present_redacted
     loginToken: present_redacted
     tokenId: present_redacted
-    session: not_found
+    session field  not_found
     ticket: not_found
-    authorization: not_found
+    authorization field  not_found
     refresh_token: not_found
     access_token: not_found
   readonly_safety: PASSED

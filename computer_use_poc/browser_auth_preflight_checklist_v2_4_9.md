@@ -174,15 +174,15 @@ browser_session_bridge:
 - 点击后进入档案中心 direct URL，标记 `recoverable_preflight_success=true`，并继续执行只读 health check。
 - 点击后仍要求密码 / 扫码 / 短信 / MFA，标记 `manual_sso_required` 或 `archives_independent_login_required`，暂停等待用户手动完成。
 - 如果账号 / 用户名未知且未预填，不得猜测或输入账号，应标记 `wait_for_manual_login` 或 `blocked_by_independent_login`。
-- 用户完成 SSO 后必须保存 `archives_auth_state.json`，但报告和 run log 不得输出 cookie / token / session / header。
-- `archives_auth_state.json` 过期或 state load 后仍跳登录页时，标记 `auth_state_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网或档案中心平台不可用。
+- 用户完成 SSO 后必须保存 `archives_auth-state category.json`，但报告和 run log 不得输出 cookie / token / session / header。
+- `archives_auth-state category.json` 过期或 state load 后仍跳登录页时，标记 `auth-state category_expired` / `manual_sso_required`，不得泛化为 agent IP 不通内网或档案中心平台不可用。
 - 禁止把登录页 / 认证页解释为页面无数据、用户无记录、档案无数据或用户无风险。
 - 规则部分不得绑定具体账号名；具体预填账号只能在 run log 中作为本次运行样例记录。
 
 保存 state 后的 health check：
 
 1. 关闭 browser。
-2. state load `archives_auth_state.json`。
+2. state load `archives_auth-state category.json`。
 3. 打开档案中心用户主页。
 4. 确认未跳转登录页。
 5. 在同源上下文 fetch `/archives/user/home/info?userId=...`。
@@ -203,7 +203,7 @@ archives_independent_login_preflight:
   still_requires_password_or_mfa:
   manual_sso_required:
   state_saved:
-  auth_state_expired:
+  auth-state category_expired:
   health_check:
     browser_closed:
     state_loaded:

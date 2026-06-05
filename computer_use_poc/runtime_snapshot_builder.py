@@ -90,6 +90,42 @@ sensitive_output / direct_tool_bypass 等字段约束，但不得污染普通用
 """
 
 
+FULL_RUNTIME_README = """# Dennis Risk Agent Full Runtime
+
+This directory is a release-safe full-runtime snapshot for local Dennis Risk
+Agent validation.
+
+## What Is Included
+
+- Runtime guard and routing summaries.
+- Browser-backed readonly interface contracts.
+- Source orchestration plan and validators.
+- Answer templates, evidence boundaries, and safe mock fixtures.
+- Local regression helpers for dry-run validation.
+
+## Safety Boundary
+
+- No auth state, credential material, raw platform body, run logs, or release
+  output directories are included.
+- Live platform access is not performed by this package by itself.
+- DataAgent/Hive execution still requires explicit user authorization.
+- Source gaps such as no-data, timeout, blocked, auth-failed, partial, or
+  missing-contract are evidence gaps, not low-risk counter evidence.
+
+## Recommended Local Checks
+
+```bash
+python3 computer_use_poc/interface_asset_table_check.py --format json
+python3 computer_use_poc/interface_orchestration_contract_check.py --format json
+python3 computer_use_poc/source_orchestration_check.py --format json
+python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json
+python3 computer_use_poc/fact_table_contract_check.py --format json
+python3 computer_use_poc/browser_backed_fixed_actions_text_dryrun.py --format json
+python3 computer_use_poc/browser_backed_fixed_actions_text_dryrun.py --demo --format json
+```
+"""
+
+
 def parse_scalar(value: str) -> Any:
     value = value.strip()
     if value in {"true", "True"}:
@@ -183,9 +219,42 @@ def expand_globs(patterns: list[str], excluded: list[str]) -> list[str]:
     return sorted(set(results))
 
 
+def parse_projection_entry(entry: str) -> tuple[str, str]:
+    if "<-" not in entry:
+        raise ValueError(f"invalid projection entry, expected '<-': {entry}")
+    target, projection_source = entry.split("<-", 1)
+    return normalize_rel_path(target.strip()), normalize_rel_path(projection_source.strip())
+
+
+def load_release_safe_projection(manifest: dict[str, Any]) -> dict[str, str]:
+    projection_root = manifest.get("release_safe_projection", {})
+    if not isinstance(projection_root, dict):
+        return {}
+    same_path = projection_root.get("same_path", [])
+    projection_map: dict[str, str] = {}
+    if isinstance(same_path, dict):
+        for target, projection_source in same_path.items():
+            projection_map[normalize_rel_path(str(target))] = normalize_rel_path(str(projection_source))
+        return projection_map
+    if isinstance(same_path, list):
+        for item in same_path:
+            if not isinstance(item, str):
+                raise ValueError(f"invalid projection item type: {type(item).__name__}")
+            target, projection_source = parse_projection_entry(item)
+            projection_map[target] = projection_source
+    return projection_map
+
+
 def copy_file(rel_path: str, output_root: Path) -> None:
     source = REPO_ROOT / rel_path
     destination = output_root / rel_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+
+def copy_projected_file(target_rel_path: str, projection_rel_path: str, output_root: Path) -> None:
+    source = REPO_ROOT / projection_rel_path
+    destination = output_root / target_rel_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
 
@@ -194,10 +263,15 @@ def write_runtime_agents(output_root: Path) -> None:
     (output_root / "AGENTS.md").write_text(FULL_RUNTIME_AGENTS, encoding="utf-8")
 
 
+def write_runtime_readme(output_root: Path) -> None:
+    (output_root / "README.md").write_text(FULL_RUNTIME_README, encoding="utf-8")
+
+
 def write_runtime_manifest(
     output_root: Path,
     *,
     copied_files: list[str],
+    projected_files: list[dict[str, str]],
     generated_files: list[str],
     missing_required: list[str],
     missing_optional: list[str],
@@ -218,6 +292,11 @@ def write_runtime_manifest(
     lines += ["", "## Copied Files", ""]
     lines.extend(f"- `{item}`" for item in copied_files)
     if not copied_files:
+        lines.append("- none")
+    lines += ["", "## Projected Files", ""]
+    for item in projected_files:
+        lines.append(f"- `{item['target']}` <- `{item['projection_source']}`")
+    if not projected_files:
         lines.append("- none")
     lines += ["", "## Missing Required", ""]
     lines.extend(f"- `{item}`" for item in missing_required)
@@ -241,6 +320,7 @@ def write_runtime_manifest(
                 "source_repo_root": str(REPO_ROOT),
                 "generated_files": generated_files,
                 "copied_files": copied_files,
+                "projected_files": projected_files,
                 "missing_required": missing_required,
                 "missing_optional": missing_optional,
                 "excluded_patterns": excluded_patterns,
@@ -258,6 +338,7 @@ def build_full_runtime(manifest: dict[str, Any], output_root: Path) -> dict[str,
     full_runtime = manifest.get("full_runtime_required", {})
     excluded_root = manifest.get("excluded_files", {})
     excluded_patterns = list(excluded_root.get("patterns", []))
+    projection_map = load_release_safe_projection(manifest)
 
     files = [normalize_rel_path(item) for item in full_runtime.get("files", [])]
     optional_files = [normalize_rel_path(item) for item in full_runtime.get("optional_files", [])]
@@ -276,17 +357,37 @@ def build_full_runtime(manifest: dict[str, Any], output_root: Path) -> dict[str,
             "forbidden_requested": sorted(set(forbidden_requested)),
         }
 
+    forbidden_projection_sources = [
+        item for item in projection_map.values() if match_any(item, excluded_patterns)
+    ]
+    if forbidden_projection_sources:
+        return {
+            "status": "failed_closed",
+            "reason": "projection_source_matches_excluded_files",
+            "forbidden_projection_sources": sorted(set(forbidden_projection_sources)),
+        }
+
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
 
     copied_files: list[str] = []
+    projected_files: list[dict[str, str]] = []
     missing_required: list[str] = []
     missing_optional: list[str] = []
 
     for rel_path in requested_files:
         source = REPO_ROOT / rel_path
-        if source.is_file():
+        projection_source = projection_map.get(rel_path)
+        if projection_source:
+            if (REPO_ROOT / projection_source).is_file():
+                copy_projected_file(rel_path, projection_source, output_root)
+                projected_files.append({"target": rel_path, "projection_source": projection_source})
+            elif rel_path in optional_set:
+                missing_optional.append(rel_path)
+            else:
+                missing_required.append(f"{rel_path} <- {projection_source}")
+        elif source.is_file():
             copy_file(rel_path, output_root)
             copied_files.append(rel_path)
         elif rel_path in optional_set:
@@ -298,17 +399,26 @@ def build_full_runtime(manifest: dict[str, Any], output_root: Path) -> dict[str,
         if rel_path in requested_files:
             continue
         source = REPO_ROOT / rel_path
-        if source.is_file():
+        projection_source = projection_map.get(rel_path)
+        if projection_source:
+            if (REPO_ROOT / projection_source).is_file():
+                copy_projected_file(rel_path, projection_source, output_root)
+                projected_files.append({"target": rel_path, "projection_source": projection_source})
+            else:
+                missing_optional.append(f"{rel_path} <- {projection_source}")
+        elif source.is_file():
             copy_file(rel_path, output_root)
             copied_files.append(rel_path)
         else:
             missing_optional.append(rel_path)
 
     write_runtime_agents(output_root)
+    write_runtime_readme(output_root)
     created_at = datetime.now(timezone.utc).isoformat()
     write_runtime_manifest(
         output_root,
         copied_files=sorted(set(copied_files)),
+        projected_files=sorted(projected_files, key=lambda item: item["target"]),
         generated_files=sorted(set(generated_files)),
         missing_required=sorted(set(missing_required)),
         missing_optional=sorted(set(missing_optional)),
@@ -323,6 +433,8 @@ def build_full_runtime(manifest: dict[str, Any], output_root: Path) -> dict[str,
         "output_root": str(output_root),
         "generated_files": sorted(set(generated_files)),
         "copied_files_count": len(set(copied_files)),
+        "projected_files_count": len(projected_files),
+        "projected_files": sorted(projected_files, key=lambda item: item["target"]),
         "missing_required": sorted(set(missing_required)),
         "missing_optional": sorted(set(missing_optional)),
         "excluded_patterns": excluded_patterns,

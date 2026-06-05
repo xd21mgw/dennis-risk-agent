@@ -86,7 +86,7 @@ tool_call_request:
 - `normalized_intent`：归一化意图。
 - `scene`：场景，如 login_investigation / entity_resolution。
 - `capability_name`：必须为 registry / policy 中登记的 capability。
-- `input_entities`：结构化实体，不写入 cookie / token / storageState。
+- `input_entities`：结构化实体，不写入 cookie / token / browser_storage_state_marker。
 - `requested_fields`：请求字段集合。
 - `requested_scope`：single_entity / batch / expansion / write / system_modification 等。
 - `requested_time_range`：查询时间窗口摘要。
@@ -173,7 +173,7 @@ false_positive_candidate:
 - 未发现高风险漏拦。
 - false positive 处于可接受范围，且有明确人工复核口径。
 - `require_approval` 默认阻断策略明确。
-- audit_event 不包含 cookie / token / session / raw result / storageState 等敏感原文。
+- audit_event 不包含 cookie / token / session / raw result / browser_storage_state_marker 等敏感原文。
 - unknown capability 默认 deny 已验证。
 - evaluator 异常 fail closed 已验证。
 - redaction 失败时不输出敏感字段的策略已验证。
@@ -192,8 +192,8 @@ false_positive_candidate:
 audit_event 只能记录摘要和引用：
 
 - 可记录：request_id、capability、scope、policy_flags、approval_status、tool_status、result_count、output_summary。
-- 不记录：cookie、token、session、storageState、raw response、完整 header、完整请求参数、完整工具返回。
-- `raw_result_reference` 只能是内部安全引用，不能包含敏感原文。
+- 不记录：cookie、token、session、browser_storage_state_marker、source response summary、完整 header、完整请求参数、完整工具返回。
+- `source_result_reference` 只能是内部安全引用，不能包含敏感原文。
 - audit_event 用于复盘、问责、权限排查和安全评估，不作为敏感数据二次存储。
 
 ## 9. 失败 / 降级策略

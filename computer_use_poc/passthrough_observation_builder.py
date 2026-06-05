@@ -135,6 +135,14 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "graph_relation_count",
         "riskdata_status",
     ],
+    "rcp_fast_query_hbase": [
+        "event_id",
+        "event_type",
+        "event_time",
+        "policy_code",
+        "hit_policy",
+        "risk_decision",
+    ],
 }
 
 BUSINESS_FIELD_ALIASES = {
@@ -143,7 +151,11 @@ BUSINESS_FIELD_ALIASES = {
     "candidate_device_id": {"candidate_device_id", "candidateDeviceId", "device_id", "deviceId", "did"},
     "photo_id": {"photo_id", "photoId", "photoID", "content_id", "contentId"},
     "event_id": {"event_id", "eventId", "sourceId", "source_id"},
+    "event_type": {"event_type", "eventType", "eventTypeCode", "eventTypeCodes"},
+    "event_time": {"event_time", "eventTime", "queryTime", "hitTime", "createTime", "time"},
     "policy_code": {"policy_code", "policyCode", "hitFusePolicyCode", "policyTreeCode"},
+    "hit_policy": {"hit_policy", "hitPolicy", "hitPolicies", "hitProductionPolicies", "policyName"},
+    "risk_decision": {"risk_decision", "riskDecision", "decision", "riskResult", "result"},
     "token_event_id": {"tokenId", "token_id"},
     "login_time": {"login_time", "loginTime", "loginTimestamp", "timestamp", "event_time", "time"},
     "login_type": {"login_type", "loginType", "reset_login_type", "resetLoginType", "authType"},
@@ -236,6 +248,10 @@ RISK_ENTITY_CANONICAL_FIELDS = {
     "photo_id",
     "event_id",
     "policy_code",
+    "event_type",
+    "event_time",
+    "hit_policy",
+    "risk_decision",
     "token_event_id",
     "ip_ua",
     "publish_ip_ua",

@@ -91,7 +91,7 @@ partial_evidence_card:
 - `blocked`, `network_error`, `platform_error`, `auth_failed`, and `timeout` are source quality, not Dennis runtime crashes.
 - The adapter does not trigger browser debug or SSO debug.
 - The adapter does not read browser profile files, `.ks_sso`, cookie DBs, or credential material.
-- The adapter does not output raw response full bodies, raw login records, raw device identifiers, raw IPs, raw labelInfo, or raw originalLog.
+- The adapter does not output source response summary full bodies, raw login records, raw device identifiers, raw IPs, raw labelInfo, or raw originalLog.
 
 ## Evidence Display Layer Enhancement
 

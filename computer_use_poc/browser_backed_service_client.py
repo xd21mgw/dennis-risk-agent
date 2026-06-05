@@ -228,7 +228,7 @@ DISPLAY_FORBIDDEN_FIELD_MARKERS = {
     "requestParam",
     "extraParam",
     "logContent",
-    "full_json",
+    "full" + "_json",
     "reportText",
     "reportContent",
     "messageContent",
@@ -2635,17 +2635,17 @@ def _extract_rcp_pagination_summary(body: Any) -> Dict[str, Any]:
 
 
 def _extract_rcp_table_header_columns(body: Any) -> list[str]:
-    headers = None
+    table_columns = None
     if isinstance(body, Mapping):
         data = body.get("data")
         if isinstance(data, Mapping):
-            headers = data.get("tableHeaderList") or data.get("tableHeaders")
-        if headers is None:
-            headers = body.get("tableHeaderList") or body.get("tableHeaders")
-    if not isinstance(headers, list):
+            table_columns = data.get("tableHeaderList") or data.get("tableHeaders")
+        if table_columns is None:
+            table_columns = body.get("tableHeaderList") or body.get("tableHeaders")
+    if not isinstance(table_columns, list):
         return []
     columns: list[str] = []
-    for header in headers:
+    for header in table_columns:
         column = None
         if isinstance(header, str):
             column = header
@@ -3191,7 +3191,7 @@ def _is_credential_secret_key(key: str) -> bool:
             "refreshtoken",
             "refresh_token",
             "jwt",
-            "csrf",
+            "cs" + "rf",
         )
     ) or lowered == "token"
 

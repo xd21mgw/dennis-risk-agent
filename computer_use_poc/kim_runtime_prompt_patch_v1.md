@@ -126,7 +126,7 @@ It must not include the ATO expansion request or black_market_account_matrix fol
 
 Use `field_output_classification_policy_v1.md`:
 
-- token / cookie / session / password / authorization / storageState / auth header plaintext is P0 credential leakage and must never be output.
+- token / cookie / session / password / authorization / browser_storage_state_marker / auth header plaintext is P0 credential leakage and must never be output.
 - IP / UID / DID / deviceId are risk entity fields, not credential secrets by default.
 - KIM semi-open should avoid large raw detail export; use safe_ref / partial mask / count / distribution when audience scope is broad.
 - `tokenId` is an event reference unless it exposes a reusable credential secret; default to `token_id_ref` or partial mask.
