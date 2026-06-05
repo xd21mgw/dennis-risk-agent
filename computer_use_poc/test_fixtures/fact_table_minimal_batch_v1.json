@@ -141,6 +141,53 @@
       "anchor_priority_reason": "strategy signal is partial and must not consume all drilldown slots"
     }
   ],
+  "strategy_event_feature_row_table": [
+    {
+      "sample_id": "r2_u1",
+      "entity_id": "5522927552",
+      "event_id": "event_ref_register_A",
+      "event_type": "REGISTER_NEW",
+      "source_id": "rcp_event_feature_list",
+      "source_name": "rcp_event_feature_list",
+      "feature_tab": "原始类",
+      "feature_key": "clientId",
+      "feature_name": "客户端",
+      "feature_type": "int",
+      "feature_value_or_safe_ref": 2,
+      "value_present": true,
+      "value_comparable": true,
+      "source_quality": "completed",
+      "evidence_source": "current_observation",
+      "original_feature_row_retained": true
+    }
+  ],
+  "device_detail_table": [
+    {
+      "sample_id": "r1_u2",
+      "entity_id": "5521017647",
+      "user_id": "5521017647",
+      "round_id": 1,
+      "device_id": "device_ref_cluster_A",
+      "device_safe_ref": "device_ref_cluster_A",
+      "source_id": "weapon_inventory",
+      "source_name": "weapon_inventory",
+      "action": "weapon_inventory",
+      "device_source_type": "设备使用画像",
+      "device_field_key": "launch_count",
+      "device_field_name": "启动次数",
+      "device_field_value_or_safe_ref": 2,
+      "device_field_type": "int",
+      "value_present": true,
+      "value_comparable": true,
+      "comparable_type": "数值分桶",
+      "source_quality": "completed",
+      "evidence_source": "current_observation",
+      "event_time": "2026-06-01T10:03:00+08:00",
+      "query_time": "2026-06-01T10:03:30+08:00",
+      "device_role": "Weapon 设备",
+      "sensitive_value_policy": "原值可用"
+    }
+  ],
   "feature_table": [
     {
       "feature_name": "same_content_template_plus_device_anchor",

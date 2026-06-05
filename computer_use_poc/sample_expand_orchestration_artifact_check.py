@@ -22,6 +22,15 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "computer_use_poc" / "runtime_case_execution_runner.py"
 FIXTURE = ROOT / "computer_use_poc" / "test_fixtures" / "sample_expand_validate_batch_fixed_rounds_v1.json"
 ROLLING_FIXTURE = ROOT / "computer_use_poc" / "test_fixtures" / "sample_expand_mock_rolling_anchor_summary_v1.json"
+STRATEGY_EVENT_REQUEST_DETAIL_FIXTURE = (
+    ROOT / "computer_use_poc" / "test_fixtures" / "strategy_event_request_detail_feature_v1.json"
+)
+RCP_ORIGINAL_TAB_FEATURE_ROWS_FIXTURE = (
+    ROOT / "computer_use_poc" / "test_fixtures" / "rcp_original_tab_feature_rows_v1.json"
+)
+DEVICE_DETAIL_MULTI_SOURCE_FIXTURE = (
+    ROOT / "computer_use_poc" / "test_fixtures" / "device_detail_multi_source_v1.json"
+)
 MOCK_SHAPED_FIXTURES = [
     (
         "content_diversion",
@@ -40,6 +49,24 @@ MOCK_SHAPED_FIXTURES = [
         ROOT / "computer_use_poc" / "test_fixtures" / "sample_expand_mock_shaped_strategy_governance_v1.json",
         {"strategy_domain", "enforcement_domain"},
         {"candidate_policy_code", "candidate_event_id", "candidate_review_id"},
+    ),
+    (
+        "rcp_request_detail_projection",
+        ROOT / "computer_use_poc" / "test_fixtures" / "sample_expand_mock_rcp_request_detail_projection_v1.json",
+        {"strategy_domain", "behavior_domain"},
+        {"candidate_policy_code", "candidate_event_id"},
+    ),
+    (
+        "rcp_original_tab_feature_rows",
+        RCP_ORIGINAL_TAB_FEATURE_ROWS_FIXTURE,
+        {"strategy_domain"},
+        {"candidate_policy_code", "candidate_event_id"},
+    ),
+    (
+        "device_detail_multi_source",
+        DEVICE_DETAIL_MULTI_SOURCE_FIXTURE,
+        {"device_domain", "behavior_domain"},
+        {"candidate_device_id"},
     ),
     (
         "feedback_enforcement",
@@ -91,6 +118,14 @@ ROUND_REQUIRED_KEYS = [
     "commonality_matrix",
     "abnormal_correlation",
     "relation_expansion_result",
+    "strategy_event_request_detail_table",
+    "strategy_event_request_detail_commonality",
+    "strategy_event_feature_row_table",
+    "strategy_event_feature_row_commonality",
+    "device_detail_table",
+    "device_field_commonality",
+    "device_environment_similarity_cluster_candidate",
+    "behavior_device_consistency_gap_candidate",
     "group_profile_candidate",
     "candidate_features",
     "validation_plan",
@@ -111,6 +146,133 @@ FEATURE_REQUIRED_KEYS = [
     "false_positive_risk",
     "not_final_conclusion",
 ]
+
+STRATEGY_EVENT_REQUEST_DETAIL_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "user_id",
+    "round_id",
+    "source_id",
+    "action",
+    "observation_domain",
+    "event_id",
+    "event_type",
+    "policy_code",
+    "risk_decision",
+    "event_time",
+    "request_path",
+    "request_scene",
+    "entry",
+    "action_type",
+    "action_object",
+    "task_type",
+    "reward_type",
+    "client_params",
+    "app_version",
+    "ua",
+    "device_id",
+    "ip_or_network",
+    "frontend_activity_signal",
+    "backend_action_signal",
+    "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds",
+    "source_quality",
+    "evidence_source",
+]
+
+STRATEGY_REQUEST_DETAIL_FEATURE_REQUIRED_KEYS = [
+    "feature_name",
+    "source_fields",
+    "field_combination",
+    "support_sample_count",
+    "supporting_current_evidence",
+    "supporting_selected_anchors",
+    "signal_inputs",
+    "hypothesis_inputs",
+    "black_gray_interpretation",
+    "normal_user_false_positive_risk",
+    "missing_fields_to_check",
+    "validation_method",
+    "strategy_usage_boundary",
+    "confidence",
+    "validation_needed",
+    "false_positive_risk",
+    "not_final_conclusion",
+]
+
+STRATEGY_EVENT_FEATURE_ROW_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "user_id",
+    "event_id",
+    "event_type",
+    "source_id",
+    "source_name",
+    "feature_tab",
+    "feature_key",
+    "feature_name",
+    "feature_type",
+    "feature_value_or_safe_ref",
+    "value_present",
+    "value_comparable",
+    "comparable_type",
+    "sensitive_value_policy",
+    "source_quality",
+    "evidence_source",
+    "mapped_domain",
+    "mapped_field_family",
+    "original_feature_row_retained",
+]
+
+DEVICE_DETAIL_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "user_id",
+    "device_id",
+    "device_safe_ref",
+    "source_id",
+    "source_name",
+    "device_source_type",
+    "device_field_key",
+    "device_field_name",
+    "device_field_value_or_safe_ref",
+    "device_field_type",
+    "value_present",
+    "value_comparable",
+    "comparable_type",
+    "source_quality",
+    "evidence_source",
+    "device_role",
+    "sensitive_value_policy",
+]
+
+DEVICE_ID_ONLY_FEATURE_FIELDS = {
+    "device_id",
+    "candidate_device_id",
+    "login_device_id",
+    "backend_action_device_id",
+    "frontend_active_device_id",
+}
+
+STRATEGY_ENTRY_LABEL_FIELDS = {"policy_code", "event_type", "risk_decision"}
+STRATEGY_REQUEST_DETAIL_CORE_FIELDS = {
+    "request_path",
+    "request_scene",
+    "entry",
+    "action_type",
+    "action_object",
+    "task_type",
+    "reward_type",
+    "client_params",
+    "app_version",
+    "ua",
+    "device_id",
+    "ip_or_network",
+    "frontend_activity_signal",
+    "backend_action_signal",
+    "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds",
+}
 
 ANCHOR_REQUIRED_KEYS = [
     "anchor_type",
@@ -934,6 +1096,383 @@ def _validate_partial_quality_lowers_anchor_score() -> tuple[list[str], dict[str
     }
 
 
+def _validate_strategy_event_request_detail_fixture() -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    if not STRATEGY_EVENT_REQUEST_DETAIL_FIXTURE.exists():
+        return [f"strategy_event_request_detail_fixture_missing:{STRATEGY_EVENT_REQUEST_DETAIL_FIXTURE}"], {}
+    fixture = json.loads(STRATEGY_EVENT_REQUEST_DETAIL_FIXTURE.read_text(encoding="utf-8"))
+
+    detail_rows = fixture.get("strategy_event_request_detail_table", [])
+    if not isinstance(detail_rows, list) or not detail_rows:
+        errors.append("strategy_event_request_detail_table_missing_or_empty")
+        detail_rows = []
+    for row_index, row in enumerate(detail_rows, start=1):
+        if not isinstance(row, dict):
+            errors.append(f"strategy_event_detail_row_{row_index}_not_object")
+            continue
+        for field in STRATEGY_EVENT_REQUEST_DETAIL_REQUIRED_FIELDS:
+            if field not in row:
+                errors.append(f"strategy_event_detail_row_{row_index}_missing_{field}")
+        if row.get("evidence_source") != "current_observation":
+            errors.append(f"strategy_event_detail_row_{row_index}_not_current_observation")
+        if row.get("source_quality") in {"no_data", "timeout", "missing_contract", "auth_failed"}:
+            errors.append(f"strategy_event_detail_row_{row_index}_gap_row_used_as_detail_fact")
+
+    commonality_rows = fixture.get("field_level_commonality", [])
+    if not isinstance(commonality_rows, list) or not commonality_rows:
+        errors.append("strategy_field_level_commonality_missing_or_empty")
+        commonality_rows = []
+    current_field_commonality_seen = False
+    for commonality_index, commonality in enumerate(commonality_rows, start=1):
+        if not isinstance(commonality, dict):
+            errors.append(f"strategy_commonality_{commonality_index}_not_object")
+            continue
+        source_fields = set(str(field) for field in commonality.get("source_fields", []) or [])
+        if not source_fields & STRATEGY_REQUEST_DETAIL_CORE_FIELDS:
+            errors.append(f"strategy_commonality_{commonality_index}_missing_request_detail_core_field")
+        if source_fields <= STRATEGY_ENTRY_LABEL_FIELDS:
+            errors.append(f"strategy_commonality_{commonality_index}_entry_label_only")
+        if int(commonality.get("support_sample_count") or 0) < 2:
+            errors.append(f"strategy_commonality_{commonality_index}_support_lt_2")
+        if commonality.get("evidence_source") == "current_observation":
+            current_field_commonality_seen = True
+        if commonality.get("not_final_conclusion") is not True:
+            errors.append(f"strategy_commonality_{commonality_index}_not_final_conclusion_missing")
+
+    features = fixture.get("candidate_features", [])
+    if not isinstance(features, list) or not features:
+        errors.append("strategy_candidate_features_missing_or_empty")
+        features = []
+    for feature_index, feature in enumerate(features, start=1):
+        if not isinstance(feature, dict):
+            errors.append(f"strategy_feature_{feature_index}_not_object")
+            continue
+        for key in STRATEGY_REQUEST_DETAIL_FEATURE_REQUIRED_KEYS:
+            if key not in feature:
+                errors.append(f"strategy_feature_{feature_index}_missing_{key}")
+        source_fields = set(str(field) for field in feature.get("source_fields", []) or [])
+        if source_fields <= STRATEGY_ENTRY_LABEL_FIELDS:
+            errors.append(f"strategy_feature_{feature_index}_policy_event_decision_only")
+        if not source_fields & STRATEGY_REQUEST_DETAIL_CORE_FIELDS:
+            errors.append(f"strategy_feature_{feature_index}_missing_request_detail_core_field")
+        if not feature.get("field_combination"):
+            errors.append(f"strategy_feature_{feature_index}_missing_field_combination")
+        if int(feature.get("support_sample_count") or 0) < 2:
+            errors.append(f"strategy_feature_{feature_index}_support_sample_count_lt_2")
+        if feature.get("validation_needed") is not True:
+            errors.append(f"strategy_feature_{feature_index}_validation_needed_not_true")
+        if feature.get("not_final_conclusion") is not True:
+            errors.append(f"strategy_feature_{feature_index}_not_final_conclusion_not_true")
+        if not feature.get("normal_user_false_positive_risk"):
+            errors.append(f"strategy_feature_{feature_index}_missing_false_positive_explanation")
+        if not feature.get("missing_fields_to_check"):
+            errors.append(f"strategy_feature_{feature_index}_missing_followup_fields")
+        if not feature.get("strategy_usage_boundary"):
+            errors.append(f"strategy_feature_{feature_index}_missing_usage_boundary")
+        for evidence_index, evidence in enumerate(feature.get("supporting_current_evidence", []) or [], start=1):
+            if not isinstance(evidence, dict):
+                errors.append(f"strategy_feature_{feature_index}_evidence_{evidence_index}_not_object")
+                continue
+            for trace_field in ("sample_id", "entity_id", "round_id", "source_id", "source_quality"):
+                if trace_field not in evidence:
+                    errors.append(f"strategy_feature_{feature_index}_evidence_{evidence_index}_missing_{trace_field}")
+
+    return errors, {
+        "fixture": str(STRATEGY_EVENT_REQUEST_DETAIL_FIXTURE.relative_to(ROOT)),
+        "detail_row_count": len(detail_rows),
+        "commonality_row_count": len(commonality_rows),
+        "candidate_feature_count": len(features),
+        "current_field_commonality_seen": current_field_commonality_seen,
+    }
+
+
+def _validate_runtime_strategy_request_detail_artifacts(result: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    round_results = result.get("round_results", []) if isinstance(result, dict) else []
+    table_rows: list[dict[str, Any]] = []
+    strategy_features: list[dict[str, Any]] = []
+    commonality_rows: list[dict[str, Any]] = []
+    for round_index, round_result in enumerate(round_results, start=1):
+        artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
+        rows = artifacts.get("strategy_event_request_detail_table", []) or []
+        if not rows:
+            errors.append(f"runtime_strategy_round_{round_index}_missing_strategy_event_request_detail_table")
+        for row_index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                errors.append(f"runtime_strategy_round_{round_index}_row_{row_index}_not_object")
+                continue
+            table_rows.append(row)
+            if row.get("entry_label_fields_only") is True:
+                continue
+            if not any(row.get(field) not in {None, ""} for field in STRATEGY_REQUEST_DETAIL_CORE_FIELDS):
+                errors.append(f"runtime_strategy_round_{round_index}_row_{row_index}_missing_request_detail_core_field")
+        commonality_rows.extend([
+            item for item in artifacts.get("strategy_event_request_detail_commonality", []) or []
+            if isinstance(item, dict)
+        ])
+        strategy_features.extend([
+            item for item in artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict)
+            and str(item.get("feature_name") or "").startswith("strategy_request_detail")
+        ])
+    if not commonality_rows:
+        errors.append("runtime_strategy_request_detail_commonality_missing")
+    if not strategy_features:
+        errors.append("runtime_strategy_request_detail_candidate_feature_missing")
+    for feature_index, feature in enumerate(strategy_features, start=1):
+        for key in STRATEGY_REQUEST_DETAIL_FEATURE_REQUIRED_KEYS:
+            if key not in feature:
+                errors.append(f"runtime_strategy_feature_{feature_index}_missing_{key}")
+        source_fields = set(str(field) for field in feature.get("source_fields", []) or [])
+        if source_fields <= STRATEGY_ENTRY_LABEL_FIELDS:
+            errors.append(f"runtime_strategy_feature_{feature_index}_entry_label_only")
+        if not source_fields & STRATEGY_REQUEST_DETAIL_CORE_FIELDS:
+            errors.append(f"runtime_strategy_feature_{feature_index}_missing_request_detail_core_field")
+        if int(feature.get("support_sample_count") or 0) < 2:
+            errors.append(f"runtime_strategy_feature_{feature_index}_support_sample_count_lt_2")
+        if feature.get("validation_needed") is not True:
+            errors.append(f"runtime_strategy_feature_{feature_index}_validation_needed_not_true")
+        if feature.get("not_final_conclusion") is not True:
+            errors.append(f"runtime_strategy_feature_{feature_index}_not_final_conclusion_not_true")
+    return errors, {
+        "strategy_event_request_detail_table_rows": len(table_rows),
+        "strategy_event_request_detail_commonality_count": len(commonality_rows),
+        "strategy_request_detail_candidate_feature_count": len(strategy_features),
+    }
+
+
+def _expected_original_feature_row_count(fixture: dict[str, Any]) -> int:
+    count = 0
+    for round_item in fixture.get("rounds", []) or []:
+        for observation in round_item.get("mock_current_observations", []) or []:
+            for row in observation.get("feature_rows", []) or []:
+                if isinstance(row, dict) and str(row.get("feature_tab") or row.get("featureGroup") or "") == "原始类":
+                    count += 1
+    return count
+
+
+def _validate_runtime_strategy_feature_row_artifacts(
+    result: dict[str, Any],
+    fixture: dict[str, Any] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    round_results = result.get("round_results", []) if isinstance(result, dict) else []
+    table_rows: list[dict[str, Any]] = []
+    commonality_rows: list[dict[str, Any]] = []
+    feature_row_candidate_features: list[dict[str, Any]] = []
+    for round_index, round_result in enumerate(round_results, start=1):
+        artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
+        rows = artifacts.get("strategy_event_feature_row_table", []) or []
+        if not rows:
+            errors.append(f"runtime_feature_row_round_{round_index}_table_missing_or_empty")
+        table_rows.extend([row for row in rows if isinstance(row, dict)])
+        commonality_rows.extend([
+            item for item in artifacts.get("strategy_event_feature_row_commonality", []) or []
+            if isinstance(item, dict)
+        ])
+        feature_row_candidate_features.extend([
+            item for item in artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict)
+            and (
+                "source_feature_keys" in item
+                or str(item.get("feature_name") or "").startswith("strategy_event_original_feature")
+            )
+        ])
+
+    original_rows = [row for row in table_rows if row.get("feature_tab") == "原始类"]
+    if fixture is not None:
+        expected_original_count = _expected_original_feature_row_count(fixture)
+        if len(original_rows) < expected_original_count:
+            errors.append(
+                f"runtime_feature_row_original_rows_lost:expected_{expected_original_count}_got_{len(original_rows)}"
+            )
+    for row_index, row in enumerate(table_rows, start=1):
+        for field in STRATEGY_EVENT_FEATURE_ROW_REQUIRED_FIELDS:
+            if field not in row:
+                errors.append(f"runtime_feature_row_{row_index}_missing_{field}")
+        if row.get("feature_tab") == "原始类" and row.get("original_feature_row_retained") is not True:
+            errors.append(f"runtime_feature_row_{row_index}_original_not_marked_retained")
+        if row.get("value_present") is True and "feature_value_or_safe_ref" not in row:
+            errors.append(f"runtime_feature_row_{row_index}_present_value_missing_safe_ref")
+        if row.get("sensitive_value_policy") in {"只保留安全引用", "只保留是否存在"} and row.get("value_present") is True:
+            if row.get("feature_value_or_safe_ref") in {None, ""}:
+                errors.append(f"runtime_feature_row_{row_index}_sensitive_policy_missing_safe_ref")
+
+    if not any(str(row.get("feature_key")) == "unknownOriginalX" for row in original_rows):
+        errors.append("runtime_feature_row_unknown_original_field_not_retained")
+
+    coverage_rows = [
+        row for row in commonality_rows
+        if str(row.get("commonality_type") or "") == "coverage_commonality"
+    ]
+    if not coverage_rows:
+        errors.append("runtime_feature_row_coverage_commonality_missing")
+    for item_index, item in enumerate(coverage_rows, start=1):
+        if item.get("candidate_feature_eligible") is True:
+            errors.append(f"runtime_feature_row_coverage_{item_index}_candidate_feature_eligible")
+        if item.get("risk_commonality") is True or item.get("eligible_for_group_candidate") is True:
+            errors.append(f"runtime_feature_row_coverage_{item_index}_marked_as_risk")
+
+    value_commonality_rows = [
+        row for row in commonality_rows
+        if str(row.get("commonality_type") or "") == "field_value_commonality"
+    ]
+    if not value_commonality_rows:
+        errors.append("runtime_feature_row_value_commonality_missing")
+    if not feature_row_candidate_features:
+        errors.append("runtime_feature_row_candidate_feature_missing")
+    for feature_index, feature in enumerate(feature_row_candidate_features, start=1):
+        source_feature_keys = feature.get("source_feature_keys") or feature.get("source_fields") or []
+        if not source_feature_keys:
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_missing_source_feature_keys")
+        if set(str(key) for key in source_feature_keys) <= STRATEGY_ENTRY_LABEL_FIELDS:
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_entry_label_only")
+        if not feature.get("field_combination"):
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_missing_field_combination")
+        if int(feature.get("support_sample_count") or 0) < 2:
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_support_lt_2")
+        if feature.get("validation_needed") is not True:
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_validation_needed_not_true")
+        if feature.get("not_final_conclusion") is not True:
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_not_final_conclusion_not_true")
+        if not feature.get("normal_user_false_positive_risk"):
+            errors.append(f"runtime_feature_row_candidate_{feature_index}_missing_false_positive_boundary")
+
+    return errors, {
+        "strategy_event_feature_row_table_rows": len(table_rows),
+        "original_feature_row_count": len(original_rows),
+        "feature_row_commonality_count": len(commonality_rows),
+        "field_value_commonality_count": len(value_commonality_rows),
+        "feature_row_candidate_feature_count": len(feature_row_candidate_features),
+    }
+
+
+def _validate_runtime_device_detail_artifacts(
+    result: dict[str, Any],
+) -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    round_results = result.get("round_results", []) if isinstance(result, dict) else []
+    table_rows: list[dict[str, Any]] = []
+    commonality_rows: list[dict[str, Any]] = []
+    similarity_candidates: list[dict[str, Any]] = []
+    consistency_candidates: list[dict[str, Any]] = []
+    device_candidate_features: list[dict[str, Any]] = []
+    for round_index, round_result in enumerate(round_results, start=1):
+        artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
+        rows = artifacts.get("device_detail_table", []) or []
+        if not rows:
+            errors.append(f"runtime_device_round_{round_index}_detail_table_missing_or_empty")
+        table_rows.extend([row for row in rows if isinstance(row, dict)])
+        commonality_rows.extend([
+            item for item in artifacts.get("device_field_commonality", []) or []
+            if isinstance(item, dict)
+        ])
+        similarity_candidates.extend([
+            item for item in artifacts.get("device_environment_similarity_cluster_candidate", []) or []
+            if isinstance(item, dict)
+        ])
+        consistency_candidates.extend([
+            item for item in artifacts.get("behavior_device_consistency_gap_candidate", []) or []
+            if isinstance(item, dict)
+        ])
+        device_candidate_features.extend([
+            item for item in artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict)
+            and (
+                str(item.get("feature_name") or "").startswith("low_life_device")
+                or str(item.get("feature_name") or "").startswith("automation_or_script_device")
+                or str(item.get("feature_name") or "").startswith("device_environment_similarity")
+                or str(item.get("feature_name") or "").startswith("behavior_device_consistency")
+            )
+        ])
+
+    if len(table_rows) < 20:
+        errors.append(f"runtime_device_detail_rows_too_few:{len(table_rows)}")
+    source_types = {str(row.get("device_source_type") or "") for row in table_rows}
+    required_source_types = {"设备基础信息", "设备风险标签", "设备使用画像", "安装列表 / 应用环境", "账号-设备关系", "行为-设备一致性"}
+    missing_source_types = sorted(required_source_types - source_types)
+    if missing_source_types:
+        errors.append(f"runtime_device_missing_source_types:{','.join(missing_source_types)}")
+    for row_index, row in enumerate(table_rows, start=1):
+        for field in DEVICE_DETAIL_REQUIRED_FIELDS:
+            if field not in row:
+                errors.append(f"runtime_device_row_{row_index}_missing_{field}")
+        if row.get("value_present") is True and "device_field_value_or_safe_ref" not in row:
+            errors.append(f"runtime_device_row_{row_index}_present_value_missing")
+        if str(row.get("device_field_key") or "") == "frontend_activity_signal":
+            errors.append(f"runtime_device_row_{row_index}_frontend_activity_as_device_field")
+
+    coverage_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "coverage_commonality"
+    ]
+    value_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "field_value_commonality"
+    ]
+    if not coverage_rows:
+        errors.append("runtime_device_coverage_commonality_missing")
+    for item_index, item in enumerate(coverage_rows, start=1):
+        if item.get("candidate_feature_eligible") is True:
+            errors.append(f"runtime_device_coverage_{item_index}_candidate_feature_eligible")
+        if item.get("risk_commonality") is True or item.get("eligible_for_group_candidate") is True:
+            errors.append(f"runtime_device_coverage_{item_index}_marked_as_risk")
+    if not value_rows:
+        errors.append("runtime_device_field_value_commonality_missing")
+
+    if not similarity_candidates:
+        errors.append("runtime_device_similarity_candidate_missing")
+    for candidate_index, candidate in enumerate(similarity_candidates, start=1):
+        if len(candidate.get("shared_device_fields", []) or []) < 2:
+            errors.append(f"runtime_device_similarity_{candidate_index}_shared_fields_lt_2")
+        if len(candidate.get("support_devices", []) or []) < 2:
+            errors.append(f"runtime_device_similarity_{candidate_index}_support_devices_lt_2")
+        if candidate.get("not_confirmed_as_group") is not True:
+            errors.append(f"runtime_device_similarity_{candidate_index}_not_confirmed_boundary_missing")
+        if len(candidate.get("shared_device_fields", []) or []) == 1 and str(candidate.get("confidence") or "").startswith("high"):
+            errors.append(f"runtime_device_similarity_{candidate_index}_single_field_high_confidence")
+
+    if not consistency_candidates:
+        errors.append("runtime_behavior_device_consistency_candidate_missing")
+    for candidate in consistency_candidates:
+        boundary = str(candidate.get("boundary") or "")
+        if "not a device fingerprint" not in boundary and "不是" not in boundary:
+            errors.append("runtime_behavior_device_consistency_boundary_missing")
+
+    if not device_candidate_features:
+        errors.append("runtime_device_candidate_features_missing")
+    for feature_index, feature in enumerate(device_candidate_features, start=1):
+        source_fields = [str(field) for field in feature.get("source_device_fields") or feature.get("source_fields") or []]
+        feature_name = str(feature.get("feature_name") or "")
+        if not source_fields:
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_source_device_fields")
+        if set(source_fields) <= DEVICE_ID_ONLY_FEATURE_FIELDS and not feature_name.startswith("behavior_device_consistency"):
+            errors.append(f"runtime_device_candidate_{feature_index}_device_id_only_feature")
+        if not feature.get("field_combination"):
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_field_combination")
+        if int(feature.get("support_user_count") or feature.get("support_sample_count") or 0) < 2:
+            errors.append(f"runtime_device_candidate_{feature_index}_support_lt_2")
+        if not feature.get("normal_user_false_positive_risk"):
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_false_positive_risk")
+        if not feature.get("validation_method"):
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_validation_method")
+        if feature.get("not_final_conclusion") is not True:
+            errors.append(f"runtime_device_candidate_{feature_index}_not_final_false")
+        if feature_name.startswith("behavior_device_consistency"):
+            if "不是纯设备指纹" not in str(feature.get("strategy_usage_boundary") or "") and "not" not in str(feature.get("strategy_usage_boundary") or ""):
+                errors.append(f"runtime_device_candidate_{feature_index}_consistency_boundary_missing")
+
+    return errors, {
+        "device_detail_table_rows": len(table_rows),
+        "device_source_types": sorted(source_types),
+        "device_field_commonality_count": len(commonality_rows),
+        "device_field_value_commonality_count": len(value_rows),
+        "device_similarity_candidate_count": len(similarity_candidates),
+        "behavior_device_consistency_candidate_count": len(consistency_candidates),
+        "device_candidate_feature_count": len(device_candidate_features),
+    }
+
+
 def run_check() -> dict[str, Any]:
     fixed_run = _run_fixture(FIXTURE)
     fixed_errors, fixed_result = _validate_common_result(
@@ -957,6 +1496,22 @@ def run_check() -> dict[str, Any]:
             "result": mock_result,
         }
         mock_errors_by_name[name] = mock_errors
+        if name == "rcp_request_detail_projection":
+            runtime_strategy_errors, runtime_strategy_summary = _validate_runtime_strategy_request_detail_artifacts(mock_result)
+            mock_errors_by_name[name].extend(runtime_strategy_errors)
+            mock_results[name]["runtime_strategy_request_detail_summary"] = runtime_strategy_summary
+        if name == "rcp_original_tab_feature_rows":
+            fixture_payload = json.loads(fixture.read_text(encoding="utf-8"))
+            runtime_feature_row_errors, runtime_feature_row_summary = _validate_runtime_strategy_feature_row_artifacts(
+                mock_result,
+                fixture=fixture_payload,
+            )
+            mock_errors_by_name[name].extend(runtime_feature_row_errors)
+            mock_results[name]["runtime_strategy_feature_row_summary"] = runtime_feature_row_summary
+        if name == "device_detail_multi_source":
+            runtime_device_errors, runtime_device_summary = _validate_runtime_device_detail_artifacts(mock_result)
+            mock_errors_by_name[name].extend(runtime_device_errors)
+            mock_results[name]["runtime_device_detail_summary"] = runtime_device_summary
     errors = [f"fixed:{error}" for error in fixed_errors] + [
         f"mock_{name}:{error}"
         for name, fixture_errors in mock_errors_by_name.items()
@@ -986,6 +1541,8 @@ def run_check() -> dict[str, Any]:
     errors.extend(f"live_safe_summary:{error}" for error in live_safe_errors)
     partial_quality_errors, partial_quality_summary = _validate_partial_quality_lowers_anchor_score()
     errors.extend(f"anchor_scoring:{error}" for error in partial_quality_errors)
+    strategy_detail_errors, strategy_detail_summary = _validate_strategy_event_request_detail_fixture()
+    errors.extend(f"strategy_event_request_detail:{error}" for error in strategy_detail_errors)
 
     single_sample_payload = {
         "route_mode": "sample_expand_validate_mode",
@@ -1069,6 +1626,16 @@ def run_check() -> dict[str, Any]:
             "validation_pass": not partial_quality_errors,
             **partial_quality_summary,
         },
+        "strategy_event_request_detail_feature": {
+            "validation_pass": not strategy_detail_errors,
+            **strategy_detail_summary,
+        },
+        "strategy_event_feature_rows": (
+            mock_results.get("rcp_original_tab_feature_rows", {}).get("runtime_strategy_feature_row_summary", {})
+        ),
+        "device_detail_multi_source": (
+            mock_results.get("device_detail_multi_source", {}).get("runtime_device_detail_summary", {})
+        ),
         "single_sample_limited_commonality": {
             "validation_pass": not single_sample_errors,
             "runner_returncode": single_sample_run["runner_returncode"],

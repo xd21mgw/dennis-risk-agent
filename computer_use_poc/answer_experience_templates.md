@@ -3488,36 +3488,67 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 
 ### 策略同学可读研判答案模板
 
-适用：`full_observation_mode`、`sample_expand_validate_mode` 和小样本 live readonly 验收。目标读者是策略同学，不是工程同学；默认少写 runtime / artifact / source_quality / candidate_anchor_pool 等内部字段，只把它们翻译成证据、线索、缺口和下一步动作。
+适用：`full_observation_mode`、`sample_expand_validate_mode` 和小样本 live readonly 验收。目标读者是策略同学，不是工程同学；默认少写 runtime / artifact / source_quality / candidate_anchor_pool 等内部字段，只把它们翻译成字段级证据、黑灰产解释、候选特征、证据缺口和下一步验证动作。
 
-固定 6 段结构：
+核心表达链路必须从“多源线索摘要”升级为：
+
+```text
+字段级共性 -> 黑灰产本质解释 -> 候选特征 -> 验证计划 -> 策略建议边界
+```
+
+固定 7 段结构：
 
 ```text
 一、初步结论
 - 这批样本目前更像什么风险模式。
 - 只能写 candidate / 疑似 / 需要验证；不能把 group_profile_candidate 写成确认团伙。
+- 如果当前只有字段覆盖或单用户锚点，必须写“尚未形成稳定同源簇 / 当前只是线索集合”。
 
-二、主要证据
-- 用自然语言说明查了哪些方向：账号/档案、设备图谱、登录日志、内容/作品、策略命中、前端行为。
-- 写 completed / partial 的业务含义，不贴 source_quality YAML。
+二、已观察到的字段级共性
+- 按字段和值写，不只写“有登录 / 有设备 / 有策略 / 有 Track”。
+- 显式字段共性：原始明细中已有字段和值，例如 device_id、IP、UA、app_version、login_source、publish_device、event_type、risk_decision。
+- 推导型字段共性：由多个字段组合构造的候选特征，例如跨设备切换异常、设备指纹相似簇、前后端行为不一致、收益动作链路、短时间任务/关注/展示动作聚集。
+- 每条必须写来源字段、字段组合、支持样本数；没有字段支撑时写“当前缺字段，需补查”，不能脑补。
+- RCP 策略事件特征明细优先看 `rcp_event_feature_list` 的行级表：`feature_tab / feature_key / feature_name / feature_type / feature_value_or_safe_ref`。原始类 TAB 的 feature row 默认全量保留；未知字段也先保留为未知字段，不因为字段名暂时看不懂就丢弃。
+- 字段级共性必须分层：字段覆盖共性只能说明字段可见；字段值共性表示多个样本同一个 `feature_key` 的值相同或相近；字段组合共性表示多个字段共同解释入口、客户端、网络、设备环境、行为节奏或内容/社交承接。
+- Android / iOS 的原始类字段可能不同。答案不要强行套同一个字段名；先保留平台原始特征行，再映射到设备、网络、行为等字段族。完整设备指纹相似簇后置到设备详情 / Weapon 补证。
 
-三、关键共性
-- 先拆成“证据覆盖情况”和“风险锚点共性”，不能把字段被查到写成风险共性。
-- 证据覆盖情况：哪些 source / 字段可见，例如登录字段、设备图谱字段、策略命中字段已抽到。
-- 风险锚点共性：是否真的共享同设备、同 IP、同内容模板、同 policy_code、同社交承接或相似链路。
-- 策略命中只能写“线索/归因方向”，不能写成最终定性。
+三、对应的黑灰产行为解释
+- 解释字段组合对应的生产方式：协议自动化、设备池承载、群控/脚本、低生活化设备、导流承接、任务/金币/展示套利、账号态维护等。
+- 策略命中只能作为入口或风险方向标签；真正特征要来自策略事件请求详情字段、行为对象、客户端参数、时间间隔、入口和任务类型。
+- 策略事件请求详情字段优先看：request_path / request_scene / entry / action_type / action_object / task_type / reward_type / client_params / app_version / UA / device_id / IP或网络 / frontend_activity_signal / backend_action_signal / time_delta_from_login / time_delta_between_actions。没有这些字段时，只能写“缺策略请求详情字段，需补查”，不能把 policy_code、event_type、risk_decision 写成核心特征。
+- device_id 只能作为设备锚点；设备特征必须来自设备指纹、设备环境、启动/开机/锁屏/SIM/自动化服务/脚本/改机/低生活化等明细。
 
-四、当前边界
-- 样本数、partial 登录日志、未授权离线验证、锚点抽取缺口、反证不足。
+四、候选特征
+- 每条候选特征必须包含：
+  - feature_name:
+  - source_fields:
+  - field_combination:
+  - support_sample_count:
+  - black_gray_interpretation:
+  - normal_user_false_positive_risk:
+  - missing_fields_to_check:
+  - validation_method:
+  - strategy_usage_boundary: 观察 / 人审辅助 / 灰度验证 / 拦截候选
+  - not_final_conclusion: true
+- 如果只有 policy_code / event_type / risk_decision，只能写“策略入口信号”，不能写成候选核心特征。
+- 策略侧候选特征必须来自请求详情字段组合，例如“同 request_path + 同 action_object + 短 login-to-action 时间差 + 前端弱活跃但后端动作存在”。只看到策略命中集中时，候选特征栏写“当前缺 request detail，暂不能生成策略侧核心特征”。
+- 如果来自 `rcp_event_feature_list`，候选特征必须列出 `source_feature_keys`，例如 `phoneModel + clientId + channel + locale`，并说明哪些是字段值共性、哪些只是字段覆盖。不能把 feature row 先压成“设备字段正常 / 有策略命中 / source completed”。
+- 如果只有 device_id，只能写“设备锚点”，不能写成设备指纹特征。
+
+五、证据缺口
+- 样本数、partial 登录日志、未授权离线验证、请求详情字段缺失、设备指纹字段缺失、正常对照缺失、锚点抽取缺口、反证不足。
 - partial/no_data/skipped/timeout/missing_contract 不能写成低风险反证。
 
-五、下一步建议
-- 补证：扩量验证、对照样本、长窗口/宽表、关键 source extraction follow-up。
+六、验证计划
+- 补证：扩量验证、对照样本、长窗口/宽表、策略事件请求详情、设备指纹详情、关键 source extraction follow-up。
+- 明确验证口径：覆盖率、支持样本数、正常对照、误伤率、lift、跨轮稳定性。
 - DataAgent/Hive 只能写“需用户授权后查”，不能写成已查。
-- 策略方向只能写候选：可灰度验证 / 组合使用 / 监控扩线索，不写立刻上线。
 
-六、一句话摘要
-- 1 句话给策略同学带走：风险候选 + 证据边界 + 下一步。
+七、策略建议边界
+- 策略方向只能写候选：观察 / 人审辅助 / 灰度验证 / 组合拦截候选。
+- 不写立刻上线，不自动处置，不把策略命中、专家经验、字段覆盖或小样本共性当策略结论。
+- 1 句话给策略同学带走：字段级候选特征 + 当前边界 + 下一步验证。
 ```
 
 示例片段：
@@ -3526,20 +3557,31 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 一、初步结论
 这 3 个小样本已经能看到多源风险线索：一个样本偏登录/设备异常，一个样本偏内容导流和策略信号，另一个样本有策略/内容候选但锚点抽取还不完整。当前是“多源风险线索集合”，尚未形成稳定同源簇，不能写成确认团伙或确认攻击链。
 
-二、主要证据
-本轮查了账号档案、设备图谱、作品/内容入口、登录日志、策略命中、作品列表和前端行为可用性。21 个 source 中 20 个完成，1 个登录日志因返回过大只能 partial；没有 blocked、timeout、auth_failed，也没有调用 DataAgent/Hive。
+二、已观察到的字段级共性
+证据覆盖层面：登录字段、设备图谱字段、策略事件字段可见。风险字段层面：当前只看到设备/策略方向存在可下钻锚点，还没有证明 3 个样本共享同一设备、同一 IP、同一内容模板或同一策略请求路径。策略命中字段只能说明风险方向，不能直接沉淀为核心特征。
 
-三、关键共性
-证据覆盖层面：登录字段和设备图谱字段在 3 个样本里都可见，策略字段覆盖 2 个样本，这说明本轮证据可用性较好。风险锚点层面：当前只确认设备和策略方向有可下钻锚点，还没有证明 3 个样本共享同一设备、同一 IP、同一内容模板或同一策略路径。策略命中只是线索，不能单独定性。
+三、对应的黑灰产行为解释
+如果后续能在请求详情中看到同类入口、同类行为对象、相近时间间隔，并且设备环境表现出低生活化或自动化痕迹，才更像设备池/脚本化小号生产；当前还缺策略请求详情和设备指纹明细，只能作为候选解释。
 
-四、当前边界
-样本只有 3 个，登录日志有 response_limited，5522927552 存在锚点抽取缺口；这些都是证据缺口，不是低风险反证。当前结论不能升级为 confirmed group。
+四、候选特征
+- feature_name: 设备切换后短时间目标行为候选
+- source_fields: login_time, device_id, UA, app_version, action_time, action_type
+- field_combination: 同账号短时间多设备 + 设备参数相似 + 切换后发生同类目标行为
+- support_sample_count: 当前小样本不足，待扩量统计
+- black_gray_interpretation: 可能对应设备池承载或脚本化任务执行
+- normal_user_false_positive_risk: 正常换机、网页登录、多端登录
+- missing_fields_to_check: 设备指纹、开机/锁屏/SIM、前端活跃设备、行为设备、策略请求详情
+- validation_method: 100 样本覆盖率 + 正常对照 + 误伤复核
+- strategy_usage_boundary: 先做灰度验证或人审辅助，不直接上线
 
-五、下一步建议
-建议先进入用户授权的扩量/宽表验证：看这类设备/策略/内容信号在 100 个样本里的覆盖率、对照组误伤和稳定性。策略上只沉淀候选特征，先用于灰度验证或人审辅助，不建议直接上线处置。
+五、证据缺口
+样本只有 3 个，登录日志有 response_limited，策略事件请求详情、设备指纹明细和正常对照都未补齐；这些都是证据缺口，不是低风险反证。
 
-六、一句话摘要
-这批样本有多源风险线索，但还没有形成稳定同源簇；下一步应做授权后的锚点共性、覆盖率和误伤验证。
+六、验证计划
+建议授权后做扩量/宽表验证：统计候选字段组合在 100 个样本里的覆盖率、正常对照背景率、误伤率、lift 和跨轮稳定性。
+
+七、策略建议边界
+当前只适合沉淀候选特征，先用于观察、人审辅助或受控灰度验证；不能因为策略命中或设备锚点直接上线处置。
 ```
 
 共性语义分级：
@@ -3549,16 +3591,41 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 - `chain_commonality`：链路共性，必须能串起登录 → 发布 → 社交 → 策略 / 处置 / 反馈等相似链路。只有这一级才能写“存在相似风险链路”。
 - `group_candidate_commonality`：支持团伙候选的强共性，必须有多域锚点或链路共性、代表样本和待验证边界。只有这一级才能写“团伙候选 / 风险簇候选”。
 
+字段级候选特征分两类：
+
+- 显式字段共性：原始明细中已有字段和值，例如 IP、UA、app_version、login_source、publish_device、event_type、risk_decision。表达时必须写字段值覆盖和支持样本数。
+- 推导型字段共性：原始明细没有直接字段名，但可由多个字段组合构造，例如跨设备切换异常、设备指纹相似簇、前后端行为不一致、登录态保活、收益动作链路、短时间任务/关注/展示动作聚集、多账号分布式设备池承载。表达时必须写原始字段组合、当前事实还是候选假设、缺失验证字段和误伤边界。
+
 强制语义边界：
 
 - 只有 `coverage_commonality` 时，禁止写“同源”“团伙候选”“多源风险簇”“攻击链闭合”“稳定风险模式”。
 - `*_business_fields_extracted` 只能作为 source coverage / evidence availability，不得直接作为 risk commonality。
 - 样本少、只有字段覆盖或锚点抽取缺口时，必须写“尚未形成稳定同源簇”。
+- `policy_code` / `event_type` / `risk_decision` 只能作为策略入口信号；没有请求详情字段时，不得写成核心候选特征。
+- `device_id` 只能作为设备锚点；没有设备指纹 / 环境 / 启动 / 开机 / 锁屏 / SIM / 自动化 / 改机等明细时，不得写成设备指纹或低生活化设备特征。
+
+设备明细答案口径：
+
+- 设备阶段优先看 `device_detail_table`，不是“设备摘要”。每个设备字段应保留为明细行：用户、设备、安全值或 safe_ref、字段名、字段类型、来源、是否可比较、source_quality。
+- Weapon `weapon_inventory` / graphData / riskData 是设备主输入；RCP `rcp_event_feature_list` 只能补事件发生时的客户端/设备上下文字段；登录日志和 Track 只用于设备链路一致性补证。
+- Track 活跃、页面停留、点击路径属于行为域，不是设备指纹。只有“登录设备 / 后端行为设备 / 前端活跃设备是否一致”可以写成行为-设备一致性线索。
+- 设备方向不要写“有 device_id / 有 Android 设备 / 有设备锚点 / 设备画像异常”这种摘要句作为特征。必须写：
+  - 已观察字段：phone_model、os_version、app_version、launch_count、boot_duration、lock_screen_enabled、sim_present、automation_service_detected、script_risk、installed_app_cluster 等。
+  - 字段值共性：多少用户 / 多少设备共享相同或相似字段值。
+  - 字段组合共性：例如启动少 + 开机短 + 无锁屏 + 无 SIM，或自动化服务 + 脚本风险，或不同 device_id 但机型/系统/版本/安装环境相似。
+  - 黑灰产解释：低生活化设备环境、自动化/脚本执行环境、设备池模板、账号设备分摊承载等。
+  - 误伤点：新机、测试机、企业设备、多端登录、同版本客户端、正常换机。
+  - 需补查字段：Weapon 设备指纹详情、安装列表详情、设备首次出现、活跃天数、正常设备对照、行为序列。
+  - 验证方式：目标批次覆盖率 + 正常对照背景率 + lift + 误伤复核 + 跨轮稳定性。
+- `device_id` 本身只能做锚点或关系边；设备候选特征必须来自设备明细字段或字段组合。
+- 设备字段覆盖只能写“字段可见”；字段值相同/相近或多个字段组合异常，才可以进入候选特征。
+- 设备相似簇必须写成 `device_environment_similarity_cluster_candidate`：不同 device_id、多字段相似、至少两个用户支持、需要正常对照；不能写成同设备或确认团伙。
 
 用户可见答案禁用项：
 
 - 不默认输出完整 YAML / JSON / source_quality matrix / routing_metadata。
 - 不写 “confirmed_group” / “fraud_ring” / “已坐实团伙”，除非已有验证结果支撑。
 - 不把策略命中、专家经验、模型分、partial 登录日志写成最终结论。
+- 不把策略命中当核心特征，不把 device_id 当设备特征，不把字段覆盖当候选策略依据。
 - 不把 `no_data` / `skipped` / `timeout` / `missing_contract` 写成“没风险”。
 - 不写“已查 DataAgent/Hive”，除非用户逐次授权且已有实际结果。

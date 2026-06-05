@@ -54,6 +54,32 @@
         "same_device_relation_not_gang_conclusion",
         "archives_failure_non_blocking_when_relevant"
       ],
+      "device_detail_fact_flow": {
+        "status": "phase_c_contract_and_mock_runtime_minimum",
+        "primary_device_input": "weapon_inventory_graphData_riskData_or_future_weapon_device_detail",
+        "supplemental_inputs": [
+          "rcp_event_feature_list_event_context_only",
+          "login_logs_search_login_device",
+          "track_analysis_behavior_device_consistency_only"
+        ],
+        "standard_table": "device_detail_table",
+        "not_summary_table": true,
+        "field_retention_rule": "keep device fields as rows with user, device, field key, value/safe_ref, type, source, comparability, source_quality",
+        "commonality_engine": "reuse_shared_field_commonality_flow",
+        "commonality_levels": [
+          "coverage_commonality",
+          "field_value_commonality",
+          "field_combination_commonality",
+          "derived_candidate_feature"
+        ],
+        "forbidden_shortcuts": [
+          "device_id_as_device_feature",
+          "device_source_completed_as_risk_commonality",
+          "frontend_activity_as_device_fingerprint",
+          "rcp_event_feature_coverage_as_device_coverage"
+        ],
+        "behavior_device_consistency_boundary": "Track frontend activity is behavior_domain; only login/backend/frontend device consistency result can enter device_detail_table as cross-domain lead."
+      },
       "offline_supplement_by_risk_scene": {
         "account_takeover": [
           "login_success_failure_resetPwd_change_bind_kickout",
@@ -1398,7 +1424,25 @@
               "timeout_class": "standard_readonly",
               "failure_policy": "non_blocking_partial",
               "source_priority": "P0-explicit",
-              "expected_observation": "event_level_decision_entities_and_feature_query_keys"
+              "expected_observation": "event_level_decision_entities_feature_query_keys_and_request_detail_fields",
+              "request_detail_field_targets": [
+                "request_path",
+                "request_scene",
+                "entry",
+                "action_type",
+                "action_object",
+                "task_type",
+                "reward_type",
+                "client_params",
+                "app_version",
+                "ua",
+                "device_id",
+                "ip_or_network",
+                "frontend_activity_signal",
+                "backend_action_signal",
+                "time_delta_from_login_seconds",
+                "time_delta_between_actions_seconds"
+              ]
             },
             {
               "source_id": "rcp_event_feature_list",
@@ -2494,6 +2538,7 @@
         "safe_projected_records_boundary": "no_raw_body_no_capped_body_no_logContent_no_credential_like_raw_values",
         "tables": [
           "standard_detail_table",
+          "strategy_event_feature_row_table",
           "anchor_table",
           "feature_table",
           "relation_table",
@@ -2503,6 +2548,7 @@
         ],
         "table_mapping_from_existing_artifacts": {
           "standard_detail_table": ["base_summary_card", "drilldown_evidence_card"],
+          "strategy_event_feature_row_table": ["orchestration_artifacts.strategy_event_feature_row_table"],
           "anchor_table": ["candidate_anchor_pool", "selected_drilldown_anchors", "skipped_anchors"],
           "feature_table": ["candidate_features"],
           "relation_table": ["relation_expansion_result"],
@@ -2609,7 +2655,49 @@
             "must_combine_with": ["current_interface_evidence", "sample_commonality", "source_quality"],
             "forbidden_usage": ["replace_current_observation", "direct_final_conclusion", "direct_strategy_recommendation", "confirm_risk_because_pattern_looks_similar"]
           },
-          "candidate_features_required_fields": ["feature_name", "source_domains", "supporting_current_evidence", "supporting_selected_anchors_or_unselected_signal_hypothesis", "signal_inputs_or_hypothesis_inputs", "confidence", "validation_needed", "false_positive_risk", "not_final_conclusion"],
+          "candidate_features_required_fields": ["feature_name", "source_domains", "source_fields", "source_feature_keys_if_from_rcp_feature_rows", "field_combination", "support_sample_count", "supporting_current_evidence", "supporting_selected_anchors_or_unselected_signal_hypothesis", "signal_inputs_or_hypothesis_inputs", "black_gray_interpretation", "normal_user_false_positive_risk", "missing_fields_to_check", "validation_method", "strategy_usage_boundary", "confidence", "validation_needed", "false_positive_risk", "not_final_conclusion"],
+          "candidate_features_field_level_boundary": "strategy_hit_policy_code_event_type_risk_decision_are_entry_signals_only; device_id_is_anchor_only; core candidate features require request detail fields, device fingerprint/environment details, behavior sequence fields, or explicitly labelled derived field combinations",
+          "strategy_event_request_detail_table": {
+            "purpose": "turn strategy event hits into field-level candidate feature inputs instead of treating policy_code/event_type/risk_decision as core features",
+            "source_actions": ["rcp_event_detail", "rcp_event_feature_list", "rcp_fast_query_hbase"],
+            "entry_label_fields_only": ["policy_code", "event_type", "risk_decision"],
+            "required_trace_fields": ["sample_id", "entity_id", "user_id", "round_id", "source_id", "source_quality", "evidence_source"],
+            "request_detail_fields": [
+              "event_id",
+              "event_time",
+              "request_path",
+              "request_scene",
+              "entry",
+              "action_type",
+              "action_object",
+              "task_type",
+              "reward_type",
+              "client_params",
+              "app_version",
+              "ua",
+              "device_id",
+              "ip_or_network",
+              "frontend_activity_signal",
+              "backend_action_signal",
+              "time_delta_from_login_seconds",
+              "time_delta_between_actions_seconds"
+            ],
+            "candidate_feature_rule": "strategy_domain_candidate_feature_requires_at_least_one_request_detail_field_plus_field_combination_and_support_sample_count",
+            "missing_field_boundary": "if only policy_code/event_type/risk_decision are available, output strategy_event_request_detail_missing and do not emit a core candidate feature"
+          },
+          "strategy_event_feature_row_table": {
+            "purpose": "preserve rcp_event_feature_list featureKey/defaultFeatureValue rows before summary so field-level commonality can compare original feature values",
+            "source_actions": ["rcp_event_feature_list"],
+            "primary_tab": "原始类",
+            "original_tab_retention": "retain_all_original_tab_feature_rows_with_safe_value_projection",
+            "other_tab_retention": "retain_high_value_rows_when_they_explain_behavior_device_network_content_social_strategy_feedback_enforcement_or_false_positive_risk",
+            "required_fields": ["sample_id", "entity_id", "event_id", "event_type", "source_id", "source_name", "feature_tab", "feature_key", "feature_name", "feature_type", "feature_value_or_safe_ref", "value_present", "value_comparable", "source_quality", "evidence_source", "original_feature_row_retained"],
+            "commonality_levels": ["coverage_commonality", "field_value_commonality", "field_combination_commonality"],
+            "coverage_boundary": "feature_key visibility only proves field availability and must not become risk commonality or group candidate support",
+            "candidate_feature_rule": "candidate features must cite source_feature_keys, field_combination, support_sample_count, supporting rows, black_gray_interpretation, false_positive risk, validation method, and not_final_conclusion=true",
+            "platform_field_boundary": "Android and iOS may expose different feature keys; preserve rows first, map to platform-aware field families later. Full device fingerprint similarity is deferred to the device-detail/Weapon stage."
+          },
+          "derived_candidate_features_boundary": "model may propose constructible features from field combinations such as cross-device switching anomaly, similar fingerprint cluster, frontend/backend mismatch, monetization action chain, or distributed device-pool carrying, but must label current_fact_vs_hypothesis and required_validation_fields before strategy use",
           "candidate_features_compatibility_alias": "expert_risk_signal_input may be retained only as compatibility alias for hypothesis_inputs; it is not evidence, not weak_evidence, and not final conclusion",
           "group_profile_candidate_required_fields": ["representative_entities", "shared_domains", "shared_signals", "supporting_selected_anchors", "supporting_selected_batch_anchors", "context_selected_anchors", "missing_evidence", "confidence", "not_confirmed_as_group", "required_validation"],
           "group_profile_candidate_support_boundary": "supporting_selected_batch_anchors can support group_profile_candidate; context_selected_anchors are single-entity or explanatory anchors only and cannot support group conclusion",

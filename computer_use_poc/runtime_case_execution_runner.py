@@ -1642,17 +1642,48 @@ SOURCE_OBSERVATION_CONTRACTS = {
             "event_type",
             "hit_policy",
             "event_time",
+            "request_path",
+            "request_scene",
+            "entry",
+            "action_type",
+            "action_object",
+            "task_type",
+            "reward_type",
+            "client_params",
+            "app_version",
+            "ua",
+            "device_id",
+            "ip_or_network",
+            "frontend_activity_signal",
+            "backend_action_signal",
+            "time_delta_from_login_seconds",
+            "time_delta_between_actions_seconds",
         ],
         "role": "事件归因上下文，不单独定性风险",
     },
     "rcp_event_feature_list": {
         "chain_section": "strategy_risk_signal",
         "expected_business_fields": [
+            "event_id",
+            "event_type",
+            "policy_code",
             "feature_group",
+            "feature_key",
+            "feature_name",
+            "feature_value",
+            "request_path",
+            "request_scene",
+            "action_type",
+            "action_object",
+            "task_type",
+            "reward_type",
+            "client_params",
+            "frontend_activity_signal",
+            "backend_action_signal",
             "feature_presence",
             "feature_list_boundary",
         ],
-        "role": "策略特征分组/有限观察，不声称完整明细",
+        "role": "策略事件特征行安全投影；原始类 TAB 行级保留，不把策略命中当核心特征",
     },
     "rcp_fast_query_hbase": {
         "chain_section": "strategy_risk_signal",
@@ -1718,6 +1749,24 @@ BUSINESS_FIELD_ALIASES = {
     "policy_code": {"policy_code", "policyCode", "hitPolicyCode", "hitFusePolicyCode"},
     "hit_policy": {"hit_policy", "hitPolicy", "hitPolicies", "hitProductionPolicies"},
     "risk_decision": {"risk_decision", "riskDecision", "decision", "riskResult", "result"},
+    "request_path": {"request_path", "requestPath", "apiPath", "path", "urlPath", "uri", "interfacePath"},
+    "request_scene": {"request_scene", "requestScene", "scene", "sceneType", "bizScene"},
+    "entry": {"entry", "entryType", "entryScene", "entrance", "entranceType", "sourceEntry"},
+    "action_type": {"action_type", "actionType", "operationType", "opType", "behaviorType"},
+    "action_object": {"action_object", "actionObject", "objectId", "targetId", "resourceId", "itemId"},
+    "task_type": {"task_type", "taskType", "missionType", "activityTaskType"},
+    "reward_type": {"reward_type", "rewardType", "awardType", "incentiveType"},
+    "client_params": {"client_params", "clientParams", "clientInfo", "deviceInfo", "requestParams", "params"},
+    "app_version": {"app_version", "appVersion", "appVer", "clientVersion"},
+    "ip_or_network": {"ip_or_network", "ip", "clientIp", "requestIp", "network", "networkType"},
+    "frontend_activity_signal": {"frontend_activity_signal", "frontendActivitySignal", "frontActivity", "frontendActivity"},
+    "backend_action_signal": {"backend_action_signal", "backendActionSignal", "backendAction", "serverAction"},
+    "time_delta_from_login_seconds": {"time_delta_from_login_seconds", "timeDeltaFromLogin", "loginActionDelta", "deltaFromLoginSeconds"},
+    "time_delta_between_actions_seconds": {"time_delta_between_actions_seconds", "timeDeltaBetweenActions", "actionIntervalSeconds", "deltaBetweenActionsSeconds"},
+    "feature_group": {"feature_group", "featureGroup", "featureGroupName"},
+    "feature_key": {"feature_key", "featureKey"},
+    "feature_name": {"feature_name", "featureName"},
+    "feature_value": {"feature_value", "featureValue", "defaultFeatureValue", "value"},
 }
 
 
@@ -1780,6 +1829,39 @@ OBSERVATION_SAFE_ANCHOR_KEYS = {
     "hitPolicies",
     "riskDecision",
     "queryTime",
+    "request_path",
+    "requestPath",
+    "request_scene",
+    "requestScene",
+    "entry",
+    "entryType",
+    "entryScene",
+    "action_type",
+    "actionType",
+    "action_object",
+    "actionObject",
+    "task_type",
+    "taskType",
+    "reward_type",
+    "rewardType",
+    "client_params",
+    "clientParams",
+    "clientInfo",
+    "app_version",
+    "appVersion",
+    "ip_or_network",
+    "requestIp",
+    "networkType",
+    "frontend_activity_signal",
+    "frontendActivitySignal",
+    "backend_action_signal",
+    "backendActionSignal",
+    "time_delta_from_login_seconds",
+    "timeDeltaFromLogin",
+    "time_delta_between_actions_seconds",
+    "timeDeltaBetweenActions",
+    "feature_group",
+    "featureGroup",
     "first_seen_device",
     "firstSeenDevice",
     "device_seen_days",
@@ -2080,6 +2162,8 @@ def build_source_observations(
                 "extracted_business_fields": extracted_business_fields,
                 "observed_field_handles": field_handles,
                 "parsed_body_field_handles": safe_observation.get("parsed_body_safe_handles", []),
+                "strategy_event_feature_rows": safe_observation.get("strategy_event_feature_rows", []),
+                "device_detail_rows": safe_observation.get("device_detail_rows", []),
                 "missing_business_fields": missing_business_fields,
                 "candidate_device_ids": safe_observation.get("candidate_device_ids", []),
                 "passthrough_row_cap": row_cap_metadata,
@@ -3884,7 +3968,15 @@ def build_sample_round_source_plan(
     )
     items: list[SourcePlanItem] = []
     for index, entity in enumerate(sampled_entities, start=1):
+        seed_entity_type = _infer_seed_entity_type(entity)
         common_user_params = {"user_id": entity}
+        weapon_params = {"device_id": entity} if seed_entity_type == "device_id" else {"user_id": entity}
+        weapon_required_fields = ["device_id"] if seed_entity_type == "device_id" else ["user_id"]
+        weapon_expected_observation = (
+            "device graphData/riskData summary for real device detail field validation"
+            if seed_entity_type == "device_id"
+            else "user-device graphData/riskData summary for entity_resolution_first"
+        )
         items.extend(
             [
                 SourcePlanItem(
@@ -3911,15 +4003,15 @@ def build_sample_round_source_plan(
                     timeout_class="standard_readonly",
                     failure_policy="non_blocking_partial",
                     source_priority="P0",
-                    expected_observation="user-device graphData/riskData summary for entity_resolution_first",
+                    expected_observation=weapon_expected_observation,
                     params={
-                        **common_user_params,
+                        **weapon_params,
                         "mode": "batch_user_device_graph_summary",
                         "include_risk_data": True,
                         "max_device_ids": 10,
                     },
                     timeout_ms=30_000,
-                    required_fields=["user_id"],
+                    required_fields=weapon_required_fields,
                     window_policy="current_user_device_graph_window",
                     window_start_ms=window_start_ms,
                     window_end_ms=window_end_ms,
@@ -4096,6 +4188,7 @@ def build_batch_source_commonality_cards(
         ({"archives_photo_search", "archives_gallery_photo_list", "archives_photo_profile", "archives_photo_meta"}, "content_action_anchor"),
         ({"rcp_fast_query_hbase"}, "strategy_hit"),
         ({"rcp_snapshot"}, "strategy_hit_detail"),
+        ({"rcp_event_detail", "rcp_event_feature_list"}, "strategy_event_request_detail"),
         ({"track_analysis_check_data_ready"}, "track_frontend_behavior"),
         ({"archives_negative_report", "archives_user_report_search"}, "feedback_signal"),
         ({"archives_punish_status", "archives_review_logs"}, "enforcement_review"),
@@ -4110,6 +4203,8 @@ def build_batch_source_commonality_cards(
         "archives_photo_meta": {"photo_id", "publish_time", "publish_source", "publish_device", "publish_ip", "publish_ua"},
         "rcp_fast_query_hbase": {"event_type", "event_time", "policy_code", "hit_policy", "risk_decision"},
         "rcp_snapshot": {"event_type", "event_time", "policy_code", "hit_policy", "risk_decision"},
+        "rcp_event_detail": {"request_path", "request_scene", "entry", "action_type", "action_object", "task_type", "reward_type", "client_params", "app_version", "ua", "device_id", "ip_or_network", "frontend_activity_signal", "backend_action_signal", "time_delta_from_login_seconds", "time_delta_between_actions_seconds"},
+        "rcp_event_feature_list": {"request_path", "request_scene", "action_type", "action_object", "task_type", "reward_type", "client_params", "frontend_activity_signal", "backend_action_signal", "feature_group"},
         "track_analysis_check_data_ready": {"device_id", "track_data_ready", "active_status", "event_type"},
         "archives_negative_report": {"report_id", "report_type", "report_time", "feedback_signal"},
         "archives_user_report_search": {"report_id", "report_type", "report_time", "feedback_signal"},
@@ -4419,6 +4514,8 @@ INTERFACE_OBSERVATION_DOMAINS: dict[str, list[str]] = {
     "archives_punish_status": ["enforcement_domain", "content_domain"],
     "rcp_fast_query_hbase": ["strategy_domain"],
     "rcp_snapshot": ["strategy_domain"],
+    "rcp_event_detail": ["strategy_domain", "behavior_domain"],
+    "rcp_event_feature_list": ["strategy_domain", "behavior_domain"],
     "rcp_event_tree_or_decision": ["strategy_domain"],
     "track_analysis_check_data_ready": ["behavior_domain", "device_domain"],
 }
@@ -4440,6 +4537,8 @@ ANCHOR_TRIGGERED_ACTIONS = {
     "archives_photo_meta",
     "track_analysis_check_data_ready",
     "rcp_event_tree_or_decision",
+    "rcp_event_detail",
+    "rcp_event_feature_list",
 }
 
 
@@ -4447,6 +4546,8 @@ def _infer_seed_entity_type(entity: str) -> str:
     text = str(entity).strip()
     lowered = text.lower()
     if lowered.startswith(("web_", "did_", "device_", "android_", "ios_")):
+        return "device_id"
+    if re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", text):
         return "device_id"
     if lowered.startswith(("photo_", "kwai_photo_")):
         return "photo_id"
@@ -4497,6 +4598,8 @@ def _expected_anchor_types_for_action(action: str) -> list[str]:
         "archives_user_report_search": ["report_id", "feedback_signal"],
         "archives_punish_status": ["punish_id", "enforcement_action"],
         "rcp_fast_query_hbase": ["candidate_policy_code", "candidate_event_id", "strategy_hit_time"],
+        "rcp_event_detail": ["event_id", "request_path", "action_object", "client_params", "time_delta_from_login_seconds"],
+        "rcp_event_feature_list": ["event_id", "feature_group", "request_path", "action_object"],
         "track_analysis_check_data_ready": ["frontend_activity_anchor", "frontend_backend_consistency_anchor"],
     }
     return mapping.get(action, [])
@@ -4717,10 +4820,1074 @@ MAX_L2_INTERFACES_PER_ANCHOR = 3
 COMMONALITY_ANCHOR_MIN_SUPPORT = 2
 COVERAGE_COMMONALITY_SUFFIX = "_business_fields_extracted"
 RISK_COMMONALITY_TYPES = {"anchor_commonality", "chain_commonality", "group_candidate_commonality"}
+STRATEGY_EVENT_REQUEST_DETAIL_ACTIONS = {"rcp_event_detail", "rcp_event_feature_list", "rcp_fast_query_hbase"}
+STRATEGY_EVENT_ENTRY_LABEL_FIELDS = {"policy_code", "event_type", "risk_decision"}
+STRATEGY_EVENT_FEATURE_ROW_ACTIONS = {"rcp_event_feature_list"}
+STRATEGY_EVENT_ORIGINAL_FEATURE_TAB = "原始类"
+STRATEGY_EVENT_FEATURE_ROW_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "event_id",
+    "event_type",
+    "source_id",
+    "source_name",
+    "feature_tab",
+    "feature_key",
+    "feature_name",
+    "feature_type",
+    "feature_value_or_safe_ref",
+    "value_present",
+    "value_comparable",
+    "source_quality",
+    "evidence_source",
+]
+STRATEGY_EVENT_REQUEST_DETAIL_FIELDS = [
+    "user_id",
+    "event_id",
+    "event_type",
+    "policy_code",
+    "risk_decision",
+    "event_time",
+    "request_path",
+    "request_scene",
+    "entry",
+    "action_type",
+    "action_object",
+    "task_type",
+    "reward_type",
+    "client_params",
+    "app_version",
+    "ua",
+    "device_id",
+    "ip_or_network",
+    "frontend_activity_signal",
+    "backend_action_signal",
+    "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds",
+]
+STRATEGY_EVENT_REQUEST_DETAIL_CORE_FIELDS = {
+    "request_path",
+    "request_scene",
+    "entry",
+    "action_type",
+    "action_object",
+    "task_type",
+    "reward_type",
+    "client_params",
+    "app_version",
+    "ua",
+    "device_id",
+    "ip_or_network",
+    "frontend_activity_signal",
+    "backend_action_signal",
+    "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds",
+}
+
+DEVICE_DETAIL_SOURCE_TYPES = {
+    "设备基础信息",
+    "设备风险标签",
+    "设备使用画像",
+    "安装列表 / 应用环境",
+    "账号-设备关系",
+    "行为-设备一致性",
+    "未知",
+}
+
+DEVICE_DETAIL_TABLE_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "user_id",
+    "device_id",
+    "device_safe_ref",
+    "source_id",
+    "source_name",
+    "device_source_type",
+    "device_field_key",
+    "device_field_name",
+    "device_field_value_or_safe_ref",
+    "device_field_type",
+    "value_present",
+    "value_comparable",
+    "comparable_type",
+    "source_quality",
+    "evidence_source",
+    "event_time",
+    "query_time",
+    "device_role",
+    "sensitive_value_policy",
+]
+
+DEVICE_ID_ONLY_FIELDS = {"device_id", "candidate_device_id", "login_device_id", "backend_action_device_id", "frontend_active_device_id"}
+DEVICE_BASIC_FIELDS = {"phone_model", "phoneModel", "model", "os_version", "system_version", "app_version", "device_platform", "platform"}
+DEVICE_FRESHNESS_FIELDS = {"launch_count", "boot_duration", "boot_duration_seconds", "first_seen_delta", "active_days", "device_age_days"}
+DEVICE_LOW_LIFE_FIELDS = {"lock_screen_enabled", "sim_present", "charging_pattern", "low_life_signal"}
+DEVICE_AUTOMATION_FIELDS = {"automation_service_detected", "script_risk", "automation_signal", "abnormal_client_signal"}
+DEVICE_MODIFICATION_FIELDS = {"device_reset_signal", "root_or_hook_signal", "root_signal", "hook_signal", "frida_signal", "emulator_signal", "modification_signal"}
+DEVICE_APP_ENV_FIELDS = {"installed_app_cluster", "risk_app", "tool_app", "app_environment_signal", "installed_app_list"}
+DEVICE_RISK_LABEL_FIELDS = {"risk_label", "risk_label_group", "device_risk_label", "device_low_quality_label"}
+DEVICE_RELATION_FIELDS = {"account_device_count", "device_account_count", "same_device_user_count", "device_pool_signal"}
+DEVICE_BEHAVIOR_CONSISTENCY_FIELDS = {
+    "login_device_id",
+    "backend_action_device_id",
+    "frontend_active_device_id",
+    "behavior_device_consistency_signal",
+}
+
+DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS = DEVICE_ID_ONLY_FIELDS | {"frontend_activity_signal", "backend_action_signal"}
+
+
+def _normalized_device_field_key(key: Any) -> str:
+    return str(key or "").strip()
+
+
+def _truthy_device_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text in {"true", "1", "yes", "y", "detected", "present", "enabled", "low", "short", "risk", "risky"}
+
+
+def _device_field_family(field_key: str) -> str:
+    key = _normalized_device_field_key(field_key)
+    if key in DEVICE_BASIC_FIELDS:
+        return "device_basic"
+    if key in DEVICE_FRESHNESS_FIELDS:
+        return "device_freshness"
+    if key in DEVICE_LOW_LIFE_FIELDS:
+        return "low_life_device_environment"
+    if key in DEVICE_AUTOMATION_FIELDS:
+        return "automation_or_script"
+    if key in DEVICE_MODIFICATION_FIELDS:
+        return "modification_or_adversarial"
+    if key in DEVICE_APP_ENV_FIELDS:
+        return "app_environment"
+    if key in DEVICE_RISK_LABEL_FIELDS:
+        return "device_risk_label"
+    if key in DEVICE_RELATION_FIELDS:
+        return "account_device_relation"
+    if key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS:
+        return "behavior_device_consistency"
+    if key in DEVICE_ID_ONLY_FIELDS:
+        return "device_identifier_anchor"
+    return "unknown_device_field_family"
+
+
+def _device_source_type_for_field(field_key: str, explicit: Any = None) -> str:
+    explicit_text = str(explicit or "").strip()
+    if explicit_text in DEVICE_DETAIL_SOURCE_TYPES:
+        return explicit_text
+    family = _device_field_family(field_key)
+    if family == "device_basic":
+        return "设备基础信息"
+    if family in {"device_freshness", "low_life_device_environment"}:
+        return "设备使用画像"
+    if family in {"automation_or_script", "modification_or_adversarial", "device_risk_label"}:
+        return "设备风险标签"
+    if family == "app_environment":
+        return "安装列表 / 应用环境"
+    if family in {"account_device_relation", "device_identifier_anchor"}:
+        return "账号-设备关系"
+    if family == "behavior_device_consistency":
+        return "行为-设备一致性"
+    return "未知"
+
+
+def _device_comparable_type(field_key: str, value: Any, explicit: Any = None) -> str:
+    explicit_text = str(explicit or "").strip()
+    if explicit_text:
+        return explicit_text
+    key = _normalized_device_field_key(field_key)
+    if value in {None, ""}:
+        return "不可比较"
+    if key in DEVICE_FRESHNESS_FIELDS or key in {"account_device_count", "device_account_count", "same_device_user_count"}:
+        return "数值分桶"
+    if key in DEVICE_LOW_LIFE_FIELDS or key in DEVICE_AUTOMATION_FIELDS or key in DEVICE_MODIFICATION_FIELDS:
+        return "布尔"
+    if key in DEVICE_APP_ENV_FIELDS:
+        return "集合相似"
+    if key in DEVICE_BASIC_FIELDS or key in DEVICE_RISK_LABEL_FIELDS:
+        return "等值"
+    if key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS or key in DEVICE_ID_ONLY_FIELDS:
+        return "等值"
+    return "文本相似"
+
+
+def _device_candidate_eligible(field_key: str, row: dict[str, Any]) -> bool:
+    key = _normalized_device_field_key(field_key)
+    if key in DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS:
+        return False
+    if row.get("value_present") is not True or row.get("value_comparable") is not True:
+        return False
+    return _device_field_family(key) != "unknown_device_field_family"
+
+
+def _device_evidence_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sample_id": row.get("sample_id"),
+        "entity_id": row.get("entity_id"),
+        "user_id": row.get("user_id"),
+        "device_id": row.get("device_id") or row.get("device_safe_ref"),
+        "round_id": row.get("round_id"),
+        "source_id": row.get("source_id"),
+        "source_quality": row.get("source_quality"),
+        "device_field_key": row.get("device_field_key"),
+        "device_field_value_or_safe_ref": row.get("device_field_value_or_safe_ref"),
+    }
+
+
+def _normalize_device_detail_row(
+    *,
+    source_row: dict[str, Any],
+    observation: dict[str, Any],
+    entity_id: str,
+    round_id: int,
+    row_index: int,
+) -> dict[str, Any] | None:
+    field_key = _normalized_device_field_key(
+        source_row.get("device_field_key")
+        or source_row.get("field_key")
+        or source_row.get("feature_key")
+        or source_row.get("field")
+    )
+    field_name = str(source_row.get("device_field_name") or source_row.get("field_name") or field_key).strip()
+    if not field_key and not field_name:
+        return None
+    raw_value = (
+        source_row.get("device_field_value_or_safe_ref")
+        if "device_field_value_or_safe_ref" in source_row
+        else source_row.get("field_value_or_safe_ref")
+        if "field_value_or_safe_ref" in source_row
+        else source_row.get("value")
+    )
+    redacted = _is_credential_secret_key(field_key) or _is_credential_secret_key(field_name)
+    value_present = raw_value is not None and raw_value != ""
+    safe_value = "redacted_safe_ref" if redacted and value_present else raw_value
+    source_quality = str(source_row.get("source_quality") or observation.get("quality_class") or "completed")
+    device_id = source_row.get("device_id") or source_row.get("device_safe_ref") or source_row.get("candidate_device_id")
+    device_source_type = _device_source_type_for_field(field_key, source_row.get("device_source_type"))
+    comparable_type = _device_comparable_type(field_key, safe_value, source_row.get("comparable_type"))
+    value_comparable = bool(source_row.get("value_comparable", value_present and not redacted and comparable_type != "不可比较"))
+    row = {
+        "sample_id": source_row.get("sample_id") or f"round_{round_id}_{entity_id}",
+        "entity_id": source_row.get("entity_id") or entity_id,
+        "user_id": source_row.get("user_id") or entity_id,
+        "round_id": round_id,
+        "device_id": device_id if field_key in DEVICE_ID_ONLY_FIELDS else source_row.get("device_id"),
+        "device_safe_ref": source_row.get("device_safe_ref") or device_id or f"device_context_{entity_id}",
+        "source_id": source_row.get("source_id") or observation.get("source_id"),
+        "source_name": source_row.get("source_name") or observation.get("action") or "weapon_inventory",
+        "action": source_row.get("action") or observation.get("action"),
+        "device_source_type": device_source_type,
+        "device_field_key": field_key or field_name,
+        "device_field_name": field_name or field_key,
+        "device_field_value_or_safe_ref": safe_value,
+        "device_field_type": str(source_row.get("device_field_type") or type(raw_value).__name__),
+        "value_present": bool(value_present),
+        "value_comparable": value_comparable,
+        "comparable_type": comparable_type,
+        "source_quality": source_quality,
+        "evidence_source": source_row.get("evidence_source") or "current_observation",
+        "event_time": source_row.get("event_time"),
+        "query_time": source_row.get("query_time"),
+        "device_role": source_row.get("device_role") or "未知",
+        "sensitive_value_policy": source_row.get("sensitive_value_policy") or ("只保留安全引用" if redacted else "原值可用"),
+        "device_platform": source_row.get("device_platform"),
+        "app_version": source_row.get("app_version"),
+        "os_version": source_row.get("os_version"),
+        "phone_model": source_row.get("phone_model"),
+        "risk_label": source_row.get("risk_label"),
+        "risk_label_group": source_row.get("risk_label_group"),
+        "usage_signal": source_row.get("usage_signal"),
+        "environment_signal": source_row.get("environment_signal"),
+        "automation_signal": source_row.get("automation_signal"),
+        "modification_signal": source_row.get("modification_signal"),
+        "low_life_signal": source_row.get("low_life_signal"),
+        "app_environment_signal": source_row.get("app_environment_signal"),
+        "relation_signal": source_row.get("relation_signal"),
+        "behavior_device_consistency_signal": source_row.get("behavior_device_consistency_signal"),
+        "mapped_field_family": source_row.get("mapped_field_family") or _device_field_family(field_key),
+        "candidate_feature_eligible": bool(source_row.get("candidate_feature_eligible", False)),
+    }
+    row["candidate_feature_eligible"] = bool(source_row.get("candidate_feature_eligible", _device_candidate_eligible(field_key, row)))
+    row["source_priority_boundary"] = (
+        "weapon_device_detail_primary" if str(row.get("source_name")) == "weapon_inventory"
+        else "rcp_event_feature_context_only" if str(row.get("source_name")) == "rcp_event_feature_list"
+        else "device_context_supplement"
+    )
+    row["device_stage_boundary"] = (
+        "frontend_activity_is_behavior_domain_not_device_fingerprint"
+        if field_key == "frontend_activity_signal"
+        else "device_detail_field_candidate_not_final_conclusion"
+    )
+    return row
+
+
+def build_device_detail_table(
+    *,
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    strategy_event_feature_row_table: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for observation in source_observations:
+        quality = str(observation.get("quality_class") or "unknown")
+        if quality not in {"completed", "partial"}:
+            continue
+        entity_id = _observation_entity_for_round(observation, sampled_entities)
+        for row_index, source_row in enumerate(observation.get("device_detail_rows", []) or [], start=1):
+            if not isinstance(source_row, dict):
+                continue
+            normalized = _normalize_device_detail_row(
+                source_row=source_row,
+                observation=observation,
+                entity_id=entity_id,
+                round_id=round_id,
+                row_index=row_index,
+            )
+            if normalized is not None:
+                rows.append(normalized)
+        for candidate in observation.get("candidate_device_ids", []) or []:
+            if not isinstance(candidate, dict):
+                continue
+            normalized = _normalize_device_detail_row(
+                source_row={
+                    "device_field_key": "device_id",
+                    "device_field_name": "设备号",
+                    "device_field_value_or_safe_ref": candidate.get("device_id"),
+                    "device_id": candidate.get("device_id"),
+                    "source_id": candidate.get("source_id") or observation.get("source_id"),
+                    "source_name": observation.get("action") or "unknown_source",
+                    "device_source_type": "账号-设备关系",
+                    "device_role": "未知",
+                    "source_quality": quality,
+                    "candidate_feature_eligible": False,
+                },
+                observation=observation,
+                entity_id=entity_id,
+                round_id=round_id,
+                row_index=0,
+            )
+            if normalized is not None:
+                rows.append(normalized)
+    for feature_row in strategy_event_feature_row_table:
+        if str(feature_row.get("mapped_domain") or "") != "设备":
+            continue
+        field_key = str(feature_row.get("feature_key") or "")
+        normalized = _normalize_device_detail_row(
+            source_row={
+                "sample_id": feature_row.get("sample_id"),
+                "entity_id": feature_row.get("entity_id"),
+                "user_id": feature_row.get("user_id"),
+                "device_field_key": field_key,
+                "device_field_name": feature_row.get("feature_name") or field_key,
+                "device_field_value_or_safe_ref": feature_row.get("feature_value_or_safe_ref"),
+                "device_field_type": feature_row.get("feature_type"),
+                "value_present": feature_row.get("value_present"),
+                "value_comparable": feature_row.get("value_comparable"),
+                "comparable_type": feature_row.get("comparable_type"),
+                "source_id": feature_row.get("source_id"),
+                "source_name": "rcp_event_feature_list",
+                "device_source_type": _device_source_type_for_field(field_key),
+                "device_role": "策略事件上下文设备字段",
+                "source_quality": feature_row.get("source_quality"),
+                "evidence_source": feature_row.get("evidence_source"),
+                "event_time": feature_row.get("event_time"),
+                "sensitive_value_policy": feature_row.get("sensitive_value_policy"),
+                "mapped_field_family": _device_field_family(field_key),
+            },
+            observation={
+                "source_id": feature_row.get("source_id"),
+                "action": "rcp_event_feature_list",
+                "quality_class": feature_row.get("source_quality") or "completed",
+            },
+            entity_id=str(feature_row.get("entity_id") or ""),
+            round_id=round_id,
+            row_index=int(feature_row.get("feature_row_index") or 0),
+        )
+        if normalized is not None:
+            rows.append(normalized)
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for row in rows:
+        identity = (
+            str(row.get("sample_id") or ""),
+            str(row.get("device_safe_ref") or row.get("device_id") or ""),
+            str(row.get("source_id") or ""),
+            str(row.get("device_field_key") or ""),
+            str(row.get("device_field_value_or_safe_ref") or ""),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(row)
+    return deduped
+
+
+def build_device_commonality_and_features(
+    device_detail_table: list[dict[str, Any]],
+    sampled_entities: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    rows_by_key: dict[str, list[dict[str, Any]]] = {}
+    comparable_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in device_detail_table:
+        key = str(row.get("device_field_key") or "")
+        if not key:
+            continue
+        rows_by_key.setdefault(key, []).append(row)
+        if row.get("value_present") and row.get("value_comparable"):
+            comparable_groups.setdefault((key, str(row.get("device_field_value_or_safe_ref"))), []).append(row)
+
+    commonality_rows: list[dict[str, Any]] = []
+    for key, rows in rows_by_key.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        commonality_rows.append({
+            "signal_name": f"device_field_coverage:{key}",
+            "commonality_type": "coverage_commonality",
+            "device_field_key": key,
+            "device_field_family": _device_field_family(key),
+            "source_fields": [key],
+            "supporting_current_evidence": entities,
+            "support_count": len(entities),
+            "batch_support_count": len(entities),
+            "commonality_anchor": False,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": False,
+            "evidence_source": "current_observation",
+            "source_name": "device_detail_table",
+            "not_final_conclusion": True,
+        })
+
+    value_commonality_rows: list[dict[str, Any]] = []
+    for (key, value_ref), rows in comparable_groups.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2 or key in DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS:
+            continue
+        if not any(row.get("candidate_feature_eligible") for row in rows):
+            continue
+        commonality = {
+            "signal_name": f"device_field_value_commonality:{key}",
+            "commonality_type": "field_value_commonality",
+            "device_field_key": key,
+            "device_field_family": _device_field_family(key),
+            "device_field_value_or_safe_ref": value_ref,
+            "source_fields": [key],
+            "supporting_current_evidence": entities,
+            "support_count": len(entities),
+            "batch_support_count": len(entities),
+            "support_ratio": round(len(entities) / len(sampled_entities), 4) if sampled_entities else None,
+            "commonality_anchor": False,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "evidence_source": "current_observation",
+            "source_name": "device_detail_table",
+            "not_final_conclusion": True,
+        }
+        commonality_rows.append(commonality)
+        value_commonality_rows.append(commonality)
+
+    rows_by_entity: dict[str, list[dict[str, Any]]] = {}
+    for row in device_detail_table:
+        rows_by_entity.setdefault(str(row.get("entity_id") or ""), []).append(row)
+
+    candidate_features: list[dict[str, Any]] = []
+    low_life_support: list[dict[str, Any]] = []
+    automation_support: list[dict[str, Any]] = []
+    consistency_support: list[dict[str, Any]] = []
+    for entity, rows in rows_by_entity.items():
+        keyed = {str(row.get("device_field_key")): row for row in rows}
+        low_life_fields = [
+            row for key, row in keyed.items()
+            if key in {"launch_count", "boot_duration", "lock_screen_enabled", "sim_present"}
+            and (
+                (key == "launch_count" and str(row.get("device_field_value_or_safe_ref")).isdigit() and int(row.get("device_field_value_or_safe_ref")) <= 3)
+                or (key == "boot_duration" and str(row.get("device_field_value_or_safe_ref")).isdigit() and int(row.get("device_field_value_or_safe_ref")) <= 600)
+                or (key in {"lock_screen_enabled", "sim_present"} and str(row.get("device_field_value_or_safe_ref")).lower() in {"false", "0", "no"})
+            )
+        ]
+        if len(low_life_fields) >= 2:
+            low_life_support.extend(low_life_fields)
+        automation_fields = [
+            row for key, row in keyed.items()
+            if key in {"automation_service_detected", "script_risk"} and _truthy_device_value(row.get("device_field_value_or_safe_ref"))
+        ]
+        if automation_fields:
+            automation_support.extend(automation_fields)
+        login_device = keyed.get("login_device_id", {}).get("device_field_value_or_safe_ref")
+        backend_device = keyed.get("backend_action_device_id", {}).get("device_field_value_or_safe_ref")
+        frontend_device = keyed.get("frontend_active_device_id", {}).get("device_field_value_or_safe_ref")
+        if login_device and backend_device and login_device != backend_device:
+            consistency_support.extend([keyed["login_device_id"], keyed["backend_action_device_id"]])
+        if login_device and frontend_device and login_device != frontend_device:
+            consistency_support.extend([keyed["login_device_id"], keyed["frontend_active_device_id"]])
+
+    def add_device_candidate(
+        *,
+        feature_name: str,
+        support_rows: list[dict[str, Any]],
+        source_fields: list[str],
+        field_combination: list[str],
+        interpretation: str,
+        false_positive: str,
+        missing_fields: list[str],
+        validation_method: str,
+        usage_boundary: str,
+        confidence: str = "medium_partial",
+    ) -> None:
+        support_entities = unique_strings([str(row.get("entity_id")) for row in support_rows if row.get("entity_id")])
+        support_devices = unique_strings([str(row.get("device_id") or row.get("device_safe_ref")) for row in support_rows if row.get("device_id") or row.get("device_safe_ref")])
+        if len(support_entities) < 2:
+            return
+        evidence = [_device_evidence_row(row) for row in support_rows]
+        candidate_features.append({
+            "feature_name": feature_name,
+            "source_domains": ["device_domain"],
+            "source_fields": source_fields,
+            "source_device_fields": source_fields,
+            "field_combination": field_combination,
+            "support_device_count": len(support_devices),
+            "support_user_count": len(support_entities),
+            "support_sample_count": len(support_entities),
+            "supporting_current_evidence": evidence,
+            "supporting_selected_anchors": [],
+            "unselected_signal_hypothesis": True,
+            "signal_inputs": [{"evidence_source": "current_observation", "device_fields": source_fields}],
+            "hypothesis_inputs": [{"evidence_source": "expert_hypothesis", "signal": feature_name, "usage_boundary": "device_candidate_requires_validation"}],
+            "black_gray_interpretation": interpretation,
+            "normal_user_false_positive_risk": false_positive,
+            "missing_fields_to_check": missing_fields,
+            "validation_method": validation_method,
+            "strategy_usage_boundary": usage_boundary,
+            "confidence": confidence,
+            "validation_needed": True,
+            "false_positive_risk": "medium",
+            "not_final_conclusion": True,
+        })
+
+    add_device_candidate(
+        feature_name="low_life_device_environment_candidate",
+        support_rows=low_life_support,
+        source_fields=["launch_count", "boot_duration", "lock_screen_enabled", "sim_present"],
+        field_combination=["launch_count_low", "boot_duration_short", "lock_screen_or_sim_missing"],
+        interpretation="设备缺少正常生活化沉淀，可能是批量设备池或短期任务设备环境。",
+        false_positive="新机、备用机、测试机也可能启动少或无 SIM，需要正常设备对照。",
+        missing_fields=["device_first_seen_time", "active_days", "normal_device_control_group", "weapon_device_usage_profile"],
+        validation_method="按设备使用画像字段回放目标样本和正常对照，计算覆盖率、背景率、lift 和误伤率。",
+        usage_boundary="候选设备特征，只能用于观察、人审辅助或灰度验证，不能直接处置。",
+    )
+    add_device_candidate(
+        feature_name="automation_or_script_device_candidate",
+        support_rows=automation_support,
+        source_fields=["automation_service_detected", "script_risk"],
+        field_combination=["automation_service_detected_or_script_risk"],
+        interpretation="设备环境出现自动化或脚本迹象，可能承载批量任务执行。",
+        false_positive="辅助功能、企业测试环境或无障碍工具可能误触，需要结合行为节奏和对照组。",
+        missing_fields=["backend_action_sequence", "frontend_behavior_sequence", "automation_detail_label", "normal_control_group"],
+        validation_method="按自动化/脚本字段组合联动行为序列验证覆盖、误伤和跨轮稳定性。",
+        usage_boundary="候选自动化设备特征，不等于确认脚本或群控。",
+    )
+    add_device_candidate(
+        feature_name="behavior_device_consistency_gap_candidate",
+        support_rows=consistency_support,
+        source_fields=["login_device_id", "backend_action_device_id", "frontend_active_device_id"],
+        field_combination=["login_device_backend_or_frontend_device_mismatch"],
+        interpretation="登录设备、后端动作设备、前端活跃设备不一致，可能存在后端动作与真实前端使用脱节。",
+        false_positive="多端登录、换机、前端埋点缺失也会导致不一致，需要行为链路补证。",
+        missing_fields=["frontend_action_sequence", "backend_action_sequence", "device_role_timestamps", "track_readiness"],
+        validation_method="按登录/后端/前端设备角色和时间序列验证链路一致性。",
+        usage_boundary="行为-设备一致性候选线索，不是纯设备指纹特征。",
+        confidence="low_partial",
+    )
+
+    similarity_candidates: list[dict[str, Any]] = []
+    similarity_fields = ["phone_model", "os_version", "app_version", "risk_label", "installed_app_cluster"]
+    grouped_by_signature: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for entity, rows in rows_by_entity.items():
+        keyed = {str(row.get("device_field_key")): row for row in rows}
+        signature = tuple(str(keyed.get(field, {}).get("device_field_value_or_safe_ref") or "") for field in similarity_fields)
+        shared_count = len([value for value in signature if value])
+        if shared_count >= 2:
+            grouped_by_signature.setdefault(signature, []).extend([keyed[field] for field in similarity_fields if field in keyed])
+    for index, (signature, rows) in enumerate(grouped_by_signature.items(), start=1):
+        support_users = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        support_devices = unique_strings([str(row.get("device_id") or row.get("device_safe_ref")) for row in rows if row.get("device_id") or row.get("device_safe_ref")])
+        shared_fields = [field for field, value in zip(similarity_fields, signature) if value]
+        if len(support_users) < 2 or len(shared_fields) < 2 or len(support_devices) < 2:
+            continue
+        candidate = {
+            "cluster_id": f"device_environment_similarity_cluster_candidate_{index}",
+            "support_users": support_users,
+            "support_devices": support_devices,
+            "shared_device_fields": shared_fields,
+            "similarity_basis": [f"{field}={value}" for field, value in zip(similarity_fields, signature) if value],
+            "confidence": "medium_partial" if len(shared_fields) >= 3 else "low_partial",
+            "missing_fields": ["weapon_device_fingerprint_detail", "installed_app_detail", "normal_device_control_group"],
+            "false_positive_risk": "同机型、同版本或同活动渠道正常用户也可能相似，不能只凭单字段或少量字段定性。",
+            "not_confirmed_as_group": True,
+        }
+        similarity_candidates.append(candidate)
+        add_device_candidate(
+            feature_name="device_environment_similarity_cluster_candidate",
+            support_rows=rows,
+            source_fields=shared_fields,
+            field_combination=candidate["similarity_basis"],
+            interpretation="不同 device_id 在多个设备环境字段上高度相似，可能是设备池模板或批量环境。",
+            false_positive=candidate["false_positive_risk"],
+            missing_fields=candidate["missing_fields"],
+            validation_method="基于更多设备指纹字段、安装环境和正常对照计算相似簇覆盖率、背景率和误伤。",
+            usage_boundary="设备环境相似候选簇，不等于同设备或确认团伙。",
+            confidence=candidate["confidence"],
+        )
+
+    consistency_candidates = [
+        {
+            "candidate_id": "behavior_device_consistency_gap_candidate",
+            "support_users": unique_strings([str(row.get("entity_id")) for row in consistency_support if row.get("entity_id")]),
+            "source_fields": ["login_device_id", "backend_action_device_id", "frontend_active_device_id"],
+            "boundary": "frontend_activity_is_behavior_domain; this is a behavior-device consistency lead, not a device fingerprint",
+            "not_final_conclusion": True,
+        }
+    ] if consistency_support else []
+
+    return commonality_rows, similarity_candidates, consistency_candidates, candidate_features
 
 
 def _anchor_ref(anchor: dict[str, Any]) -> str:
     return str(anchor.get("value") or anchor.get("safe_ref") or anchor.get("anchor_type") or "")
+
+
+def _first_handle_value(handles: list[dict[str, Any]], canonical_field: str) -> Any:
+    for handle in handles:
+        if str(handle.get("canonical_field") or handle.get("field") or "") == canonical_field:
+            return handle.get("value")
+    return None
+
+
+def _observation_entity_for_round(
+    observation: dict[str, Any],
+    sampled_entities: list[str],
+) -> str:
+    source_id = str(observation.get("source_id") or "")
+    index = _entity_index_from_batch_source_id(source_id)
+    if index is not None and 1 <= index <= len(sampled_entities):
+        return str(sampled_entities[index - 1])
+    user_id = _first_handle_value(observation.get("parsed_body_field_handles", []) or [], "user_id")
+    if user_id:
+        return str(user_id)
+    return source_id or "unknown_entity"
+
+
+def build_strategy_event_request_detail_table(
+    *,
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for observation in source_observations:
+        action = str(observation.get("action") or "")
+        if action not in STRATEGY_EVENT_REQUEST_DETAIL_ACTIONS:
+            continue
+        quality = str(observation.get("quality_class") or "unknown")
+        if quality not in {"completed", "partial"}:
+            continue
+        handles = observation.get("parsed_body_field_handles", []) or []
+        values = {
+            field: _first_handle_value(handles, field)
+            for field in STRATEGY_EVENT_REQUEST_DETAIL_FIELDS
+        }
+        if not any(values.values()):
+            continue
+        entity_id = _observation_entity_for_round(observation, sampled_entities)
+        row: dict[str, Any] = {
+            "sample_id": f"round_{round_id}_{entity_id}",
+            "entity_id": entity_id,
+            "user_id": values.get("user_id") or entity_id,
+            "round_id": round_id,
+            "source_id": observation.get("source_id"),
+            "action": action,
+            "observation_domain": "strategy_domain",
+            "source_quality": quality,
+            "evidence_source": "current_observation",
+            "missing_request_detail_fields": sorted([
+                field for field in STRATEGY_EVENT_REQUEST_DETAIL_CORE_FIELDS
+                if values.get(field) in {None, ""}
+            ]),
+            "entry_label_fields_only": False,
+        }
+        for field in STRATEGY_EVENT_REQUEST_DETAIL_FIELDS:
+            row[field] = values.get(field)
+        if values.get("user_id"):
+            row["user_id"] = values.get("user_id")
+        row["entry_label_fields_only"] = not any(
+            row.get(field) not in {None, ""}
+            for field in STRATEGY_EVENT_REQUEST_DETAIL_CORE_FIELDS
+        )
+        rows.append(row)
+    return rows
+
+
+def build_strategy_event_feature_row_table(
+    *,
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for observation in source_observations:
+        action = str(observation.get("action") or "")
+        if action not in STRATEGY_EVENT_FEATURE_ROW_ACTIONS:
+            continue
+        quality = str(observation.get("quality_class") or "unknown")
+        if quality not in {"completed", "partial"}:
+            continue
+        entity_id = _observation_entity_for_round(observation, sampled_entities)
+        handles = observation.get("parsed_body_field_handles", []) or []
+        user_id = _first_handle_value(handles, "user_id") or entity_id
+        event_id = _first_handle_value(handles, "event_id")
+        event_type = _first_handle_value(handles, "event_type")
+        policy_code = _first_handle_value(handles, "policy_code")
+        event_time = _first_handle_value(handles, "event_time")
+        source_rows = observation.get("strategy_event_feature_rows", []) or []
+        for row_index, source_row in enumerate(source_rows, start=1):
+            if not isinstance(source_row, dict):
+                continue
+            row = {
+                "sample_id": source_row.get("sample_id") or f"round_{round_id}_{entity_id}",
+                "entity_id": source_row.get("entity_id") or entity_id,
+                "user_id": source_row.get("user_id") or user_id,
+                "round_id": round_id,
+                "event_id": source_row.get("event_id") or event_id,
+                "event_type": source_row.get("event_type") or event_type,
+                "policy_code": source_row.get("policy_code") or policy_code,
+                "event_time": source_row.get("event_time") or event_time,
+                "source_id": source_row.get("source_id") or observation.get("source_id"),
+                "source_name": source_row.get("source_name") or "rcp_event_feature_list",
+                "action": action,
+                "feature_row_index": source_row.get("feature_row_index") or row_index,
+                "source_field_path": source_row.get("source_field_path"),
+                "feature_tab": source_row.get("feature_tab") or "未知",
+                "feature_key": source_row.get("feature_key"),
+                "feature_name": source_row.get("feature_name") or source_row.get("feature_key"),
+                "feature_type": source_row.get("feature_type"),
+                "feature_value_or_safe_ref": source_row.get("feature_value_or_safe_ref"),
+                "value_present": bool(source_row.get("value_present")),
+                "value_comparable": bool(source_row.get("value_comparable")),
+                "comparable_type": source_row.get("comparable_type") or "不可比较",
+                "sensitive_value_policy": source_row.get("sensitive_value_policy") or "原值可用",
+                "candidate_feature_eligible": bool(source_row.get("candidate_feature_eligible")),
+                "high_value_reason": source_row.get("high_value_reason"),
+                "missing_reason": source_row.get("missing_reason"),
+                "mapped_domain": source_row.get("mapped_domain") or "未知",
+                "mapped_field_family": source_row.get("mapped_field_family") or "unknown_feature_family",
+                "original_feature_row_retained": bool(source_row.get("original_feature_row_retained")),
+                "source_quality": source_row.get("source_quality") or quality,
+                "evidence_source": source_row.get("evidence_source") or "current_observation",
+            }
+            rows.append(row)
+    return rows
+
+
+def build_strategy_feature_row_commonality_and_features(
+    strategy_event_feature_row_table: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows_by_key: dict[str, list[dict[str, Any]]] = {}
+    comparable_value_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in strategy_event_feature_row_table:
+        feature_key = str(row.get("feature_key") or "")
+        if not feature_key:
+            continue
+        rows_by_key.setdefault(feature_key, []).append(row)
+        if row.get("value_present") and row.get("value_comparable"):
+            value_ref = str(row.get("feature_value_or_safe_ref"))
+            comparable_value_groups.setdefault((feature_key, value_ref), []).append(row)
+
+    commonality_rows: list[dict[str, Any]] = []
+    for feature_key, rows in rows_by_key.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        example = rows[0]
+        commonality_rows.append(
+            {
+                "signal_name": f"feature_coverage:{feature_key}",
+                "commonality_type": "coverage_commonality",
+                "feature_key": feature_key,
+                "feature_tab": example.get("feature_tab"),
+                "source_fields": [feature_key],
+                "supporting_current_evidence": entities,
+                "support_count": len(entities),
+                "batch_support_count": len(entities),
+                "commonality_anchor": False,
+                "risk_commonality": False,
+                "eligible_for_group_candidate": False,
+                "candidate_feature_eligible": False,
+                "evidence_source": "current_observation",
+                "source_name": "strategy_event_feature_row_table",
+                "not_final_conclusion": True,
+            }
+        )
+
+    value_commonality_rows: list[dict[str, Any]] = []
+    for (feature_key, value_ref), rows in comparable_value_groups.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        example = rows[0]
+        if example.get("candidate_feature_eligible") is not True:
+            continue
+        commonality = {
+            "signal_name": f"feature_value_commonality:{feature_key}",
+            "commonality_type": "field_value_commonality",
+            "feature_key": feature_key,
+            "feature_tab": example.get("feature_tab"),
+            "feature_value_or_safe_ref": value_ref,
+            "source_fields": [feature_key],
+            "supporting_current_evidence": entities,
+            "support_count": len(entities),
+            "batch_support_count": len(entities),
+            "support_ratio": None,
+            "commonality_anchor": False,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "mapped_domain": example.get("mapped_domain"),
+            "mapped_field_family": example.get("mapped_field_family"),
+            "evidence_source": "current_observation",
+            "source_name": "strategy_event_feature_row_table",
+            "not_final_conclusion": True,
+        }
+        commonality_rows.append(commonality)
+        value_commonality_rows.append(commonality)
+
+    value_commonality_rows = sorted(
+        value_commonality_rows,
+        key=lambda item: (
+            0 if item.get("feature_tab") == STRATEGY_EVENT_ORIGINAL_FEATURE_TAB else 1,
+            -int(item.get("support_count") or 0),
+            str(item.get("feature_key") or ""),
+        ),
+    )
+    selected = value_commonality_rows[:6]
+    candidate_features: list[dict[str, Any]] = []
+    if len(selected) >= 2:
+        selected_keys = unique_strings([str(item.get("feature_key")) for item in selected if item.get("feature_key")])
+        support_sets = [
+            set(str(entity) for entity in item.get("supporting_current_evidence", []) or [] if str(entity))
+            for item in selected
+        ]
+        support_intersection = set.intersection(*support_sets) if support_sets else set()
+        support_entities = sorted(support_intersection) if len(support_intersection) >= 2 else unique_strings([
+            entity for item in selected for entity in item.get("supporting_current_evidence", []) or []
+        ])
+        supporting_rows = [
+            {
+                "sample_id": row.get("sample_id"),
+                "entity_id": row.get("entity_id"),
+                "round_id": row.get("round_id"),
+                "source_id": row.get("source_id"),
+                "source_quality": row.get("source_quality"),
+                "feature_key": row.get("feature_key"),
+                "feature_tab": row.get("feature_tab"),
+            }
+            for row in strategy_event_feature_row_table
+            if str(row.get("feature_key")) in selected_keys and str(row.get("entity_id")) in set(support_entities)
+        ]
+        if len(support_entities) >= 2:
+            candidate_features.append(
+                {
+                    "feature_name": "strategy_event_original_feature_value_combination_candidate",
+                    "source_domains": unique_strings([
+                        str(row.get("mapped_domain"))
+                        for row in strategy_event_feature_row_table
+                        if str(row.get("feature_key")) in selected_keys and row.get("mapped_domain")
+                    ]) or ["策略", "行为"],
+                    "source_fields": selected_keys,
+                    "source_feature_keys": selected_keys,
+                    "field_combination": [
+                        f"{item.get('feature_key')}={item.get('feature_value_or_safe_ref')}"
+                        for item in selected
+                    ],
+                    "support_sample_count": len(support_entities),
+                    "supporting_sample_refs": support_entities,
+                    "supporting_current_evidence": supporting_rows,
+                    "supporting_feature_rows": supporting_rows,
+                    "supporting_selected_anchors": [],
+                    "unselected_signal_hypothesis": True,
+                    "signal_inputs": [{"evidence_source": "current_observation", "feature_keys": selected_keys}],
+                    "hypothesis_inputs": [
+                        {
+                            "evidence_source": "expert_hypothesis",
+                            "signal": "original_tab_field_value_combination_may_indicate_shared_register_or_action_context",
+                            "usage_boundary": "hypothesis_only_requires_validation",
+                        }
+                    ],
+                    "black_gray_interpretation": "多个样本在原始类或高价值特征行上出现相同/相近字段值组合，可作为注册入口、客户端环境、网络/地域、设备环境或行为节奏的候选共性输入。",
+                    "normal_user_false_positive_risk": "正常 Android/iOS 用户、同地域网络、同版本客户端、活动入口集中也可能形成相同字段组合，需要正常对照和背景率。",
+                    "missing_fields_to_check": [
+                        "normal_register_or_action_control_group",
+                        "field_value_distribution",
+                        "device_fingerprint_detail_if_device_related",
+                        "frontend_backend_sequence_if_behavior_related",
+                    ],
+                    "validation_method": "按 feature_key/value 组合在目标批次和正常对照中回放，计算支持样本数、背景率、lift、误伤率和跨轮稳定性。",
+                    "strategy_usage_boundary": "候选特征 only: 观察、人审辅助或受控灰度验证；不能直接上线或处置。",
+                    "confidence": "medium_partial",
+                    "validation_needed": True,
+                    "false_positive_risk": "medium",
+                    "not_final_conclusion": True,
+                }
+            )
+    return commonality_rows, candidate_features
+
+
+def _strategy_delta_bucket(value: Any) -> str | None:
+    try:
+        seconds = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    if seconds <= 60:
+        return "login_to_action_delta_le_60s"
+    if seconds <= 300:
+        return "login_to_action_delta_le_5m"
+    return "login_to_action_delta_gt_5m"
+
+
+def build_strategy_request_detail_features(
+    strategy_event_request_detail_table: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    grouped: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for row in strategy_event_request_detail_table:
+        if row.get("entry_label_fields_only") is True:
+            continue
+        if not any(row.get(field) not in {None, ""} for field in STRATEGY_EVENT_REQUEST_DETAIL_CORE_FIELDS):
+            continue
+        key = (
+            str(row.get("request_path") or "missing_request_path"),
+            str(row.get("request_scene") or "missing_request_scene"),
+            str(row.get("entry") or "missing_entry"),
+            str(row.get("action_type") or "missing_action_type"),
+            str(row.get("action_object") or "missing_action_object"),
+            str(row.get("task_type") or "missing_task_type"),
+            str(row.get("reward_type") or "missing_reward_type"),
+            str(row.get("frontend_activity_signal") or "missing_frontend_activity_signal"),
+            str(row.get("backend_action_signal") or "missing_backend_action_signal"),
+            _strategy_delta_bucket(row.get("time_delta_from_login_seconds")) or "missing_login_delta",
+        )
+        grouped.setdefault(key, []).append(row)
+
+    shared_signals: list[dict[str, Any]] = []
+    candidate_features: list[dict[str, Any]] = []
+    for key, rows in grouped.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        source_fields = [
+            "request_path",
+            "request_scene",
+            "entry",
+            "action_type",
+            "action_object",
+            "task_type",
+            "reward_type",
+            "frontend_activity_signal",
+            "backend_action_signal",
+            "time_delta_from_login_seconds",
+            "app_version",
+            "ua",
+            "device_id",
+            "ip_or_network",
+        ]
+        field_combination = [
+            f"request_path={key[0]}",
+            f"request_scene={key[1]}",
+            f"entry={key[2]}",
+            f"action_type={key[3]}",
+            f"action_object={key[4]}",
+            f"task_type={key[5]}",
+            f"reward_type={key[6]}",
+            f"frontend_activity_signal={key[7]}",
+            f"backend_action_signal={key[8]}",
+            f"time_delta_from_login={key[9]}",
+        ]
+        evidence = [
+            {
+                "sample_id": row.get("sample_id"),
+                "entity_id": row.get("entity_id"),
+                "round_id": row.get("round_id"),
+                "source_id": row.get("source_id"),
+                "source_quality": row.get("source_quality"),
+            }
+            for row in rows
+        ]
+        feature_name = "strategy_request_detail_shared_behavior_candidate"
+        shared_signals.append(
+            {
+                "signal_name": feature_name,
+                "commonality_type": "field_level_request_detail_commonality",
+                "source_fields": source_fields,
+                "field_combination": field_combination,
+                "supporting_current_evidence": entities,
+                "support_count": len(entities),
+                "batch_support_count": len(entities),
+                "support_ratio": None,
+                "commonality_anchor": False,
+                "risk_commonality": False,
+                "eligible_for_group_candidate": False,
+                "evidence_source": "current_observation",
+                "source_name": "strategy_event_request_detail_table",
+                "not_final_conclusion": True,
+            }
+        )
+        candidate_features.append(
+            {
+                "feature_name": feature_name,
+                "source_domains": ["strategy_domain", "behavior_domain"],
+                "source_fields": source_fields,
+                "field_combination": field_combination,
+                "support_sample_count": len(entities),
+                "supporting_current_evidence": evidence,
+                "supporting_selected_anchors": unique_strings([
+                    str(row.get("event_id") or row.get("policy_code") or row.get("source_id"))
+                    for row in rows
+                    if row.get("event_id") or row.get("policy_code") or row.get("source_id")
+                ]),
+                "signal_inputs": [{"evidence_source": "current_observation", "signals": [feature_name]}],
+                "hypothesis_inputs": [
+                    {
+                        "evidence_source": "expert_hypothesis",
+                        "signal": "strategy_request_detail_field_combination_may_indicate_automation_or_low_human_interaction",
+                        "usage_boundary": "hypothesis_only_requires_validation",
+                    }
+                ],
+                "black_gray_interpretation": "Similar request path, action object, client context, and login-to-action timing can indicate scripted task execution, reward abuse, or low-human-interaction behavior.",
+                "normal_user_false_positive_risk": "Campaign users may legitimately perform similar actions shortly after login; request detail must be compared against a normal control group.",
+                "missing_fields_to_check": unique_strings([
+                    missing
+                    for row in rows
+                    for missing in row.get("missing_request_detail_fields", []) or []
+                    if missing
+                ] + [
+                    "normal_control_group_background_rate",
+                    "device_fingerprint_environment",
+                    "full_request_param_distribution",
+                    "frontend_action_sequence",
+                    "reward_or_business_outcome",
+                ]),
+                "validation_method": "Replay this request-detail field combination on the target batch and a normal control group; measure support ratio, background rate, lift, false-positive review rate, and cross-round stability.",
+                "strategy_usage_boundary": "Candidate only: observation, manual-review assist, or controlled gray validation. Do not auto-launch or auto-dispose.",
+                "confidence": "medium_partial",
+                "validation_needed": True,
+                "false_positive_risk": "medium",
+                "not_final_conclusion": True,
+            }
+        )
+    return shared_signals, candidate_features
 
 
 def _canonical_anchor_type(canonical: str) -> str | None:
@@ -4822,7 +5989,7 @@ def _anchor_next_interfaces(anchor_type: str) -> list[str]:
     if anchor_type == "candidate_device_id":
         return ["track_analysis_check_data_ready", "weapon_inventory"]
     if anchor_type in {"candidate_policy_code", "candidate_event_id", "candidate_source_id"}:
-        return ["rcp_event_tree_or_decision", "rcp_feature_info_by_keys"]
+        return ["rcp_event_detail", "rcp_event_feature_list"]
     if anchor_type == "candidate_ip":
         return ["login_logs_search"]
     if anchor_type == "candidate_comment_id":
@@ -5521,7 +6688,7 @@ def build_candidate_anchor_pool_artifact(
                     produced_by=source_id or action,
                     observation_domain="strategy_domain",
                     confidence="current_observation",
-                    next_allowed_interfaces=["rcp_event_tree_or_decision", "rcp_feature_info_by_keys"],
+                    next_allowed_interfaces=["rcp_event_detail", "rcp_event_feature_list"],
                     cap_key="strategy_anchor_top_k",
                     reason=f"{canonical}_extracted_from_current_observation",
                     source_quality=quality,
@@ -5613,7 +6780,7 @@ def build_candidate_anchor_pool_artifact(
         for anchor_type, produced_by, domain, next_interfaces, cap_key in [
             ("candidate_photo_id", "archives_photo_search", "content_domain", ["archives_gallery_photo_list", "archives_photo_profile", "archives_photo_meta"], "photo_anchor_top_k"),
             ("candidate_device_id", "weapon_inventory", "device_domain", ["track_analysis_check_data_ready", "weapon_inventory"], "device_anchor_top_k"),
-            ("candidate_policy_code", "rcp_fast_query_hbase", "strategy_domain", ["rcp_event_tree_or_decision", "rcp_feature_info_by_keys"], "strategy_anchor_top_k"),
+            ("candidate_policy_code", "rcp_fast_query_hbase", "strategy_domain", ["rcp_event_detail", "rcp_event_feature_list"], "strategy_anchor_top_k"),
         ]:
             _append_anchor(
                 anchors,
@@ -5646,6 +6813,21 @@ MOCK_OBSERVATION_CANONICAL_FIELDS: dict[str, str] = {
     "candidate_punish_id": "punish_id",
     "login_ip": "ip_ua",
     "login_ua": "ip_ua",
+    "request_path": "request_path",
+    "request_scene": "request_scene",
+    "entry": "entry",
+    "action_type": "action_type",
+    "action_object": "action_object",
+    "task_type": "task_type",
+    "reward_type": "reward_type",
+    "client_params": "client_params",
+    "app_version": "app_version",
+    "ua": "ua",
+    "ip_or_network": "ip_or_network",
+    "frontend_activity_signal": "frontend_activity_signal",
+    "backend_action_signal": "backend_action_signal",
+    "time_delta_from_login_seconds": "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds": "time_delta_between_actions_seconds",
 }
 
 
@@ -5659,6 +6841,56 @@ def build_mock_current_source_observations(
         action = str(item.get("action") or "mock_current_observation")
         source_id = str(item.get("source_id") or f"mock_current_observation_{index}")
         fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+        feature_rows_input = item.get("feature_rows") if isinstance(item.get("feature_rows"), list) else []
+        device_detail_rows_input = item.get("device_detail_rows") if isinstance(item.get("device_detail_rows"), list) else []
+        strategy_event_feature_rows: list[dict[str, Any]] = []
+        for row_index, row in enumerate(feature_rows_input, start=1):
+            if not isinstance(row, dict):
+                continue
+            feature_key = str(row.get("feature_key") or row.get("featureKey") or "").strip()
+            feature_name = str(row.get("feature_name") or row.get("featureName") or feature_key).strip()
+            if not feature_key and not feature_name:
+                continue
+            raw_value = (
+                row.get("feature_value_or_safe_ref")
+                if "feature_value_or_safe_ref" in row
+                else row.get("defaultFeatureValue")
+                if "defaultFeatureValue" in row
+                else row.get("feature_value")
+                if "feature_value" in row
+                else row.get("value")
+            )
+            redacted = _is_credential_secret_key(feature_key) or _is_credential_secret_key(feature_name)
+            value_present = raw_value is not None and raw_value != ""
+            strategy_event_feature_rows.append(
+                {
+                    "source_id": source_id,
+                    "source_name": "rcp_event_feature_list",
+                    "feature_row_index": row_index,
+                    "source_field_path": str(row.get("source_field_path") or f"$.mock_current_observation.feature_rows[{row_index - 1}]"),
+                    "feature_tab": str(row.get("feature_tab") or row.get("featureGroup") or STRATEGY_EVENT_ORIGINAL_FEATURE_TAB),
+                    "feature_key": feature_key or feature_name,
+                    "feature_name": feature_name or feature_key,
+                    "feature_type": str(row.get("feature_type") or row.get("dataType") or type(raw_value).__name__),
+                    "feature_value_or_safe_ref": "redacted_safe_ref" if redacted and value_present else raw_value,
+                    "value_present": bool(value_present),
+                    "value_comparable": bool(row.get("value_comparable", value_present and not redacted)),
+                    "comparable_type": str(row.get("comparable_type") or ("不可比较" if redacted or not value_present else "等值")),
+                    "sensitive_value_policy": str(row.get("sensitive_value_policy") or ("只保留安全引用" if redacted else "原值可用")),
+                    "candidate_feature_eligible": bool(row.get("candidate_feature_eligible", value_present and not redacted)),
+                    "high_value_reason": row.get("high_value_reason") or ("original_tab_full_retention" if str(row.get("feature_tab") or row.get("featureGroup") or STRATEGY_EVENT_ORIGINAL_FEATURE_TAB) == STRATEGY_EVENT_ORIGINAL_FEATURE_TAB else None),
+                    "missing_reason": row.get("missing_reason"),
+                    "mapped_domain": str(row.get("mapped_domain") or "未知"),
+                    "mapped_field_family": str(row.get("mapped_field_family") or "unknown_feature_family"),
+                    "original_feature_row_retained": bool(row.get("original_feature_row_retained", str(row.get("feature_tab") or row.get("featureGroup") or STRATEGY_EVENT_ORIGINAL_FEATURE_TAB) == STRATEGY_EVENT_ORIGINAL_FEATURE_TAB)),
+                    "source_quality": "completed",
+                    "evidence_source": "current_observation",
+                    "event_id": row.get("event_id") or fields.get("candidate_event_id") or fields.get("event_id"),
+                    "event_type": row.get("event_type") or fields.get("event_type"),
+                    "policy_code": row.get("policy_code") or fields.get("candidate_policy_code") or fields.get("policy_code"),
+                    "event_time": row.get("event_time") or fields.get("event_time"),
+                }
+            )
         handles: list[dict[str, Any]] = []
         extracted_fields: list[str] = []
         candidate_device_ids: list[dict[str, Any]] = []
@@ -5701,6 +6933,8 @@ def build_mock_current_source_observations(
                 "extracted_business_fields": unique_strings(extracted_fields),
                 "observed_field_handles": handles,
                 "parsed_body_field_handles": handles,
+                "strategy_event_feature_rows": strategy_event_feature_rows,
+                "device_detail_rows": device_detail_rows_input,
                 "missing_business_fields": [],
                 "candidate_device_ids": candidate_device_ids,
                 "passthrough_row_cap": {},
@@ -5908,6 +7142,9 @@ def build_commonality_artifacts(
     candidate_anchor_pool: list[dict[str, Any]],
     batch_anchor_pool: list[dict[str, Any]],
     selected_drilldown_anchors: list[dict[str, Any]],
+    strategy_event_request_detail_table: list[dict[str, Any]],
+    strategy_event_feature_row_table: list[dict[str, Any]],
+    device_detail_table: list[dict[str, Any]],
     source_quality: dict[str, Any],
     mode: str,
 ) -> dict[str, Any]:
@@ -5921,12 +7158,22 @@ def build_commonality_artifacts(
         "content_action_anchor": ["content_domain", "behavior_domain"],
         "strategy_hit": ["strategy_domain"],
         "strategy_hit_detail": ["strategy_domain"],
+        "strategy_event_request_detail": ["strategy_domain", "behavior_domain"],
         "track_frontend_behavior": ["behavior_domain", "device_domain"],
         "feedback_signal": ["feedback_domain"],
         "enforcement_review": ["enforcement_domain", "behavior_domain"],
     }
     shared_signal_items: list[dict[str, Any]] = []
     card_domains: list[str] = []
+    strategy_detail_shared_signals, strategy_detail_candidate_features = build_strategy_request_detail_features(
+        strategy_event_request_detail_table
+    )
+    strategy_feature_row_shared_signals, strategy_feature_row_candidate_features = build_strategy_feature_row_commonality_and_features(
+        strategy_event_feature_row_table
+    )
+    device_field_shared_signals, device_similarity_candidates, behavior_device_consistency_candidates, device_candidate_features = (
+        build_device_commonality_and_features(device_detail_table, sampled_entities)
+    )
     for card in source_commonality_cards:
         card_domains.extend(source_commonality_domains.get(str(card.get("source_name") or ""), []))
         for signal in card.get("shared_signals", []) or []:
@@ -5973,6 +7220,18 @@ def build_commonality_artifacts(
                     "not_final_conclusion": True,
                 }
             )
+    for signal in strategy_detail_shared_signals:
+        signal = dict(signal)
+        signal["limited_commonality"] = limited_commonality
+        shared_signal_items.append(signal)
+    for signal in strategy_feature_row_shared_signals:
+        signal = dict(signal)
+        signal["limited_commonality"] = limited_commonality
+        shared_signal_items.append(signal)
+    for signal in device_field_shared_signals:
+        signal = dict(signal)
+        signal["limited_commonality"] = limited_commonality
+        shared_signal_items.append(signal)
     for anchor in batch_anchor_pool:
         if not isinstance(anchor, dict) or anchor.get("batch_anchor_scope") != "batch_anchor":
             continue
@@ -6043,7 +7302,15 @@ def build_commonality_artifacts(
         str(anchor.get("observation_domain"))
         for anchor in candidate_anchor_pool
         if anchor.get("observation_domain")
-    ] + card_domains)
+    ] + card_domains + [
+        str(row.get("mapped_domain"))
+        for row in strategy_event_feature_row_table
+        if row.get("mapped_domain") and str(row.get("mapped_domain")) != "未知"
+    ] + [
+        "device_domain"
+        for row in device_detail_table
+        if row.get("device_field_key")
+    ])
     commonality_matrix = [
         {
             "shared_signals": shared_signal_items,
@@ -6138,7 +7405,7 @@ def build_commonality_artifacts(
             "usage_boundary": "expert_hypothesis_only_not_current_evidence",
         }
     ]
-    candidate_features = [
+    generic_candidate_features = [
         {
             "feature_name": "multi_domain_anchor_overlap_candidate",
             "source_domains": domains or ["device_domain", "content_domain", "strategy_domain"],
@@ -6158,6 +7425,12 @@ def build_commonality_artifacts(
             "not_final_conclusion": True,
         }
     ]
+    candidate_features = (
+        strategy_detail_candidate_features
+        + strategy_feature_row_candidate_features
+        + device_candidate_features
+        + generic_candidate_features
+    )
     group_profile_candidate = {
         "cluster_id": "group_profile_candidate_round",
         "representative_entities": sampled_entities[:3],
@@ -6223,6 +7496,11 @@ def build_commonality_artifacts(
         "commonality_matrix": commonality_matrix,
         "abnormal_correlation": abnormal_correlation,
         "relation_expansion_result": relation_expansion_result,
+        "strategy_event_request_detail_commonality": strategy_detail_shared_signals,
+        "strategy_event_feature_row_commonality": strategy_feature_row_shared_signals,
+        "device_field_commonality": device_field_shared_signals,
+        "device_environment_similarity_cluster_candidate": device_similarity_candidates,
+        "behavior_device_consistency_gap_candidate": behavior_device_consistency_candidates,
         "group_profile_candidate": group_profile_candidate,
         "candidate_features": candidate_features,
         "validation_plan": validation_plan,
@@ -6299,12 +7577,31 @@ def build_round_orchestration_artifacts(
         skipped_anchors=anchor_selection["skipped_anchors"],
         source_observations=source_observations,
     )
+    strategy_event_request_detail_table = build_strategy_event_request_detail_table(
+        round_id=round_id,
+        sampled_entities=sampled_entities,
+        source_observations=source_observations,
+    )
+    strategy_event_feature_row_table = build_strategy_event_feature_row_table(
+        round_id=round_id,
+        sampled_entities=sampled_entities,
+        source_observations=source_observations,
+    )
+    device_detail_table = build_device_detail_table(
+        round_id=round_id,
+        sampled_entities=sampled_entities,
+        source_observations=source_observations,
+        strategy_event_feature_row_table=strategy_event_feature_row_table,
+    )
     commonality = build_commonality_artifacts(
         sampled_entities=sampled_entities,
         source_commonality_cards=source_commonality_cards,
         candidate_anchor_pool=candidate_anchor_pool,
         batch_anchor_pool=anchor_selection["batch_anchor_pool"],
         selected_drilldown_anchors=anchor_selection["selected_drilldown_anchors"],
+        strategy_event_request_detail_table=strategy_event_request_detail_table,
+        strategy_event_feature_row_table=strategy_event_feature_row_table,
+        device_detail_table=device_detail_table,
         source_quality=normalized_source_quality,
         mode=mode,
     )
@@ -6326,6 +7623,14 @@ def build_round_orchestration_artifacts(
         "commonality_matrix": commonality["commonality_matrix"],
         "abnormal_correlation": commonality["abnormal_correlation"],
         "relation_expansion_result": commonality["relation_expansion_result"],
+        "strategy_event_request_detail_table": strategy_event_request_detail_table,
+        "strategy_event_request_detail_commonality": commonality["strategy_event_request_detail_commonality"],
+        "strategy_event_feature_row_table": strategy_event_feature_row_table,
+        "strategy_event_feature_row_commonality": commonality["strategy_event_feature_row_commonality"],
+        "device_detail_table": device_detail_table,
+        "device_field_commonality": commonality["device_field_commonality"],
+        "device_environment_similarity_cluster_candidate": commonality["device_environment_similarity_cluster_candidate"],
+        "behavior_device_consistency_gap_candidate": commonality["behavior_device_consistency_gap_candidate"],
         "group_profile_candidate": commonality["group_profile_candidate"],
         "candidate_features": commonality["candidate_features"],
         "validation_plan": commonality["validation_plan"],

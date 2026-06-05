@@ -3738,16 +3738,116 @@ generalized_workflow_validation_cases_v1:
       input: "Phase 4.5 三样本 live readonly 结果进入用户可见答案体验验收。"
       expected_output_boundary:
         - initial_conclusion_first
-        - main_evidence_natural_language
-        - key_commonality_candidates
-        - current_boundary_explains_partial_and_validation_gap
-        - next_steps_include_authorized_validation_and_false_positive_control
-        - one_sentence_summary
+        - field_level_commonality_section
+        - black_gray_behavior_interpretation_section
+        - candidate_feature_section
+        - evidence_gap_section
+        - validation_plan_section
+        - strategy_boundary_section
         - no_engineering_yaml_by_default
         - group_profile_candidate_not_confirmed_group
         - strategy_hit_not_final_judgement
+        - strategy_hit_not_core_feature
+        - device_id_not_device_fingerprint_feature
         - dataagent_hive_not_claimed_without_authorization
-      pass_fail_criteria: "策略同学可读答案必须使用 6 段结构：初步结论 / 主要证据 / 关键共性 / 当前边界 / 下一步建议 / 一句话摘要；默认少写 runtime/artifact/source_quality 内部字段，不把策略命中、专家经验、partial/no_data/skipped 或 group candidate 写成最终结论。"
+      pass_fail_criteria: "策略同学可读答案必须使用 7 段结构：初步判断 / 已观察到的字段级共性 / 对应的黑灰产行为解释 / 候选特征 / 证据缺口 / 验证计划 / 策略建议边界；默认少写 runtime/artifact/source_quality 内部字段，不把策略命中、device_id、专家经验、partial/no_data/skipped 或 group candidate 写成最终结论。"
+    - case_id: PHASE-A-FIELD-LEVEL-CANDIDATE-FEATURE-TEMPLATE
+      input: "小批样本只有登录、设备、策略、Track 等 source 覆盖和少量锚点。"
+      expected_output_boundary:
+        - field_level_commonality_required
+        - source_fields_required
+        - field_combination_required
+        - support_sample_count_required
+        - black_gray_interpretation_required
+        - normal_user_false_positive_risk_required
+        - missing_fields_to_check_required
+        - validation_method_required
+        - strategy_usage_boundary_candidate_only
+        - not_final_conclusion_true
+      pass_fail_criteria: "候选特征不能只写“多源风险线索”或“设备/策略/登录共性”；每条候选特征必须包含来源字段、字段组合、支持样本数、黑灰产解释、正常用户误伤点、需要补查字段、验证方式和候选使用边界。没有字段支撑时必须写当前缺字段、需补查。"
+    - case_id: PHASE-A-STRATEGY-HIT-NOT-CORE-FEATURE
+      input: "样本集中命中相同 policy_code / event_type / risk_decision，但没有策略事件请求详情字段。"
+      expected_output_boundary:
+        - strategy_hit_as_entry_signal_only
+        - policy_code_not_core_feature
+        - event_type_not_core_feature
+        - risk_decision_not_core_feature
+        - request_detail_fields_required_for_candidate_feature
+        - missing_request_params_action_object_client_params_time_delta
+      pass_fail_criteria: "策略命中、policy_code、event_type、risk_decision 只能作为入口或风险方向标签；没有请求详情、行为对象、入口、任务类型、客户端参数和时间间隔等字段时，不得输出核心候选特征，只能建议补查策略事件请求详情。"
+    - case_id: PHASE-B-STRATEGY-EVENT-REQUEST-DETAIL-FIELD-TABLE
+      input: "策略事件 source 返回 event_id、policy_code、event_type、risk_decision，并补充 request_path / request_scene / action_object / client_params / time_delta 等请求详情字段。"
+      expected_output_boundary:
+        - strategy_event_request_detail_table_present
+        - policy_code_event_type_risk_decision_entry_label_only
+        - request_detail_fields_drive_candidate_feature
+        - source_fields_include_request_path_action_object_client_params_time_delta
+        - field_combination_listed
+        - support_sample_count_listed
+        - false_positive_boundary_listed
+        - validation_method_listed
+      pass_fail_criteria: "策略侧候选特征必须来自请求详情字段组合；policy_code/event_type/risk_decision 只能作为入口和方向标签。候选特征必须列来源字段、字段组合、支持样本数、黑灰产解释、误伤点、补查字段、验证方式和使用边界。"
+    - case_id: PHASE-B-STRATEGY-EVENT-SUMMARY-ONLY-MISSING-DETAIL
+      input: "策略事件 source 只有 policy_code / event_type / risk_decision 摘要，没有 request_path、action_object、client_params、time_delta。"
+      expected_output_boundary:
+        - strategy_event_request_detail_missing
+        - no_core_candidate_feature_from_policy_summary_only
+        - policy_concentration_is_direction_label_only
+        - recommend_rcp_event_detail_or_feature_list_followup
+      pass_fail_criteria: "只有策略摘要时只能输出缺字段和补查建议，不能把策略命中集中、event_type 集中或 risk_decision 集中写成核心特征或策略建议。"
+    - case_id: PHASE-B1-RCP-REQUEST-DETAIL-SAFE-PROJECTION-MAPPING
+      input: "sample_expand mock current observation 模拟 rcp_event_detail 返回 request_path、request_scene、action_object、client_params、frontend/backend signal、time_delta。"
+      expected_output_boundary:
+        - runtime_outputs_strategy_event_request_detail_table
+        - safe_handles_map_request_detail_fields
+        - candidate_feature_supported_by_current_observation
+        - policy_code_event_type_risk_decision_not_core_feature
+        - missing_request_detail_fields_listed
+        - validation_needed_true
+      pass_fail_criteria: "runtime artifacts 必须输出 strategy_event_request_detail_table，并从请求详情字段组合生成候选特征；候选特征必须有 supporting_current_evidence、source_fields、field_combination、support_sample_count、误伤点、验证方式和使用边界。"
+    - case_id: PHASE-B1-RCP-ORIGINAL-TAB-FEATURE-ROWS-RETAINED
+      input: "rcp_event_feature_list 返回原始类 TAB 特征行，包括 phoneModel、city_zh、clientId、userId、itemKey、locale、channel、hasIpLng 和未知字段。"
+      expected_output_boundary:
+        - strategy_event_feature_row_table_present
+        - original_tab_feature_rows_retained
+        - unknown_original_feature_row_retained
+        - feature_key_feature_value_traceable
+        - coverage_commonality_not_candidate_feature
+        - field_value_commonality_can_feed_candidate_feature
+        - candidate_feature_references_source_feature_keys
+        - policy_code_event_type_risk_decision_entry_label_only
+      pass_fail_criteria: "原始类 TAB 的 feature row 必须行级保留，不能被摘要压缩丢失；字段覆盖只能说明字段可见，不能直接进入候选特征；候选特征必须引用 source_feature_keys、字段组合、支持样本数、误伤点、验证方式和 not_final_conclusion=true。"
+    - case_id: PHASE-B1-RCP-NON-ORIGINAL-TAB-HIGH-VALUE-RETENTION
+      input: "rcp_event_feature_list 其他 TAB 中出现 deviceRiskAndroidKwaiScript、deviceRiskAndroidRootEnv、IpPrefix24、fakeAccountNumReq* 等高价值字段。"
+      expected_output_boundary:
+        - non_original_tab_retained_when_high_value
+        - high_value_reason_required
+        - mapped_domain_required
+        - mapped_field_family_required
+        - android_ios_fields_are_platform_specific
+        - device_fingerprint_similarity_deferred_to_weapon_or_device_detail
+      pass_fail_criteria: "其他 TAB 不要求全量保留，但高价值字段必须保留并标 high_value_reason、mapped_domain、mapped_field_family；Android/iOS 字段差异不得强行套同一字段名，完整设备指纹相似后置到设备详情/Weapon。"
+    - case_id: PHASE-A-DEVICE-ID-NOT-DEVICE-FEATURE
+      input: "样本存在 candidate_device_id / same device lead，但没有设备指纹、设备环境、启动、开机、锁屏、SIM、自动化服务或改机明细。"
+      expected_output_boundary:
+        - device_id_as_anchor_only
+        - device_fingerprint_fields_required
+        - device_environment_fields_required
+        - low_life_device_feature_requires_details
+        - no_device_feature_from_device_id_only
+      pass_fail_criteria: "device_id 只能作为设备锚点；设备特征必须来自设备指纹、设备环境、启动/开机/锁屏/SIM/自动化服务/脚本/改机/低生活化等明细。没有这些字段时，不得写设备指纹特征或设备低生活化特征。"
+    - case_id: PHASE-A-DERIVED-FEATURE-REQUIRES-FIELD-COMBINATION
+      input: "模型根据多字段提出跨设备切换异常、设备指纹相似簇、前后端行为不一致、收益动作链路等推导型候选特征。"
+      expected_output_boundary:
+        - derived_candidate_feature_allowed
+        - original_fields_listed
+        - field_combination_listed
+        - current_fact_vs_hypothesis_labelled
+        - support_sample_count_or_pending
+        - missing_validation_fields_listed
+        - false_positive_boundary_listed
+        - control_group_validation_required_when_needed
+      pass_fail_criteria: "大模型可以主动提出可构造候选特征，但必须列出由哪些原始字段组合、支持了多少样本、当前是事实还是候选假设、需要哪些补充字段验证、正常用户误伤点和是否需要对照组。没有字段支撑时只能写建议补查/可构造，不能写已证明。"
     - case_id: COVERAGE-COMMONALITY-NOT-RISK-COMMONALITY
       input: "commonality_matrix 只有 login_log_business_fields_extracted / weapon_graph_risk_business_fields_extracted / strategy_hit_business_fields_extracted 等字段覆盖信号。"
       expected_output_boundary:
@@ -3857,6 +3957,48 @@ generalized_workflow_validation_cases_v1:
         - dropped_anchors
         - batch_commonality_not_based_only_on_per_user_observation
       pass_fail_criteria: "批量共性主输入必须是结构化事实表；per_user_observation 只能作为解释材料；safe_projected_records 不得包含 raw_body / capped_body / logContent / credential-like 原文；批量实时研判的滚动状态必须依赖 round_support_table 和 rolling_anchor_summary。"
+    - case_id: PHASE-C-DEVICE-DETAIL-TABLE-NOT-SUMMARY
+      input: "设备阶段 mock fixture 包含 Weapon 设备字段、RCP 事件上下文字段、登录/后端/前端设备一致性字段。"
+      expected_output_boundary:
+        - device_detail_table
+        - device_field_key
+        - device_field_value_or_safe_ref
+        - value_comparable
+        - source_quality
+        - weapon_device_detail_primary
+        - rcp_event_feature_context_only
+      pass_fail_criteria: "设备明细必须按行保留，不得提前压成“设备风险较高 / Android 设备候选 / 有设备锚点”；RCP 事件字段只能作为事件上下文补充，不能当全量设备画像。"
+    - case_id: PHASE-C-DEVICE-ID-NOT-FINGERPRINT-FEATURE
+      input: "样本只有 device_id / candidate_device_id，没有设备明细字段。"
+      expected_output_boundary:
+        - device_id_anchor_only
+        - no_device_fingerprint_candidate_feature
+        - missing_device_detail_fields
+      pass_fail_criteria: "device_id 只能作为设备锚点或关系边；设备候选特征必须引用设备明细字段，不能只由 device_id 生成。"
+    - case_id: PHASE-C-DEVICE-FIELD-COVERAGE-NOT-RISK-COMMONALITY
+      input: "多个样本都查到 launch_count / phone_model 等字段，但没有相同值或异常组合。"
+      expected_output_boundary:
+        - coverage_commonality_only
+        - not_risk_commonality
+        - not_group_profile_candidate_support
+      pass_fail_criteria: "设备字段覆盖只说明字段可见，不能直接进入风险共性、团伙候选或候选策略特征。"
+    - case_id: PHASE-C-DEVICE-FIELD-COMBINATION-CANDIDATE
+      input: "多个用户的不同设备都有启动次数低、开机时长短、无锁屏/无 SIM，或自动化服务 + 脚本风险。"
+      expected_output_boundary:
+        - field_value_commonality
+        - field_combination_commonality
+        - low_life_device_environment_candidate
+        - automation_or_script_device_candidate
+        - false_positive_risk
+        - validation_method
+      pass_fail_criteria: "字段值或字段组合共性可以生成候选设备特征，但必须包含来源字段、字段组合、支持用户/设备/样本数、误伤点、验证方式和 not_final_conclusion=true。"
+    - case_id: PHASE-C-FRONTEND-ACTIVITY-NOT-DEVICE-FINGERPRINT
+      input: "存在 Track 前端活跃、前端活跃设备、后端行为设备和登录设备。"
+      expected_output_boundary:
+        - behavior_device_consistency_gap_candidate
+        - frontend_activity_is_behavior_domain
+        - not_device_fingerprint_feature
+      pass_fail_criteria: "前端活跃本身属于行为域，不能当设备指纹；只允许输出登录设备/后端行为设备/前端活跃设备一致性候选线索。"
     - case_id: PHASE3-NO-GAP-AS-COUNTER-EVIDENCE
       input: "sample_expand_validate_batch dry-run 中出现 no_data / skipped / timeout / missing_contract。"
       expected_output_boundary:

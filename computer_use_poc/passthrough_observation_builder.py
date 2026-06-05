@@ -134,6 +134,23 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "risk_label",
         "graph_relation_count",
         "riskdata_status",
+        "phone_model",
+        "os_version",
+        "app_version",
+        "device_platform",
+        "launch_count",
+        "boot_duration",
+        "lock_screen_enabled",
+        "sim_present",
+        "automation_service_detected",
+        "script_risk",
+        "device_reset_signal",
+        "root_or_hook_signal",
+        "frida_signal",
+        "emulator_signal",
+        "installed_app_list",
+        "first_seen_time",
+        "active_days",
     ],
     "rcp_fast_query_hbase": [
         "event_id",
@@ -142,6 +159,49 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "policy_code",
         "hit_policy",
         "risk_decision",
+    ],
+    "rcp_event_detail": [
+        "event_id",
+        "event_type",
+        "event_time",
+        "policy_code",
+        "hit_policy",
+        "risk_decision",
+        "request_path",
+        "request_scene",
+        "entry",
+        "action_type",
+        "action_object",
+        "task_type",
+        "reward_type",
+        "client_params",
+        "app_version",
+        "ua",
+        "device_id",
+        "ip_or_network",
+        "frontend_activity_signal",
+        "backend_action_signal",
+        "time_delta_from_login_seconds",
+        "time_delta_between_actions_seconds",
+    ],
+    "rcp_event_feature_list": [
+        "event_id",
+        "event_type",
+        "event_time",
+        "policy_code",
+        "feature_group",
+        "feature_key",
+        "feature_name",
+        "feature_value",
+        "request_path",
+        "request_scene",
+        "action_type",
+        "action_object",
+        "task_type",
+        "reward_type",
+        "client_params",
+        "frontend_activity_signal",
+        "backend_action_signal",
     ],
 }
 
@@ -156,6 +216,25 @@ BUSINESS_FIELD_ALIASES = {
     "policy_code": {"policy_code", "policyCode", "hitFusePolicyCode", "policyTreeCode"},
     "hit_policy": {"hit_policy", "hitPolicy", "hitPolicies", "hitProductionPolicies", "policyName"},
     "risk_decision": {"risk_decision", "riskDecision", "decision", "riskResult", "result"},
+    "request_path": {"request_path", "requestPath", "apiPath", "path", "urlPath", "uri", "interfacePath"},
+    "request_scene": {"request_scene", "requestScene", "scene", "sceneType", "bizScene"},
+    "entry": {"entry", "entryType", "entryScene", "entrance", "entranceType", "sourceEntry"},
+    "action_type": {"action_type", "actionType", "operationType", "opType", "behaviorType"},
+    "action_object": {"action_object", "actionObject", "objectId", "targetId", "resourceId", "itemId"},
+    "task_type": {"task_type", "taskType", "missionType", "activityTaskType"},
+    "reward_type": {"reward_type", "rewardType", "awardType", "incentiveType"},
+    "client_params": {"client_params", "clientParams", "clientInfo", "deviceInfo", "requestParams", "params"},
+    "app_version": {"app_version", "appVersion", "appVer", "clientVersion"},
+    "ua": {"ua", "UA", "userAgent", "user_agent", "browserUa"},
+    "ip_or_network": {"ip_or_network", "ip", "clientIp", "requestIp", "network", "networkType"},
+    "frontend_activity_signal": {"frontend_activity_signal", "frontendActivitySignal", "frontActivity", "frontendActivity"},
+    "backend_action_signal": {"backend_action_signal", "backendActionSignal", "backendAction", "serverAction"},
+    "time_delta_from_login_seconds": {"time_delta_from_login_seconds", "timeDeltaFromLogin", "loginActionDelta", "deltaFromLoginSeconds"},
+    "time_delta_between_actions_seconds": {"time_delta_between_actions_seconds", "timeDeltaBetweenActions", "actionIntervalSeconds", "deltaBetweenActionsSeconds"},
+    "feature_group": {"feature_group", "featureGroup", "featureGroupName"},
+    "feature_key": {"feature_key", "featureKey"},
+    "feature_name": {"feature_name", "featureName"},
+    "feature_value": {"feature_value", "featureValue", "defaultFeatureValue", "value"},
     "token_event_id": {"tokenId", "token_id"},
     "login_time": {"login_time", "loginTime", "loginTimestamp", "timestamp", "event_time", "time"},
     "login_type": {"login_type", "loginType", "reset_login_type", "resetLoginType", "authType"},
@@ -224,7 +303,61 @@ BUSINESS_FIELD_ALIASES = {
     "user_device_edge": {"user_device_edge", "edge", "pointInfoMap", "deviceId", "did"},
     "graph_relation_count": {"graph_relation_count", "relationCount", "edgeCount", "count"},
     "riskdata_status": {"riskdata_status", "riskData", "riskStatus"},
+    "phone_model": {"phone_model", "phoneModel", "model", "deviceModel", "mobileModel", "machineModel"},
+    "os_version": {"os_version", "osVersion", "systemVersion", "androidVersion", "iosVersion", "deviceOsVersion"},
+    "device_platform": {"device_platform", "devicePlatform", "appPlatform", "platform", "osName", "systemName"},
+    "launch_count": {"launch_count", "launchCount", "startupCount", "startUpCount", "bootCount"},
+    "boot_duration": {"boot_duration", "bootDuration", "bootDurationSeconds", "uptime", "upTime", "powerOnDuration"},
+    "lock_screen_enabled": {"lock_screen_enabled", "lockScreenEnabled", "hasLockScreen", "lockScreen", "screenLock"},
+    "sim_present": {"sim_present", "simPresent", "hasSim", "hasSIM", "simCount"},
+    "charging_pattern": {"charging_pattern", "chargingPattern", "isCharging", "chargeStatus"},
+    "automation_service_detected": {"automation_service_detected", "automationServiceDetected", "accessibilityEnabled", "accessibilityService", "autoService"},
+    "script_risk": {"script_risk", "scriptRisk", "scriptDetected", "scriptSignal"},
+    "device_reset_signal": {"device_reset_signal", "deviceResetSignal", "resetSignal", "deviceReset"},
+    "root_or_hook_signal": {"root_or_hook_signal", "rootOrHookSignal", "rootHookSignal"},
+    "root_signal": {"root_signal", "rootSignal", "isRoot", "rooted"},
+    "hook_signal": {"hook_signal", "hookSignal", "hookDetected"},
+    "frida_signal": {"frida_signal", "fridaSignal", "fridaDetected"},
+    "emulator_signal": {"emulator_signal", "emulatorSignal", "isEmulator", "simulator"},
+    "installed_app_list": {"installed_app_list", "installedApps", "appList", "installList", "installedAppList", "packageList"},
+    "installed_app_cluster": {"installed_app_cluster", "installedAppCluster", "appEnvironmentCluster"},
+    "risk_app": {"risk_app", "riskApp", "riskApps", "riskyApp"},
+    "tool_app": {"tool_app", "toolApp", "toolApps", "toolPackage"},
+    "first_seen_time": {"first_seen_time", "firstSeenTime", "firstSeen", "firstAppearTime"},
+    "active_days": {"active_days", "activeDays", "deviceActiveDays", "usageDays"},
+    "device_age_days": {"device_age_days", "deviceAgeDays", "ageDays"},
+    "account_device_count": {"account_device_count", "accountDeviceCount", "userDeviceCount"},
+    "device_account_count": {"device_account_count", "deviceAccountCount", "linkedUserCount", "sameDeviceUserCount"},
     "endpoint_path": {"method", "path", "endpoint", "apiPath", "requestPath", "urlPath"},
+}
+
+DEVICE_DETAIL_CANONICAL_FIELDS = {
+    "phone_model",
+    "os_version",
+    "app_version",
+    "device_platform",
+    "launch_count",
+    "boot_duration",
+    "lock_screen_enabled",
+    "sim_present",
+    "charging_pattern",
+    "automation_service_detected",
+    "script_risk",
+    "device_reset_signal",
+    "root_or_hook_signal",
+    "root_signal",
+    "hook_signal",
+    "frida_signal",
+    "emulator_signal",
+    "installed_app_list",
+    "installed_app_cluster",
+    "risk_app",
+    "tool_app",
+    "first_seen_time",
+    "active_days",
+    "device_age_days",
+    "account_device_count",
+    "device_account_count",
 }
 
 DEVICE_CANONICAL_FIELDS = {
@@ -257,6 +390,23 @@ RISK_ENTITY_CANONICAL_FIELDS = {
     "publish_ip_ua",
     "operation_ip_ua",
     "endpoint_path",
+    "request_path",
+    "request_scene",
+    "entry",
+    "action_type",
+    "action_object",
+    "task_type",
+    "reward_type",
+    "client_params",
+    "app_version",
+    "ua",
+    "ip_or_network",
+    "frontend_activity_signal",
+    "backend_action_signal",
+    "time_delta_from_login_seconds",
+    "time_delta_between_actions_seconds",
+    "feature_group",
+    *DEVICE_DETAIL_CANONICAL_FIELDS,
 }
 
 SENSITIVE_VALUE_PATTERNS = (
@@ -328,7 +478,58 @@ PROJECTION_ALWAYS_KEEP_KEYS = {
 
 MAX_PROJECTED_STRING_VALUE_LENGTH = 512
 MAX_PROJECTED_ARRAY_ITEMS = 200
+MAX_RCP_EVENT_FEATURE_ROWS = 2000
 MAX_RETAINED_FIELD_PATHS = 120
+
+RCP_FEATURE_TAB_ALIASES = {
+    "orig": "原始类",
+    "original": "原始类",
+    "raw": "原始类",
+    "base": "原始类",
+    "原始": "原始类",
+    "原始类": "原始类",
+    "derive": "衍生类",
+    "deriv": "衍生类",
+    "deriveclass": "衍生类",
+    "derivedclass": "衍生类",
+    "derived": "衍生类",
+    "衍生": "衍生类",
+    "衍生类": "衍生类",
+    "counter": "聚合类",
+    "count": "聚合类",
+    "aggregate": "聚合类",
+    "agg": "聚合类",
+    "聚合": "聚合类",
+    "聚合类": "聚合类",
+    "dataserv": "服务类",
+    "dataservice": "服务类",
+    "data_service": "服务类",
+    "service": "服务类",
+    "服务": "服务类",
+    "服务类": "服务类",
+    "namelist": "名单类",
+    "list": "名单类",
+    "名单": "名单类",
+    "名单类": "名单类",
+    "sys": "系统类",
+    "systemclass": "系统类",
+    "system": "系统类",
+    "系统": "系统类",
+    "系统类": "系统类",
+    "other": "未知",
+    "uncreated": "未创建类",
+    "未创建": "未创建类",
+    "未创建类": "未创建类",
+}
+
+RCP_HIGH_VALUE_FEATURE_KEY_FRAGMENTS = {
+    "device", "did", "android", "ios", "weapon", "wpn", "boot", "fingerprint",
+    "root", "hook", "script", "groupcontrol", "virtual", "proxy", "vpn",
+    "sim", "lock", "reset", "model", "osver", "ua", "client", "channel",
+    "locale", "city", "ip", "network", "action", "task", "reward", "entry",
+    "scene", "request", "startup", "start", "click", "register", "fakeaccount",
+    "risk", "policy", "event",
+}
 
 
 def _unique(items: list[str]) -> list[str]:
@@ -530,7 +731,8 @@ def _expand_embedded_json_strings(value: Any, *, action: str, depth: int = 0) ->
         return expanded, meta
     if isinstance(value, list):
         expanded_list: list[Any] = []
-        for child in value[:MAX_PROJECTED_ARRAY_ITEMS]:
+        max_items = MAX_RCP_EVENT_FEATURE_ROWS if action == "rcp_event_feature_list" else MAX_PROJECTED_ARRAY_ITEMS
+        for child in value[:max_items]:
             expanded_child, child_meta = _expand_embedded_json_strings(child, action=action, depth=depth + 1)
             merge(child_meta)
             expanded_list.append(expanded_child)
@@ -608,6 +810,217 @@ def _safe_sensitive_projection(key: str, value: Any) -> dict[str, Any]:
     }
 
 
+def _normalize_rcp_feature_tab(raw_tab: Any) -> str:
+    text = str(raw_tab or "").strip()
+    if not text:
+        return "未知"
+    normalized = _normalized_key(text)
+    if text in RCP_FEATURE_TAB_ALIASES:
+        return RCP_FEATURE_TAB_ALIASES[text]
+    if normalized in RCP_FEATURE_TAB_ALIASES:
+        return RCP_FEATURE_TAB_ALIASES[normalized]
+    for alias, tab in RCP_FEATURE_TAB_ALIASES.items():
+        alias_norm = _normalized_key(alias)
+        if alias and (alias in text or alias_norm and alias_norm in normalized):
+            return tab
+    return text
+
+
+def _rcp_feature_row_lists(value: Any, *, depth: int = 0) -> list[tuple[str, list[dict[str, Any]]]]:
+    if depth > 6:
+        return []
+    if isinstance(value, list):
+        if all(isinstance(item, dict) for item in value) and any(
+            "featureKey" in item or "feature_key" in item or "featureName" in item
+            for item in value
+        ):
+            return [("$", [item for item in value if isinstance(item, dict)])]
+        results: list[tuple[str, list[dict[str, Any]]]] = []
+        for index, item in enumerate(value[:MAX_RCP_EVENT_FEATURE_ROWS]):
+            for path, rows in _rcp_feature_row_lists(item, depth=depth + 1):
+                results.append((f"$[{index}]{path[1:]}", rows))
+        return results
+    if isinstance(value, dict):
+        results: list[tuple[str, list[dict[str, Any]]]] = []
+        for key, child in value.items():
+            if isinstance(child, list) and all(isinstance(item, dict) for item in child) and any(
+                "featureKey" in item or "feature_key" in item or "featureName" in item
+                for item in child
+            ):
+                results.append((f"$.{key}", [item for item in child if isinstance(item, dict)]))
+                continue
+            if isinstance(child, (dict, list)):
+                for path, rows in _rcp_feature_row_lists(child, depth=depth + 1):
+                    suffix = path[1:] if path.startswith("$") else path
+                    results.append((f"$.{key}{suffix}", rows))
+        return results
+    return []
+
+
+def _rcp_feature_domain_and_family(feature_key: str, feature_name: str) -> tuple[str, str]:
+    normalized = _normalized_key(f"{feature_key}_{feature_name}")
+    if any(fragment in normalized for fragment in ("userid", "account", "registeruser", "usersex")):
+        return "账号", "account_or_register_profile"
+    if any(fragment in normalized for fragment in ("device", "did", "android", "ios", "weapon", "wpn", "boot", "fingerprint", "root", "hook", "sim", "lock", "reset", "model", "osver", "cloudphone", "virtualmachine")):
+        return "设备", "device_fingerprint_or_environment"
+    if any(fragment in normalized for fragment in ("ip", "city", "province", "locale", "network", "ua", "channel")):
+        return "网络", "network_geo_or_client_channel"
+    if any(fragment in normalized for fragment in ("item", "photo", "content", "live", "publish")):
+        return "内容", "content_or_publish_object"
+    if any(fragment in normalized for fragment in ("comment", "message", "follow", "fan", "like", "collect", "relation")):
+        return "社交", "social_interaction"
+    if any(fragment in normalized for fragment in ("action", "click", "task", "reward", "startup", "start", "clientevent", "lagtime", "register")):
+        return "行为", "behavior_sequence_or_timing"
+    if any(fragment in normalized for fragment in ("policy", "risk", "score", "decision", "event")):
+        return "策略", "strategy_signal_or_risk_feature"
+    if any(fragment in normalized for fragment in ("appeal", "report", "complaint", "review")):
+        return "反馈", "feedback_signal"
+    if any(fragment in normalized for fragment in ("punish", "ban", "block", "enforce", "unban")):
+        return "处置", "enforcement_signal"
+    return "未知", "unknown_feature_family"
+
+
+def _rcp_feature_high_value_reason(feature_key: str, feature_name: str, feature_tab: str) -> str | None:
+    if feature_tab == "原始类":
+        return "original_tab_full_retention"
+    normalized = _normalized_key(f"{feature_key}_{feature_name}")
+    if any(fragment in normalized for fragment in RCP_HIGH_VALUE_FEATURE_KEY_FRAGMENTS):
+        return "risk_relevant_feature_family"
+    return None
+
+
+def _rcp_feature_value_projection(feature_key: str, feature_name: str, value: Any, data_type: Any) -> dict[str, Any]:
+    value_present = value not in (None, "", [], {})
+    if not value_present:
+        return {
+            "feature_value_or_safe_ref": None,
+            "value_present": False,
+            "value_comparable": False,
+            "comparable_type": "不可比较",
+            "sensitive_value_policy": "只保留是否存在",
+            "missing_reason": "empty_or_null_feature_value",
+        }
+
+    sensitive_key = _is_credential_secret_key(feature_key) or _is_credential_secret_key(feature_name)
+    strict_pii_key = _is_strict_pii_key(feature_key) or _is_strict_pii_key(feature_name)
+    sensitive_value = _looks_sensitive_scalar(value)
+    if isinstance(value, dict) and (
+        value.get("__strict_pii_redacted__")
+        or value.get("__sensitive_control_chain_field_present__")
+        or value.get("__large_string_projected__")
+    ):
+        return {
+            "feature_value_or_safe_ref": value.get("value_hash") or _safe_value_hash(value),
+            "value_present": True,
+            "value_comparable": False,
+            "comparable_type": "不可比较",
+            "sensitive_value_policy": "只保留安全引用",
+            "missing_reason": None,
+        }
+    if sensitive_key or strict_pii_key or sensitive_value:
+        return {
+            "feature_value_or_safe_ref": _safe_value_hash(value),
+            "value_present": True,
+            "value_comparable": False,
+            "comparable_type": "不可比较",
+            "sensitive_value_policy": "只保留安全引用",
+            "missing_reason": None,
+        }
+    if isinstance(value, bool):
+        comparable_type = "等值"
+    elif isinstance(value, (int, float)):
+        comparable_type = "数值分桶"
+    elif isinstance(value, (list, dict)):
+        return {
+            "feature_value_or_safe_ref": _safe_value_hash(value),
+            "value_present": True,
+            "value_comparable": True,
+            "comparable_type": "集合相似",
+            "sensitive_value_policy": "只保留安全引用",
+            "missing_reason": None,
+        }
+    else:
+        comparable_type = "等值" if str(data_type or "").lower() in {"string", "str", "bool", "boolean"} else "文本相似"
+    return {
+        "feature_value_or_safe_ref": value,
+        "value_present": True,
+        "value_comparable": True,
+        "comparable_type": comparable_type,
+        "sensitive_value_policy": "原值可用",
+        "missing_reason": None,
+    }
+
+
+def _extract_rcp_strategy_event_feature_rows(
+    action: str,
+    parsed_values: list[tuple[str, Any]],
+    *,
+    source_id: str,
+) -> list[dict[str, Any]]:
+    if action != "rcp_event_feature_list":
+        return []
+    rows: list[dict[str, Any]] = []
+    seen_rows: set[tuple[str, str, str, str]] = set()
+    for body_path, parsed in parsed_values:
+        for list_path, feature_rows in _rcp_feature_row_lists(parsed):
+            for index, feature in enumerate(feature_rows[:MAX_RCP_EVENT_FEATURE_ROWS], start=1):
+                feature_key = str(feature.get("featureKey") or feature.get("feature_key") or "").strip()
+                feature_name = str(feature.get("featureName") or feature.get("feature_name") or feature_key).strip()
+                if not feature_key and not feature_name:
+                    continue
+                feature_tab = _normalize_rcp_feature_tab(
+                    feature.get("featureTab")
+                    or feature.get("feature_tab")
+                    or feature.get("featureGroup")
+                    or feature.get("feature_group")
+                )
+                high_value_reason = _rcp_feature_high_value_reason(feature_key, feature_name, feature_tab)
+                if feature_tab != "原始类" and not high_value_reason:
+                    continue
+                raw_value = (
+                    feature.get("defaultFeatureValue")
+                    if "defaultFeatureValue" in feature
+                    else feature.get("featureValue")
+                    if "featureValue" in feature
+                    else feature.get("featureOrigValue")
+                    if "featureOrigValue" in feature
+                    else feature.get("value")
+                )
+                row_identity = (
+                    feature_tab,
+                    feature_key or feature_name,
+                    feature_name or feature_key,
+                    _safe_value_hash(raw_value),
+                )
+                if row_identity in seen_rows:
+                    continue
+                seen_rows.add(row_identity)
+                feature_type = feature.get("dataType") or feature.get("featureType")
+                projection = _rcp_feature_value_projection(feature_key, feature_name, raw_value, feature_type)
+                mapped_domain, mapped_family = _rcp_feature_domain_and_family(feature_key, feature_name)
+                rows.append(
+                    {
+                        "source_id": source_id,
+                        "source_name": "rcp_event_feature_list",
+                        "feature_row_index": len(rows) + 1,
+                        "source_field_path": f"{body_path}{list_path}[{index - 1}]",
+                        "feature_tab": feature_tab,
+                        "feature_key": feature_key or feature_name,
+                        "feature_name": feature_name or feature_key,
+                        "feature_type": feature_type or type(raw_value).__name__,
+                        **projection,
+                        "source_quality": None,
+                        "evidence_source": "current_observation",
+                        "candidate_feature_eligible": bool(projection.get("value_comparable") and high_value_reason),
+                        "high_value_reason": high_value_reason,
+                        "mapped_domain": mapped_domain,
+                        "mapped_field_family": mapped_family,
+                        "original_feature_row_retained": feature_tab == "原始类",
+                    }
+                )
+    return rows
+
+
 def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple[Any, dict[str, Any]]:
     """Project large passthrough bodies before observation extraction.
 
@@ -654,7 +1067,8 @@ def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple
             return projected
         if isinstance(item, list):
             projected_list = []
-            for index, child in enumerate(item[:MAX_PROJECTED_ARRAY_ITEMS]):
+            max_items = MAX_RCP_EVENT_FEATURE_ROWS if action == "rcp_event_feature_list" else MAX_PROJECTED_ARRAY_ITEMS
+            for index, child in enumerate(item[:max_items]):
                 child_path = f"{path}[{index}]"
                 projected_child = project(child, child_path, depth + 1)
                 if projected_child in (None, "", [], {}):
@@ -876,6 +1290,140 @@ def _source_contextual_handles(action: str, handles: list[dict[str, Any]]) -> li
     return handles + contextual
 
 
+def _device_comparable_type(value: Any) -> str:
+    if isinstance(value, bool):
+        return "布尔"
+    if isinstance(value, (int, float)):
+        return "数值分桶"
+    if isinstance(value, list):
+        return "集合相似"
+    if isinstance(value, dict):
+        return "集合相似"
+    return "等值"
+
+
+def _device_source_type_for_key(field_key: str) -> str:
+    if field_key in {"phone_model", "os_version", "app_version", "device_platform"}:
+        return "设备基础信息"
+    if field_key in {"launch_count", "boot_duration", "first_seen_time", "active_days", "device_age_days"}:
+        return "设备使用画像"
+    if field_key in {"lock_screen_enabled", "sim_present", "charging_pattern"}:
+        return "设备使用画像"
+    if field_key in {"automation_service_detected", "script_risk"}:
+        return "设备风险标签"
+    if field_key in {"device_reset_signal", "root_or_hook_signal", "root_signal", "hook_signal", "frida_signal", "emulator_signal"}:
+        return "设备风险标签"
+    if field_key in {"installed_app_list", "installed_app_cluster", "risk_app", "tool_app"}:
+        return "安装列表 / 应用环境"
+    if field_key in {"account_device_count", "device_account_count"}:
+        return "账号-设备关系"
+    return "未知"
+
+
+def _safe_device_field_value(value: Any) -> tuple[Any, str, bool]:
+    if isinstance(value, dict):
+        safe_dict: dict[str, Any] = {}
+        for key, child in value.items():
+            if _is_credential_secret_key(str(key)):
+                continue
+            child_value, _policy, present = _safe_device_field_value(child)
+            if present:
+                safe_dict[str(key)] = child_value
+            if len(safe_dict) >= 200:
+                break
+        return safe_dict, "原值可用", bool(safe_dict)
+    if isinstance(value, list):
+        safe_list: list[Any] = []
+        for child in value[:200]:
+            child_value, _policy, present = _safe_device_field_value(child)
+            if present:
+                safe_list.append(child_value)
+        return safe_list, "原值可用", bool(safe_list)
+    if value is None or value == "":
+        return None, "原值可用", False
+    if _looks_sensitive_scalar(value):
+        return {"__strict_pii_redacted__": True, "value_hash": _safe_value_hash(value)}, "只保留安全引用", True
+    return value, "原值可用", True
+
+
+def _extract_device_detail_rows(
+    action: str,
+    parsed_values: list[tuple[str, Any]],
+    *,
+    source_id: str,
+) -> list[dict[str, Any]]:
+    if action != "weapon_inventory":
+        return []
+    rows: list[dict[str, Any]] = []
+
+    def nearest_device_id(item: dict[str, Any]) -> Any:
+        for key, child in item.items():
+            canonical = _canonical_for_key(str(key))
+            if canonical in {"device_id", "candidate_device_id"} and isinstance(child, (str, int, float)):
+                return child
+        return None
+
+    def walk(item: Any, path: str, device_context: Any = None) -> None:
+        if len(rows) >= 800:
+            return
+        if isinstance(item, dict):
+            current_device = nearest_device_id(item) or device_context
+            for key, child in item.items():
+                if _is_credential_secret_key(str(key)) or _is_strict_pii_key(str(key)):
+                    continue
+                canonical = _canonical_for_key(str(key))
+                child_path = f"{path}.{key}"
+                if canonical in DEVICE_DETAIL_CANONICAL_FIELDS:
+                    safe_value, sensitive_policy, value_present = _safe_device_field_value(child)
+                    rows.append(
+                        {
+                            "source_id": source_id,
+                            "source_name": action,
+                            "action": action,
+                            "device_id": str(current_device) if current_device else None,
+                            "device_safe_ref": str(current_device) if current_device else None,
+                            "device_source_type": _device_source_type_for_key(canonical),
+                            "device_field_key": canonical,
+                            "device_field_name": str(key),
+                            "device_field_value_or_safe_ref": safe_value,
+                            "device_field_type": type(child).__name__,
+                            "value_present": value_present,
+                            "value_comparable": value_present and sensitive_policy != "只保留安全引用",
+                            "comparable_type": _device_comparable_type(safe_value),
+                            "source_quality": None,
+                            "evidence_source": "current_observation",
+                            "sensitive_value_policy": sensitive_policy,
+                            "field_path": child_path,
+                            "candidate_feature_eligible": canonical not in {"device_id", "candidate_device_id"},
+                        }
+                    )
+                if isinstance(child, (dict, list)):
+                    walk(child, child_path, current_device)
+        elif isinstance(item, list):
+            for index, child in enumerate(item[:200]):
+                walk(child, f"{path}[{index}]", device_context)
+                if len(rows) >= 800:
+                    return
+
+    for body_path, parsed in parsed_values:
+        walk(parsed, body_path)
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in rows:
+        key = (
+            str(row.get("device_id") or ""),
+            str(row.get("device_field_key") or ""),
+            str(row.get("field_path") or ""),
+            _safe_value_hash(row.get("device_field_value_or_safe_ref")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
+
+
 def _expected_fields_for_action(action: str, expected_business_fields: list[str] | None) -> list[str]:
     if expected_business_fields:
         return list(expected_business_fields)
@@ -896,6 +1444,7 @@ def build_safe_observation(
     body_candidates = _collect_body_candidates(source_payload)
     body_parse_statuses: list[str] = []
     parsed_values: list[tuple[str, Any]] = []
+    prepared_values: list[tuple[str, Any]] = []
     projection_metadata: list[dict[str, Any]] = []
     embedded_json_metadata: list[dict[str, Any]] = []
     flags: list[str] = []
@@ -910,6 +1459,7 @@ def build_safe_observation(
             continue
         prepared, embedded_meta = _prepare_body_for_action(action, parsed)
         embedded_json_metadata.append(embedded_meta)
+        prepared_values.append((body_path, prepared))
         projected, projection_meta = _project_evidence_body(action, prepared, body_path=body_path)
         projection_metadata.append(projection_meta)
         parsed_values.append((body_path, projected))
@@ -924,11 +1474,26 @@ def build_safe_observation(
 
     parsed_body_handles = _dedupe_handles(_source_contextual_handles(action, body_handles))
     all_handles = _dedupe_handles(direct_handles + parsed_body_handles)
+    strategy_event_feature_rows = _extract_rcp_strategy_event_feature_rows(
+        action,
+        prepared_values,
+        source_id=source_id,
+    )
+    device_detail_rows = _extract_device_detail_rows(
+        action,
+        parsed_values,
+        source_id=source_id,
+    )
     extracted_business_fields = _unique(
         [
             str(handle["canonical_field"])
             for handle in parsed_body_handles
             if str(handle.get("canonical_field")) in expected or not expected
+        ]
+        + [
+            str(row.get("device_field_key"))
+            for row in device_detail_rows
+            if str(row.get("device_field_key") or "")
         ]
     )
     missing_business_fields = [field for field in expected if field not in extracted_business_fields]
@@ -951,6 +1516,17 @@ def build_safe_observation(
         flags.append("projection_error")
     if any(item.get("embedded_json_expanded") for item in embedded_json_metadata):
         flags.append("embedded_json_string_expanded")
+    if strategy_event_feature_rows:
+        flags.extend([
+            "strategy_event_feature_rows_extracted",
+            "rcp_event_feature_list_row_level_projection_applied",
+        ])
+    if device_detail_rows:
+        flags.extend([
+            "device_detail_rows_extracted",
+            "weapon_device_detail_row_projection_applied",
+            "device_raw_field_values_retained_except_credentials_and_strict_pii",
+        ])
     if not parsed_values and (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
         flags.append("service_body_visibility_gap")
     if body_candidates and not parsed_values:
@@ -993,6 +1569,8 @@ def build_safe_observation(
         "direct_safe_handles": direct_handles,
         "parsed_body_safe_handles": parsed_body_handles,
         "extracted_safe_handles": all_handles,
+        "strategy_event_feature_rows": strategy_event_feature_rows,
+        "device_detail_rows": device_detail_rows,
         "extracted_business_fields": extracted_business_fields,
         "missing_business_fields": missing_business_fields,
         "candidate_device_ids": _dedupe_device_candidates(candidate_device_ids),

@@ -8797,7 +8797,50 @@ grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_ent
 - test_id: SAMPLE-EXPAND-PHASE5-STRATEGY-READABLE-ANSWER-001
 - input: Phase 4.5 three-sample live readonly result rendered for a strategy analyst.
 - expected_runtime_behavior: strategy_readable_answer_template
-- expected_output_boundary: answer uses six sections: 初步结论、主要证据、关键共性、当前边界、下一步建议、一句话摘要. It avoids raw runtime/artifact/source_quality YAML by default, keeps `group_profile_candidate` as candidate rather than confirmed group, treats strategy hits as signal not final judgement, explains partial / no_data / skipped / missing_contract as evidence gaps rather than low-risk counter evidence, and says DataAgent/Hive validation requires user authorization before execution.
+- expected_output_boundary: answer uses seven sections: 初步判断、已观察到的字段级共性、对应的黑灰产行为解释、候选特征、证据缺口、验证计划、策略建议边界. It avoids raw runtime/artifact/source_quality YAML by default, keeps `group_profile_candidate` as candidate rather than confirmed group, treats strategy hits as signal not final judgement, explains partial / no_data / skipped / missing_contract as evidence gaps rather than low-risk counter evidence, and says DataAgent/Hive validation requires user authorization before execution.
+
+### PHASE-B1-RCP-ORIGINAL-TAB-FEATURE-ROW-SMOKE
+
+- input: `rcp_event_feature_list` returns feature rows from 原始类 TAB such as `phoneModel`, `city_zh`, `clientId`, `userId`, `itemKey`, `locale`, `channel`, `hasIpLng`, plus unknown original fields.
+- expected_runtime_behavior: `strategy_event_feature_row_table` preserves original-tab rows before summary; unknown original fields remain as rows with `mapped_domain=未知`; candidate features cite `source_feature_keys` and `field_combination`.
+- expected_output_boundary: field coverage commonality means field availability only; field value commonality and field combination commonality can feed candidate features; `policy_code` / `event_type` / `risk_decision` remain entry labels; `device_id` remains an anchor, not a fingerprint feature.
+- required_checks: `sample_expand_orchestration_artifact_check.py --format json` reports `strategy_event_feature_rows.original_feature_row_count > 0` and `feature_row_candidate_feature_count > 0`.
+- forbidden: dropping original-tab rows because field meaning is unknown; compressing rows into "source completed"; generating candidate features from policy hit concentration alone; treating Android/iOS fields as identical device fingerprint schema before device-detail/Weapon validation.
+
+- test_id: SAMPLE-EXPAND-PHASE-A-FIELD-LEVEL-FEATURE-ANSWER-001
+- input: strategy-readable answer from small batch artifacts.
+- expected_runtime_behavior: field_level_commonality_to_candidate_feature_template
+- expected_output_boundary: each candidate feature includes `source_fields`, `field_combination`, `support_sample_count`, `black_gray_interpretation`, `normal_user_false_positive_risk`, `missing_fields_to_check`, `validation_method`, `strategy_usage_boundary`, and `not_final_conclusion=true`; missing field support is rendered as "current fields missing / need follow-up", not as proven behavior.
+
+- test_id: SAMPLE-EXPAND-PHASE-A-STRATEGY-HIT-NOT-CORE-FEATURE-001
+- input: commonality only shows `policy_code`, `event_type`, or `risk_decision` concentration.
+- expected_runtime_behavior: strategy_hit_is_entry_signal_not_core_feature
+- expected_output_boundary: strategy hits, policy codes, event types, and risk decisions are rendered as entry signals / risk direction labels only; candidate features require request-detail fields such as request parameters, behavior object, entry, task type, client parameters, and time deltas.
+
+- test_id: SAMPLE-EXPAND-PHASE-B-STRATEGY-EVENT-REQUEST-DETAIL-FEATURE-001
+- input: `strategy_event_request_detail_feature_v1.json` with request_path, request_scene, action_object, client_params, frontend/backend activity signals, and login-to-action time delta.
+- expected_runtime_behavior: strategy_event_request_detail_drives_candidate_feature
+- expected_output_boundary: checker validates `strategy_event_request_detail_table`; `policy_code`, `event_type`, and `risk_decision` remain entry labels only; candidate feature source fields include request-detail fields, field combination, support sample count, black-gray interpretation, false-positive risk, follow-up fields, validation method, and candidate-only usage boundary.
+
+- test_id: SAMPLE-EXPAND-PHASE-B1-RCP-REQUEST-DETAIL-PROJECTION-001
+- input: `sample_expand_mock_rcp_request_detail_projection_v1.json` with mock-shaped `rcp_event_detail` safe handles for request_path, request_scene, action_object, client_params, frontend/backend signals, and login/action time deltas.
+- expected_runtime_behavior: rcp_event_detail_safe_projection_maps_to_strategy_request_detail_table
+- expected_output_boundary: runtime artifacts include `strategy_event_request_detail_table` and `strategy_event_request_detail_commonality`; at least one candidate feature is supported by current observation request-detail fields, not by `policy_code` / `event_type` / `risk_decision` alone; missing request-detail fields are listed instead of hallucinated.
+
+- test_id: SAMPLE-EXPAND-PHASE-B-STRATEGY-SUMMARY-ONLY-NO-CORE-FEATURE-001
+- input: strategy event observation only has `policy_code`, `event_type`, and `risk_decision`.
+- expected_runtime_behavior: strategy_event_summary_only_missing_request_detail
+- expected_output_boundary: output must say `strategy_event_request_detail_missing`; no core candidate feature, no strategy suggestion, and no risk conclusion may be based on policy concentration alone. Next step is bounded RCP event detail / feature-list follow-up if authorized and anchors exist.
+
+- test_id: SAMPLE-EXPAND-PHASE-A-DEVICE-ID-NOT-DEVICE-FEATURE-001
+- input: commonality only shows candidate device ids or same-device leads.
+- expected_runtime_behavior: device_id_is_anchor_not_device_feature
+- expected_output_boundary: `device_id` is rendered as a device anchor only; device features require fingerprint/environment details such as startup/boot, lock screen, SIM, automation service, script/tooling, modification tags, or low-life-device signals.
+
+- test_id: SAMPLE-EXPAND-PHASE-A-DERIVED-CANDIDATE-FEATURE-001
+- input: model proposes inferred features such as cross-device switching anomaly, similar fingerprint cluster, frontend/backend mismatch, monetization action chain, or distributed device-pool carrying.
+- expected_runtime_behavior: derived_candidate_features_require_field_combination_and_validation
+- expected_output_boundary: derived features list original field combinations, support sample count or pending support, current-fact vs hypothesis label, missing fields, false-positive risk, and validation method; without field support the answer says "constructible candidate / needs follow-up", not "proven".
 
 - test_id: SAMPLE-EXPAND-PHASE5-1-COVERAGE-COMMONALITY-NOT-RISK-COMMONALITY-001
 - input: commonality signals only include `login_log_business_fields_extracted`, `weapon_graph_risk_business_fields_extracted`, or `strategy_hit_business_fields_extracted`.
@@ -8848,6 +8891,21 @@ grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_ent
 - input: `python3 computer_use_poc/fact_table_contract_check.py --format json`
 - expected_runtime_behavior: structured_fact_table_contract_offline_check_passes
 - expected_output_boundary: `fact_table_contract_v1.md` and `fact_table_minimal_batch_v1.json` define `safe_projected_records`, `standard_detail_table`, `anchor_table`, `feature_table`, `relation_table`, `source_quality_table`, `round_support_table`, and `rolling_anchor_summary`; batch realtime review may use per-user evidence cards for readability but keeps structured facts; rolling state consumes table inputs and exposes `round_support_count`, `cumulative_support_count`, `support_ratio`, `stability_across_rounds`, `new_anchor_delta`, `stable_anchors`, and `dropped_anchors`; batch commonality is not based only on `per_user_observation`; safe projected records do not include raw body, capped body, logContent, or credential-like raw values.
+
+- test_id: SAMPLE-EXPAND-PHASE-C-DEVICE-DETAIL-TABLE-001
+- input: `python3 computer_use_poc/sample_expand_orchestration_artifact_check.py --format json`
+- expected_runtime_behavior: device_detail_multi_source_fixture_keeps_field_rows
+- expected_output_boundary: `device_detail_table` keeps row-level device fields from Weapon-style device detail and RCP event context; each row has user/entity, device ref, field key, value/safe_ref, field type, source, comparable_type, source_quality, and evidence_source. It must not collapse rows into “device risk high”, “Android device candidate”, or “device anchor exists”.
+
+- test_id: SAMPLE-EXPAND-PHASE-C-DEVICE-CANDIDATE-FEATURES-001
+- input: `device_detail_multi_source_v1.json`
+- expected_runtime_behavior: device_candidate_features_from_field_values_and_combinations
+- expected_output_boundary: `device_id` is anchor-only; device candidate features cite `source_device_fields`, `field_combination`, support device/user/sample counts, false-positive risk, validation method, and `not_final_conclusion=true`. Field coverage cannot become risk commonality. Device environment similarity candidate requires different device_id values and multiple shared device fields.
+
+- test_id: SAMPLE-EXPAND-PHASE-C-FRONTEND-ACTIVITY-BOUNDARY-001
+- input: fixture with login_device_id, backend_action_device_id, frontend_active_device_id, frontend_activity_signal.
+- expected_runtime_behavior: behavior_device_consistency_not_device_fingerprint
+- expected_output_boundary: Track activity / frontend activity stays in behavior_domain; only the consistency check between login/backend/frontend device roles can be expressed as `behavior_device_consistency_gap_candidate`, not as a device fingerprint feature.
 
 - test_id: SAMPLE-EXPAND-PHASE3-GAP-BOUNDARY-001
 - input: sample expand dry-run with no current platform evidence.

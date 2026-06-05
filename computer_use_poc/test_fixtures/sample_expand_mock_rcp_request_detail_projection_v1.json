@@ -1,0 +1,111 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 5,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_rcp_request_detail_projection",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "策略事件请求详情",
+    "字段级共性",
+    "候选特征验证"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_user_001",
+        "mock_user_002",
+        "mock_user_003"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_strategy_detail",
+          "action": "rcp_event_detail",
+          "fields": {
+            "user_id": "mock_user_001",
+            "candidate_event_id": "mock_event_001",
+            "candidate_policy_code": "mock_policy_reward_task_guard",
+            "event_type": "MOCK_REWARD_TASK_EVENT",
+            "risk_decision": "review_candidate",
+            "event_time": "2026-06-05T10:00:45+08:00",
+            "request_path": "/mock/task/reward/claim",
+            "request_scene": "reward_task_claim",
+            "entry": "post_login_task_panel",
+            "action_type": "reward_claim",
+            "action_object": "task_campaign_alpha",
+            "task_type": "follow_reward_task",
+            "reward_type": "coin",
+            "client_params": "app_version=12.3.0;ua_family=android_webview",
+            "app_version": "12.3.0",
+            "ua": "android_webview_safe_ref",
+            "candidate_device_id": "mock_device_ref_001",
+            "ip_or_network": "mock_private_network_a",
+            "frontend_activity_signal": "weak_frontend_activity_before_backend_claim",
+            "backend_action_signal": "backend_reward_claim_after_login",
+            "time_delta_from_login_seconds": "45",
+            "time_delta_between_actions_seconds": "12"
+          }
+        },
+        {
+          "source_id": "round_1_entity_2_strategy_detail",
+          "action": "rcp_event_detail",
+          "fields": {
+            "user_id": "mock_user_002",
+            "candidate_event_id": "mock_event_002",
+            "candidate_policy_code": "mock_policy_reward_task_guard",
+            "event_type": "MOCK_REWARD_TASK_EVENT",
+            "risk_decision": "review_candidate",
+            "event_time": "2026-06-05T10:01:02+08:00",
+            "request_path": "/mock/task/reward/claim",
+            "request_scene": "reward_task_claim",
+            "entry": "post_login_task_panel",
+            "action_type": "reward_claim",
+            "action_object": "task_campaign_alpha",
+            "task_type": "follow_reward_task",
+            "reward_type": "coin",
+            "client_params": "app_version=12.3.0;ua_family=android_webview",
+            "app_version": "12.3.0",
+            "ua": "android_webview_safe_ref",
+            "candidate_device_id": "mock_device_ref_002",
+            "ip_or_network": "mock_private_network_a",
+            "frontend_activity_signal": "weak_frontend_activity_before_backend_claim",
+            "backend_action_signal": "backend_reward_claim_after_login",
+            "time_delta_from_login_seconds": "52",
+            "time_delta_between_actions_seconds": "15"
+          }
+        },
+        {
+          "source_id": "round_1_entity_3_strategy_detail",
+          "action": "rcp_event_detail",
+          "fields": {
+            "user_id": "mock_user_003",
+            "candidate_event_id": "mock_event_003",
+            "candidate_policy_code": "mock_policy_reward_task_guard",
+            "event_type": "MOCK_REWARD_TASK_EVENT",
+            "risk_decision": "pass_or_low_risk_candidate",
+            "event_time": "2026-06-05T10:12:30+08:00",
+            "request_path": "/mock/task/reward/browse",
+            "request_scene": "reward_task_browse",
+            "entry": "normal_feed_entry",
+            "action_type": "reward_browse",
+            "action_object": "task_campaign_beta",
+            "task_type": "browse_reward_task",
+            "reward_type": "coin",
+            "client_params": "app_version=12.3.1;ua_family=android_native",
+            "app_version": "12.3.1",
+            "ua": "android_native_safe_ref",
+            "candidate_device_id": "mock_device_ref_003",
+            "ip_or_network": "mock_private_network_b",
+            "frontend_activity_signal": "normal_frontend_activity_before_backend_browse",
+            "backend_action_signal": "backend_reward_browse_after_active_session",
+            "time_delta_from_login_seconds": "620",
+            "time_delta_between_actions_seconds": "95"
+          }
+        }
+      ]
+    }
+  ]
+}

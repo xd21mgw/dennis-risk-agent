@@ -1,0 +1,94 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 1,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "mock_rcp_original_tab_feature_rows",
+  "data_window": "last_7d",
+  "scene_hint": [
+    "RCP 原始类 TAB",
+    "字段级共性",
+    "候选特征验证"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "mock_user_r1",
+        "mock_user_r2",
+        "mock_user_r3"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "round_1_entity_1_rcp_feature_list",
+          "action": "rcp_event_feature_list",
+          "fields": {
+            "user_id": "mock_user_r1",
+            "candidate_event_id": "mock_register_event_001",
+            "candidate_policy_code": "mock_register_policy_entry_label",
+            "event_type": "REGISTER_NEW",
+            "event_time": "2026-06-05T22:36:01+08:00"
+          },
+          "feature_rows": [
+            {"feature_tab": "原始类", "feature_key": "phoneModel", "feature_name": "手机型号", "feature_type": "string", "feature_value_or_safe_ref": "OPPO_A_safe_model", "mapped_domain": "设备", "mapped_field_family": "device_model", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "city_zh", "feature_name": "城市", "feature_type": "string", "feature_value_or_safe_ref": "safe_city_A", "mapped_domain": "网络", "mapped_field_family": "geo_city", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "clientId", "feature_name": "客户端", "feature_type": "int", "feature_value_or_safe_ref": 2, "mapped_domain": "行为", "mapped_field_family": "client_context", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "userId", "feature_name": "用户", "feature_type": "string", "feature_value_or_safe_ref": "mock_user_r1", "mapped_domain": "账号", "mapped_field_family": "account_identifier", "candidate_feature_eligible": false},
+            {"feature_tab": "原始类", "feature_key": "itemKey", "feature_name": "对象", "feature_type": "string", "feature_value_or_safe_ref": "item_alpha", "mapped_domain": "内容", "mapped_field_family": "content_object", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "locale", "feature_name": "语言地区", "feature_type": "string", "feature_value_or_safe_ref": "zh_CN", "mapped_domain": "网络", "mapped_field_family": "locale", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "channel", "feature_name": "渠道", "feature_type": "string", "feature_value_or_safe_ref": "safe_channel_x", "mapped_domain": "行为", "mapped_field_family": "entry_channel", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "hasIpLng", "feature_name": "IP经纬度存在", "feature_type": "bool", "feature_value_or_safe_ref": true, "mapped_domain": "网络", "mapped_field_family": "ip_geo_presence", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "unknownOriginalX", "feature_name": "未知原始字段", "feature_type": "string", "feature_value_or_safe_ref": "unknown_value_a", "mapped_domain": "未知", "mapped_field_family": "unknown_feature_family", "candidate_feature_eligible": false}
+          ]
+        },
+        {
+          "source_id": "round_1_entity_2_rcp_feature_list",
+          "action": "rcp_event_feature_list",
+          "fields": {
+            "user_id": "mock_user_r2",
+            "candidate_event_id": "mock_register_event_002",
+            "candidate_policy_code": "mock_register_policy_entry_label",
+            "event_type": "REGISTER_NEW",
+            "event_time": "2026-06-05T22:36:30+08:00"
+          },
+          "feature_rows": [
+            {"feature_tab": "原始类", "feature_key": "phoneModel", "feature_name": "手机型号", "feature_type": "string", "feature_value_or_safe_ref": "OPPO_A_safe_model", "mapped_domain": "设备", "mapped_field_family": "device_model", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "city_zh", "feature_name": "城市", "feature_type": "string", "feature_value_or_safe_ref": "safe_city_A", "mapped_domain": "网络", "mapped_field_family": "geo_city", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "clientId", "feature_name": "客户端", "feature_type": "int", "feature_value_or_safe_ref": 2, "mapped_domain": "行为", "mapped_field_family": "client_context", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "userId", "feature_name": "用户", "feature_type": "string", "feature_value_or_safe_ref": "mock_user_r2", "mapped_domain": "账号", "mapped_field_family": "account_identifier", "candidate_feature_eligible": false},
+            {"feature_tab": "原始类", "feature_key": "itemKey", "feature_name": "对象", "feature_type": "string", "feature_value_or_safe_ref": "item_beta", "mapped_domain": "内容", "mapped_field_family": "content_object", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "locale", "feature_name": "语言地区", "feature_type": "string", "feature_value_or_safe_ref": "zh_CN", "mapped_domain": "网络", "mapped_field_family": "locale", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "channel", "feature_name": "渠道", "feature_type": "string", "feature_value_or_safe_ref": "safe_channel_x", "mapped_domain": "行为", "mapped_field_family": "entry_channel", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "hasIpLng", "feature_name": "IP经纬度存在", "feature_type": "bool", "feature_value_or_safe_ref": true, "mapped_domain": "网络", "mapped_field_family": "ip_geo_presence", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "unknownOriginalX", "feature_name": "未知原始字段", "feature_type": "string", "feature_value_or_safe_ref": "unknown_value_b", "mapped_domain": "未知", "mapped_field_family": "unknown_feature_family", "candidate_feature_eligible": false}
+          ]
+        },
+        {
+          "source_id": "round_1_entity_3_rcp_feature_list",
+          "action": "rcp_event_feature_list",
+          "fields": {
+            "user_id": "mock_user_r3",
+            "candidate_event_id": "mock_register_event_003",
+            "candidate_policy_code": "mock_register_policy_entry_label",
+            "event_type": "REGISTER_NEW",
+            "event_time": "2026-06-05T22:37:02+08:00"
+          },
+          "feature_rows": [
+            {"feature_tab": "原始类", "feature_key": "phoneModel", "feature_name": "手机型号", "feature_type": "string", "feature_value_or_safe_ref": "OPPO_A_safe_model", "mapped_domain": "设备", "mapped_field_family": "device_model", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "city_zh", "feature_name": "城市", "feature_type": "string", "feature_value_or_safe_ref": "safe_city_B", "mapped_domain": "网络", "mapped_field_family": "geo_city", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "clientId", "feature_name": "客户端", "feature_type": "int", "feature_value_or_safe_ref": 2, "mapped_domain": "行为", "mapped_field_family": "client_context", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "userId", "feature_name": "用户", "feature_type": "string", "feature_value_or_safe_ref": "mock_user_r3", "mapped_domain": "账号", "mapped_field_family": "account_identifier", "candidate_feature_eligible": false},
+            {"feature_tab": "原始类", "feature_key": "itemKey", "feature_name": "对象", "feature_type": "string", "feature_value_or_safe_ref": "item_gamma", "mapped_domain": "内容", "mapped_field_family": "content_object", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "locale", "feature_name": "语言地区", "feature_type": "string", "feature_value_or_safe_ref": "zh_CN", "mapped_domain": "网络", "mapped_field_family": "locale", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "channel", "feature_name": "渠道", "feature_type": "string", "feature_value_or_safe_ref": "safe_channel_x", "mapped_domain": "行为", "mapped_field_family": "entry_channel", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "hasIpLng", "feature_name": "IP经纬度存在", "feature_type": "bool", "feature_value_or_safe_ref": false, "mapped_domain": "网络", "mapped_field_family": "ip_geo_presence", "candidate_feature_eligible": true},
+            {"feature_tab": "原始类", "feature_key": "unknownOriginalX", "feature_name": "未知原始字段", "feature_type": "string", "feature_value_or_safe_ref": "unknown_value_c", "mapped_domain": "未知", "mapped_field_family": "unknown_feature_family", "candidate_feature_eligible": false},
+            {"feature_tab": "衍生类", "feature_key": "deviceRiskAndroidKwaiScript", "feature_name": "脚本风险", "feature_type": "bool", "feature_value_or_safe_ref": false, "mapped_domain": "设备", "mapped_field_family": "device_automation_signal", "candidate_feature_eligible": true, "high_value_reason": "risk_relevant_feature_family"}
+          ]
+        }
+      ]
+    }
+  ]
+}

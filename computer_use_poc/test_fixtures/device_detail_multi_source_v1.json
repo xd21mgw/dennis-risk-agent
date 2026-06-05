@@ -1,0 +1,102 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 1,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "device_detail_mock_shape",
+  "data_window": "last_7d",
+  "scene_hint": ["设备明细", "设备池候选", "自动化候选", "行为设备一致性"],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": ["device_user_A", "device_user_B", "device_user_C"],
+      "mock_current_observations": [
+        {
+          "source_id": "weapon_device_detail_user_A",
+          "action": "weapon_inventory",
+          "fields": {
+            "user_id": "device_user_A",
+            "candidate_device_id": "dev_A_1",
+            "backend_action_signal": "reward_claim",
+            "frontend_activity_signal": "weak_frontend_activity"
+          },
+          "device_detail_rows": [
+            {"device_id": "dev_A_1", "device_field_key": "phone_model", "device_field_name": "机型", "device_field_value_or_safe_ref": "vivo_X_template", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "os_version", "device_field_name": "系统版本", "device_field_value_or_safe_ref": "Android_12", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "app_version", "device_field_name": "客户端版本", "device_field_value_or_safe_ref": "12.4.10", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "launch_count", "device_field_name": "启动次数", "device_field_value_or_safe_ref": 2, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "boot_duration", "device_field_name": "开机时长秒", "device_field_value_or_safe_ref": 180, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "lock_screen_enabled", "device_field_name": "是否启用锁屏", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "automation_service_detected", "device_field_name": "自动化服务", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "script_risk", "device_field_name": "脚本风险", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "tool_env_cluster_7", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "login_device_id", "device_field_name": "登录设备", "device_field_value_or_safe_ref": "dev_A_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "登录设备"},
+            {"device_id": "dev_A_1", "device_field_key": "backend_action_device_id", "device_field_name": "后端行为设备", "device_field_value_or_safe_ref": "dev_A_2", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "后端行为设备"},
+            {"device_id": "dev_A_1", "device_field_key": "frontend_active_device_id", "device_field_name": "前端活跃设备", "device_field_value_or_safe_ref": "dev_A_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "Track 关联设备"},
+            {"device_id": "dev_A_1", "device_field_key": "unknown_device_vendor_flag", "device_field_name": "未知厂商字段", "device_field_value_or_safe_ref": "unknown_flag_A", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"}
+          ]
+        },
+        {
+          "source_id": "weapon_device_detail_user_B",
+          "action": "weapon_inventory",
+          "fields": {
+            "user_id": "device_user_B",
+            "candidate_device_id": "dev_B_1",
+            "backend_action_signal": "reward_claim",
+            "frontend_activity_signal": "weak_frontend_activity"
+          },
+          "device_detail_rows": [
+            {"device_id": "dev_B_1", "device_field_key": "phone_model", "device_field_name": "机型", "device_field_value_or_safe_ref": "vivo_X_template", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "os_version", "device_field_name": "系统版本", "device_field_value_or_safe_ref": "Android_12", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "app_version", "device_field_name": "客户端版本", "device_field_value_or_safe_ref": "12.4.10", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "launch_count", "device_field_name": "启动次数", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "boot_duration", "device_field_name": "开机时长秒", "device_field_value_or_safe_ref": 240, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "lock_screen_enabled", "device_field_name": "是否启用锁屏", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "automation_service_detected", "device_field_name": "自动化服务", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "script_risk", "device_field_name": "脚本风险", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "tool_env_cluster_7", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "login_device_id", "device_field_name": "登录设备", "device_field_value_or_safe_ref": "dev_B_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "登录设备"},
+            {"device_id": "dev_B_1", "device_field_key": "backend_action_device_id", "device_field_name": "后端行为设备", "device_field_value_or_safe_ref": "dev_B_2", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "后端行为设备"},
+            {"device_id": "dev_B_1", "device_field_key": "frontend_active_device_id", "device_field_name": "前端活跃设备", "device_field_value_or_safe_ref": "dev_B_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "Track 关联设备"}
+          ]
+        },
+        {
+          "source_id": "weapon_device_detail_user_C",
+          "action": "weapon_inventory",
+          "fields": {
+            "user_id": "device_user_C",
+            "candidate_device_id": "dev_C_1",
+            "backend_action_signal": "normal_browse",
+            "frontend_activity_signal": "normal_frontend_activity"
+          },
+          "device_detail_rows": [
+            {"device_id": "dev_C_1", "device_field_key": "phone_model", "device_field_name": "机型", "device_field_value_or_safe_ref": "iPhone_14", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "os_version", "device_field_name": "系统版本", "device_field_value_or_safe_ref": "iOS_17", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "app_version", "device_field_name": "客户端版本", "device_field_value_or_safe_ref": "12.4.10", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "launch_count", "device_field_name": "启动次数", "device_field_value_or_safe_ref": 32, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "boot_duration", "device_field_name": "开机时长秒", "device_field_value_or_safe_ref": 86400, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "lock_screen_enabled", "device_field_name": "是否启用锁屏", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "normal_app_env", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"}
+          ]
+        },
+        {
+          "source_id": "rcp_event_context_device_A",
+          "action": "rcp_event_feature_list",
+          "fields": {
+            "user_id": "device_user_A",
+            "candidate_event_id": "event_A",
+            "candidate_policy_code": "policy_register_context"
+          },
+          "feature_rows": [
+            {"feature_tab": "原始类", "feature_key": "phoneModel", "feature_name": "事件机型", "feature_type": "string", "feature_value_or_safe_ref": "vivo_X_template", "mapped_domain": "设备", "mapped_field_family": "device_fingerprint_or_environment", "candidate_feature_eligible": true}
+          ]
+        }
+      ]
+    }
+  ]
+}

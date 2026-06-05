@@ -1,0 +1,227 @@
+{
+  "fixture_name": "strategy_event_request_detail_feature_v1",
+  "fixture_scope": "mock_only_no_platform_call",
+  "purpose": "Validate that strategy-side candidate features come from request detail field combinations, not policy_code/event_type/risk_decision alone.",
+  "strategy_event_request_detail_table": [
+    {
+      "sample_id": "sample_strategy_001",
+      "entity_id": "mock_user_001",
+      "user_id": "mock_user_001",
+      "round_id": 1,
+      "source_id": "mock_rcp_event_detail_001",
+      "action": "rcp_event_detail",
+      "observation_domain": "strategy_domain",
+      "event_id": "mock_event_001",
+      "event_type": "MOCK_REWARD_TASK_EVENT",
+      "policy_code": "mock_policy_reward_task_guard",
+      "risk_decision": "review_candidate",
+      "event_time": "2026-06-05T10:00:45+08:00",
+      "request_path": "/mock/task/reward/claim",
+      "request_scene": "reward_task_claim",
+      "entry": "post_login_task_panel",
+      "action_type": "reward_claim",
+      "action_object": "task_campaign_alpha",
+      "task_type": "follow_reward_task",
+      "reward_type": "coin",
+      "client_params": {
+        "app_version": "12.3.0",
+        "ua_family": "android_webview",
+        "device_ref": "mock_device_ref_001"
+      },
+      "app_version": "12.3.0",
+      "ua": "android_webview_safe_ref",
+      "device_id": "mock_device_ref_001",
+      "ip_or_network": "mock_private_network_a",
+      "frontend_activity_signal": "weak_frontend_activity_before_backend_claim",
+      "backend_action_signal": "backend_reward_claim_after_login",
+      "time_delta_from_login_seconds": 45,
+      "time_delta_between_actions_seconds": 12,
+      "source_quality": "completed",
+      "evidence_source": "current_observation"
+    },
+    {
+      "sample_id": "sample_strategy_002",
+      "entity_id": "mock_user_002",
+      "user_id": "mock_user_002",
+      "round_id": 1,
+      "source_id": "mock_rcp_event_detail_002",
+      "action": "rcp_event_detail",
+      "observation_domain": "strategy_domain",
+      "event_id": "mock_event_002",
+      "event_type": "MOCK_REWARD_TASK_EVENT",
+      "policy_code": "mock_policy_reward_task_guard",
+      "risk_decision": "review_candidate",
+      "event_time": "2026-06-05T10:01:02+08:00",
+      "request_path": "/mock/task/reward/claim",
+      "request_scene": "reward_task_claim",
+      "entry": "post_login_task_panel",
+      "action_type": "reward_claim",
+      "action_object": "task_campaign_alpha",
+      "task_type": "follow_reward_task",
+      "reward_type": "coin",
+      "client_params": {
+        "app_version": "12.3.0",
+        "ua_family": "android_webview",
+        "device_ref": "mock_device_ref_002"
+      },
+      "app_version": "12.3.0",
+      "ua": "android_webview_safe_ref",
+      "device_id": "mock_device_ref_002",
+      "ip_or_network": "mock_private_network_a",
+      "frontend_activity_signal": "weak_frontend_activity_before_backend_claim",
+      "backend_action_signal": "backend_reward_claim_after_login",
+      "time_delta_from_login_seconds": 52,
+      "time_delta_between_actions_seconds": 15,
+      "source_quality": "completed",
+      "evidence_source": "current_observation"
+    },
+    {
+      "sample_id": "sample_strategy_003",
+      "entity_id": "mock_user_003",
+      "user_id": "mock_user_003",
+      "round_id": 1,
+      "source_id": "mock_rcp_event_detail_003",
+      "action": "rcp_event_detail",
+      "observation_domain": "strategy_domain",
+      "event_id": "mock_event_003",
+      "event_type": "MOCK_REWARD_TASK_EVENT",
+      "policy_code": "mock_policy_reward_task_guard",
+      "risk_decision": "pass_or_low_risk_candidate",
+      "event_time": "2026-06-05T10:12:30+08:00",
+      "request_path": "/mock/task/reward/browse",
+      "request_scene": "reward_task_browse",
+      "entry": "normal_feed_entry",
+      "action_type": "reward_browse",
+      "action_object": "task_campaign_beta",
+      "task_type": "browse_reward_task",
+      "reward_type": "coin",
+      "client_params": {
+        "app_version": "12.3.1",
+        "ua_family": "android_native",
+        "device_ref": "mock_device_ref_003"
+      },
+      "app_version": "12.3.1",
+      "ua": "android_native_safe_ref",
+      "device_id": "mock_device_ref_003",
+      "ip_or_network": "mock_private_network_b",
+      "frontend_activity_signal": "normal_frontend_activity_before_backend_browse",
+      "backend_action_signal": "backend_reward_browse_after_active_session",
+      "time_delta_from_login_seconds": 620,
+      "time_delta_between_actions_seconds": 95,
+      "source_quality": "completed",
+      "evidence_source": "current_observation"
+    }
+  ],
+  "field_level_commonality": [
+    {
+      "signal_name": "short_login_to_reward_claim_with_weak_frontend_activity",
+      "commonality_type": "field_level_request_detail_commonality",
+      "source_fields": [
+        "request_path",
+        "request_scene",
+        "entry",
+        "action_type",
+        "action_object",
+        "task_type",
+        "reward_type",
+        "frontend_activity_signal",
+        "backend_action_signal",
+        "time_delta_from_login_seconds"
+      ],
+      "field_combination": [
+        "same_request_path:/mock/task/reward/claim",
+        "same_action_type:reward_claim",
+        "same_action_object:task_campaign_alpha",
+        "same_task_type:follow_reward_task",
+        "same_reward_type:coin",
+        "weak_frontend_activity_before_backend_claim",
+        "time_delta_from_login_seconds<=60"
+      ],
+      "support_sample_count": 2,
+      "support_entities": [
+        "mock_user_001",
+        "mock_user_002"
+      ],
+      "evidence_source": "current_observation",
+      "not_final_conclusion": true
+    }
+  ],
+  "candidate_features": [
+    {
+      "feature_name": "short_login_to_reward_claim_with_weak_frontend_activity_candidate",
+      "source_fields": [
+        "request_path",
+        "request_scene",
+        "entry",
+        "action_type",
+        "action_object",
+        "task_type",
+        "reward_type",
+        "frontend_activity_signal",
+        "backend_action_signal",
+        "time_delta_from_login_seconds",
+        "app_version",
+        "ua"
+      ],
+      "field_combination": [
+        "reward_claim request path",
+        "same task campaign object",
+        "follow reward task",
+        "short login-to-action delta",
+        "weak frontend activity but backend reward claim present",
+        "similar client params"
+      ],
+      "support_sample_count": 2,
+      "supporting_current_evidence": [
+        {
+          "sample_id": "sample_strategy_001",
+          "entity_id": "mock_user_001",
+          "round_id": 1,
+          "source_id": "mock_rcp_event_detail_001",
+          "source_quality": "completed"
+        },
+        {
+          "sample_id": "sample_strategy_002",
+          "entity_id": "mock_user_002",
+          "round_id": 1,
+          "source_id": "mock_rcp_event_detail_002",
+          "source_quality": "completed"
+        }
+      ],
+      "supporting_selected_anchors": [
+        "mock_event_001",
+        "mock_event_002"
+      ],
+      "signal_inputs": [
+        "current_observation"
+      ],
+      "hypothesis_inputs": [
+        "task_reward_automation_hypothesis"
+      ],
+      "black_gray_interpretation": "The field combination looks like task-reward automation or low-human-interaction reward claiming: backend reward claim happens shortly after login while frontend activity is weak.",
+      "normal_user_false_positive_risk": "Normal users can claim onboarding or campaign rewards shortly after login, especially during campaign periods.",
+      "missing_fields_to_check": [
+        "device_fingerprint_environment",
+        "normal_control_group_background_rate",
+        "full_event_request_param_distribution",
+        "frontend_action_sequence",
+        "reward_settlement_result"
+      ],
+      "validation_method": "Replay the field combination on the full sample and a normal control group; measure coverage, background rate, lift, false-positive review rate, and stability across rounds.",
+      "strategy_usage_boundary": "Candidate only: observation / manual-review assist / controlled gray validation. Do not auto-launch or auto-dispose.",
+      "confidence": "medium",
+      "validation_needed": true,
+      "false_positive_risk": "medium",
+      "not_final_conclusion": true
+    }
+  ],
+  "forbidden_core_feature_fields_only": [
+    "policy_code",
+    "event_type",
+    "risk_decision"
+  ],
+  "missing_fields_boundary": [
+    "If request detail fields are absent, policy_code/event_type/risk_decision are entry labels only.",
+    "Without request_path/action_object/client_params/time_delta fields, Dennis must output missing strategy request detail, not a core candidate feature."
+  ]
+}
