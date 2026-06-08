@@ -219,6 +219,24 @@ Weapon `graphData -> riskData` 必须使用 graphData checkpoint 中保留的 ra
 
 `event_id -> rcpEventDetail`、`source_id -> fastQueryHbase/eventList`、`policy_code -> policy attribution`、`ip -> IP cluster/Hive query plan` 同样遵守该分层。cookie / token / session / header / password 永不保留、永不输出、不得进入 source checkpoint。
 
+### Source Field Volume / Commonality Readiness Guard
+
+每条 source 做接入、复测、回归或交付验收时，必须同时输出字段量级，而不是只报 source completed 或 detail row 数：
+
+- `raw_input_field_count`: source 原始返回中可见的字段 / feature key 数量。
+- `parsed_detail_field_count`: parser 实际解析出的去重字段数。
+- `standard_detail_field_count`: 进入 `standard_detail_table` 或 source-specific detail table 的去重字段数。
+- `commonality_eligible_field_count`: `value_comparable=true` 且可参与字段值共性 / 字段组合共性的去重字段数。
+- `detail_row_count`: 字段行记录数，只作样本 * 字段的记录量参考，不能替代特征数。
+
+默认期望：除纯入口 / 锚点类 source 外，数据明细型 source 的 `commonality_eligible_field_count` 应至少达到 50+。低于 20 必须标记 `parser_under_extraction_gap`、`source_body_visibility_gap`、`source_detail_not_returned` 或 `anchor_not_triggered`，不能解释成“该 source 字段少”。设备类 Weapon detail 通常应为数百字段；RCP `rcp_event_feature_list`、登录日志、用户画像 / 用户分析、内容 / 社交 / 反馈 / 处置明细均应优先保留原始非凭证字段进入事实表。
+
+RCP 边界：`rcp_fast_query_hbase` / 策略命中只属于事件入口和方向标签，不是核心候选特征来源。真正用于字段级共性的主 source 是 `rcp_event_feature_list` 的 `featureKey/defaultFeatureValue` 行级明细；如果 live 只执行了 `rcp_fast_query_hbase`，不得宣称 RCP 字段共性已闭环。`rcp_event_feature_list` 已有 contract/parser/mock 不等于真实 live 稳定接入；必须在 source status 中明确是否真的调用、返回 feature count、保留多少 feature key、多少进入 commonality。
+
+风控原始明细是取证核心事实，不属于默认要整体压缩的敏感材料。登录、设备、策略事件、内容、评论、私信、关系、处罚、反馈、前端行为、后端行为等 source 返回的非凭证字段，执行层应原则上按字段行保留，用于字段值共性、字段组合共性、链路共性、异常相关性和候选特征分析。设备字段只是其中一类；Weapon / 设备源返回的设备信息、设备属性、设备环境、安装环境、系统参数、SDK 参数、风险标签、使用画像、账号-设备关系等非凭证字段同样必须保留。安全投影只能剔除纯凭证 / 认证控制材料，例如 cookie、token、session、header、authorization、password、credential、storageState、API key；不得因为字段未知、字段量大、平台字段名不同、source 类型不同或 release scanner 压力，把原始字段提前删成“有登录 / 有设备锚点 / 有策略命中 / 有内容记录 / 设备风险较高”这类摘要。
+
+用户可见层仍不得 dump raw upstream body 或完整平台响应；正确做法是保留标准明细行和各类事实表中的字段名、字段值或 safe_ref、字段类型、来源、用户 / 设备 / 内容 / 事件实体、是否可比较、source_quality，再由答案层输出字段级共性、字段组合、候选特征和验证边界。
+
 ### Runtime Config Apply 前置条件
 
 半开放 readonly runtime config template 不等于 live runtime 已生效。只有 live `openclaw.json` 的 `agents.list` 中存在独立 `dennis-risk-agent` entry，并且该 entry 应用了 `exec.security=allowlist`、`safeBins`、`tools.deny`、`fs.workspaceOnly=true` 和 `loopDetection`，AGENTS.md 中的 wrapper-first / browser fallback / direct exec guard 才是 runtime 硬约束。
@@ -493,7 +511,7 @@ ATO 单案用户设备实体层：
 - 登录日志 `response_too_large` / `body_truncated` 是 partial observation：若 capped body/snippet 可见，Dennis 先安全解析前段登录字段；若 `body_present=true` 但 Dennis 看不到 capped/snippet，标 `service_body_visibility_gap_for_truncated_login_log`。缩窗锚点优先来自发布时间、用户客诉时间、异常事件时间、策略命中时间和近期作品发布时间；没有锚点时先从作品/用户分析/策略事件找锚点。`network_error` 必须细分为 transport / service / batch contract / passthrough interpretation / invalid params gap。
 - partial 必须分型：`partial_transport`、`partial_fields`、`partial_baseline`、`partial_consistency`、`partial_authorization_required` 分别映射到自动实时下一跳、plan-only 下一跳、用户授权下一跳或 blocked 下一跳；不得只写“多个源 partial”。
 - 用户正文不要只写“档案 / Track 200 返回”；必须写业务字段闭合状态、partial subtype、已执行 / 未执行的 next-hop 和仍缺字段。
-- observation 前允许 Dennis 做 evidence projection：只删 UI/debug/blob/重复/空值等明显低价值字段，保留风控锚点和敏感控制链字段的存在性/路径/hash/长度安全句柄；最终用户正文仍禁止输出 cookie/token/session/header/password 原文。
+- 字段级事实抽取必须先于展示层投影：Dennis 可在内存中解析可见 body，事实表 / 锚点表 / 设备明细 / RCP 特征行默认使用 pre-projection prepared body，只过滤 cookie/token/session/header/password 等凭证明文；展示层 / stdout / safe summary 才做 projection，不得用投影摘要替代共性分析输入。
 
 实时证据不闭合时，离线补证必须按当前 `missing_evidence` 动态生成 `module_id`，不固定输出 1-5 菜单，也不默认请求全量 DataAgent/Hive。典型动态模块包括 `web_publish_fact`、`web_login_history`、`device_history_baseline`、`token_oauth_scan_chain`、`security_action_chain`、`post_action_chain`；用户只授权哪个 `module_id`，只能生成/执行哪个模块的 query plan，未授权模块继续进入 `missing_evidence`。
 

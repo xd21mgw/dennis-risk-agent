@@ -114,10 +114,8 @@ def run_check(asset_table: Path, service_actions_js: Path, service_registry: Pat
 
     if declared_count is not None and declared_count != len(allowlist):
         failures.append("registry_declared_count_mismatch_allowlist")
-    if len(allowlist) != 70:
-        failures.append("service_allowlist_count_not_70")
-    if len(asset_names) != 70:
-        failures.append("asset_table_count_not_70")
+    if len(asset_names) != len(allowlist):
+        failures.append("asset_table_count_mismatch_service_allowlist")
     if missing_in_asset:
         failures.append("service_actions_missing_in_asset_table")
     if extra_in_asset:

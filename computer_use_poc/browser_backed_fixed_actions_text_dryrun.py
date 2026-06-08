@@ -317,11 +317,13 @@ BOUNDARY_FLAG_EXPLANATIONS = {
     "auto_plan_only_next_hop": "缺输入或当前只需计划时，仅生成受控下一跳计划，不执行",
     "user_authorized_next_hop": "DataAgent/Hive、长窗口离线、大批量扩展等必须逐次用户授权",
     "blocked_next_hop": "action 未登记、contract pending、auth repair、URL guessing 或缺不可解析入参时阻塞，不绕查",
-    "evidence_projection_applied": "passthrough body 先做 evidence projection 再 observation，提高关键风控字段保留率",
+    "fact_extraction_before_display_projection": "事实表 / 共性分析先使用 pre-projection prepared body，展示层再做 projection",
+    "display_projection_only": "projection 只约束 stdout / final answer / safe summary，不作为事实抽取输入",
+    "evidence_projection_applied": "展示层 evidence projection 已应用；不得替代字段级事实抽取",
     "projection_not_business_normalizer": "projection 只裁剪无用/重复/超大字段，不生成业务结论或 service normalizer",
     "projection_drops_useless_duplicate_huge_fields": "projection 可删除 UI/debug/blob/重复/空值等低价值字段",
     "projection_preserves_sensitive_control_chain_as_safe_handle": "token/session/cookie/header/password 字段名不导致整行丢失，仅保留存在性/路径/hash/长度等安全句柄",
-    "projection_cap_before_observation": "数组类 source 先按 evidence row 投影，再进入 observation 与 cap 后解析",
+    "projection_cap_before_observation": "legacy alias；当前事实抽取先于展示投影，数组 cap 只影响展示和 source_quality 边界",
     "login_small_body_likely_no_data_not_risk_exclusion": "登录日志 2xx 小 body 且有 empty hint 只能 likely_no_data，不作为低风险反证",
     "response_too_large_window_shrink_recommended": "登录日志 response_too_large/截断时建议围绕锚点缩小时间窗，而不是解释成登录正常或登录很多",
     "ato_evidence_card_chain_organized": "ATO evidence card 必须按控制权入口、后置行为、内容承接、前后端活跃、设备/IP、策略和缺口组织",
@@ -1781,10 +1783,11 @@ def route_query(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
         ]
     if has_any(text, ["evidence projection", "projection", "投影", "先 projection", "先投影", "无用字段", "重复字段", "超大字段"]):
         flags += [
+            "fact_extraction_before_display_projection",
+            "display_projection_only",
             "evidence_projection_applied",
             "projection_not_business_normalizer",
             "projection_drops_useless_duplicate_huge_fields",
-            "projection_cap_before_observation",
             "raw_body_not_returned_to_final_answer",
         ]
         if has_any(text, ["token", "session", "cookie", "header", "控制链"]):

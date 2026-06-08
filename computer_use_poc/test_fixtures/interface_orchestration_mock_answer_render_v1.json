@@ -11,7 +11,7 @@
     "final_evidence_card": true
   },
   "rendered_answer_sections": {
-    "input_recognition": "一、输入识别：本轮是 sample_expand_validate_mode，seed_entity 为一批 user_id，禁止 70 action 笛卡尔积。",
+    "input_recognition": "一、输入识别：本轮是 sample_expand_validate_mode，seed_entity 为一批 user_id，禁止 74 action 笛卡尔积。",
     "base_summary": "二、基础摘要：已消费 base_summary_card，基础接口只做低成本 anchor discovery，不把 no_data/skipped/timeout 当作反证。",
     "candidate_anchors": "三、候选锚点：已消费 candidate_anchor_pool，包含 current_observation 产生的 device/content/strategy anchor。",
     "drilldown": "四、追踪下钻：已消费 drilldown_evidence_card；本 fixture 只输出 planned/not_executed，未启动真实接口。",

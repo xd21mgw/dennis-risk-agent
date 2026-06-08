@@ -1,0 +1,277 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 3,
+  "round_size": 3,
+  "max_rounds": 1,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 3,
+  "sampling_method": "source_l1_l3_field_commonality_multi_source",
+  "data_window": "mock_current_observation",
+  "scene_hint": [
+    "L1-L3 字段级共性",
+    "登录",
+    "用户画像",
+    "内容社交",
+    "反馈处置"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "user_A",
+        "user_B",
+        "user_C"
+      ],
+      "mock_current_observations": [
+        {
+          "source_id": "login_user_A",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "user_A",
+            "login_time": "2026-06-06T10:01:00+08:00",
+            "login_type": "WEB_SMS_LOGIN",
+            "login_source": "WEB",
+            "login_result": "success",
+            "candidate_device_id": "did_shared_template_1",
+            "login_ip": "10.10.1.8",
+            "login_ua": "ua_template_x",
+            "backend_action_signal": "publish_after_login",
+            "frontend_activity_signal": "weak_frontend_activity"
+          },
+          "records": [
+            {
+              "login_time": "2026-06-06T10:01:00+08:00",
+              "login_type": "WEB_SMS_LOGIN",
+              "login_source": "WEB",
+              "login_result": "success",
+              "candidate_device_id": "did_shared_template_1",
+              "login_ip": "10.10.1.8",
+              "login_ua": "ua_template_x",
+              "app_version": "14.4.20"
+            },
+            {
+              "login_time": "2026-06-06T10:03:00+08:00",
+              "login_type": "WEB_SMS_LOGIN",
+              "login_source": "WEB",
+              "login_result": "refresh",
+              "candidate_device_id": "did_shared_template_1",
+              "login_ip": "10.10.1.8",
+              "login_ua": "ua_template_x",
+              "app_version": "14.4.20"
+            }
+          ]
+        },
+        {
+          "source_id": "login_user_B",
+          "action": "login_logs_search",
+          "fields": {
+            "user_id": "user_B",
+            "login_time": "2026-06-06T10:04:00+08:00",
+            "login_type": "WEB_SMS_LOGIN",
+            "login_source": "WEB",
+            "login_result": "success",
+            "candidate_device_id": "did_shared_template_2",
+            "login_ip": "10.10.1.9",
+            "login_ua": "ua_template_x",
+            "backend_action_signal": "publish_after_login",
+            "frontend_activity_signal": "weak_frontend_activity"
+          },
+          "records": [
+            {
+              "login_time": "2026-06-06T10:04:00+08:00",
+              "login_type": "WEB_SMS_LOGIN",
+              "login_source": "WEB",
+              "login_result": "success",
+              "candidate_device_id": "did_shared_template_2",
+              "login_ip": "10.10.1.9",
+              "login_ua": "ua_template_x",
+              "app_version": "14.4.20"
+            },
+            {
+              "login_time": "2026-06-06T10:06:00+08:00",
+              "login_type": "WEB_SMS_LOGIN",
+              "login_source": "WEB",
+              "login_result": "refresh",
+              "candidate_device_id": "did_shared_template_2",
+              "login_ip": "10.10.1.9",
+              "login_ua": "ua_template_x",
+              "app_version": "14.4.20"
+            }
+          ]
+        },
+        {
+          "source_id": "account_user_A",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "user_A",
+            "register_time": "2026-06-01",
+            "account_status": "normal",
+            "profile_change_time": "2026-06-06T09:58:00+08:00",
+            "nickname_change": "recent",
+            "fan_count": "12",
+            "follow_count": "480",
+            "content_publish_count": "3"
+          }
+        },
+        {
+          "source_id": "account_user_B",
+          "action": "archives_user_profile",
+          "fields": {
+            "user_id": "user_B",
+            "register_time": "2026-06-01",
+            "account_status": "normal",
+            "profile_change_time": "2026-06-06T10:00:00+08:00",
+            "nickname_change": "recent",
+            "fan_count": "15",
+            "follow_count": "465",
+            "content_publish_count": "2"
+          }
+        },
+        {
+          "source_id": "behavior_user_A",
+          "action": "archives_user_analysis",
+          "fields": {
+            "user_id": "user_A",
+            "recent_behavior_counts": "publish_3_comment_12",
+            "profile_change": "recent_profile_change",
+            "operation_time": "2026-06-06T10:07:00+08:00",
+            "operation_type": "publish_after_login",
+            "operation_device": "did_shared_template_1"
+          },
+          "records": [
+            {
+              "operation_time": "2026-06-06T10:07:00+08:00",
+              "operation_type": "publish_after_login",
+              "operation_device": "did_shared_template_1",
+              "recent_behavior_counts": "publish_3_comment_12"
+            },
+            {
+              "operation_time": "2026-06-06T10:11:00+08:00",
+              "operation_type": "comment_after_publish",
+              "operation_device": "did_shared_template_1",
+              "recent_behavior_counts": "publish_3_comment_12"
+            }
+          ]
+        },
+        {
+          "source_id": "behavior_user_B",
+          "action": "archives_user_analysis",
+          "fields": {
+            "user_id": "user_B",
+            "recent_behavior_counts": "publish_3_comment_12",
+            "profile_change": "recent_profile_change",
+            "operation_time": "2026-06-06T10:09:00+08:00",
+            "operation_type": "publish_after_login",
+            "operation_device": "did_shared_template_2"
+          },
+          "records": [
+            {
+              "operation_time": "2026-06-06T10:09:00+08:00",
+              "operation_type": "publish_after_login",
+              "operation_device": "did_shared_template_2",
+              "recent_behavior_counts": "publish_3_comment_12"
+            },
+            {
+              "operation_time": "2026-06-06T10:13:00+08:00",
+              "operation_type": "comment_after_publish",
+              "operation_device": "did_shared_template_2",
+              "recent_behavior_counts": "publish_3_comment_12"
+            }
+          ]
+        },
+        {
+          "source_id": "content_user_A",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "user_A",
+            "photo_id": "photo_A_1",
+            "publish_time": "2026-06-06T10:08:00+08:00",
+            "publish_device": "did_shared_template_1",
+            "content_type": "image_text",
+            "caption": "same_diversion_template",
+            "audit_reason": "suspected_diversion"
+          }
+        },
+        {
+          "source_id": "content_user_B",
+          "action": "archives_photo_search",
+          "fields": {
+            "user_id": "user_B",
+            "photo_id": "photo_B_1",
+            "publish_time": "2026-06-06T10:09:00+08:00",
+            "publish_device": "did_shared_template_2",
+            "content_type": "image_text",
+            "caption": "same_diversion_template",
+            "audit_reason": "suspected_diversion"
+          }
+        },
+        {
+          "source_id": "social_user_A",
+          "action": "archives_comment_search",
+          "fields": {
+            "user_id": "user_A",
+            "comment_id": "comment_A_1",
+            "target_user_id": "target_shop_1",
+            "comment_text": "same_lead_wording",
+            "action_time": "2026-06-06T10:10:00+08:00",
+            "same_path": "comment_to_profile"
+          }
+        },
+        {
+          "source_id": "social_user_B",
+          "action": "archives_comment_search",
+          "fields": {
+            "user_id": "user_B",
+            "comment_id": "comment_B_1",
+            "target_user_id": "target_shop_1",
+            "comment_text": "same_lead_wording",
+            "action_time": "2026-06-06T10:12:00+08:00",
+            "same_path": "comment_to_profile"
+          }
+        },
+        {
+          "source_id": "feedback_user_A",
+          "action": "archives_user_report_search",
+          "fields": {
+            "user_id": "user_A",
+            "candidate_report_id": "report_A_1",
+            "report_time": "2026-06-06T11:00:00+08:00",
+            "report_type": "diversion_report",
+            "feedback_object": "photo_A_1"
+          }
+        },
+        {
+          "source_id": "enforcement_user_A",
+          "action": "archives_punish_status",
+          "fields": {
+            "user_id": "user_A",
+            "candidate_punish_id": "punish_A_1",
+            "punish_type": "content_takedown",
+            "enforcement_action": "remove_photo",
+            "policy_reason": "diversion_policy_reason"
+          }
+        },
+        {
+          "source_id": "rcp_feature_user_A",
+          "action": "rcp_event_feature_list",
+          "fields": {
+            "user_id": "user_A",
+            "candidate_event_id": "event_REGISTER_NEW_A",
+            "event_type": "REGISTER_NEW",
+            "candidate_policy_code": "REGISTER_NEW_POLICY_ENTRY"
+          },
+          "generated_feature_row_count": 55
+        },
+        {
+          "source_id": "weapon_wide_user_A",
+          "action": "weapon_device_info",
+          "fields": {
+            "user_id": "user_A",
+            "candidate_device_id": "did_shared_template_1"
+          },
+          "generated_device_detail_field_count": 60
+        }
+      ]
+    }
+  ]
+}

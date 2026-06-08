@@ -4,7 +4,7 @@ source_of_truth:
   service_action_registry: /Users/pengcheng/dennis-local/browser-backed-api-poc/ACTION_REGISTRY.md
   service_actions_file: /Users/pengcheng/dennis-local/browser-backed-api-poc/src/actions.js
   service_mock_tests: /Users/pengcheng/dennis-local/browser-backed-api-poc/test/mock.test.js
-interface_count: 70
+interface_count: 74
 business_naming_rule: "Business orchestration calls service actions and inventory rows interfaces."
 default_boundaries:
   default_runtime_routing: false
@@ -60,9 +60,49 @@ interfaces:
     possible_outputs: [base_summary_card, candidate_anchor_pool, relation_expansion_result, group_profile_candidate]
     cap_policy: "Limit device ids and graph edges; no unbounded graph expansion."
     stop_reason_policy: [cap_reached, missing_anchor, source_timeout, service_contract_gap]
-    prohibited_usage: "Same-device relation is not a gang conclusion by itself."
+    prohibited_usage: "Same-device relation is not a gang conclusion by itself; do not use this as the primary device-detail field source when weapon_device_info is available."
     status: registered
-    notes: "Service-owned graphData -> riskData follow-up."
+    notes: "Service-owned graphData -> riskData follow-up. Primary role is user-device graph / relation discovery; direct device details use weapon_device_info."
+  - interface_name: weapon_device_info
+    observation_domain: [device_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [device_id]
+    possible_outputs: [drilldown_evidence_card, device_detail_table, device_field_commonality, candidate_features]
+    cap_policy: "Top-K selected device anchors only; no all-device detail fanout."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Do not call without a current-task device_id anchor; device detail fields are candidate evidence, not final judgement."
+    status: registered
+    notes: "Direct Weapon riskData device detail. Shared Android/iOS action; output fields differ by platform."
+  - interface_name: weapon_device_app_list
+    observation_domain: [device_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [device_id]
+    possible_outputs: [drilldown_evidence_card, device_detail_table, app_environment_signal, candidate_features]
+    cap_policy: "Top-K selected device anchors only; retain non-credential app/environment fields as rows."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Do not run full app-list expansion for every device; app presence is a candidate signal, not standalone risk conclusion."
+    status: registered
+    notes: "Weapon installed application / app environment detail."
+  - interface_name: weapon_device_location_info
+    observation_domain: [device_domain, network_domain]
+    default_call_role: anchor_triggered_drilldown
+    required_anchor: [device_id, user_id]
+    possible_outputs: [drilldown_evidence_card, device_detail_table, network_anchor, candidate_features]
+    cap_policy: "Only when selected device anchor also has user_id; otherwise skipped_missing_anchor."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Do not call with device_id alone; location/network fields need source_quality and are not low-risk counter evidence."
+    status: registered
+    notes: "Weapon device location / network context detail."
+  - interface_name: weapon_user_klink_status
+    observation_domain: [account_domain, device_domain, behavior_domain]
+    default_call_role: first_hop_candidate
+    required_anchor: [user_id]
+    possible_outputs: [base_summary_card, candidate_anchor_pool, account_device_session_status, candidate_features]
+    cap_policy: "One bounded Klink status query per selected user."
+    stop_reason_policy: [missing_anchor, source_no_data_not_counter_evidence, source_timeout, parse_error, service_contract_gap]
+    prohibited_usage: "Klink/session status is account-device context, not proof of ATO or group relation."
+    status: registered
+    notes: "Weapon account session/Klink status records."
   - interface_name: rcp_snapshot
     observation_domain: [strategy_domain]
     default_call_role: first_hop_candidate

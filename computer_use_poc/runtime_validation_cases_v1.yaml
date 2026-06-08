@@ -1703,7 +1703,7 @@ source_orchestration_validator_regression:
       - source_orchestration_plan_v1_required
       - required_p0_sources_present
       - stop_conditions_enforced
-    pass_fail_criteria: "`source_orchestration_plan_v1.yaml` 必须以当前 browser-backed 70 action 口径返回 `login_logs_search`、`weapon_inventory`，并声明 login_log-only 不可停止。"
+    pass_fail_criteria: "`source_orchestration_plan_v1.yaml` 必须以当前 browser-backed 74 action 口径返回 `login_logs_search`、`weapon_inventory`，并声明 login_log-only 不可停止。"
   - case_id: LOGIN-LOG-ONLY-CANNOT-CONCLUDE-001
     input: "source_completion_matrix 只有 login_logs_search。"
     expected_routing_mode: source_orchestration_validation
@@ -3446,18 +3446,18 @@ generalized_workflow_validation_cases_v1:
         - same_policy_hit_not_gang_conclusion
         - cluster_evidence_chain_required
       pass_fail_criteria: "策略命中不能单独把一批账号定性为 ATO 团伙。"
-    - case_id: INTERFACE-ORCHESTRATION-ACTION-COUNT-70-001
+    - case_id: INTERFACE-ORCHESTRATION-REGISTERED-ACTION-COUNT-001
       input: "浏览器受控接口资产表。"
       expected_output_boundary:
-        - action_count_70_from_service_registry
+        - action_count_from_service_registry
         - do_not_use_37_action_inventory_as_current_fact
         - browser_backed_interface_asset_table_v1
-      pass_fail_criteria: "Dennis 当前接口资产事实必须来自相邻 service ACTION_REGISTRY.md / src/actions.js 的 70 registered interfaces，不得回退到旧 37 口径。"
+      pass_fail_criteria: "Dennis 当前接口资产事实必须来自相邻 service ACTION_REGISTRY.md / src/actions.js 的 74 registered interfaces，不得回退到旧 37 口径。"
     - case_id: INTERFACE-ASSET-TABLE-DRIFT-CHECK-001
       input: "运行 `python3 computer_use_poc/interface_asset_table_check.py --format json`。"
       expected_output_boundary:
-        - service_allowlist_count_70
-        - asset_table_count_70
+        - service_allowlist_count_matches_registry
+        - asset_table_count_matches_service_allowlist
         - missing_in_asset_empty
         - extra_in_asset_empty
         - required_asset_fields_present
@@ -3477,7 +3477,7 @@ generalized_workflow_validation_cases_v1:
         - device_risk_l2_when_triggered_by_user_id_device_anchor
       pass_fail_criteria: "接口不固定死为 L1/L2；调用层级由输入和锚点动态决定。"
     - case_id: INTERFACE-ORCHESTRATION-NO-CARTESIAN-EXPANSION-001
-      input: "给定 user_id 批量样本和 70 registered interfaces。"
+      input: "给定 user_id 批量样本和 74 registered interfaces。"
       expected_output_boundary:
         - base_summary_layer_not_all_interfaces
         - user_id_input_does_not_chase_all_photo_ip_event_policy
@@ -3513,12 +3513,12 @@ generalized_workflow_validation_cases_v1:
         - skipped_unavailable_action_enters_missing_evidence
         - no_data_skipped_timeout_missing_contract_not_counter_evidence
       pass_fail_criteria: "registered 接口可以挂到对象域；missing_contract / skipped / no_data / timeout 不得伪造成已查或低风险反证。"
-    - case_id: ACTION-COUNT-70-NOT-37
+    - case_id: ACTION-COUNT-REGISTERED-NOT-37
       input: "当前 browser-backed service 和 Dennis interface asset table。"
       expected_output_boundary:
-        - service_allowlist_count_70
-        - asset_table_count_70
-        - action_count_70_not_37
+        - service_allowlist_count_matches_registry
+        - asset_table_count_matches_service_allowlist
+        - action_count_registered_not_37
         - interface_asset_table_check_validation_pass
       pass_fail_criteria: "`interface_asset_table_check.py` 必须通过；不得引用旧 37 action inventory 作为当前事实。"
     - case_id: USER-ID-NO-FULL-EXPANSION
@@ -3528,7 +3528,7 @@ generalized_workflow_validation_cases_v1:
         - base_summary_card
         - candidate_anchor_pool
         - no_full_photo_ip_event_policy_expansion
-        - no_70_interface_cartesian_execution
+        - no_registered_interface_cartesian_execution
       pass_fail_criteria: "user_id 输入先产出 base_summary_card / candidate_anchor_pool；不得全量追所有 photo/IP/event/policy。"
     - case_id: DYNAMIC-L1-L2-PHOTO
       input: "直接输入 photo_id；以及 user_id 场景中先发现 candidate_photo_id。"
@@ -3992,6 +3992,60 @@ generalized_workflow_validation_cases_v1:
         - false_positive_risk
         - validation_method
       pass_fail_criteria: "字段值或字段组合共性可以生成候选设备特征，但必须包含来源字段、字段组合、支持用户/设备/样本数、误伤点、验证方式和 not_final_conclusion=true。"
+    - case_id: PHASE-C4-DEVICE-COMMONALITY-TYPES
+      input: "Android/iOS 大量设备字段 fixture 同时包含已知字段族、unknown 字段值共性、单字段强信号和字段组合共性。"
+      expected_output_boundary:
+        - known_field_commonality
+        - unknown_field_value_commonality
+        - hard_single_field_signal
+        - group_level_field_enrichment_commonality
+        - field_combination_commonality
+        - candidate_only_not_final_conclusion
+        - android_ios_platform_field_summary
+      pass_fail_criteria: "unknown 字段不得丢；unknown 字段值共性只能写成候选异常，不能强解释为自动化/改机/团伙；frida/root/hook/mountRisk 等 hard 字段可以进入 hard_single_field_signal_candidate；无锁屏/无 SIM/低启动等 weak 字段单设备不能成为 hard 候选，只能在批量高占比时生成 group_level_field_enrichment_candidate；Android/iOS 字段统计不能把 iOS 压成极少行。"
+    - case_id: PHASE-C4-DEVICE-CANDIDATE-FEATURE-READABLE
+      input: "设备候选特征从 device_detail_table 转为策略同学可读特征。"
+      expected_output_boundary:
+        - feature_type
+        - source_fields
+        - field_values_or_safe_refs
+        - support_device_count
+        - group_device_count
+        - support_ratio
+        - support_user_count
+        - platform_scope
+        - priority_level
+        - priority_score
+        - reason_codes
+        - black_gray_interpretation
+        - false_positive_risk
+        - missing_evidence
+        - validation_method
+        - conclusion_boundary
+      pass_fail_criteria: "设备候选特征必须像策略评估项，不能只是“有 device_id / 有 Weapon / Android 设备”；每条必须保留字段和值的回挂、误伤点、验证方式和 candidate_only_not_final_conclusion。"
+    - case_id: PHASE-C5-DEVICE-FEATURE-RANKING-DENOISE
+      input: "设备字段共性里 unknown 很多，且包含 groupname/grouplevel/safestatus 这类疑似默认枚举；同时有 no_lock_screen/low_launch_count 等 weak 字段和 frida/root/hook 等 hard 字段。"
+      expected_output_boundary:
+        - unknown_possible_default_enum_downranked
+        - baseline_missing
+        - lift_unavailable
+        - hard_single_field_signal_candidate
+        - group_level_field_enrichment_candidate
+        - unknown_field_value_enrichment_candidate
+        - top_candidate_features_only
+      pass_fail_criteria: "unknown 共性不得全部进入高优先级候选；疑似默认枚举必须降级；weak 单字段不得独立成为 hard candidate；weak 字段批量高占比可形成 group enrichment；用户可见答案默认只展示 Top 3-5 个候选特征。"
+    - case_id: PHASE-C3-WEAPON-REAL-FIELD-FAMILY-MAPPING
+      input: "真实 Weapon 设备详情返回 Android/iOS 风格字段，例如 appLaunchCount、lockScreenTime、simStatus、installAccessibility、frida、xposed、mountRiskCheck、packageName、kernOsProductVersion。"
+      expected_output_boundary:
+        - raw_device_field_rows_retained
+        - mapped_field_family_not_mostly_unknown
+        - device_freshness
+        - low_life_device_environment
+        - automation_or_script
+        - modification_or_adversarial
+        - app_environment
+        - source_device_fields_back_reference
+      pass_fail_criteria: "真实设备字段不得只保留为 unknown_device_field_family；非 credential 字段仍按行保留，字段族映射只用于解释，不得提前压缩。候选特征必须回挂 source_device_fields，不能由 device_id 或 source 覆盖生成。"
     - case_id: PHASE-C-FRONTEND-ACTIVITY-NOT-DEVICE-FINGERPRINT
       input: "存在 Track 前端活跃、前端活跃设备、后端行为设备和登录设备。"
       expected_output_boundary:
@@ -3999,6 +4053,308 @@ generalized_workflow_validation_cases_v1:
         - frontend_activity_is_behavior_domain
         - not_device_fingerprint_feature
       pass_fail_criteria: "前端活跃本身属于行为域，不能当设备指纹；只允许输出登录设备/后端行为设备/前端活跃设备一致性候选线索。"
+    - case_id: PHASE-D-SOURCE-L1L3-FIELD-COMMONALITY-001
+      input: "登录、用户画像、内容、社交、反馈和处置 mock current observation 同轮输入。"
+      expected_output_boundary:
+        - standard_detail_table
+        - login_detail_table
+        - account_detail_table
+        - user_behavior_summary_detail_table
+        - content_detail_table
+        - social_detail_table
+        - feedback_detail_table
+        - enforcement_detail_table
+        - standard_field_commonality
+        - source_field_value_commonality_candidate
+        - candidate_only_not_final_conclusion
+      pass_fail_criteria: "四条 source 字段抽取线必须先保留字段行、字段族、可比性和 source_quality，再统一进入 L3 commonality/candidate_features；不得单 source 直接输出 confirmed ATO、确认团伙、精准率、lift、误伤率或策略上线建议。"
+    - case_id: PHASE-D-SOURCE-L1L3-QUALITY-GAP-NOT-COUNTER-EVIDENCE-001
+      input: "多 source 字段抽取中部分 source 为 no_data / timeout / auth_failed / blocked / response_limited / skipped。"
+      expected_output_boundary:
+        - source_quality
+        - missing_evidence
+        - no_gap_as_counter_evidence
+        - response_limited_partial_not_failed_final
+        - skipped_by_cap_not_source_failed
+      pass_fail_criteria: "gap 状态只能进入 source_quality/missing_evidence；detail table 只保留 completed/partial 的字段事实；gap 不得成为低风险反证。"
+    - case_id: PHASE-F-RAW-DETAIL-FLAT-TABLE-001
+      input: "登录、用户画像、内容、社交、反馈、处置、Weapon 设备详情和 RCP feature list mock observation。"
+      expected_output_boundary:
+        - raw_detail_flat_table
+        - layer
+        - parent_observation_id
+        - anchor_lineage
+        - raw_field_count
+        - flattened_field_count
+        - comparable_field_count
+        - unknown_field_count
+        - filtered_field_count
+      pass_fail_criteria: "所有 completed/partial source observation 先展开为 raw_detail_flat_table；非 credential 的 user_id/device_id/IP/UA/photo_id/event_id/policy_code 不默认 masked；cookie/token/session/header/password/API key 必须 redacted；字段行保留 layer、parent_observation_id 和 anchor_lineage。"
+    - case_id: PHASE-F-MULTI-ROW-SEQUENCE-COMPARISON-001
+      input: "login_logs_search / archives_user_analysis 等多行事件 source fixture，包含多条 record_index 和 record_time。"
+      expected_output_boundary:
+        - sequence_comparison_features
+        - support_record_count
+        - involved_record_indexes
+        - involved_fields
+        - candidate_only_not_final_conclusion
+      pass_fail_criteria: "多行事件型 source 既保留每条 raw detail row，也产出 sequence_comparison_features；sequence 只能作为 L3 candidate_features 输入，不得单独确认 ATO、团伙或黑灰产。"
+    - case_id: PHASE-F-SINGLE-OBJECT-WIDE-FIELD-FLATTENING-001
+      input: "Weapon device detail 和 rcp_event_feature_list 大字段 fixture。"
+      expected_output_boundary:
+        - single_object_wide_field
+        - flattened_field_count_gte_50
+        - unknown_fields_retained
+        - field_value_commonality_candidate_input
+      pass_fail_criteria: "单体大字段型 source 必须优先全量展开 field_path/field_name/field_value/field_type；fixture flattened_field_count 必须 >=50；unknown 字段保留并标 needs_field_dictionary_review。"
+    - case_id: PHASE-F-UNIFIED-CANDIDATE-FEATURE-CONTRACT-001
+      input: "raw field commonality、sequence comparison、field combination、unknown field commonality 同时进入 candidate_features。"
+      expected_output_boundary:
+        - feature_origin
+        - source_names
+        - field_paths
+        - support_entity_count
+        - support_record_count
+        - priority_score
+        - priority_level
+        - conclusion_boundary
+        - candidate_only_not_final_conclusion
+      pass_fail_criteria: "candidate_features 必须由统一 L3 收口层归一化；不得出现 confirmed_group、fraud_ring、可直接上线、精准率、lift、误伤率或已确认黑灰产。"
+    - case_id: PHASE-F-L3-CANDIDATE-ESSENCE-L4-VALIDATION-BOUNDARY-001
+      input: "L3 candidate_features 中出现高支持率字段值共性、字段组合共性和风控专家解释，但尚无正常对照、baseline、lift、误伤率或跨轮稳定性。"
+      expected_output_boundary:
+        - l3_candidate_essence_assessment
+        - statistical_commonality
+        - risk_expert_interpretation
+        - validation_needed
+        - candidate_only_not_final_conclusion
+        - l4_validation_required
+      pass_fail_criteria: "L3 可以判断候选特征像不像风险本质，并给出优先级、误伤点和验证方法；但不得写成已证明本质、高鲁棒、低误伤、可上线或 confirmed risk。只有 L4 数据验证后才能声明 baseline/lift/误伤率/稳定性支持。"
+    - case_id: DEVICE-PRIMARY-SOURCE-FOLLOWUP-BLOCKED-001
+      input: "weapon_device_info completed，但一度用户详情 follow-up 因 invalid_params / 400 blocked。"
+      expected_output_boundary:
+        - primary_source_status=completed
+        - followup_source_status=blocked
+        - top_level_final_status=completed_primary_with_followup_blocked
+        - status_contamination=true
+        - primary_source_impact=false
+      pass_fail_criteria: "主设备详情字段抽取不得被 follow-up blocked 污染成失败；一度用户详情 400 进入 followup_source_quality，用户可见答案写主源完成、关联 follow-up blocked。"
+    - case_id: LOGIN-RAW-DETAIL-EXPANSION-001
+      input: "login_logs_search partial / response_limited，但返回体包含多行登录记录和 logContent / detail JSON。"
+      expected_output_boundary:
+        - login_detail_table
+        - raw_detail_flat_table
+        - source_payload_thin
+        - commonality_eligible_field_count_gte_20_when_payload_supports
+      pass_fail_criteria: "可见登录记录必须展开到字段行；可用于共性的字段目标 >=20，若真实返回确实薄，必须标 source_payload_thin=true，不得误报 parser failed。"
+    - case_id: USER-ANALYSIS-RAW-DETAIL-EXPANSION-001
+      input: "archives_user_analysis 返回多字段用户行为 / 画像明细。"
+      expected_output_boundary:
+        - user_behavior_summary_detail_table
+        - raw_detail_flat_table
+        - source_payload_thin
+        - commonality_eligible_field_count_gte_20_when_payload_supports
+      pass_fail_criteria: "用户分析明细必须展开到字段行；未知但可比字段保留为 account_unknown_field_family / needs_field_dictionary_review。"
+    - case_id: RCP-REGISTER-NEW-L2-FEATURE-DRILLDOWN-001
+      input: "rcp_snapshot 或 rcp_fast_query_hbase 发现 REGISTER_NEW event anchor。"
+      expected_output_boundary:
+        - rcp_event_feature_list
+        - explicit_event_anchor
+        - strategy_event_feature_row_table
+        - raw_detail_flat_table
+        - candidate_features
+      pass_fail_criteria: "runner 只能基于明确 event_id / eventType / queryTime / sourceId 锚点下钻 rcp_event_feature_list；不得无 anchor 发散查询所有事件；policy_code/source_id 只作策略锚点。"
+    - case_id: SOURCE-QUALITY-BUCKET-CONSISTENCY-001
+      input: "同一 bucket 中部分 source completed，部分 source auth_failed / blocked。"
+      expected_output_boundary:
+        - per_source_quality_class
+        - bucket_summary_consistent_with_source_detail
+        - no_completed_auth_failed_mixed_row
+      pass_fail_criteria: "source-level quality_class 必须优先真实 source 状态；HTTP 200 但 source_status/error_type 为 auth_failed 时不得归 completed；bucket summary 不得混写 completed/auth_failed。"
+    - case_id: L3-SOURCE-INPUT-QUALITY-TABLE-001
+      input: "RCP、设备、登录、用户画像、内容、社交、反馈/处置 source 同轮进入 L3。"
+      expected_output_boundary:
+        - source_input_quality_table
+        - comparable_field_count
+        - unknown_field_count
+        - source_payload_thin
+        - parser_under_expanded
+        - action_mapping_incomplete
+        - auth_blocked
+        - not_entered_main_chain
+        - l3_input_quality
+      pass_fail_criteria: "必须输出 source -> 字段量 -> 可共性字段量 -> 薄源原因总表；低字段量必须明确归因为 payload thin、parser under-expanded、action mapping incomplete、auth blocked、not entered main chain、repeated item list schema narrow 或 dynamic event table capped，不能混成“共性弱”。"
+    - case_id: L3-COMMONALITY-TYPE-SEPARATION-001
+      input: "L3 同时存在 coverage、field value、field combination、sequence 和跨 source 支撑信号。"
+      expected_output_boundary:
+        - l3_commonality_type_distribution
+        - coverage_commonality_count
+        - field_value_commonality_count
+        - field_combination_commonality_count
+        - sequence_commonality_count
+        - cross_source_support_commonality_count
+      pass_fail_criteria: "coverage_commonality 只说明字段可见，不得支撑高 essence 或最终风险结论；真正像本质的候选必须来自 field value / field combination / sequence / cross-source support 之一。"
+    - case_id: L3-CANDIDATE-ESSENCE-STABILITY-001
+      input: "L3 candidate_features 覆盖 raw field、field combination、sequence 和 unknown field 候选。"
+      expected_output_boundary:
+        - essence_likeness
+        - essence_reason
+        - essence_boundary
+        - candidate_only_not_final_conclusion
+        - validation_needed
+      pass_fail_criteria: "所有 candidate_features 必须补齐 essence_likeness / essence_reason / essence_boundary；解释不了时必须写 unknown + 明确缺口，不能为 null。"
+    - case_id: L3-TOP-FEATURE-SAMPLE-001
+      input: "RCP、设备、登录、用户画像、内容/社交 source 进入 L3，但部分 source blocked 或未入主链。"
+      expected_output_boundary:
+        - candidate_feature_top_samples
+        - current_status=observed|partial|blocked|not_entered_main_chain|template_only
+        - candidate_unavailable_due_to_source_gap
+      pass_fail_criteria: "必须输出 Top candidate 样板；blocked/not_entered 的内容/社交线只能写 source gap 或 template_only，不能误写为“无共性”。"
+    - case_id: L3-NO-PARALLEL-ENGINE-001
+      input: "raw_detail_flat_table、standard_detail_table、sequence_comparison_features 三类输入同时存在。"
+      expected_output_boundary:
+        - raw_detail_flat_table
+        - standard_detail_table
+        - sequence_comparison_features
+        - no_parallel_commonality_engine
+      pass_fail_criteria: "L3 只允许统一比较层收口；source adapter 只负责拿字段、打标签、保 lineage，不得新增第二套 commonality engine 或 source-specific final feature engine。"
+    - case_id: L3-CANDIDATE-NOT-FINAL-001
+      input: "L3 candidate_features 出现高支持度字段值、组合或序列共性。"
+      expected_output_boundary:
+        - candidate_only_not_final_conclusion
+        - not_final_conclusion
+        - no_confirmed_group_or_l4_l5_terms
+      pass_fail_criteria: "不出现 confirmed_group、fraud_ring、可直接上线、精准率、lift、误伤率等 L4/L5 口径；L3 只输出候选特征和验证建议。"
+    - case_id: L3-ATTACK-CHAIN-COOCCURRENCE-RETAINED-001
+      input: "登录、设备、内容、社交、反馈/处置 source 在同轮形成链路共现。"
+      expected_output_boundary:
+        - attack_chain_cooccurrence
+        - chain_id
+        - chain_steps
+        - involved_sources
+        - attack_chain_role
+      pass_fail_criteria: "attack_chain_cooccurrence 必须保留，用于还原样本作恶链路；不能被 risk_choke_point_candidate 取代。"
+    - case_id: L3-CHOKE-POINT-CANDIDATE-001
+      input: "candidate_features 同时出现字段值、组合、序列和跨 source 支撑。"
+      expected_output_boundary:
+        - risk_choke_point_type
+        - choke_point_likeness
+        - choke_point_reason
+        - required_for_attack
+        - easy_to_evade_if_changed
+        - robustness
+      pass_fail_criteria: "candidate_features 必须输出关键卡口候选字段；链路共现不能自动等同关键卡口。"
+    - case_id: L3-COMMONALITY-NOT-ESSENCE-001
+      input: "coverage / field value / field combination / sequence / cross-source support 同时存在。"
+      expected_output_boundary:
+        - evidence_commonality_types
+        - coverage_not_equal_to_choke_point
+      pass_fail_criteria: "5 类 commonality 只作为证据形态；coverage_commonality 不能直接给 high choke_point_likeness。"
+    - case_id: L3-COVERAGE-NOT-CHOKE-POINT-001
+      input: "只有 coverage_commonality 和弱字段覆盖。"
+      expected_output_boundary:
+        - choke_point_likeness_low_or_unknown
+      pass_fail_criteria: "coverage_commonality 不允许 choke_point_likeness=high。"
+    - case_id: L3-GENERIC-OVERLAP-DOWNRANK-001
+      input: "存在 multi_domain_anchor_overlap_candidate 等 generic 候选。"
+      expected_output_boundary:
+        - generic_candidate_downranked
+      pass_fail_criteria: "generic overlap 候选不能作为 Top 强候选，除非能额外解释关键卡口。"
+    - case_id: L3-ROBUSTNESS-AGAINST-EVASION-001
+      input: "L3 候选需要区分临时链路共现和相对鲁棒的防护卡口。"
+      expected_output_boundary:
+        - easy_to_evade_if_changed
+        - robustness
+      pass_fail_criteria: "每个关键卡口候选都必须评估是否容易通过改一个模块绕过，以及当前鲁棒性。"
+    - case_id: L3-FIELD-VALUE-COMPRESSION-FUNNEL-001
+      input: "RCP / Weapon / 登录 / 内容等来源存在百级或多行字段。"
+      expected_output_boundary:
+        - field_value_commonality_funnel
+        - raw_field_value_match_count
+        - after_dedup_count
+        - after_semantic_grouping_count
+        - promoted_commonality_count
+        - suppressed_count
+        - suppressed_reasons
+      pass_fail_criteria: "必须输出字段值共性的压缩漏斗；field_value_commonality_count 明确是 promoted count，而不是 raw count。"
+    - case_id: L3-RAW-MATCH-INVENTORY-RETAINED-001
+      input: "RCP / Weapon 这类百级字段来源进入 L3。"
+      expected_output_boundary:
+        - raw_match_inventory_retained
+        - sample_suppressed_field_families
+      pass_fail_criteria: "RCP / Weapon 必须保留原始同值命中池信息，不能只剩归并后的少量 commonality。"
+    - case_id: L3-CONTROL-EXECUTION-SEPARATION-SAMPLE-001
+      input: "登录、设备、行为源共同支撑执行端与控制端不一致。"
+      expected_output_boundary:
+        - control_execution_separation_candidate
+      pass_fail_criteria: "Top 样板或 candidate_features 能输出控制面/执行面分离类候选。"
+    - case_id: L3-PROTOCOL-CONSTRAINT-GAP-SAMPLE-001
+      input: "后端行为与预期客户端约束、前端活跃或请求路径不一致。"
+      expected_output_boundary:
+        - protocol_constraint_gap_candidate
+      pass_fail_criteria: "Top 样板或 candidate_features 能输出协议约束缺失类候选。"
+    - case_id: R3-REGISTER-NEW-SNAPSHOT-PLAN-001
+      input: "最新注册攻击 batch rounds-json，scene_hint 含 REGISTER_NEW。"
+      expected_output_boundary:
+        - rcp_fast_query_hbase_retained
+        - rcp_snapshot_enabled
+        - register_new_discovery_in_source_plan
+        - rcp_event_feature_list_followup_from_event_anchor
+      pass_fail_criteria: "R3 rounds-json 必须显式包含 rcp_snapshot.enabled=true；rcp_fast_query_hbase 仅作为快查入口，不能替代 REGISTER_NEW event discovery。"
+    - case_id: R3-BATCH-CHUNKING-6-6-6-001
+      input: "18 个最新注册攻击 user_id。"
+      expected_output_boundary:
+        - three_rounds
+        - round_size_6
+      pass_fail_criteria: "18 用户必须拆成 6+6+6 三个 chunk，不改成一次性大 batch。"
+    - case_id: R3-CHECKPOINT-PARTIAL-RESULT-001
+      input: "sample_expand_validate_batch live/dry_run 执行多 chunk。"
+      expected_output_boundary:
+        - checkpoint_files
+        - latest_checkpoint_file
+        - partial_result_available
+      pass_fail_criteria: "每个 chunk/batch 完成后必须写 checkpoint；整轮失败或中断时仍可读取 partial result。"
+    - case_id: R3-BATCH-HANG-NOT-SOURCE-NODATA-001
+      input: "batch timeout / service hang / harness error。"
+      expected_output_boundary:
+        - pending_or_timeout
+        - no_source_no_data_mislabel
+      pass_fail_criteria: "batch 未回收时只能标 pending_or_timeout 或 batch_timeout_or_service_hang，不得把未完成 source 写成 no_data，更不能当低风险反证。"
+    - case_id: R3-CHECKPOINT-SOURCE-QUALITY-001
+      input: "chunk 级 source 完成情况存在 completed / partial / blocked / timeout / auth_failed / pending 混合状态。"
+      expected_output_boundary:
+        - checkpoint_source_quality_summary
+        - source_level_status_not_overwritten
+      pass_fail_criteria: "checkpoint 必须保留 source-level buckets，top-level final_status 不得污染已完成 source。"
+    - case_id: R3-PROGRESS-VISIBILITY-001
+      input: "sample_expand_validate_batch 长时间运行。"
+      expected_output_boundary:
+        - current_chunk_id
+        - current_batch_index
+        - current_running_sources
+        - last_checkpoint_file
+      pass_fail_criteria: "stdout/JSON 中必须能看到当前 chunk、当前 running sources、已完成/待完成数量和最近 checkpoint。"
+    - case_id: R3-TIMING-TRACE-001
+      input: "sample_expand_validate_batch live/dry_run 多 chunk 执行。"
+      expected_output_boundary:
+        - plan_build_ms
+        - batch_submit_ms
+        - batch_wait_ms
+        - artifact_build_ms
+        - checkpoint_write_ms
+        - timing_summary
+      pass_fail_criteria: "必须输出全局与 chunk 级 timing trace，能区分 runner 组装、batch 等待、artifact 构造和 checkpoint 写入耗时。"
+    - case_id: R3-NO-L4-NO-FINAL-JUDGEMENT-001
+      input: "R3 live readonly register attack batch result。"
+      expected_output_boundary:
+        - no_confirmed_group_or_l4_l5_terms
+      pass_fail_criteria: "不出现 confirmed_group、fraud_ring、可直接上线、精准率、lift、误伤率等 L4/L5 口径。"
+    - case_id: L3-CANDIDATE-STILL-NOT-FINAL-001
+      input: "L3 新增 risk_choke_point_candidate 和 attack_chain_cooccurrence 后继续输出候选特征。"
+      expected_output_boundary:
+        - candidate_only_not_final_conclusion
+        - no_confirmed_group_or_l4_l5_terms
+      pass_fail_criteria: "即使加入关键卡口候选和作恶链路还原，仍不得出现 confirmed_group、fraud_ring、可直接上线、精准率、lift、误伤率。"
     - case_id: PHASE3-NO-GAP-AS-COUNTER-EVIDENCE
       input: "sample_expand_validate_batch dry-run 中出现 no_data / skipped / timeout / missing_contract。"
       expected_output_boundary:

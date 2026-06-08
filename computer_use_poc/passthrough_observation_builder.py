@@ -21,6 +21,26 @@ CREDENTIAL_SECRET_KEYS = {
     "rawauthheader", "password", "passwd", "secret", "credential", "ticket",
 }
 
+DEVICE_DETAIL_NON_DEVICE_SUBTREE_KEYS = {
+    "userbehavior",
+    "user_behavior",
+    "userinfo",
+    "user_info",
+    "usercache",
+    "user_cache",
+    "userprofilechanged",
+    "user_profile_changed",
+    "userlastcomments",
+    "user_last_comments",
+    "usermessageusercnt",
+    "user_message_user_cnt",
+    "userchargeamountfen30d",
+    "user_charge_amount_fen_30d",
+    "userbanstatus",
+    "user_ban_status",
+    "query",
+}
+
 RISK_ENTITY_TOKEN_KEYS = {
     "tokenid", "tokenstatus", "tokentype", "tokensource", "tokentime",
     "tokencreatetime", "tokengeneratetime", "tokenexpiretime",
@@ -30,6 +50,33 @@ STRICT_PII_KEYS = {
     "phone", "phonenumber", "mobile", "mobilenumber", "idcard", "identity",
     "identitynumber", "realname", "name", "address", "detailaddress",
     "detailedaddress",
+}
+
+STRICT_PII_EXACT_KEYS = {
+    "username",
+    "rawusername",
+    "nickname",
+    "fromusername",
+    "tousername",
+    "reporterusername",
+    "reporteruserprofile",
+}
+
+NONESSENTIAL_URL_KEYS = {
+    "thumburl",
+    "mediaurl",
+    "relatedurl",
+    "userhead",
+    "rawuserhead",
+    "fromuserhead",
+    "touserhead",
+    "reporterheadurl",
+    "bgdupurl",
+    "hddupurl",
+    "frameurls",
+    "image",
+    "links",
+    "url",
 }
 
 BODY_CANDIDATE_KEYS = {
@@ -121,12 +168,71 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "baseline_summary",
         "candidate_device_id",
     ],
+    "archives_comment_search": [
+        "photo_id",
+        "comment_id",
+        "comment_text",
+        "action_time",
+        "target_user_id",
+        "relation_type",
+    ],
+    "archives_private_message_search": [
+        "message_id",
+        "message_text",
+        "sender",
+        "receiver",
+        "target_user_id",
+        "action_time",
+        "relation_type",
+    ],
     "archives_related_users": [
         "related_user_id",
         "relation_type",
         "shared_device",
         "shared_login_or_register",
         "related_count",
+    ],
+    "archives_fans_list": [
+        "target_user_id",
+        "relation_type",
+        "action_time",
+    ],
+    "archives_follow_list": [
+        "target_user_id",
+        "relation_type",
+        "action_time",
+    ],
+    "archives_user_report_search": [
+        "report_id",
+        "report_time",
+        "report_type",
+        "feedback_object",
+        "feedback_signal",
+    ],
+    "archives_negative_report": [
+        "report_id",
+        "report_time",
+        "report_type",
+        "feedback_object",
+        "feedback_signal",
+    ],
+    "archives_review_logs": [
+        "review_id",
+        "review_result",
+        "review_scene",
+        "enforcement_action",
+        "review_time",
+        "enforcement_time",
+        "policy_reason",
+    ],
+    "archives_punish_status": [
+        "punish_id",
+        "punish_type",
+        "enforcement_action",
+        "enforcement_time",
+        "policy_reason",
+        "photo_id",
+        "user_id",
     ],
     "weapon_inventory": [
         "user_device_edge",
@@ -151,6 +257,47 @@ SOURCE_EXPECTED_BUSINESS_FIELDS = {
         "installed_app_list",
         "first_seen_time",
         "active_days",
+    ],
+    "weapon_device_info": [
+        "device_id",
+        "risk_label",
+        "phone_model",
+        "os_version",
+        "app_version",
+        "device_platform",
+        "launch_count",
+        "boot_duration",
+        "lock_screen_enabled",
+        "sim_present",
+        "automation_service_detected",
+        "script_risk",
+        "device_reset_signal",
+        "root_or_hook_signal",
+        "frida_signal",
+        "emulator_signal",
+        "first_seen_time",
+        "active_days",
+    ],
+    "weapon_device_app_list": [
+        "device_id",
+        "installed_app_list",
+        "risk_app",
+        "tool_app",
+        "app_environment_signal",
+    ],
+    "weapon_device_location_info": [
+        "device_id",
+        "user_id",
+        "ip_or_network",
+        "location",
+        "city",
+        "province",
+    ],
+    "weapon_user_klink_status": [
+        "user_id",
+        "device_id",
+        "klink_status",
+        "session_status",
     ],
     "rcp_fast_query_hbase": [
         "event_id",
@@ -224,7 +371,7 @@ BUSINESS_FIELD_ALIASES = {
     "task_type": {"task_type", "taskType", "missionType", "activityTaskType"},
     "reward_type": {"reward_type", "rewardType", "awardType", "incentiveType"},
     "client_params": {"client_params", "clientParams", "clientInfo", "deviceInfo", "requestParams", "params"},
-    "app_version": {"app_version", "appVersion", "appVer", "clientVersion"},
+    "app_version": {"app_version", "appVersion", "appVer", "clientVersion", "versionName"},
     "ua": {"ua", "UA", "userAgent", "user_agent", "browserUa"},
     "ip_or_network": {"ip_or_network", "ip", "clientIp", "requestIp", "network", "networkType"},
     "frontend_activity_signal": {"frontend_activity_signal", "frontendActivitySignal", "frontActivity", "frontendActivity"},
@@ -241,7 +388,7 @@ BUSINESS_FIELD_ALIASES = {
     "login_source": {"login_source", "loginSource", "login_channel", "clientType", "platform", "loginPlatform", "logSource"},
     "login_device": {"login_device", "loginDevice", "loginDeviceId", "device_id", "deviceId", "did"},
     "ip_ua": {"ip", "loginIp", "clientIp", "requestIp", "ua", "UA", "userAgent", "user_agent", "browserUa"},
-    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime", "upload_time", "create_time"},
+    "publish_time": {"publish_time", "publishTime", "createTime", "uploadTime", "upload_time", "create_time", "timeMillis"},
     "publish_source": {
         "publish_source",
         "publishSource",
@@ -289,6 +436,13 @@ BUSINESS_FIELD_ALIASES = {
     "punish_or_tag_summary": {"punishment", "punish", "label", "riskLabel", "tag", "penalty"},
     "risk_label": {"risk_label", "riskLabel", "label", "tag"},
     "baseline_summary": {"baseline", "profileBaseline", "profile_baseline"},
+    "comment_id": {"comment_id", "commentId", "rootCommentId"},
+    "comment_text": {"comment_text", "commentText", "commentContent"},
+    "message_id": {"message_id", "messageId"},
+    "message_text": {"message_text", "messageText", "contentNormalized", "title", "subTitle"},
+    "sender": {"sender", "fromUserId", "fromUid"},
+    "receiver": {"receiver", "toUserId", "toUid"},
+    "target_user_id": {"target_user_id", "targetUserId", "authorId"},
     "related_user_id": {"related_user_id", "relatedUserId", "user_id", "userId"},
     "relation_type": {"relation_type", "relationType", "relation"},
     "shared_device": {"shared_device", "sharedDevice", "device_id", "deviceId", "did"},
@@ -300,26 +454,47 @@ BUSINESS_FIELD_ALIASES = {
     "window_coverage": {"request_window_start", "request_window_end", "from_timestamp", "to_timestamp"},
     "content_status": {"content_status", "photoStatus", "auditStatus", "status"},
     "audit_or_strategy_reason": {"audit_reason", "strategyReason", "hitReason", "reason"},
+    "report_id": {"report_id", "reportId", "feedbackId"},
+    "report_time": {"report_time", "reportTime", "createTime", "time"},
+    "report_type": {"report_type", "reportType"},
+    "feedback_object": {"feedback_object", "feedbackObject", "detailInfo", "reportedObject"},
+    "feedback_signal": {"feedback_signal", "reportSignal", "reportTimes", "reportedCount"},
+    "review_id": {"review_id", "reviewId", "auditId"},
+    "review_time": {"review_time", "reviewTime", "createTime"},
+    "review_result": {"review_result", "reviewResult", "logType"},
+    "punish_id": {"punish_id", "punishId"},
+    "punish_type": {"punish_type", "punishType", "punishCode", "punishCodeNameB", "eventType"},
+    "enforcement_action": {"enforcement_action", "enforcementAction", "requestSource", "desc"},
+    "enforcement_time": {"enforcement_time", "enforcementTime", "createTime"},
+    "policy_reason": {"policy_reason", "policyReason", "punishReason", "markCodeNameB", "bizAreaName", "subBizName"},
+    "review_scene": {"review_scene", "reviewScene", "sourcePage"},
     "user_device_edge": {"user_device_edge", "edge", "pointInfoMap", "deviceId", "did"},
     "graph_relation_count": {"graph_relation_count", "relationCount", "edgeCount", "count"},
     "riskdata_status": {"riskdata_status", "riskData", "riskStatus"},
-    "phone_model": {"phone_model", "phoneModel", "model", "deviceModel", "mobileModel", "machineModel"},
-    "os_version": {"os_version", "osVersion", "systemVersion", "androidVersion", "iosVersion", "deviceOsVersion"},
-    "device_platform": {"device_platform", "devicePlatform", "appPlatform", "platform", "osName", "systemName"},
-    "launch_count": {"launch_count", "launchCount", "startupCount", "startUpCount", "bootCount"},
-    "boot_duration": {"boot_duration", "bootDuration", "bootDurationSeconds", "uptime", "upTime", "powerOnDuration"},
-    "lock_screen_enabled": {"lock_screen_enabled", "lockScreenEnabled", "hasLockScreen", "lockScreen", "screenLock"},
-    "sim_present": {"sim_present", "simPresent", "hasSim", "hasSIM", "simCount"},
-    "charging_pattern": {"charging_pattern", "chargingPattern", "isCharging", "chargeStatus"},
-    "automation_service_detected": {"automation_service_detected", "automationServiceDetected", "accessibilityEnabled", "accessibilityService", "autoService"},
-    "script_risk": {"script_risk", "scriptRisk", "scriptDetected", "scriptSignal"},
-    "device_reset_signal": {"device_reset_signal", "deviceResetSignal", "resetSignal", "deviceReset"},
-    "root_or_hook_signal": {"root_or_hook_signal", "rootOrHookSignal", "rootHookSignal"},
-    "root_signal": {"root_signal", "rootSignal", "isRoot", "rooted"},
+    "phone_model": {"phone_model", "phoneModel", "model", "deviceModel", "mobileModel", "machineModel", "hwModel"},
+    "os_version": {"os_version", "osVersion", "systemVersion", "androidVersion", "iosVersion", "deviceOsVersion", "kernOsProductVersion", "kernelVersion"},
+    "device_platform": {"device_platform", "devicePlatform", "appPlatform", "platform", "osName", "systemName", "productName"},
+    "device_name": {"deviceName", "deviceName2", "kernHostname"},
+    "device_hardware_model": {"hardwareType", "hwMachine", "hwProduct", "hwTarget", "deviceModel", "buildProduct", "buildBoard", "brand", "hardware", "cpuModel"},
+    "cpu_core_count": {"hwNcpu", "hwLogicalcpu", "hwActivecpu", "hwAvailcpu", "hwPhysicalcpu", "hwPhysicalcpuMax", "cpuCoreCount", "cpuCores"},
+    "memory_total": {"hwMemsize", "hwPhysmem", "hwUsermem", "systemMem", "totalMemory", "usedMemory"},
+    "storage_total": {"diskSpace", "totalStorage", "sdTotalStorage"},
+    "storage_free": {"diskFree", "systemMemFree", "sdUsedStorage", "usedStorage", "diskSpaceUsed"},
+    "screen_resolution": {"resolution", "screenSize", "dpi"},
+    "launch_count": {"launch_count", "launchCount", "startupCount", "startUpCount", "bootCount", "appLaunchCount", "launchTimes1d", "launchTimes7d", "launchTimes30d", "launchTimes90d", "launchTimes180d"},
+    "boot_duration": {"boot_duration", "bootDuration", "bootDurationSeconds", "uptime", "upTime", "powerOnDuration", "kernWakeTime", "kernWakeTime", "bootTime", "kernBootTime", "startTime", "startTime2", "startupTime", "startupDurationms", "runningDurationms", "procesSystemUptime"},
+    "lock_screen_enabled": {"lock_screen_enabled", "lockScreenEnabled", "hasLockScreen", "lockScreen", "screenLock", "lockScreenStatus", "deviceLocked"},
+    "sim_present": {"sim_present", "simPresent", "hasSim", "hasSIM", "simCount", "simStatus", "isHasSimCard"},
+    "charging_pattern": {"charging_pattern", "chargingPattern", "isCharging", "chargeStatus", "battery", "batteryTemperature"},
+    "automation_service_detected": {"automation_service_detected", "automationServiceDetected", "accessibilityEnabled", "accessibilityService", "accessibilityServiceList", "installAccessibility", "autoService"},
+    "script_risk": {"script_risk", "scriptRisk", "scriptDetected", "scriptSignal", "pluginVersion", "accessibilitySvc", "enabledAccessibilityServices"},
+    "device_reset_signal": {"device_reset_signal", "deviceResetSignal", "resetSignal", "deviceReset", "resetTime", "resetTimeV2Ms", "bootId", "bootHashId"},
+    "root_or_hook_signal": {"root_or_hook_signal", "rootOrHookSignal", "rootHookSignal", "xposed", "mountRiskCheck", "mountRiskPath", "inject", "jailbreakDetector", "jailbreak", "proxyDetector", "proxyV2"},
+    "root_signal": {"root_signal", "rootSignal", "isRoot", "rooted", "rootCertificates"},
     "hook_signal": {"hook_signal", "hookSignal", "hookDetected"},
-    "frida_signal": {"frida_signal", "fridaSignal", "fridaDetected"},
-    "emulator_signal": {"emulator_signal", "emulatorSignal", "isEmulator", "simulator"},
-    "installed_app_list": {"installed_app_list", "installedApps", "appList", "installList", "installedAppList", "packageList"},
+    "frida_signal": {"frida_signal", "fridaSignal", "fridaDetected", "frida"},
+    "emulator_signal": {"emulator_signal", "emulatorSignal", "isEmulator", "simulator", "emulatorAndCloudphone"},
+    "installed_app_list": {"installed_app_list", "installedApps", "appList", "installList", "installedAppList", "packageList", "appInfo", "packageName"},
     "installed_app_cluster": {"installed_app_cluster", "installedAppCluster", "appEnvironmentCluster"},
     "risk_app": {"risk_app", "riskApp", "riskApps", "riskyApp"},
     "tool_app": {"tool_app", "toolApp", "toolApps", "toolPackage"},
@@ -329,6 +504,8 @@ BUSINESS_FIELD_ALIASES = {
     "account_device_count": {"account_device_count", "accountDeviceCount", "userDeviceCount"},
     "device_account_count": {"device_account_count", "deviceAccountCount", "linkedUserCount", "sameDeviceUserCount"},
     "endpoint_path": {"method", "path", "endpoint", "apiPath", "requestPath", "urlPath"},
+    "network_context": {"clientIP", "clientIp", "sourceIp", "sourceIpv6", "ipv6", "dns", "interfaceData", "otherInterfaceData", "network", "networkType", "networkOperator", "mobileNetworkCode", "mobileCountryCode", "oneIpInfo", "bssid", "ssid", "ssidData", "mac", "routerMac", "networkLink"},
+    "request_context": {"requestUri", "sourceType", "appKey", "ksAppId", "serverIp", "servertime", "timestamp", "sdkCollectTime", "sdkUploadTime"},
 }
 
 DEVICE_DETAIL_CANONICAL_FIELDS = {
@@ -336,6 +513,13 @@ DEVICE_DETAIL_CANONICAL_FIELDS = {
     "os_version",
     "app_version",
     "device_platform",
+    "device_name",
+    "device_hardware_model",
+    "cpu_core_count",
+    "memory_total",
+    "storage_total",
+    "storage_free",
+    "screen_resolution",
     "launch_count",
     "boot_duration",
     "lock_screen_enabled",
@@ -358,6 +542,8 @@ DEVICE_DETAIL_CANONICAL_FIELDS = {
     "device_age_days",
     "account_device_count",
     "device_account_count",
+    "network_context",
+    "request_context",
 }
 
 DEVICE_CANONICAL_FIELDS = {
@@ -481,6 +667,28 @@ MAX_PROJECTED_ARRAY_ITEMS = 200
 MAX_RCP_EVENT_FEATURE_ROWS = 2000
 MAX_RETAINED_FIELD_PATHS = 120
 
+RAW_DETAIL_UNKNOWN_RETENTION_ACTIONS = {
+    "login_logs_search",
+    "archives_user_analysis",
+    "archives_user_profile",
+    "archives_photo_search",
+    "archives_photo_profile",
+    "archives_photo_meta",
+    "archives_gallery_photo_list",
+    "archives_comment_search",
+    "archives_private_message_search",
+    "archives_related_users",
+    "archives_fans_list",
+    "archives_follow_list",
+    "archives_user_report_search",
+    "archives_negative_report",
+    "archives_review_logs",
+    "archives_punish_status",
+    "weapon_device_app_list",
+    "track_analysis_summary",
+    "track_analysis_check_data_ready",
+}
+
 RCP_FEATURE_TAB_ALIASES = {
     "orig": "原始类",
     "original": "原始类",
@@ -567,7 +775,13 @@ def _is_strict_pii_key(key: str) -> bool:
     normalized = _normalized_key(key)
     if normalized in STRICT_PII_KEYS:
         return True
+    if normalized in STRICT_PII_EXACT_KEYS:
+        return True
     return any(fragment in normalized for fragment in ("idcard", "identitynumber", "realname", "detailaddress", "detailedaddress"))
+
+
+def _is_nonessential_url_key(key: str) -> bool:
+    return _normalized_key(key) in NONESSENTIAL_URL_KEYS
 
 
 def _looks_sensitive_scalar(value: Any) -> bool:
@@ -1195,9 +1409,35 @@ def _extract_handles(
     source_id: str,
     path: str = "$",
     limit: int = 160,
+    action: str = "",
+    retain_unknown_scalars: bool = False,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     handles: list[dict[str, Any]] = []
     flags: list[str] = []
+
+    def record_index_from_path(current_path: str) -> int | None:
+        match = re.search(r"\[(\d+)\]", current_path)
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+
+    def can_keep_unknown_scalar(key: str, child: Any) -> bool:
+        if not retain_unknown_scalars:
+            return False
+        if _is_credential_secret_key(key) or _is_strict_pii_key(key):
+            return False
+        if isinstance(child, (dict, list)):
+            if isinstance(child, list) and child and not any(isinstance(item, (dict, list)) for item in child[:20]):
+                return True
+            return False
+        if child in (None, ""):
+            return False
+        if isinstance(child, str) and _looks_sensitive_scalar(child):
+            return False
+        return isinstance(child, (str, int, float, bool))
 
     def walk(item: Any, current_path: str) -> None:
         if len(handles) >= limit:
@@ -1207,6 +1447,9 @@ def _extract_handles(
                 child_path = f"{current_path}.{key}"
                 canonical = _canonical_for_key(key)
                 if key.lower() in BODY_CANDIDATE_KEYS:
+                    continue
+                if _is_nonessential_url_key(key):
+                    flags.append("nonessential_url_filtered")
                     continue
                 if _is_credential_secret_key(key):
                     flags.append("blocked_sensitive_material_detected")
@@ -1235,6 +1478,21 @@ def _extract_handles(
                             "field_path": child_path,
                             "source_id": source_id,
                             "value": child,
+                            "record_index": record_index_from_path(child_path),
+                        }
+                    )
+                    if len(handles) >= limit:
+                        return
+                elif can_keep_unknown_scalar(str(key), child):
+                    handles.append(
+                        {
+                            "field": key,
+                            "field_path": child_path,
+                            "source_id": source_id,
+                            "value": child,
+                            "record_index": record_index_from_path(child_path),
+                            "unknown_field_retained": True,
+                            "retention_reason": f"{action or 'source'}_raw_detail_unknown_scalar",
                         }
                     )
                     if len(handles) >= limit:
@@ -1281,11 +1539,95 @@ def _source_contextual_handles(action: str, handles: list[dict[str, Any]]) -> li
                 clone["canonical_field"] = "publish_time"
                 clone["contextual_alias"] = "photo_list_time_as_publish_time"
                 contextual.append(clone)
+            if field == "targetid":
+                clone = dict(handle)
+                clone["canonical_field"] = "photo_id"
+                clone["contextual_alias"] = "photo_targetid_as_photo_id"
+                contextual.append(clone)
+            if field in {"timemillis", "createtime"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "publish_time"
+                clone["contextual_alias"] = "photo_time_field_as_publish_time"
+                contextual.append(clone)
+            if field == "photoreviewstatus":
+                clone = dict(handle)
+                clone["canonical_field"] = "content_status"
+                clone["contextual_alias"] = "photo_review_status_as_content_status"
+                contextual.append(clone)
+            if field == "reviewinfo":
+                clone = dict(handle)
+                clone["canonical_field"] = "audit_or_strategy_reason"
+                clone["contextual_alias"] = "review_info_as_audit_reason"
+                contextual.append(clone)
         elif action == "archives_user_analysis":
             if canonical in {"device_id", "candidate_device_id"} and field in {"deviceid", "did"}:
                 clone = dict(handle)
                 clone["canonical_field"] = "operation_device"
                 clone["contextual_alias"] = "user_analysis_deviceid_as_operation_device"
+                contextual.append(clone)
+        elif action == "archives_comment_search":
+            if field in {"commenttime", "createtime", "time"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "action_time"
+                clone["contextual_alias"] = "comment_time_as_action_time"
+                contextual.append(clone)
+        elif action == "archives_private_message_search":
+            if field == "time":
+                clone = dict(handle)
+                clone["canonical_field"] = "action_time"
+                clone["contextual_alias"] = "message_time_as_action_time"
+                contextual.append(clone)
+            if field in {"fromuserid", "touserid"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "target_user_id"
+                clone["contextual_alias"] = "message_peer_as_target_user_id"
+                contextual.append(clone)
+            if field == "content":
+                clone = dict(handle)
+                clone["canonical_field"] = "message_text"
+                clone["contextual_alias"] = "message_content_as_message_text"
+                contextual.append(clone)
+        elif action in {"archives_user_report_search", "archives_negative_report"}:
+            if field in {"createtime", "time"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "report_time"
+                clone["contextual_alias"] = "report_time_alias"
+                contextual.append(clone)
+            if field == "targetid":
+                clone = dict(handle)
+                clone["canonical_field"] = "feedback_object"
+                clone["contextual_alias"] = "report_targetid_as_feedback_object"
+                contextual.append(clone)
+        elif action == "archives_review_logs":
+            if field == "createtime":
+                for canonical_field, alias in (
+                    ("review_time", "review_log_create_time_as_review_time"),
+                    ("enforcement_time", "review_log_create_time_as_enforcement_time"),
+                ):
+                    clone = dict(handle)
+                    clone["canonical_field"] = canonical_field
+                    clone["contextual_alias"] = alias
+                    contextual.append(clone)
+            if field == "desc":
+                clone = dict(handle)
+                clone["canonical_field"] = "policy_reason"
+                clone["contextual_alias"] = "review_log_desc_as_policy_reason"
+                contextual.append(clone)
+        elif action == "archives_punish_status":
+            if field in {"punishreason", "markcodenameb"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "policy_reason"
+                clone["contextual_alias"] = "punish_reason_alias"
+                contextual.append(clone)
+            if field == "punishid":
+                clone = dict(handle)
+                clone["canonical_field"] = "punish_id"
+                clone["contextual_alias"] = "punish_id_alias"
+                contextual.append(clone)
+            if field in {"punishcode", "punishcodenameb", "eventtype"}:
+                clone = dict(handle)
+                clone["canonical_field"] = "punish_type"
+                clone["contextual_alias"] = "punish_type_alias"
                 contextual.append(clone)
     return handles + contextual
 
@@ -1346,15 +1688,60 @@ def _safe_device_field_value(value: Any) -> tuple[Any, str, bool]:
     return value, "原值可用", True
 
 
+def _parse_device_embedded_scalar(value: Any) -> Any:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or len(text) > 5000:
+        return None
+    parsed_json = _parse_nested_json(text)
+    if parsed_json is not None:
+        return parsed_json
+    if not (text.startswith("{") and text.endswith("}") and "=" in text):
+        return None
+    inner = text[1:-1].strip()
+    if not inner:
+        return None
+    result: dict[str, Any] = {}
+    for part in re.split(r"[;,]\s*", inner):
+        if "=" not in part:
+            continue
+        key, raw_value = part.split("=", 1)
+        key = key.strip().strip('"').strip("'")
+        raw_value = raw_value.strip().strip('"').strip("'")
+        if not key or _is_credential_secret_key(key):
+            continue
+        if re.fullmatch(r"-?\d+", raw_value):
+            value_out: Any = int(raw_value)
+        elif re.fullmatch(r"-?\d+\.\d+", raw_value):
+            value_out = float(raw_value)
+        else:
+            value_out = raw_value
+        result[key] = value_out
+        if len(result) >= 100:
+            break
+    return result or None
+
+
+WEAPON_DEVICE_DETAIL_ACTIONS = {
+    "weapon_inventory",
+    "weapon_device_info",
+    "weapon_device_app_list",
+    "weapon_device_location_info",
+    "weapon_user_klink_status",
+}
+
+
 def _extract_device_detail_rows(
     action: str,
     parsed_values: list[tuple[str, Any]],
     *,
     source_id: str,
 ) -> list[dict[str, Any]]:
-    if action != "weapon_inventory":
+    if action not in WEAPON_DEVICE_DETAIL_ACTIONS:
         return []
     rows: list[dict[str, Any]] = []
+    row_cap = 5000
 
     def nearest_device_id(item: dict[str, Any]) -> Any:
         for key, child in item.items():
@@ -1363,46 +1750,71 @@ def _extract_device_detail_rows(
                 return child
         return None
 
+    def device_field_key_for(raw_key: str) -> tuple[str, str | None]:
+        canonical = _canonical_for_key(raw_key)
+        if canonical:
+            return canonical, canonical
+        normalized = _normalized_key(raw_key)
+        return (normalized or raw_key.strip() or "unknown_device_field"), None
+
+    def should_emit_value(value: Any) -> bool:
+        if value is None or value == "":
+            return False
+        if isinstance(value, dict):
+            return False
+        if isinstance(value, list):
+            return not any(isinstance(child, dict) for child in value)
+        return isinstance(value, (str, int, float, bool, list))
+
     def walk(item: Any, path: str, device_context: Any = None) -> None:
-        if len(rows) >= 800:
+        if len(rows) >= row_cap:
             return
         if isinstance(item, dict):
             current_device = nearest_device_id(item) or device_context
             for key, child in item.items():
-                if _is_credential_secret_key(str(key)) or _is_strict_pii_key(str(key)):
+                if _is_credential_secret_key(str(key)):
                     continue
-                canonical = _canonical_for_key(str(key))
+                if _normalized_key(str(key)) in DEVICE_DETAIL_NON_DEVICE_SUBTREE_KEYS:
+                    continue
                 child_path = f"{path}.{key}"
-                if canonical in DEVICE_DETAIL_CANONICAL_FIELDS:
+                field_key, canonical = device_field_key_for(str(key))
+                if should_emit_value(child):
                     safe_value, sensitive_policy, value_present = _safe_device_field_value(child)
-                    rows.append(
-                        {
-                            "source_id": source_id,
-                            "source_name": action,
-                            "action": action,
-                            "device_id": str(current_device) if current_device else None,
-                            "device_safe_ref": str(current_device) if current_device else None,
-                            "device_source_type": _device_source_type_for_key(canonical),
-                            "device_field_key": canonical,
-                            "device_field_name": str(key),
-                            "device_field_value_or_safe_ref": safe_value,
-                            "device_field_type": type(child).__name__,
-                            "value_present": value_present,
-                            "value_comparable": value_present and sensitive_policy != "只保留安全引用",
-                            "comparable_type": _device_comparable_type(safe_value),
-                            "source_quality": None,
-                            "evidence_source": "current_observation",
-                            "sensitive_value_policy": sensitive_policy,
-                            "field_path": child_path,
-                            "candidate_feature_eligible": canonical not in {"device_id", "candidate_device_id"},
-                        }
-                    )
+                    if value_present:
+                        rows.append(
+                            {
+                                "source_id": source_id,
+                                "source_name": action,
+                                "action": action,
+                                "device_id": str(current_device) if current_device else None,
+                                "device_safe_ref": str(current_device) if current_device else None,
+                                "device_source_type": _device_source_type_for_key(canonical or field_key),
+                                "device_field_key": field_key,
+                                "device_field_name": str(key),
+                                "device_field_value_or_safe_ref": safe_value,
+                                "device_field_type": type(child).__name__,
+                                "value_present": value_present,
+                                "value_comparable": value_present and sensitive_policy != "只保留安全引用",
+                                "comparable_type": _device_comparable_type(safe_value),
+                                "source_quality": None,
+                                "evidence_source": "current_observation",
+                                "sensitive_value_policy": sensitive_policy,
+                                "field_path": child_path,
+                                "candidate_feature_eligible": field_key not in {"device_id", "candidate_device_id"},
+                                "known_device_field": canonical in DEVICE_DETAIL_CANONICAL_FIELDS,
+                                "unknown_device_field_retained": canonical is None,
+                                "raw_device_field_retention_policy": "retain_non_secret_weapon_leaf_fields",
+                            }
+                        )
+                    embedded_device_value = _parse_device_embedded_scalar(child)
+                    if embedded_device_value is not None:
+                        walk(embedded_device_value, f"{child_path}.__parsed_scalar", current_device)
                 if isinstance(child, (dict, list)):
                     walk(child, child_path, current_device)
         elif isinstance(item, list):
             for index, child in enumerate(item[:200]):
                 walk(child, f"{path}[{index}]", device_context)
-                if len(rows) >= 800:
+                if len(rows) >= row_cap:
                     return
 
     for body_path, parsed in parsed_values:
@@ -1464,11 +1876,25 @@ def build_safe_observation(
         projection_metadata.append(projection_meta)
         parsed_values.append((body_path, projected))
 
-    direct_handles, direct_flags = _extract_handles(source_payload, source_id=source_id, path="$passthrough")
+    direct_handles, direct_flags = _extract_handles(
+        source_payload,
+        source_id=source_id,
+        path="$passthrough",
+        action=action,
+    )
     flags.extend(direct_flags)
     body_handles: list[dict[str, Any]] = []
-    for body_path, parsed in parsed_values:
-        handles, body_flags = _extract_handles(parsed, source_id=source_id, path=body_path)
+    retain_unknown_scalars = action in RAW_DETAIL_UNKNOWN_RETENTION_ACTIONS
+    body_handle_limit = 1200 if retain_unknown_scalars else 160
+    for body_path, prepared in prepared_values:
+        handles, body_flags = _extract_handles(
+            prepared,
+            source_id=source_id,
+            path=body_path,
+            limit=body_handle_limit,
+            action=action,
+            retain_unknown_scalars=retain_unknown_scalars,
+        )
         body_handles.extend(handles)
         flags.extend(body_flags)
 
@@ -1481,7 +1907,7 @@ def build_safe_observation(
     )
     device_detail_rows = _extract_device_detail_rows(
         action,
-        parsed_values,
+        prepared_values if action in WEAPON_DEVICE_DETAIL_ACTIONS else parsed_values,
         source_id=source_id,
     )
     extracted_business_fields = _unique(
@@ -1519,13 +1945,13 @@ def build_safe_observation(
     if strategy_event_feature_rows:
         flags.extend([
             "strategy_event_feature_rows_extracted",
-            "rcp_event_feature_list_row_level_projection_applied",
+            "rcp_event_feature_list_row_level_retention_applied",
         ])
     if device_detail_rows:
         flags.extend([
             "device_detail_rows_extracted",
-            "weapon_device_detail_row_projection_applied",
-            "device_raw_field_values_retained_except_credentials_and_strict_pii",
+            "weapon_device_detail_row_level_retention_applied",
+            "device_raw_field_values_retained_except_credentials",
         ])
     if not parsed_values and (transport_row.get("body_present") is True or int(transport_row.get("observed_bytes") or 0) > 0):
         flags.append("service_body_visibility_gap")
@@ -1564,7 +1990,9 @@ def build_safe_observation(
         "safe_parse_body": True,
         "raw_body_returned": False,
         "visible_body_keys": [path for path, _value in body_candidates],
-        "parser_input_available": bool(parsed_values),
+        "parser_input_available": bool(prepared_values),
+        "fact_extraction_input_policy": "pre_projection_prepared_body_credentials_filtered",
+        "display_projection_boundary": "projection_applies_to_user_visible_summary_not_fact_tables",
         "body_parse_statuses": body_parse_statuses,
         "direct_safe_handles": direct_handles,
         "parsed_body_safe_handles": parsed_body_handles,

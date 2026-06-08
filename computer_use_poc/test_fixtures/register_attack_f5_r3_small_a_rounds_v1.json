@@ -1,0 +1,41 @@
+{
+  "route_mode": "sample_expand_validate_mode",
+  "total_input_count": 18,
+  "round_size": 6,
+  "max_rounds": 1,
+  "planned_rounds_this_run": 1,
+  "max_deep_checked_this_run": 6,
+  "sampling_method": "fixed_register_attack_sample",
+  "data_window": "latest_register_attack_r3_small_a",
+  "scene_hint": [
+    "最新注册攻击",
+    "REGISTER_NEW",
+    "RCP",
+    "设备",
+    "登录",
+    "用户画像",
+    "Track"
+  ],
+  "rounds": [
+    {
+      "round_id": 1,
+      "sampled_entities": [
+        "5531305932",
+        "5531745169",
+        "5531727692",
+        "5531602028",
+        "5530559615",
+        "5532222459"
+      ],
+      "source_overrides": {
+        "rcp_snapshot": {
+          "enabled": true,
+          "eventType": "REGISTER_NEW",
+          "eventTypeCodes": "REGISTER_NEW",
+          "pageIndex": 1,
+          "pageSize": 20
+        }
+      }
+    }
+  ]
+}

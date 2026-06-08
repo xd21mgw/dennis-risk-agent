@@ -8,7 +8,7 @@ It does not change runtime execution, browser-backed service behavior, or
 Source of truth:
 
 - Service action truth: `/Users/pengcheng/dennis-local/browser-backed-api-poc/ACTION_REGISTRY.md`.
-- Current service count: `action_count=70`.
+- Current service count: `action_count=74`.
 - Dennis asset table: `computer_use_poc/browser_backed_interface_asset_table_v1.yaml`.
 - Drift check: `python3 computer_use_poc/interface_asset_table_check.py --format json`.
 
@@ -348,7 +348,7 @@ Allowed stop reasons:
 
 - Input recognition is route selection, not full entity expansion.
 - `base_summary_layer` is not "run all interfaces".
-- Do not draw the 70 interfaces as 70 process nodes; group by observation domain and call role.
+- Do not draw the registered interfaces as one process node per interface; group by observation domain and call role.
 - Strategy hits are `strategy_domain` signals, not the center of all risk reasoning.
 - Feedback and enforcement are separate domains.
 - `group_domain` is an aggregate object domain. Use `group_profile_candidate` by default; do not output `confirmed_group` or `fraud_ring` without strong multi-source closure and validation.

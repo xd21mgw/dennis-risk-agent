@@ -33,6 +33,9 @@ DEFAULT_SCENE_WINDOW_DAYS = 30
 LOGIN_LOG_RELIABLE_WINDOW_DAYS = 7
 TRACK_READINESS_WINDOW_DAYS = 7
 MAX_BROWSER_BACKED_BATCH_SOURCES = 30
+MAX_ONE_DEGREE_USERS_PER_SEED = 2
+MAX_ONE_DEGREE_ASSOCIATED_USERS_TOTAL = 6
+DEFAULT_BROWSER_BACKED_BASE = "http://127.0.0.1:8787"
 SOURCE_ACTION_CHUNK_LIMITS = {
     "login_logs_search": 2,
     "rcp_fast_query_hbase": 5,
@@ -899,10 +902,13 @@ def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[st
             http_status=getattr(exc, "code", None),
         )
     except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        reason_type = type(reason).__name__ if reason is not None else type(exc).__name__
+        reason_text = sanitize_for_output(str(reason) if reason is not None else str(exc))
         return build_harness_error_result(
             source_status="service_unavailable",
-            error_type=type(exc).__name__,
-            detail={"reason": sanitize_for_output(str(exc.reason) if hasattr(exc, "reason") else str(exc))},
+            error_type=f"{type(exc).__name__}:{reason_type}",
+            detail={"reason": reason_text, "reason_type": reason_type},
         )
 
     try:
@@ -914,6 +920,214 @@ def call_browser_backed_batch(base_url: str, payload: dict[str, Any]) -> dict[st
             detail={"body_present": bool(data)},
             category="parse_error",
         )
+
+
+DEFAULT_SAMPLE_BATCH_CHECKPOINT_DIR = Path("/private/tmp/dennis_f5_r3_checkpoints")
+
+
+def _iso_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+
+
+def _elapsed_ms(start_monotonic: float) -> int:
+    return int((time.monotonic() - start_monotonic) * 1000)
+
+
+def _chunk_actions_from_payload(payload: dict[str, Any]) -> list[str]:
+    actions: list[str] = []
+    for group in payload.get("execution_groups", []):
+        if not isinstance(group, dict):
+            continue
+        for source in group.get("sources", []):
+            if not isinstance(source, dict):
+                continue
+            action = str(source.get("action") or "").strip()
+            if action:
+                actions.append(action)
+    return actions
+
+
+def _chunk_source_ids_from_payload(payload: dict[str, Any]) -> list[str]:
+    source_ids: list[str] = []
+    for group in payload.get("execution_groups", []):
+        if not isinstance(group, dict):
+            continue
+        for source in group.get("sources", []):
+            if not isinstance(source, dict):
+                continue
+            source_id = str(source.get("source_id") or "").strip()
+            if source_id:
+                source_ids.append(source_id)
+    return source_ids
+
+
+def _chunk_source_group_from_payload(payload: dict[str, Any]) -> str:
+    actions = unique_strings(_chunk_actions_from_payload(payload))
+    if not actions:
+        return "unknown_source_group"
+    return "+".join(actions)
+
+
+def _checkpoint_dir_for_args(args: argparse.Namespace, case_id: str) -> Path:
+    base = Path(args.checkpoint_dir) if getattr(args, "checkpoint_dir", None) else DEFAULT_SAMPLE_BATCH_CHECKPOINT_DIR
+    return base / case_id
+
+
+def _pending_sources_from_quality(
+    source_plan: list[SourcePlanItem],
+    source_quality_matrix: dict[str, Any],
+) -> list[str]:
+    seen: set[str] = set()
+    buckets = source_quality_matrix.get("buckets", {}) if isinstance(source_quality_matrix, dict) else {}
+    for key in ("completed", "partial", "blocked", "timeout", "no_data", "auth_failed", "parse_error", "planned"):
+        for source_id in buckets.get(key, []) or []:
+            seen.add(str(source_id))
+    pending = [item.source_id for item in source_plan if item.source_id not in seen]
+    return pending
+
+
+def _checkpoint_source_quality_summary(source_quality_matrix: dict[str, Any]) -> dict[str, Any]:
+    summary = _source_quality_summary_for_output(source_quality_matrix)
+    summary["completed_count"] = len(summary.get("completed", []))
+    summary["partial_count"] = len(summary.get("partial", []))
+    summary["blocked_count"] = len(summary.get("blocked", []))
+    summary["timeout_count"] = len(summary.get("timeout", []))
+    summary["auth_failed_count"] = len(summary.get("auth_failed", []))
+    summary["pending_count"] = len(_pending_sources_from_quality([], {}))
+    return summary
+
+
+def _emit_sample_batch_progress(progress_row: dict[str, Any]) -> None:
+    print(
+        json.dumps(
+            {
+                "progress": {
+                    "current_chunk_id": progress_row.get("current_chunk_id"),
+                    "current_round_index": progress_row.get("current_round_index"),
+                    "current_batch_index": progress_row.get("current_batch_index"),
+                    "current_source_group": progress_row.get("current_source_group"),
+                    "current_running_sources": progress_row.get("current_running_sources"),
+                    "elapsed_seconds": progress_row.get("elapsed_seconds"),
+                    "completed_source_count": progress_row.get("completed_source_count"),
+                    "partial_source_count": progress_row.get("partial_source_count"),
+                    "blocked_source_count": progress_row.get("blocked_source_count"),
+                    "pending_source_count": progress_row.get("pending_source_count"),
+                    "last_checkpoint_file": progress_row.get("last_checkpoint_file"),
+                }
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+
+
+def _write_sample_batch_checkpoint(
+    *,
+    checkpoint_dir: Path,
+    case_id: str,
+    round_index: int,
+    batch_index: int,
+    chunk_id: str,
+    current_source_group: str,
+    current_running_sources: list[str],
+    current_source_plan: list[SourcePlanItem],
+    current_results: list[dict[str, Any]],
+    sampled_entities: list[str],
+    mode: str,
+    disabled_actions: set[str],
+    waiting_reason: str,
+    timing_trace: dict[str, Any],
+    checkpoint_phase: str,
+) -> tuple[str, dict[str, Any]]:
+    checkpoint_started = time.monotonic()
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    batch_result_raw = merge_batch_results(current_results)
+    source_quality_matrix = merge_source_quality(current_source_plan, batch_result_raw)
+    source_observations = build_source_observations(current_source_plan, source_quality_matrix, batch_result_raw)
+    source_commonality_cards = build_batch_source_commonality_cards(
+        source_quality_matrix,
+        len(sampled_entities),
+        source_observations,
+        disabled_actions,
+    )
+    orchestration_artifacts = build_round_orchestration_artifacts(
+        round_id=round_index,
+        sampled_entities=sampled_entities,
+        source_plan=current_source_plan,
+        source_quality_matrix=source_quality_matrix,
+        source_observations=source_observations,
+        source_commonality_cards=source_commonality_cards,
+        mode=mode,
+        disabled_actions=disabled_actions,
+    )
+    pending_sources = _pending_sources_from_quality(current_source_plan, source_quality_matrix)
+    quality_summary = _source_quality_summary_for_output(source_quality_matrix)
+    quality_summary["completed_count"] = len(quality_summary.get("completed", []))
+    quality_summary["partial_count"] = len(quality_summary.get("partial", []))
+    quality_summary["blocked_count"] = len(quality_summary.get("blocked", []))
+    quality_summary["timeout_count"] = len(quality_summary.get("timeout", []))
+    quality_summary["auth_failed_count"] = len(quality_summary.get("auth_failed", []))
+    quality_summary["pending_count"] = len(pending_sources)
+    checkpoint_payload = {
+        "case_id": case_id,
+        "chunk_id": chunk_id,
+        "round_index": round_index,
+        "batch_index": batch_index,
+        "current_running_source": current_running_sources[0] if current_running_sources else None,
+        "current_running_sources": current_running_sources,
+        "completed_sources": quality_summary.get("completed", []),
+        "partial_sources": quality_summary.get("partial", []),
+        "blocked_sources": quality_summary.get("blocked", []),
+        "timeout_sources": quality_summary.get("timeout", []),
+        "auth_failed_sources": quality_summary.get("auth_failed", []),
+        "pending_sources": pending_sources,
+        "source_quality_summary": quality_summary,
+        "raw_detail_flat_table_summary": orchestration_artifacts.get("raw_detail_flat_table_summary"),
+        "field_value_commonality_funnel_summary": orchestration_artifacts.get("field_value_commonality_funnel"),
+        "candidate_features_count": len(orchestration_artifacts.get("candidate_features", []) or []),
+        "attack_chain_cooccurrence_count": len(orchestration_artifacts.get("attack_chain_cooccurrence", []) or []),
+        "risk_choke_point_candidate_count": sum(
+            1
+            for item in orchestration_artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict) and str(item.get("risk_choke_point_type") or "").strip()
+        ),
+        "last_successful_source": (
+            quality_summary.get("partial", [])[-1]
+            if quality_summary.get("partial") else
+            quality_summary.get("completed", [])[-1]
+            if quality_summary.get("completed") else
+            None
+        ),
+        "failure_or_waiting_reason": waiting_reason,
+        "checkpoint_written_at": _iso_now(),
+        "timing_trace": timing_trace,
+        "partial_result_available": bool(
+            quality_summary.get("completed") or quality_summary.get("partial") or quality_summary.get("blocked")
+            or quality_summary.get("timeout") or quality_summary.get("auth_failed")
+        ),
+    }
+    checkpoint_path = checkpoint_dir / f"round_{round_index:02d}_batch_{batch_index:02d}_{chunk_id}_{checkpoint_phase}.json"
+    checkpoint_path.write_text(
+        json.dumps(project_safe_stdout_value(checkpoint_payload), ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    timing_trace.setdefault("global", {})["checkpoint_write_ms"] = int(
+        timing_trace.get("global", {}).get("checkpoint_write_ms") or 0
+    ) + _elapsed_ms(checkpoint_started)
+    progress_row = {
+        "current_chunk_id": chunk_id,
+        "current_round_index": round_index,
+        "current_batch_index": batch_index,
+        "current_source_group": current_source_group,
+        "current_running_sources": current_running_sources,
+        "elapsed_seconds": round((timing_trace.get("global", {}).get("total_elapsed_ms") or 0) / 1000, 2),
+        "last_checkpoint_file": str(checkpoint_path),
+        "completed_source_count": quality_summary["completed_count"],
+        "partial_source_count": quality_summary["partial_count"],
+        "blocked_source_count": quality_summary["blocked_count"],
+        "pending_source_count": quality_summary["pending_count"],
+    }
+    return str(checkpoint_path), progress_row
 
 
 def build_harness_error_result(
@@ -1057,6 +1271,10 @@ def derive_transport_interpretation(row: dict[str, Any]) -> str:
 
     if _auth_flow_not_completed_gap(row):
         return "auth_flow_not_completed_in_bound_context"
+    if _explicit_auth_failure(row):
+        return "auth_failed"
+    if row.get("invalid_params") or "missing_required" in status or "invalid" in status or "invalid" in error_type:
+        return "invalid_params"
     if _success_http_with_body(row) and _row_has_large_response(row):
         return "transport_success_partial_observation_response_too_large"
     if _success_http_with_body(row) and _row_has_empty_hint(row):
@@ -1067,10 +1285,6 @@ def derive_transport_interpretation(row: dict[str, Any]) -> str:
         return "transport_success"
     if row.get("timed_out") or row.get("timeout") or "timeout" in status or "timeout" in error_type or "timeout" in transport_error:
         return "timeout"
-    if _explicit_auth_failure(row):
-        return "auth_failed"
-    if row.get("invalid_params") or "missing_required" in status or "invalid" in status or "invalid" in error_type:
-        return "invalid_params"
     if "parse" in status or "parse" in error_type:
         return "parse_error"
     if "no_data" in status or "empty" in status:
@@ -1624,6 +1838,97 @@ SOURCE_OBSERVATION_CONTRACTS = {
         ],
         "role": "扩散线索，不是团伙结论",
     },
+    "archives_comment_search": {
+        "chain_section": "content_social_handoff",
+        "expected_business_fields": [
+            "photo_id",
+            "comment_id",
+            "comment_text",
+            "action_time",
+            "target_user_id",
+            "relation_type",
+        ],
+        "role": "评论承接线索，只作为内容/社交候选，不单独定性。",
+    },
+    "archives_private_message_search": {
+        "chain_section": "content_social_handoff",
+        "expected_business_fields": [
+            "message_id",
+            "message_text",
+            "sender",
+            "receiver",
+            "target_user_id",
+            "action_time",
+            "relation_type",
+        ],
+        "role": "私信承接线索，只作为单用户/小批候选，不直接升级为团伙或最终风险结论。",
+    },
+    "archives_fans_list": {
+        "chain_section": "content_social_handoff",
+        "expected_business_fields": [
+            "target_user_id",
+            "relation_type",
+            "action_time",
+        ],
+        "role": "粉丝关系上下文，只作社交关系候选输入。",
+    },
+    "archives_follow_list": {
+        "chain_section": "content_social_handoff",
+        "expected_business_fields": [
+            "target_user_id",
+            "relation_type",
+            "action_time",
+        ],
+        "role": "关注关系上下文，只作社交关系候选输入。",
+    },
+    "archives_user_report_search": {
+        "chain_section": "feedback_signal",
+        "expected_business_fields": [
+            "report_id",
+            "report_time",
+            "report_type",
+            "feedback_object",
+            "feedback_signal",
+        ],
+        "role": "举报明细线索，是反馈不是风险事实。",
+    },
+    "archives_negative_report": {
+        "chain_section": "feedback_signal",
+        "expected_business_fields": [
+            "report_id",
+            "report_time",
+            "report_type",
+            "feedback_object",
+            "feedback_signal",
+        ],
+        "role": "负向反馈汇总线索，是反馈不是风险事实。",
+    },
+    "archives_review_logs": {
+        "chain_section": "enforcement_review",
+        "expected_business_fields": [
+            "review_id",
+            "review_result",
+            "review_scene",
+            "enforcement_action",
+            "review_time",
+            "enforcement_time",
+            "policy_reason",
+        ],
+        "role": "审核日志/治理动作线索，是处置过程不是黑灰产本质。",
+    },
+    "archives_punish_status": {
+        "chain_section": "enforcement_review",
+        "expected_business_fields": [
+            "punish_id",
+            "punish_type",
+            "enforcement_action",
+            "enforcement_time",
+            "policy_reason",
+            "photo_id",
+            "user_id",
+        ],
+        "role": "处罚状态/处罚原因线索，是治理状态不是黑灰产本质。",
+    },
     "weapon_inventory": {
         "chain_section": "device_ip_spread",
         "expected_business_fields": [
@@ -1634,6 +1939,51 @@ SOURCE_OBSERVATION_CONTRACTS = {
             "riskdata_status",
         ],
         "role": "设备图谱和设备风险辅助证据，不替代登录/发布链路",
+    },
+    "weapon_device_info": {
+        "chain_section": "device_detail",
+        "expected_business_fields": [
+            "device_id",
+            "phone_model",
+            "os_version",
+            "app_version",
+            "device_platform",
+            "risk_label",
+            "launch_count",
+            "boot_duration",
+        ],
+        "role": "Weapon 设备详情主 source，字段进入 device_detail_table，不替代风险结论",
+    },
+    "weapon_device_app_list": {
+        "chain_section": "device_app_environment",
+        "expected_business_fields": [
+            "device_id",
+            "installed_app_list",
+            "risk_app",
+            "tool_app",
+            "app_environment_signal",
+        ],
+        "role": "Weapon 安装列表 / 应用环境 source，字段进入 device_detail_table",
+    },
+    "weapon_device_location_info": {
+        "chain_section": "device_network_location",
+        "expected_business_fields": [
+            "device_id",
+            "user_id",
+            "ip_or_network",
+            "location",
+        ],
+        "role": "Weapon 设备位置 / 网络上下文 source，需要 device_id + user_id",
+    },
+    "weapon_user_klink_status": {
+        "chain_section": "account_device_session_status",
+        "expected_business_fields": [
+            "user_id",
+            "device_id",
+            "klink_status",
+            "session_status",
+        ],
+        "role": "Weapon 账号会话 / Klink 状态 source，偏账号-设备链路上下文",
     },
     "rcp_event_detail": {
         "chain_section": "strategy_risk_signal",
@@ -1719,6 +2069,10 @@ BUSINESS_FIELD_ALIASES = {
     "token_oauth_scan": {"token", "oauth", "OAuth", "scan", "scanLogin", "refreshToken", "byToken", "logined"},
     "kickout": {"kickout", "kick_out", "kickedOut", "protectKickout"},
     "success_failure_sequence": {"login_result", "loginResult", "success", "failure", "status"},
+    "operation_device": {"operation_device", "operationDevice", "actionDeviceId", "operateDeviceId"},
+    "security_action_type": {"security_action_type", "securityActionType", "actionType", "operationType", "credential_secret_event_id"},
+    "related_count": {"related_count", "relatedCount", "count", "total", "recordCount"},
+    "feature_value": {"feature_value", "featureValue", "value", "fieldValue"},
     "window_coverage": {"request_window_start", "request_window_end", "from_timestamp", "to_timestamp"},
     "account_status": {"account_status", "accountStatus", "status", "accountState"},
     "profile_baseline": {"profile_baseline", "profileBaseline", "profile", "userProfile"},
@@ -3928,6 +4282,29 @@ def validate_sample_expand_rounds_payload(
     }
 
 
+def validate_register_new_snapshot_rounds_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    scene_hints = [
+        str(item)
+        for item in payload.get("scene_hint", []) or []
+        if str(item).strip()
+    ]
+    register_new_required = any("REGISTER_NEW" in item or "注册攻击" in item for item in scene_hints)
+    if not register_new_required:
+        return {"required": False, "valid": True, "errors": []}
+    errors: list[str] = []
+    for round_item in payload.get("rounds", []) or []:
+        round_id = round_item.get("round_id")
+        source_overrides = round_item.get("source_overrides")
+        snapshot_override = (
+            source_overrides.get("rcp_snapshot", {})
+            if isinstance(source_overrides, dict) and isinstance(source_overrides.get("rcp_snapshot"), dict)
+            else {}
+        )
+        if snapshot_override.get("enabled") is not True:
+            errors.append(f"round_{round_id}_rcp_snapshot_enabled_required_for_register_new")
+    return {"required": True, "valid": not errors, "errors": errors}
+
+
 def disabled_actions_for_sample_batch(args: argparse.Namespace, rounds_payload: dict[str, Any]) -> set[str]:
     disabled = {
         str(action).strip()
@@ -3947,6 +4324,61 @@ def _batch_source_id(round_id: int, index: int, source: str) -> str:
     return f"round_{round_id}_entity_{index}_{source}"
 
 
+WEAPON_DEVICE_DETAIL_ACTIONS = {
+    "weapon_device_info",
+    "weapon_device_app_list",
+    "weapon_device_location_info",
+    "weapon_user_klink_status",
+}
+
+
+def _weapon_device_detail_source_items(
+    *,
+    round_id: int,
+    index: int,
+    entity: str,
+    seed_entity_type: str,
+    window_start_ms: int,
+    window_end_ms: int,
+) -> list[SourcePlanItem]:
+    if seed_entity_type != "device_id":
+        return []
+    return [
+        SourcePlanItem(
+            source_id=_batch_source_id(round_id, index, "weapon_device_info"),
+            action="weapon_device_info",
+            execution_group="independent_parallel",
+            depends_on=[],
+            timeout_class="standard_readonly",
+            failure_policy="non_blocking_partial",
+            source_priority="P0",
+            expected_observation="direct Weapon device detail fields for device_detail_table; inventory remains graph/relation context",
+            params={"device_id": entity, "mode": "device_detail_primary"},
+            timeout_ms=30_000,
+            required_fields=["device_id"],
+            window_policy="current_device_detail_window",
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+        ),
+        SourcePlanItem(
+            source_id=_batch_source_id(round_id, index, "weapon_device_app_list"),
+            action="weapon_device_app_list",
+            execution_group="independent_parallel",
+            depends_on=[_batch_source_id(round_id, index, "weapon_device_info")],
+            timeout_class="standard_readonly",
+            failure_policy="non_blocking_partial",
+            source_priority="P1",
+            expected_observation="Weapon installed app / app environment fields for device_detail_table",
+            params={"device_id": entity, "mode": "device_app_environment"},
+            timeout_ms=30_000,
+            required_fields=["device_id"],
+            window_policy="current_device_app_environment_window",
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+        ),
+    ]
+
+
 def build_sample_round_source_plan(
     round_id: int,
     sampled_entities: list[str],
@@ -3954,8 +4386,10 @@ def build_sample_round_source_plan(
     window_start_ms: int,
     window_end_ms: int,
     disabled_actions: set[str] | None = None,
+    source_overrides: dict[str, Any] | None = None,
 ) -> list[SourcePlanItem]:
     disabled_actions = disabled_actions or set()
+    source_overrides = source_overrides or {}
     login_start_ms, login_end_ms = _bounded_source_window(
         window_start_ms,
         window_end_ms,
@@ -3973,10 +4407,45 @@ def build_sample_round_source_plan(
         weapon_params = {"device_id": entity} if seed_entity_type == "device_id" else {"user_id": entity}
         weapon_required_fields = ["device_id"] if seed_entity_type == "device_id" else ["user_id"]
         weapon_expected_observation = (
-            "device graphData/riskData summary for real device detail field validation"
+            "device graphData/user relation summary; direct detail comes from weapon_device_info"
             if seed_entity_type == "device_id"
             else "user-device graphData/riskData summary for entity_resolution_first"
         )
+        items.extend(
+            _weapon_device_detail_source_items(
+                round_id=round_id,
+                index=index,
+                entity=entity,
+                seed_entity_type=seed_entity_type,
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+        if seed_entity_type == "device_id":
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "weapon"),
+                    action="weapon_inventory",
+                    execution_group="independent_parallel",
+                    depends_on=[],
+                    timeout_class="standard_readonly",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P0",
+                    expected_observation=weapon_expected_observation,
+                    params={
+                        **weapon_params,
+                        "mode": "batch_user_device_graph_summary",
+                        "include_risk_data": True,
+                        "max_device_ids": 10,
+                    },
+                    timeout_ms=30_000,
+                    required_fields=weapon_required_fields,
+                    window_policy="current_user_device_graph_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+            continue
         items.extend(
             [
                 SourcePlanItem(
@@ -4013,6 +4482,31 @@ def build_sample_round_source_plan(
                     timeout_ms=30_000,
                     required_fields=weapon_required_fields,
                     window_policy="current_user_device_graph_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                ),
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "user_analysis"),
+                    action="archives_user_analysis",
+                    execution_group="auth_sensitive_serial",
+                    depends_on=[_batch_source_id(round_id, index, "archives_profile")],
+                    timeout_class="large_response",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P0",
+                    expected_observation=(
+                        "bounded user behavior/action summary fields for user_behavior_summary_detail_table; "
+                        "profile/login/content gaps remain missing evidence, not counter evidence"
+                    ),
+                    params={
+                        **common_user_params,
+                        "beginTime": window_start_ms,
+                        "endTime": window_end_ms,
+                        "pageIndex": 1,
+                        "pageSize": 30,
+                    },
+                    timeout_ms=45_000,
+                    required_fields=["user_id", "beginTime", "endTime"],
+                    window_policy="archives_scene_window_not_constrained_by_login_logs_7d",
                     window_start_ms=window_start_ms,
                     window_end_ms=window_end_ms,
                 ),
@@ -4067,8 +4561,13 @@ def build_sample_round_source_plan(
                         "source_id": entity,
                         "startTime": window_start_ms,
                         "endTime": window_end_ms,
-                        "eventTypeCodes": "",
+                        "eventTypeCodes": str(source_overrides.get("rcp_fast_query_hbase", {}).get("eventTypeCodes", "")) if isinstance(source_overrides.get("rcp_fast_query_hbase"), dict) else "",
                         "limit": 100,
+                        **(
+                            source_overrides.get("rcp_fast_query_hbase", {})
+                            if isinstance(source_overrides.get("rcp_fast_query_hbase"), dict)
+                            else {}
+                        ),
                     },
                     timeout_ms=30_000,
                     required_fields=["source_id", "startTime", "endTime"],
@@ -4078,6 +4577,40 @@ def build_sample_round_source_plan(
                 ),
             ]
         )
+        rcp_snapshot_override = (
+            source_overrides.get("rcp_snapshot", {})
+            if isinstance(source_overrides.get("rcp_snapshot"), dict)
+            else {}
+        )
+        if rcp_snapshot_override.get("enabled") is True:
+            snapshot_params = {
+                "source_id": entity,
+                "startTime": window_start_ms,
+                "endTime": window_end_ms,
+                "eventType": str(rcp_snapshot_override.get("eventType") or "REGISTER_NEW"),
+                "eventTypeCodes": str(rcp_snapshot_override.get("eventTypeCodes") or rcp_snapshot_override.get("eventType") or "REGISTER_NEW"),
+                "pageIndex": int(rcp_snapshot_override.get("pageIndex") or 1),
+                "pageSize": int(rcp_snapshot_override.get("pageSize") or 20),
+                **{key: value for key, value in rcp_snapshot_override.items() if key != "enabled"},
+            }
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "rcp_snapshot"),
+                    action="rcp_snapshot",
+                    execution_group="independent_parallel",
+                    depends_on=[],
+                    timeout_class="standard_readonly",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P1-controlled-event-discovery",
+                    expected_observation="RCP eventList discovery for explicit REGISTER_NEW event anchors before feature-list L2",
+                    params=snapshot_params,
+                    timeout_ms=30_000,
+                    required_fields=["eventType", "startTime", "endTime"],
+                    window_policy="strategy_event_discovery_by_event_type_recent_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
     return [item for item in items if item.action not in disabled_actions]
 
 
@@ -4186,6 +4719,7 @@ def build_batch_source_commonality_cards(
         ({"archives_user_profile"}, "archive_admin_profile"),
         ({"weapon_inventory"}, "weapon_graph_risk"),
         ({"archives_photo_search", "archives_gallery_photo_list", "archives_photo_profile", "archives_photo_meta"}, "content_action_anchor"),
+        ({"archives_comment_search", "archives_private_message_search", "archives_related_users", "archives_fans_list", "archives_follow_list"}, "social_action_anchor"),
         ({"rcp_fast_query_hbase"}, "strategy_hit"),
         ({"rcp_snapshot"}, "strategy_hit_detail"),
         ({"rcp_event_detail", "rcp_event_feature_list"}, "strategy_event_request_detail"),
@@ -4201,6 +4735,11 @@ def build_batch_source_commonality_cards(
         "archives_gallery_photo_list": {"photo_id", "publish_time", "publish_source", "publish_device"},
         "archives_photo_profile": {"photo_id", "publish_time", "publish_source", "publish_device", "publish_ip", "publish_ua"},
         "archives_photo_meta": {"photo_id", "publish_time", "publish_source", "publish_device", "publish_ip", "publish_ua"},
+        "archives_comment_search": {"photo_id", "comment_id", "comment_text", "action_time", "target_user_id", "relation_type"},
+        "archives_private_message_search": {"message_id", "message_text", "sender", "receiver", "target_user_id", "action_time", "relation_type"},
+        "archives_related_users": {"related_user_id", "relation_type", "shared_device", "related_count"},
+        "archives_fans_list": {"target_user_id", "relation_type", "action_time"},
+        "archives_follow_list": {"target_user_id", "relation_type", "action_time"},
         "rcp_fast_query_hbase": {"event_type", "event_time", "policy_code", "hit_policy", "risk_decision"},
         "rcp_snapshot": {"event_type", "event_time", "policy_code", "hit_policy", "risk_decision"},
         "rcp_event_detail": {"request_path", "request_scene", "entry", "action_type", "action_object", "task_type", "reward_type", "client_params", "app_version", "ua", "device_id", "ip_or_network", "frontend_activity_signal", "backend_action_signal", "time_delta_from_login_seconds", "time_delta_between_actions_seconds"},
@@ -4342,44 +4881,47 @@ def build_batch_source_commonality_cards(
     return cards
 
 
-def build_batch_strategy_recommendations(coverage_status: str) -> list[dict[str, Any]]:
+def build_batch_candidate_action_groups(coverage_status: str) -> list[dict[str, Any]]:
     return [
         {
             "priority": "P0",
-            "action_group": "ready_for_controlled_gray_validation",
-            "feature_or_strategy": "multi_source_device_login_content_behavior_combination",
+            "candidate_action_group": "prioritize_validation",
+            "candidate_signal": "multi_source_device_login_content_behavior_combination",
             "target_cluster": "main_cluster_when_coverage_validated",
-            "reason": "Only valid after realtime/wide-table validation shows multi-source consistency.",
+            "reason": "Only valid as a candidate after realtime field commonality shows multi-source consistency.",
             "coverage_estimate": coverage_status,
-            "precision_estimate": "pending_full_validation",
+            "validation_status": "pending_l4_l5_validation",
             "false_positive_risk": "medium_until_counter_samples_checked",
-            "rollout_suggestion": "controlled_gray_validation_only; no automatic disposition",
+            "next_validation_step": "collect_missing_fields_and_prepare_authorized_validation_plan",
+            "usage_boundary": "candidate_action_only_not_strategy_recommendation_not_auto_disposition",
             "required_validation_data": ["full_batch_coverage", "normal_counter_samples", "source_quality"],
             "not_recommended_usage": "Do not use strategy hit or same-device alone.",
         },
         {
             "priority": "P1",
-            "action_group": "combine_before_use",
-            "feature_or_strategy": "same_device_or_same_login_window_signal",
+            "candidate_action_group": "combine_before_validation",
+            "candidate_signal": "same_device_or_same_login_window_signal",
             "target_cluster": "candidate_secondary_clusters",
             "reason": "Useful as a weighted or review feature, not standalone disposition.",
             "coverage_estimate": coverage_status,
-            "precision_estimate": "pending_full_validation",
+            "validation_status": "pending_l4_l5_validation",
             "false_positive_risk": "medium_high_if_standalone",
-            "rollout_suggestion": "risk score / second verification / manual review",
+            "next_validation_step": "combine_with_cross_source_fields_before_any_validation",
+            "usage_boundary": "candidate_action_only_not_strategy_recommendation_not_auto_disposition",
             "required_validation_data": ["cross_source_confirmation"],
             "not_recommended_usage": "Do not block from this signal alone.",
         },
         {
             "priority": "P2",
-            "action_group": "monitor_or_expand_only",
-            "feature_or_strategy": "single_strategy_hit_or_single_frontend_similarity",
+            "candidate_action_group": "observe_or_expand_only",
+            "candidate_signal": "single_strategy_hit_or_single_frontend_similarity",
             "target_cluster": "weak_signal_pool",
             "reason": "Weak lead for monitoring and further discovery.",
             "coverage_estimate": "not_evaluable_from_current_rounds",
-            "precision_estimate": "not_evaluable",
+            "validation_status": "not_evaluable_at_l3",
             "false_positive_risk": "high_if_used_for_control",
-            "rollout_suggestion": "monitoring / offline exploration only",
+            "next_validation_step": "expand_source_fields_or_keep_as_observation",
+            "usage_boundary": "candidate_action_only_not_strategy_recommendation_not_auto_disposition",
             "required_validation_data": ["additional_source_commonality"],
             "not_recommended_usage": "Not for direct control or P0 policy.",
         },
@@ -4504,11 +5046,20 @@ INTERFACE_OBSERVATION_DOMAINS: dict[str, list[str]] = {
     "archives_user_analysis": ["account_domain", "behavior_domain"],
     "archives_review_logs": ["behavior_domain", "enforcement_domain"],
     "weapon_inventory": ["device_domain", "group_domain"],
+    "weapon_device_info": ["device_domain"],
+    "weapon_device_app_list": ["device_domain"],
+    "weapon_device_location_info": ["device_domain", "network_domain"],
+    "weapon_user_klink_status": ["account_domain", "device_domain", "behavior_domain"],
     "login_logs_search": ["account_domain", "network_domain", "behavior_domain"],
     "archives_photo_search": ["content_domain", "behavior_domain"],
     "archives_gallery_photo_list": ["content_domain", "behavior_domain"],
     "archives_photo_profile": ["content_domain", "network_domain", "behavior_domain"],
     "archives_photo_meta": ["content_domain", "device_domain", "network_domain"],
+    "archives_comment_search": ["content_domain", "social_domain"],
+    "archives_private_message_search": ["social_domain"],
+    "archives_related_users": ["social_domain", "device_domain"],
+    "archives_fans_list": ["social_domain"],
+    "archives_follow_list": ["social_domain"],
     "archives_negative_report": ["feedback_domain"],
     "archives_user_report_search": ["feedback_domain", "content_domain"],
     "archives_punish_status": ["enforcement_domain", "content_domain"],
@@ -4525,6 +5076,7 @@ FIRST_HOP_ACTIONS = {
     "archives_user_profile",
     "archives_review_logs",
     "weapon_inventory",
+    "weapon_user_klink_status",
     "login_logs_search",
     "archives_photo_search",
     "rcp_fast_query_hbase",
@@ -4536,6 +5088,9 @@ ANCHOR_TRIGGERED_ACTIONS = {
     "archives_photo_profile",
     "archives_photo_meta",
     "track_analysis_check_data_ready",
+    "weapon_device_info",
+    "weapon_device_app_list",
+    "weapon_device_location_info",
     "rcp_event_tree_or_decision",
     "rcp_event_detail",
     "rcp_event_feature_list",
@@ -4918,14 +5473,425 @@ DEVICE_DETAIL_TABLE_REQUIRED_FIELDS = [
     "sensitive_value_policy",
 ]
 
+STANDARD_DETAIL_TABLE_REQUIRED_FIELDS = [
+    "sample_id",
+    "entity_id",
+    "entity_type",
+    "round_id",
+    "source_id",
+    "source_name",
+    "source_domain",
+    "action",
+    "detail_table",
+    "field_name",
+    "field_value_or_safe_ref",
+    "field_family",
+    "value_present",
+    "value_comparable",
+    "comparable_type",
+    "source_quality",
+    "evidence_source",
+    "extracted_from_observation_id",
+]
+
+RAW_DETAIL_FLAT_TABLE_REQUIRED_FIELDS = [
+    "observation_id",
+    "parent_observation_id",
+    "layer",
+    "anchor_lineage",
+    "source_name",
+    "source_domain",
+    "source_shape",
+    "entity_type",
+    "entity_id",
+    "record_index",
+    "record_time",
+    "field_path",
+    "field_name",
+    "field_value_raw_or_ref",
+    "field_value_type",
+    "value_handling",
+    "redaction_reason",
+    "field_family",
+    "field_family_confidence",
+    "value_comparable",
+    "comparable_reason",
+    "source_quality",
+    "missing_or_partial_reason",
+    "extraction_quality",
+    "is_unknown_field",
+    "needs_field_dictionary_review",
+]
+
+SOURCE_ACTION_DETAIL_TABLES = {
+    "login_logs_search": "login_detail_table",
+    "archives_user_profile": "account_detail_table",
+    "archives_user_analysis": "user_behavior_summary_detail_table",
+    "archives_gallery_photo_list": "content_detail_table",
+    "archives_photo_search": "content_detail_table",
+    "archives_photo_profile": "content_detail_table",
+    "archives_photo_meta": "content_detail_table",
+    "archives_photo_report_aggregate": "content_detail_table",
+    "archives_comment_search": "social_detail_table",
+    "archives_livestream_comment_detail": "social_detail_table",
+    "archives_private_message_search": "social_detail_table",
+    "archives_related_users": "social_detail_table",
+    "archives_fans_list": "social_detail_table",
+    "archives_follow_list": "social_detail_table",
+    "archives_user_report_search": "feedback_detail_table",
+    "archives_negative_report": "feedback_detail_table",
+    "archives_review_logs": "enforcement_detail_table",
+    "archives_punish_status": "enforcement_detail_table",
+}
+
+MULTI_ROW_EVENT_ACTIONS = {
+    "login_logs_search",
+    "archives_user_analysis",
+    "archives_gallery_photo_list",
+    "archives_photo_search",
+    "archives_photo_profile",
+    "archives_photo_meta",
+    "archives_comment_search",
+    "archives_livestream_comment_detail",
+    "archives_private_message_search",
+    "archives_related_users",
+    "archives_fans_list",
+    "archives_follow_list",
+    "archives_user_report_search",
+    "archives_negative_report",
+    "archives_review_logs",
+    "archives_punish_status",
+}
+
+SINGLE_OBJECT_WIDE_FIELD_ACTIONS = {
+    "weapon_inventory",
+    "weapon_device_info",
+    "weapon_device_app_list",
+    "weapon_device_location_info",
+    "weapon_user_klink_status",
+    "rcp_event_feature_list",
+}
+
+DETAIL_TABLE_SOURCE_DOMAINS = {
+    "login_detail_table": "behavior_domain",
+    "account_detail_table": "account_domain",
+    "user_behavior_summary_detail_table": "behavior_domain",
+    "content_detail_table": "content_domain",
+    "social_detail_table": "social_domain",
+    "feedback_detail_table": "feedback_domain",
+    "enforcement_detail_table": "enforcement_domain",
+}
+
+SOURCE_ROLE_BY_ACTION = {
+    "rcp_snapshot": "anchor_discovery_source",
+    "rcp_fast_query_hbase": "anchor_discovery_source",
+    "rcp_event_detail": "auxiliary_detail_source",
+    "rcp_event_feature_list": "dynamic_event_table",
+    "weapon_inventory": "summary_or_inventory_source",
+    "weapon_device_info": "primary_detail_source",
+    "weapon_device_app_list": "auxiliary_detail_source",
+    "weapon_device_location_info": "auxiliary_detail_source",
+    "weapon_user_klink_status": "auxiliary_detail_source",
+    "login_logs_search": "primary_detail_source",
+    "archives_user_profile": "primary_detail_source",
+    "archives_user_analysis": "primary_detail_source",
+    "archives_photo_search": "primary_detail_source",
+    "archives_gallery_photo_list": "auxiliary_detail_source",
+    "archives_photo_profile": "auxiliary_detail_source",
+    "archives_photo_meta": "auxiliary_detail_source",
+    "archives_comment_search": "primary_detail_source",
+    "archives_private_message_search": "primary_detail_source",
+    "archives_related_users": "anchor_discovery_source",
+    "archives_fans_list": "auxiliary_detail_source",
+    "archives_follow_list": "auxiliary_detail_source",
+    "archives_user_report_search": "primary_detail_source",
+    "archives_negative_report": "auxiliary_detail_source",
+    "archives_review_logs": "primary_detail_source",
+    "archives_punish_status": "primary_detail_source",
+    "track_analysis_check_data_ready": "summary_or_inventory_source",
+}
+
+FIELD_FAMILY_BY_CANONICAL_FIELD = {
+    "login_time": "login_time_family",
+    "login_type": "login_method_family",
+    "login_source": "login_method_family",
+    "login_result": "login_result_family",
+    "success_failure": "login_result_family",
+    "success_failure_sequence": "login_result_family",
+    "token_oauth_scan": "login_result_family",
+    "kickout": "login_result_family",
+    "device_id": "login_device_family",
+    "login_device": "login_device_family",
+    "candidate_device_id": "login_device_family",
+    "device_model": "login_device_family",
+    "os": "login_client_family",
+    "app_version": "login_client_family",
+    "ua": "login_client_family",
+    "ip": "login_network_family",
+    "ip_ua": "login_network_family",
+    "ip_or_network": "login_network_family",
+    "province": "login_network_family",
+    "city": "login_network_family",
+    "region": "login_network_family",
+    "asn": "login_network_family",
+    "browser_fingerprint": "login_client_family",
+    "time_delta_between_login": "login_sequence_family",
+    "time_delta_to_action": "login_action_alignment_family",
+    "event_time": "login_action_alignment_family",
+    "operation_time": "login_action_alignment_family",
+    "action_time": "login_action_alignment_family",
+    "operation_device": "login_action_alignment_family",
+    "security_action_type": "login_action_alignment_family",
+    "frontend_activity_signal": "login_action_alignment_family",
+    "backend_action_signal": "login_action_alignment_family",
+    "frontend_backend_consistency": "login_action_alignment_family",
+    "account_age": "account_age_family",
+    "register_time": "account_age_family",
+    "account_status": "account_status_family",
+    "protection_status": "protection_punish_family",
+    "protection_state": "protection_punish_family",
+    "punish_status": "protection_punish_family",
+    "punish_or_tag_summary": "protection_punish_family",
+    "profile_change_time": "profile_change_family",
+    "profile_change": "profile_change_family",
+    "nickname_change": "profile_change_family",
+    "avatar_change": "profile_change_family",
+    "bio_change": "profile_change_family",
+    "follow_count": "social_asset_family",
+    "fan_count": "social_asset_family",
+    "content_publish_count": "behavior_count_family",
+    "active_days": "behavior_count_family",
+    "recent_behavior_counts": "behavior_count_family",
+    "blacklist": "protection_punish_family",
+    "report": "protection_punish_family",
+    "ban": "protection_punish_family",
+    "limit": "protection_punish_family",
+    "profile_completeness": "account_maintenance_family",
+    "related_count": "behavior_count_family",
+    "feature_value": "account_status_family",
+    "photo_id": "content_publish_family",
+    "content_id": "content_publish_family",
+    "item_id": "content_publish_family",
+    "publish_time": "content_publish_family",
+    "publish_device": "content_publish_family",
+    "publish_ip": "content_publish_family",
+    "publish_ip_ua": "content_publish_family",
+    "publish_source": "content_publish_family",
+    "content_type": "content_media_family",
+    "caption": "content_template_family",
+    "title": "content_template_family",
+    "text": "content_template_family",
+    "ocr": "content_media_family",
+    "asr": "content_media_family",
+    "image_tags": "content_media_family",
+    "audit_reason": "content_audit_family",
+    "audit_or_strategy_reason": "content_audit_family",
+    "strategy_reason": "content_audit_family",
+    "like_count": "content_engagement_family",
+    "comment_count": "content_engagement_family",
+    "share_count": "content_engagement_family",
+    "play_count": "content_engagement_family",
+    "delete_status": "content_audit_family",
+    "downrank_status": "content_audit_family",
+    "content_status": "content_audit_family",
+    "comment_id": "social_text_family",
+    "message_id": "social_text_family",
+    "message_anchor": "social_text_family",
+    "target_user_id": "social_target_family",
+    "relation_type": "social_relation_family",
+    "message_text": "social_text_family",
+    "comment_text": "social_text_family",
+    "action_time": "social_action_sequence_family",
+    "operation_time": "social_action_sequence_family",
+    "sender": "social_relation_family",
+    "receiver": "social_relation_family",
+    "follow": "social_action_sequence_family",
+    "unfollow": "social_action_sequence_family",
+    "same_target": "social_target_family",
+    "same_wording": "social_text_family",
+    "same_path": "social_path_family",
+    "reply_chain": "social_path_family",
+    "report_id": "feedback_object_family",
+    "report_time": "feedback_type_family",
+    "report_type": "feedback_type_family",
+    "feedback_object": "feedback_object_family",
+    "feedback_signal": "feedback_type_family",
+    "appeal_time": "appeal_family",
+    "appeal_result": "appeal_family",
+    "review_id": "review_result_family",
+    "review_result": "review_result_family",
+    "punish_id": "enforcement_type_family",
+    "punish_type": "enforcement_type_family",
+    "enforcement_action": "enforcement_type_family",
+    "enforcement_time": "enforcement_timing_family",
+    "policy_reason": "policy_reason_family",
+    "review_scene": "review_result_family",
+    "post_enforcement_action": "post_enforcement_migration_family",
+}
+
+FIELD_FAMILIES_BY_DETAIL_TABLE = {
+    "login_detail_table": {
+        "login_time_family",
+        "login_method_family",
+        "login_result_family",
+        "login_device_family",
+        "login_network_family",
+        "login_client_family",
+        "login_sequence_family",
+        "login_action_alignment_family",
+    },
+    "account_detail_table": {
+        "account_age_family",
+        "account_status_family",
+        "profile_change_family",
+        "social_asset_family",
+        "protection_punish_family",
+        "account_maintenance_family",
+    },
+    "user_behavior_summary_detail_table": {
+        "behavior_count_family",
+        "account_maintenance_family",
+        "profile_change_family",
+        "protection_punish_family",
+    },
+    "content_detail_table": {
+        "content_publish_family",
+        "content_template_family",
+        "content_media_family",
+        "content_audit_family",
+        "content_engagement_family",
+    },
+    "social_detail_table": {
+        "social_relation_family",
+        "social_text_family",
+        "social_target_family",
+        "social_path_family",
+        "social_action_sequence_family",
+    },
+    "feedback_detail_table": {
+        "feedback_type_family",
+        "feedback_object_family",
+        "appeal_family",
+    },
+    "enforcement_detail_table": {
+        "review_result_family",
+        "enforcement_type_family",
+        "enforcement_timing_family",
+        "policy_reason_family",
+        "post_enforcement_migration_family",
+    },
+}
+
+DETAIL_TABLE_FEATURE_NAMES = {
+    "login_detail_table": "login_field_commonality_candidate",
+    "account_detail_table": "account_profile_field_commonality_candidate",
+    "user_behavior_summary_detail_table": "user_behavior_summary_field_commonality_candidate",
+    "content_detail_table": "content_field_commonality_candidate",
+    "social_detail_table": "social_field_commonality_candidate",
+    "feedback_detail_table": "feedback_field_commonality_candidate",
+    "enforcement_detail_table": "enforcement_field_commonality_candidate",
+}
+
 DEVICE_ID_ONLY_FIELDS = {"device_id", "candidate_device_id", "login_device_id", "backend_action_device_id", "frontend_active_device_id"}
-DEVICE_BASIC_FIELDS = {"phone_model", "phoneModel", "model", "os_version", "system_version", "app_version", "device_platform", "platform"}
-DEVICE_FRESHNESS_FIELDS = {"launch_count", "boot_duration", "boot_duration_seconds", "first_seen_delta", "active_days", "device_age_days"}
-DEVICE_LOW_LIFE_FIELDS = {"lock_screen_enabled", "sim_present", "charging_pattern", "low_life_signal"}
-DEVICE_AUTOMATION_FIELDS = {"automation_service_detected", "script_risk", "automation_signal", "abnormal_client_signal"}
-DEVICE_MODIFICATION_FIELDS = {"device_reset_signal", "root_or_hook_signal", "root_signal", "hook_signal", "frida_signal", "emulator_signal", "modification_signal"}
-DEVICE_APP_ENV_FIELDS = {"installed_app_cluster", "risk_app", "tool_app", "app_environment_signal", "installed_app_list"}
-DEVICE_RISK_LABEL_FIELDS = {"risk_label", "risk_label_group", "device_risk_label", "device_low_quality_label"}
+DEVICE_CONTEXT_ONLY_FIELDS = {
+    "user_id", "userid", "clientip", "client_ip", "sourceip", "sourceipv6", "ipv6",
+    "serverip", "appkey", "ksappid", "requesturi", "sourcetype", "timestamp",
+    "sdkcollecttime", "sdkuploadtime", "servertime", "request_context", "requestcontext",
+    "network_context", "networkcontext", "userlevel",
+}
+DEVICE_NON_DEVICE_SUBTREE_KEYS = {
+    "userbehavior",
+    "user_behavior",
+    "userinfo",
+    "user_info",
+    "usercache",
+    "user_cache",
+    "userprofilechanged",
+    "user_profile_changed",
+    "userlastcomments",
+    "user_last_comments",
+    "usermessageusercnt",
+    "user_message_user_cnt",
+    "userchargeamountfen30d",
+    "user_charge_amount_fen_30d",
+    "userbanstatus",
+    "user_ban_status",
+    "query",
+    "cookies",
+}
+DEVICE_BASIC_FIELDS = {
+    "phone_model", "phonemodel", "hwmodel", "model", "os_version", "osversion", "system_version",
+    "systemversion", "app_version", "appversion", "versionname", "device_platform", "platform",
+    "productname", "kernosproductversion", "kernelversion", "resolution", "sdkversion",
+    "devicename", "devicename2", "kernhostname", "hardwaretype", "hwmachine", "hwproduct",
+    "hwtarget", "devicemodel", "buildproduct", "buildboard", "brand", "hardware", "cpumodel",
+    "hwncpu", "hwlogicalcpu", "hwactivecpu", "hwavailcpu", "hwphysicalcpu",
+    "hwphysicalcpumax", "cpucorecount", "cpucores", "hwmemsize", "hwphysmem",
+    "hwusermem", "systemmem", "totalmemory", "usedmemory", "diskspace",
+    "totalstorage", "sdtotalstorage", "diskfree", "systemmemfree", "sdusedstorage",
+    "usedstorage", "diskspaceused", "screensize", "dpi", "hwcpufamily", "hwcputype",
+    "hwcpusubtype", "hwcpu64bitcapable", "hwpagesize", "hwl1dcachesize",
+    "hwl1icachesize", "hwl2cachesize", "hwl2settings", "hwtbfrequency",
+    "hwbyteorder", "hwcachelinesize", "hwvectorunit", "kernosrelease", "kernosversion",
+    "kernostype", "kernelversion", "securitypatch", "buildfingerprint", "buildtags",
+    "builddisplayrom", "apiLevel", "apilevel", "cpuabi", "cpuinfo",
+    "device_hardware_model", "cpu_core_count", "memory_total", "storage_total",
+    "storage_free", "screen_resolution", "device_name",
+}
+DEVICE_FRESHNESS_FIELDS = {
+    "launch_count", "launchcount", "applaunchcount", "launchtimes1d", "launchtimes7d",
+    "launchtimes30d", "launchtimes90d", "launchtimes180d", "boot_duration",
+    "bootduration", "boot_duration_seconds", "kernwaketime", "kernboottime", "boottime",
+    "first_seen_delta", "first_seen_time", "firstinstallationtimestamp", "appinstalltime",
+    "appinstalltime2", "active_days", "device_age_days", "starttime", "starttime2",
+    "startuptime", "startupdurationms", "runningdurationms", "processystemuptime",
+    "procesSystemUptime", "bootcount", "backgroundcount",
+}
+DEVICE_LOW_LIFE_FIELDS = {
+    "lock_screen_enabled", "lockscreenenabled", "lockscreenstatus", "lockscreentime",
+    "devicelocked", "sim_present", "simpresent", "simstatus", "ishassimcard",
+    "charging_pattern", "chargingpattern", "battery", "batterytemperature", "low_life_signal",
+}
+DEVICE_AUTOMATION_FIELDS = {
+    "automation_service_detected", "automationservicedetected", "accessibilityservicelist",
+    "installaccessibility", "accessibilitysvc", "script_risk", "scriptrisk", "automation_signal",
+    "abnormal_client_signal", "pluginversion", "enabledaccessibilityservices", "inputdevice",
+    "touchEvent", "touchevent", "autoflip", "creatorreplaced", "appcomponentfactory",
+}
+DEVICE_MODIFICATION_FIELDS = {
+    "device_reset_signal", "deviceresetsignal", "resettime", "resettimev2ms", "bootid",
+    "boothashid", "root_or_hook_signal", "rootorhooksignal", "root_signal", "rootsignal",
+    "hook_signal", "hooksignal", "frida_signal", "fridasignal", "frida", "xposed",
+    "mountriskcheck", "mountriskpath", "emulator_signal", "emulatorsignal",
+    "emulatorandcloudphone", "modification_signal", "rootcertificates", "inject",
+    "jailbreakdetector", "jailbreak", "proxydetector", "proxyv2", "debug",
+    "adbstatus", "doubleopen", "sandbox", "unidbg", "inodeseccomp", "systemfilehash",
+    "apksignature", "apkpath", "apkprofile", "randompackgename", "drmid",
+}
+DEVICE_APP_ENV_FIELDS = {
+    "installed_app_cluster", "installedappcluster", "risk_app", "riskapp", "tool_app",
+    "toolapp", "app_environment_signal", "appenvironmentsignal", "installed_app_list",
+    "installedapps", "applist", "appinfo", "packagename", "package_name", "versioncode",
+    "system", "running", "uploadapplistcnt1d", "uploadapplistcnt7d", "uploadapplistcnt30d",
+    "uploadapplistcnt90d", "uploadapplistcnt180d", "userappcnt", "kuaiShouCnt",
+    "kuaishoucnt", "packageName", "randomPackgeName",
+}
+DEVICE_NETWORK_CONTEXT_FIELDS = {
+    "clientip", "sourceip", "sourceipv6", "ipv6", "dns", "interfacedata",
+    "otherinterfacedata", "network", "networktype", "networkoperator",
+    "mobilenetworkcode", "mobilecountrycode", "oneipinfo", "bssid", "ssid",
+    "ssiddata", "mac", "routermac", "networklink", "wgroupmac", "gateway",
+    "broadcastaddress", "wifiip", "trafficinfo", "network_context", "networkcontext",
+    "ip_or_network", "ipornetwork", "country", "province", "city", "district",
+    "isp", "asn", "latitude", "longitude",
+}
+DEVICE_REQUEST_CONTEXT_FIELDS = {
+    "requesturi", "sourcetype", "appkey", "ksappid", "serverip", "servertime",
+    "timestamp", "sdkcollecttime", "sdkuploadtime", "asyncstatus", "product",
+    "oneDataVersion", "onedataversion", "secretkeyversion", "weaponstatus",
+    "weaponsignheader", "weapondecodeheader", "request_context", "requestcontext",
+}
+DEVICE_RISK_LABEL_FIELDS = {"risk_label", "risklabel", "labeldesc", "labelname", "risklevel", "risktime", "risk_label_group", "device_risk_label", "device_low_quality_label", "userrisk", "weaponrisk"}
 DEVICE_RELATION_FIELDS = {"account_device_count", "device_account_count", "same_device_user_count", "device_pool_signal"}
 DEVICE_BEHAVIOR_CONSISTENCY_FIELDS = {
     "login_device_id",
@@ -4934,41 +5900,179 @@ DEVICE_BEHAVIOR_CONSISTENCY_FIELDS = {
     "behavior_device_consistency_signal",
 }
 
-DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS = DEVICE_ID_ONLY_FIELDS | {"frontend_activity_signal", "backend_action_signal"}
+DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS = DEVICE_ID_ONLY_FIELDS | DEVICE_CONTEXT_ONLY_FIELDS | {"frontend_activity_signal", "backend_action_signal"}
+DEVICE_SECRET_FIELD_FRAGMENTS = (
+    "cookie",
+    "token",
+    "session",
+    "header",
+    "authorization",
+    "password",
+    "credential",
+)
+
+DEVICE_HARD_SINGLE_FIELD_FRAGMENTS = (
+    "frida",
+    "xposed",
+    "root",
+    "hook",
+    "mountrisk",
+    "emulator",
+    "rootcertificate",
+)
+DEVICE_HARD_RISK_LABEL_FRAGMENTS = (
+    "frida",
+    "xposed",
+    "root",
+    "hook",
+    "mountrisk",
+    "emulator",
+    "cloudphone",
+    "jailbreak",
+    "改机",
+    "模拟器",
+    "云手机",
+    "强风险",
+    "高危",
+)
+DEVICE_WEAK_RISK_LABEL_FRAGMENTS = (
+    "nosim",
+    "launchless",
+    "launchless10",
+    "refresh",
+    "lockscreen",
+    "lowlife",
+    "低启动",
+    "无sim",
+    "无锁屏",
+)
+
+DEVICE_WEAK_FIELD_FAMILIES = {"device_freshness", "low_life_device_environment"}
+DEVICE_DEFAULT_LIKE_UNKNOWN_KEYS = {
+    "code",
+    "msg",
+    "groupname",
+    "grouplevel",
+    "labeltype",
+    "safestatus",
+    "safe_status",
+    "system",
+    "running",
+}
+DEVICE_DEFAULT_LIKE_VALUES = {"0", "1", "success", "true", "false", "kuaishou", "较弱风险"}
+DEVICE_UNKNOWN_CANDIDATE_LIMIT = 20
 
 
 def _normalized_device_field_key(key: Any) -> str:
     return str(key or "").strip()
 
 
+def _compact_device_field_key(key: Any) -> str:
+    return "".join(ch for ch in str(key or "").lower() if ch.isalnum())
+
+
+def _is_device_secret_field(row: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(row.get(key) or "")
+        for key in ("device_field_key", "device_field_name", "field_path")
+    ).lower()
+    normalized = "".join(ch for ch in text if ch.isalnum())
+    return any(fragment in normalized for fragment in DEVICE_SECRET_FIELD_FRAGMENTS)
+
+
 def _truthy_device_value(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     text = str(value).strip().lower()
-    return text in {"true", "1", "yes", "y", "detected", "present", "enabled", "low", "short", "risk", "risky"}
+    return text in {"true", "1", "yes", "y", "detected", "present", "enabled", "low", "short", "risk", "risky", "abnormal"}
+
+
+def _device_value_safe_ref(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (dict, list, tuple)):
+        try:
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+        except (TypeError, ValueError):
+            return str(value)
+    return str(value)
+
+
+def _device_value_tokens(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if item not in {None, ""}]
+    if isinstance(value, dict):
+        return [str(key) for key in value.keys()] + [str(item) for item in value.values() if item not in {None, ""}]
+    text = str(value)
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+    except (TypeError, ValueError):
+        parsed = None
+    if isinstance(parsed, (list, tuple, set)):
+        return [str(item) for item in parsed if item not in {None, ""}]
+    if isinstance(parsed, dict):
+        return [str(key) for key in parsed.keys()] + [str(item) for item in parsed.values() if item not in {None, ""}]
+    return [text]
+
+
+def _low_life_device_row_matches(key: str, value: Any) -> bool:
+    compact_key = _compact_device_field_key(key)
+    text = str(value).strip().lower()
+    if compact_key in {"launchcount", "applaunchcount", "launchtimes1d"} and text.isdigit():
+        return int(text) <= 3
+    if compact_key in {"bootduration", "kernwaketime", "kernboottime"} and text.isdigit():
+        return int(text) <= 600
+    if compact_key in {"lockscreenenabled", "lockscreenstatus", "devicelocked", "simstatus", "simpresent", "ishassimcard"}:
+        return text in {"false", "0", "no", "disabled", "-1"}
+    if compact_key in {"weaponrisk", "userrisk", "risklabel", "devicerisklabel"}:
+        compact_values = [
+            "".join(ch for ch in token.lower() if ch.isalnum())
+            for token in _device_value_tokens(value)
+        ]
+        return any(
+            any(fragment in token for fragment in DEVICE_WEAK_RISK_LABEL_FRAGMENTS)
+            for token in compact_values
+        )
+    return False
+
+
+def _device_key_in_family(key: str, family_fields: set[str]) -> bool:
+    compact_key = _compact_device_field_key(key)
+    return key in family_fields or compact_key in family_fields
 
 
 def _device_field_family(field_key: str) -> str:
     key = _normalized_device_field_key(field_key)
-    if key in DEVICE_BASIC_FIELDS:
+    compact_key = _compact_device_field_key(key)
+    if compact_key in DEVICE_CONTEXT_ONLY_FIELDS:
+        return "device_context_only"
+    if key in DEVICE_BASIC_FIELDS or compact_key in DEVICE_BASIC_FIELDS:
         return "device_basic"
-    if key in DEVICE_FRESHNESS_FIELDS:
+    if key in DEVICE_FRESHNESS_FIELDS or compact_key in DEVICE_FRESHNESS_FIELDS:
         return "device_freshness"
-    if key in DEVICE_LOW_LIFE_FIELDS:
+    if key in DEVICE_LOW_LIFE_FIELDS or compact_key in DEVICE_LOW_LIFE_FIELDS:
         return "low_life_device_environment"
-    if key in DEVICE_AUTOMATION_FIELDS:
+    if key in DEVICE_AUTOMATION_FIELDS or compact_key in DEVICE_AUTOMATION_FIELDS:
         return "automation_or_script"
-    if key in DEVICE_MODIFICATION_FIELDS:
+    if key in DEVICE_MODIFICATION_FIELDS or compact_key in DEVICE_MODIFICATION_FIELDS:
         return "modification_or_adversarial"
-    if key in DEVICE_APP_ENV_FIELDS:
+    if key in DEVICE_APP_ENV_FIELDS or compact_key in DEVICE_APP_ENV_FIELDS:
         return "app_environment"
-    if key in DEVICE_RISK_LABEL_FIELDS:
+    if key in DEVICE_NETWORK_CONTEXT_FIELDS or compact_key in DEVICE_NETWORK_CONTEXT_FIELDS:
+        return "device_network_context"
+    if key in DEVICE_REQUEST_CONTEXT_FIELDS or compact_key in DEVICE_REQUEST_CONTEXT_FIELDS:
+        return "device_request_context"
+    if key in DEVICE_RISK_LABEL_FIELDS or compact_key in DEVICE_RISK_LABEL_FIELDS:
         return "device_risk_label"
-    if key in DEVICE_RELATION_FIELDS:
+    if key in DEVICE_RELATION_FIELDS or compact_key in DEVICE_RELATION_FIELDS:
         return "account_device_relation"
-    if key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS:
+    if key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS or compact_key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS:
         return "behavior_device_consistency"
-    if key in DEVICE_ID_ONLY_FIELDS:
+    if key in DEVICE_ID_ONLY_FIELDS or compact_key in DEVICE_ID_ONLY_FIELDS:
         return "device_identifier_anchor"
     return "unknown_device_field_family"
 
@@ -4986,6 +6090,8 @@ def _device_source_type_for_field(field_key: str, explicit: Any = None) -> str:
         return "设备风险标签"
     if family == "app_environment":
         return "安装列表 / 应用环境"
+    if family in {"device_network_context", "device_request_context"}:
+        return "未知"
     if family in {"account_device_relation", "device_identifier_anchor"}:
         return "账号-设备关系"
     if family == "behavior_device_consistency":
@@ -4998,15 +6104,18 @@ def _device_comparable_type(field_key: str, value: Any, explicit: Any = None) ->
     if explicit_text:
         return explicit_text
     key = _normalized_device_field_key(field_key)
+    compact_key = _compact_device_field_key(key)
     if value in {None, ""}:
         return "不可比较"
-    if key in DEVICE_FRESHNESS_FIELDS or key in {"account_device_count", "device_account_count", "same_device_user_count"}:
+    if key in DEVICE_FRESHNESS_FIELDS or compact_key in DEVICE_FRESHNESS_FIELDS or key in {"account_device_count", "device_account_count", "same_device_user_count"}:
         return "数值分桶"
-    if key in DEVICE_LOW_LIFE_FIELDS or key in DEVICE_AUTOMATION_FIELDS or key in DEVICE_MODIFICATION_FIELDS:
+    if key in DEVICE_LOW_LIFE_FIELDS or compact_key in DEVICE_LOW_LIFE_FIELDS or key in DEVICE_AUTOMATION_FIELDS or compact_key in DEVICE_AUTOMATION_FIELDS or key in DEVICE_MODIFICATION_FIELDS or compact_key in DEVICE_MODIFICATION_FIELDS:
         return "布尔"
-    if key in DEVICE_APP_ENV_FIELDS:
+    if key in DEVICE_APP_ENV_FIELDS or compact_key in DEVICE_APP_ENV_FIELDS:
         return "集合相似"
-    if key in DEVICE_BASIC_FIELDS or key in DEVICE_RISK_LABEL_FIELDS:
+    if key in DEVICE_NETWORK_CONTEXT_FIELDS or compact_key in DEVICE_NETWORK_CONTEXT_FIELDS or key in DEVICE_REQUEST_CONTEXT_FIELDS or compact_key in DEVICE_REQUEST_CONTEXT_FIELDS:
+        return "等值"
+    if key in DEVICE_BASIC_FIELDS or compact_key in DEVICE_BASIC_FIELDS or key in DEVICE_RISK_LABEL_FIELDS or compact_key in DEVICE_RISK_LABEL_FIELDS:
         return "等值"
     if key in DEVICE_BEHAVIOR_CONSISTENCY_FIELDS or key in DEVICE_ID_ONLY_FIELDS:
         return "等值"
@@ -5019,7 +6128,7 @@ def _device_candidate_eligible(field_key: str, row: dict[str, Any]) -> bool:
         return False
     if row.get("value_present") is not True or row.get("value_comparable") is not True:
         return False
-    return _device_field_family(key) != "unknown_device_field_family"
+    return _device_field_family(key) not in {"unknown_device_field_family", "device_context_only", "device_network_context", "device_request_context"}
 
 
 def _device_evidence_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -5033,6 +6142,174 @@ def _device_evidence_row(row: dict[str, Any]) -> dict[str, Any]:
         "source_quality": row.get("source_quality"),
         "device_field_key": row.get("device_field_key"),
         "device_field_value_or_safe_ref": row.get("device_field_value_or_safe_ref"),
+    }
+
+
+def _device_platform_bucket_from_row(row: dict[str, Any]) -> str:
+    explicit = str(row.get("device_platform") or "").strip().lower()
+    if explicit in {"android", "ios"}:
+        return explicit
+    text = " ".join(
+        str(row.get(key) or "")
+        for key in (
+            "device_id",
+            "device_safe_ref",
+            "device_field_key",
+            "device_field_value_or_safe_ref",
+            "phone_model",
+            "os_version",
+        )
+    ).lower()
+    compact = "".join(ch for ch in text if ch.isalnum())
+    if "android" in text or "android" in compact:
+        return "android"
+    ios_markers = ("iphone", "ipad", "ios", "idfa", "idfv", "kernos", "kernwake", "userposix", "hwmodel")
+    if any(marker in compact for marker in ios_markers):
+        return "ios"
+    device_ref = str(row.get("device_id") or row.get("device_safe_ref") or "")
+    if "-" in device_ref and len(device_ref) >= 32:
+        return "ios"
+    return "unknown"
+
+
+def _device_single_field_strong_signal_reason(key: str, value: Any) -> str | None:
+    family = _device_field_family(key)
+    if key in DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS:
+        return None
+    compact_key = _compact_device_field_key(key)
+    if (
+        family == "modification_or_adversarial"
+        and any(fragment in compact_key for fragment in DEVICE_HARD_SINGLE_FIELD_FRAGMENTS)
+        and _truthy_device_value(value)
+    ):
+        return "hard adversarial device field is truthy; keep as high-priority candidate evidence, not final conclusion"
+    if family == "device_risk_label":
+        compact_values = [
+            "".join(ch for ch in token.lower() if ch.isalnum())
+            for token in _device_value_tokens(value)
+        ]
+        if any(
+            any(fragment in token for fragment in DEVICE_HARD_RISK_LABEL_FRAGMENTS)
+            for token in compact_values
+        ):
+            return "explicit high-risk device label is present; keep as candidate evidence, not final conclusion"
+    return None
+
+
+def _device_weak_field_observation_reason(key: str, value: Any) -> str | None:
+    family = _device_field_family(key)
+    if family in DEVICE_WEAK_FIELD_FAMILIES and _low_life_device_row_matches(key, value):
+        return "weak low-life/freshness observation; single device cannot become hard signal, but batch enrichment can be useful"
+    return None
+
+
+def _unknown_field_noise_category(key: str, value: Any, platform_scope: str) -> str:
+    compact_key = _compact_device_field_key(key)
+    text = str(value).strip().lower()
+    if key.lower() in DEVICE_DEFAULT_LIKE_UNKNOWN_KEYS or compact_key in DEVICE_DEFAULT_LIKE_UNKNOWN_KEYS:
+        if text in DEVICE_DEFAULT_LIKE_VALUES or key.lower() in {"groupname", "grouplevel", "labeltype"}:
+            return "unknown_possible_default_enum"
+    if any(fragment in compact_key for fragment in ("hw", "kern", "userposix", "userstream", "userline", "disk", "memsize", "cpu")):
+        return "unknown_possible_system_constant"
+    if any(fragment in compact_key for fragment in ("group", "label", "risk", "safe")):
+        return "unknown_possible_platform_label"
+    if platform_scope in {"android", "ios"} and text in DEVICE_DEFAULT_LIKE_VALUES:
+        return "unknown_possible_system_constant"
+    return "unknown_needs_dictionary"
+
+
+def _support_stats_for_rows(rows: list[dict[str, Any]], sampled_entities: list[str]) -> dict[str, Any]:
+    support_entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+    support_devices = unique_strings([
+        str(row.get("device_id") or row.get("device_safe_ref"))
+        for row in rows
+        if row.get("device_id") or row.get("device_safe_ref")
+    ])
+    platforms = unique_strings([
+        _device_platform_bucket_from_row(row)
+        for row in rows
+        if _device_platform_bucket_from_row(row) != "unknown"
+    ])
+    platform_scope = platforms[0] if len(platforms) == 1 else "mixed" if len(platforms) > 1 else "unknown"
+    denominator = max(len(sampled_entities), 1)
+    support_ratio = round(len(support_entities) / denominator, 4)
+    return {
+        "support_entities": support_entities,
+        "support_devices": support_devices,
+        "support_device_count": len(support_devices),
+        "group_device_count": len(unique_strings([
+            str(row.get("device_id") or row.get("device_safe_ref") or row.get("entity_id"))
+            for row in rows
+            if row.get("device_id") or row.get("device_safe_ref") or row.get("entity_id")
+        ])),
+        "support_user_count": len(support_entities),
+        "support_sample_count": len(support_entities),
+        "support_ratio": support_ratio,
+        "platform_scope": platform_scope,
+    }
+
+
+def _device_priority_for_signal(
+    *,
+    signal_type: str,
+    known_field: bool,
+    field_family: str,
+    support_ratio: float | None,
+    suspected_default_value: bool | str,
+    baseline_ratio: float | None = None,
+) -> dict[str, Any]:
+    ratio = float(support_ratio or 0.0)
+    score = ratio * 40
+    reason_codes: list[str] = [f"support_ratio={ratio:.4f}", "baseline_missing"]
+    if known_field:
+        score += 15
+        reason_codes.append("known_field")
+    else:
+        score -= 8
+        reason_codes.append("field_semantics_unknown")
+    if field_family in {"modification_or_adversarial", "automation_or_script", "device_risk_label"}:
+        score += 25
+        reason_codes.append("high_value_device_family")
+    elif field_family in {"low_life_device_environment", "device_freshness", "app_environment"}:
+        score += 10
+        reason_codes.append("enrichment_field_family")
+    if signal_type == "hard_single_field_signal":
+        score += 25
+        reason_codes.append("hard_single_field_signal")
+    if signal_type == "group_level_field_enrichment":
+        score += 12
+        reason_codes.append("weak_field_batch_enrichment")
+    if signal_type == "field_combination_commonality":
+        score += 18
+        reason_codes.append("field_combination")
+    if suspected_default_value is True:
+        score -= 25
+        reason_codes.append("suspected_default_value_downranked")
+    elif suspected_default_value == "unknown":
+        reason_codes.append("default_value_unknown")
+    if baseline_ratio is not None:
+        lift = round((ratio / baseline_ratio), 4) if baseline_ratio else None
+        reason_codes = [code for code in reason_codes if code != "baseline_missing"]
+        reason_codes.append("baseline_available")
+        if lift and lift >= 3:
+            score += 20
+            reason_codes.append(f"lift={lift}")
+    else:
+        lift = None
+    if score >= 70:
+        level = "high"
+    elif score >= 40:
+        level = "medium"
+    else:
+        level = "low"
+    return {
+        "priority_score": round(max(score, 0), 2),
+        "priority_level": level,
+        "reason_codes": reason_codes,
+        "baseline_ratio": baseline_ratio,
+        "baseline_missing": baseline_ratio is None,
+        "lift": lift,
+        "lift_unavailable": lift is None,
     }
 
 
@@ -5052,6 +6329,20 @@ def _normalize_device_detail_row(
     )
     field_name = str(source_row.get("device_field_name") or source_row.get("field_name") or field_key).strip()
     if not field_key and not field_name:
+        return None
+    field_path_text = str(source_row.get("field_path") or "").lower()
+    compact_field_key = _compact_device_field_key(field_key)
+    compact_field_name = _compact_device_field_key(field_name)
+    if compact_field_key in DEVICE_NON_DEVICE_SUBTREE_KEYS or compact_field_name in DEVICE_NON_DEVICE_SUBTREE_KEYS:
+        return None
+    path_parts = [
+        _compact_device_field_key(part)
+        for part in re.split(r"[.\[\]]+", field_path_text)
+        if part
+    ]
+    if any(part in DEVICE_NON_DEVICE_SUBTREE_KEYS for part in path_parts):
+        return None
+    if _is_credential_secret_key(field_key) or _is_credential_secret_key(field_name):
         return None
     raw_value = (
         source_row.get("device_field_value_or_safe_ref")
@@ -5109,9 +6400,15 @@ def _normalize_device_detail_row(
         "mapped_field_family": source_row.get("mapped_field_family") or _device_field_family(field_key),
         "candidate_feature_eligible": bool(source_row.get("candidate_feature_eligible", False)),
     }
+    row["device_platform"] = row.get("device_platform") or _device_platform_bucket_from_row(row)
+    row["known_device_field"] = row["mapped_field_family"] != "unknown_device_field_family"
+    row["unknown_device_field_retained"] = row["mapped_field_family"] == "unknown_device_field_family"
+    row["raw_device_field_retention_policy"] = "retain_non_secret_weapon_leaf_fields"
     row["candidate_feature_eligible"] = bool(source_row.get("candidate_feature_eligible", _device_candidate_eligible(field_key, row)))
     row["source_priority_boundary"] = (
-        "weapon_device_detail_primary" if str(row.get("source_name")) == "weapon_inventory"
+        "weapon_device_detail_primary" if str(row.get("source_name")) in {"weapon_device_info", "weapon_device_app_list", "weapon_device_location_info"}
+        else "weapon_inventory_graph_relation_context" if str(row.get("source_name")) == "weapon_inventory"
+        else "weapon_user_klink_context" if str(row.get("source_name")) == "weapon_user_klink_status"
         else "rcp_event_feature_context_only" if str(row.get("source_name")) == "rcp_event_feature_list"
         else "device_context_supplement"
     )
@@ -5211,6 +6508,8 @@ def build_device_detail_table(
     deduped: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str, str, str]] = set()
     for row in rows:
+        if _is_device_secret_field(row):
+            continue
         identity = (
             str(row.get("sample_id") or ""),
             str(row.get("device_safe_ref") or row.get("device_id") or ""),
@@ -5225,10 +6524,47 @@ def build_device_detail_table(
     return deduped
 
 
+def build_device_detail_source_field_summary(device_detail_table: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_source: dict[str, list[dict[str, Any]]] = {}
+    for row in device_detail_table:
+        source_name = str(row.get("source_name") or row.get("action") or "unknown_source")
+        if source_name not in {"weapon_inventory", *WEAPON_DEVICE_DETAIL_ACTIONS}:
+            continue
+        by_source.setdefault(source_name, []).append(row)
+    summary: list[dict[str, Any]] = []
+    for source_name in sorted(by_source):
+        rows = by_source[source_name]
+        field_keys = unique_strings([str(row.get("device_field_key") or "") for row in rows if row.get("device_field_key")])
+        comparable_field_keys = unique_strings([
+            str(row.get("device_field_key") or "")
+            for row in rows
+            if row.get("device_field_key") and row.get("value_comparable") is True
+        ])
+        commonality_eligible_field_keys = unique_strings([
+            str(row.get("device_field_key") or "")
+            for row in rows
+            if row.get("device_field_key")
+            and row.get("value_comparable") is True
+            and row.get("candidate_feature_eligible") is True
+        ])
+        summary.append(
+            {
+                "source_name": source_name,
+                "device_detail_row_count": len(rows),
+                "distinct_output_field_count": len(field_keys),
+                "comparable_field_count": len(comparable_field_keys),
+                "commonality_eligible_field_count": len(commonality_eligible_field_keys),
+                "commonality_eligible_sample_keys": commonality_eligible_field_keys[:20],
+                "field_retention_boundary": "non_credential_leaf_fields_retained; credential_auth_control_fields_excluded",
+            }
+        )
+    return summary
+
+
 def build_device_commonality_and_features(
     device_detail_table: list[dict[str, Any]],
     sampled_entities: list[str],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     rows_by_key: dict[str, list[dict[str, Any]]] = {}
     comparable_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in device_detail_table:
@@ -5262,34 +6598,79 @@ def build_device_commonality_and_features(
             "not_final_conclusion": True,
         })
 
-    value_commonality_rows: list[dict[str, Any]] = []
+    known_value_commonality_rows: list[dict[str, Any]] = []
+    unknown_value_commonality_rows: list[dict[str, Any]] = []
     for (key, value_ref), rows in comparable_groups.items():
         entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
         if len(entities) < 2 or key in DEVICE_FEATURE_CANDIDATE_EXCLUDED_FIELDS:
             continue
-        if not any(row.get("candidate_feature_eligible") for row in rows):
+        field_family = _device_field_family(key)
+        known_field = field_family != "unknown_device_field_family"
+        if known_field and not any(row.get("candidate_feature_eligible") for row in rows):
             continue
+        commonality_type = "known_field_commonality" if known_field else "unknown_field_value_commonality"
+        stats = _support_stats_for_rows(rows, sampled_entities)
+        unknown_category = None if known_field else _unknown_field_noise_category(key, value_ref, stats["platform_scope"])
+        suspected_default_value: bool | str = (
+            False if known_field else unknown_category in {
+                "unknown_possible_default_enum",
+                "unknown_possible_system_constant",
+                "unknown_possible_platform_label",
+            }
+        )
+        priority = _device_priority_for_signal(
+            signal_type=commonality_type,
+            known_field=known_field,
+            field_family=field_family,
+            support_ratio=stats["support_ratio"],
+            suspected_default_value=suspected_default_value,
+        )
         commonality = {
             "signal_name": f"device_field_value_commonality:{key}",
-            "commonality_type": "field_value_commonality",
+            "commonality_type": commonality_type,
+            "commonality_subtype": "field_value_commonality",
             "device_field_key": key,
-            "device_field_family": _device_field_family(key),
+            "device_field_family": field_family,
             "device_field_value_or_safe_ref": value_ref,
+            "field_value_or_safe_ref": value_ref,
             "source_fields": [key],
             "supporting_current_evidence": entities,
             "support_count": len(entities),
             "batch_support_count": len(entities),
-            "support_ratio": round(len(entities) / len(sampled_entities), 4) if sampled_entities else None,
+            "support_device_count": stats["support_device_count"],
+            "group_device_count": stats["group_device_count"],
+            "support_user_count": stats["support_user_count"],
+            "support_ratio": stats["support_ratio"],
+            "platform_scope": stats["platform_scope"],
             "commonality_anchor": False,
             "risk_commonality": False,
             "eligible_for_group_candidate": False,
             "candidate_feature_eligible": True,
+            "known_field": known_field,
+            "field_semantics_status": "known_field_family" if known_field else "field_semantics_unknown",
+            "unknown_field_category": unknown_category,
+            "suspected_default_value": suspected_default_value,
+            "why_suspicious": (
+                "多个设备/用户共享同一已知设备字段值，可作为候选设备字段共性。"
+                if known_field else
+                "多个设备/用户共享同一未知字段值，说明存在可疑字段值共性；字段语义未知，需字段字典或正常对照验证。"
+            ),
+            "false_positive_risk": (
+                "同机型、同版本、同渠道或正常配置也可能共享字段值，需要正常样本背景率。"
+                if known_field else
+                "字段含义未知，可能是正常系统参数或平台默认值，不能强解释为黑产。"
+            ),
+            "validation_needed": True,
             "evidence_source": "current_observation",
             "source_name": "device_detail_table",
             "not_final_conclusion": True,
+            **priority,
         }
         commonality_rows.append(commonality)
-        value_commonality_rows.append(commonality)
+        if known_field:
+            known_value_commonality_rows.append(commonality)
+        else:
+            unknown_value_commonality_rows.append(commonality)
 
     rows_by_entity: dict[str, list[dict[str, Any]]] = {}
     for row in device_detail_table:
@@ -5298,26 +6679,39 @@ def build_device_commonality_and_features(
     candidate_features: list[dict[str, Any]] = []
     low_life_support: list[dict[str, Any]] = []
     automation_support: list[dict[str, Any]] = []
+    modification_support: list[dict[str, Any]] = []
+    app_environment_support: list[dict[str, Any]] = []
     consistency_support: list[dict[str, Any]] = []
+    single_field_strong_support: list[dict[str, Any]] = []
+    single_field_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    weak_field_groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for entity, rows in rows_by_entity.items():
         keyed = {str(row.get("device_field_key")): row for row in rows}
         low_life_fields = [
             row for key, row in keyed.items()
-            if key in {"launch_count", "boot_duration", "lock_screen_enabled", "sim_present"}
-            and (
-                (key == "launch_count" and str(row.get("device_field_value_or_safe_ref")).isdigit() and int(row.get("device_field_value_or_safe_ref")) <= 3)
-                or (key == "boot_duration" and str(row.get("device_field_value_or_safe_ref")).isdigit() and int(row.get("device_field_value_or_safe_ref")) <= 600)
-                or (key in {"lock_screen_enabled", "sim_present"} and str(row.get("device_field_value_or_safe_ref")).lower() in {"false", "0", "no"})
-            )
+            if _device_key_in_family(key, DEVICE_FRESHNESS_FIELDS | DEVICE_LOW_LIFE_FIELDS)
+            and _low_life_device_row_matches(key, row.get("device_field_value_or_safe_ref"))
         ]
         if len(low_life_fields) >= 2:
             low_life_support.extend(low_life_fields)
         automation_fields = [
             row for key, row in keyed.items()
-            if key in {"automation_service_detected", "script_risk"} and _truthy_device_value(row.get("device_field_value_or_safe_ref"))
+            if _device_key_in_family(key, DEVICE_AUTOMATION_FIELDS) and _truthy_device_value(row.get("device_field_value_or_safe_ref"))
         ]
         if automation_fields:
             automation_support.extend(automation_fields)
+        modification_fields = [
+            row for key, row in keyed.items()
+            if _device_key_in_family(key, DEVICE_MODIFICATION_FIELDS) and _truthy_device_value(row.get("device_field_value_or_safe_ref"))
+        ]
+        if modification_fields:
+            modification_support.extend(modification_fields)
+        app_environment_fields = [
+            row for key, row in keyed.items()
+            if _device_key_in_family(key, DEVICE_APP_ENV_FIELDS) and row.get("value_present") is True
+        ]
+        if len(app_environment_fields) >= 2:
+            app_environment_support.extend(app_environment_fields)
         login_device = keyed.get("login_device_id", {}).get("device_field_value_or_safe_ref")
         backend_device = keyed.get("backend_action_device_id", {}).get("device_field_value_or_safe_ref")
         frontend_device = keyed.get("frontend_active_device_id", {}).get("device_field_value_or_safe_ref")
@@ -5325,10 +6719,112 @@ def build_device_commonality_and_features(
             consistency_support.extend([keyed["login_device_id"], keyed["backend_action_device_id"]])
         if login_device and frontend_device and login_device != frontend_device:
             consistency_support.extend([keyed["login_device_id"], keyed["frontend_active_device_id"]])
+        for row in rows:
+            key = str(row.get("device_field_key") or "")
+            reason = _device_single_field_strong_signal_reason(key, row.get("device_field_value_or_safe_ref"))
+            value_ref = str(row.get("device_field_value_or_safe_ref"))
+            if reason:
+                single_field_strong_support.append(row)
+                single_field_groups.setdefault((key, value_ref), []).append(row)
+                continue
+            weak_reason = _device_weak_field_observation_reason(key, row.get("device_field_value_or_safe_ref"))
+            if weak_reason:
+                weak_field_groups.setdefault((key, value_ref), []).append(row)
+
+    for (key, value_ref), rows in single_field_groups.items():
+        stats = _support_stats_for_rows(rows, sampled_entities)
+        if not stats["support_entities"]:
+            continue
+        priority = _device_priority_for_signal(
+            signal_type="hard_single_field_signal",
+            known_field=True,
+            field_family=_device_field_family(key),
+            support_ratio=stats["support_ratio"],
+            suspected_default_value=False,
+        )
+        signal = {
+            "signal_name": f"single_field_strong_signal:{key}",
+            "commonality_type": "hard_single_field_signal",
+            "device_field_key": key,
+            "device_field_family": _device_field_family(key),
+            "device_field_value_or_safe_ref": value_ref,
+            "source_fields": [key],
+            "supporting_current_evidence": stats["support_entities"],
+            "support_count": stats["support_user_count"],
+            "batch_support_count": stats["support_user_count"],
+            "support_device_count": stats["support_device_count"],
+            "group_device_count": stats["group_device_count"],
+            "support_user_count": stats["support_user_count"],
+            "support_ratio": stats["support_ratio"],
+            "platform_scope": stats["platform_scope"],
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "risk_interpretation": _device_single_field_strong_signal_reason(key, value_ref),
+            "false_positive_risk": "单字段可能来自测试机、企业设备、误报或正常系统参数，需要结合更多字段和正常对照。",
+            "known_field": True,
+            "field_semantics_status": "known_field_family",
+            "suspected_default_value": False,
+            "validation_needed": True,
+            "evidence_source": "current_observation",
+            "source_name": "device_detail_table",
+            "not_final_conclusion": True,
+            **priority,
+        }
+        commonality_rows.append(signal)
+
+    group_level_enrichment_rows: list[dict[str, Any]] = []
+    for (key, value_ref), rows in weak_field_groups.items():
+        stats = _support_stats_for_rows(rows, sampled_entities)
+        if stats["support_user_count"] < 2:
+            continue
+        priority = _device_priority_for_signal(
+            signal_type="group_level_field_enrichment",
+            known_field=True,
+            field_family=_device_field_family(key),
+            support_ratio=stats["support_ratio"],
+            suspected_default_value=False,
+        )
+        signal = {
+            "signal_name": f"group_level_field_enrichment:{key}",
+            "commonality_type": "group_level_field_enrichment_commonality",
+            "device_field_key": key,
+            "device_field_family": _device_field_family(key),
+            "device_field_value_or_safe_ref": value_ref,
+            "source_fields": [key],
+            "supporting_current_evidence": stats["support_entities"],
+            "support_count": stats["support_user_count"],
+            "batch_support_count": stats["support_user_count"],
+            "support_device_count": stats["support_device_count"],
+            "group_device_count": stats["group_device_count"],
+            "support_user_count": stats["support_user_count"],
+            "support_ratio": stats["support_ratio"],
+            "platform_scope": stats["platform_scope"],
+            "known_field": True,
+            "field_semantics_status": "known_field_family",
+            "suspected_default_value": False,
+            "baseline_ratio": None,
+            "baseline_missing": True,
+            "lift": None,
+            "lift_unavailable": True,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "risk_interpretation": "弱设备字段在批量样本中富集，可作为团组层面候选共性；没有 baseline 前不能作为最终风险结论。",
+            "false_positive_risk": "新机、备用机、企业设备、系统配置或正常低活跃设备可能出现同类弱字段，需要正常背景率。",
+            "validation_needed": True,
+            "evidence_source": "current_observation",
+            "source_name": "device_detail_table",
+            "not_final_conclusion": True,
+            **priority,
+        }
+        group_level_enrichment_rows.append(signal)
+        commonality_rows.append(signal)
 
     def add_device_candidate(
         *,
         feature_name: str,
+        feature_type: str,
         support_rows: list[dict[str, Any]],
         source_fields: list[str],
         field_combination: list[str],
@@ -5338,21 +6834,53 @@ def build_device_commonality_and_features(
         validation_method: str,
         usage_boundary: str,
         confidence: str = "medium_partial",
+        support_min_users: int = 2,
+        field_values_or_safe_refs: list[Any] | None = None,
+        field_semantics_status: str | None = None,
+        priority: dict[str, Any] | None = None,
+        suspected_default_value: bool | str = False,
     ) -> None:
-        support_entities = unique_strings([str(row.get("entity_id")) for row in support_rows if row.get("entity_id")])
-        support_devices = unique_strings([str(row.get("device_id") or row.get("device_safe_ref")) for row in support_rows if row.get("device_id") or row.get("device_safe_ref")])
-        if len(support_entities) < 2:
+        stats = _support_stats_for_rows(support_rows, sampled_entities)
+        if stats["support_user_count"] < support_min_users:
             return
         evidence = [_device_evidence_row(row) for row in support_rows]
+        if field_values_or_safe_refs:
+            value_refs = unique_strings([
+                safe_ref
+                for value in field_values_or_safe_refs
+                for safe_ref in [_device_value_safe_ref(value)]
+                if safe_ref
+            ])[:20]
+        else:
+            value_refs = unique_strings([
+                safe_ref
+                for row in support_rows
+                for safe_ref in [_device_value_safe_ref(row.get("device_field_value_or_safe_ref"))]
+                if safe_ref
+            ])[:20]
+        priority_payload = priority or _device_priority_for_signal(
+            signal_type=feature_type,
+            known_field=field_semantics_status != "field_semantics_unknown",
+            field_family=_device_field_family(source_fields[0] if source_fields else ""),
+            support_ratio=stats["support_ratio"],
+            suspected_default_value=suspected_default_value,
+        )
         candidate_features.append({
             "feature_name": feature_name,
+            "feature_type": feature_type,
             "source_domains": ["device_domain"],
             "source_fields": source_fields,
             "source_device_fields": source_fields,
+            "field_values_or_safe_refs": value_refs,
             "field_combination": field_combination,
-            "support_device_count": len(support_devices),
-            "support_user_count": len(support_entities),
-            "support_sample_count": len(support_entities),
+            "support_device_count": stats["support_device_count"],
+            "group_device_count": stats["group_device_count"],
+            "support_user_count": stats["support_user_count"],
+            "support_sample_count": stats["support_sample_count"],
+            "support_ratio": stats["support_ratio"],
+            "platform_scope": stats["platform_scope"],
+            "known_field": field_semantics_status != "field_semantics_unknown",
+            "suspected_default_value": suspected_default_value,
             "supporting_current_evidence": evidence,
             "supporting_selected_anchors": [],
             "unselected_signal_hypothesis": True,
@@ -5360,17 +6888,23 @@ def build_device_commonality_and_features(
             "hypothesis_inputs": [{"evidence_source": "expert_hypothesis", "signal": feature_name, "usage_boundary": "device_candidate_requires_validation"}],
             "black_gray_interpretation": interpretation,
             "normal_user_false_positive_risk": false_positive,
+            "false_positive_risk": false_positive,
             "missing_fields_to_check": missing_fields,
+            "missing_evidence": missing_fields,
             "validation_method": validation_method,
             "strategy_usage_boundary": usage_boundary,
             "confidence": confidence,
             "validation_needed": True,
-            "false_positive_risk": "medium",
             "not_final_conclusion": True,
+            "conclusion_boundary": "candidate_only_not_final_conclusion",
+            **priority_payload,
         })
+        if field_semantics_status:
+            candidate_features[-1]["field_semantics_status"] = field_semantics_status
 
     add_device_candidate(
         feature_name="low_life_device_environment_candidate",
+        feature_type="field_combination_commonality",
         support_rows=low_life_support,
         source_fields=["launch_count", "boot_duration", "lock_screen_enabled", "sim_present"],
         field_combination=["launch_count_low", "boot_duration_short", "lock_screen_or_sim_missing"],
@@ -5381,10 +6915,35 @@ def build_device_commonality_and_features(
         usage_boundary="候选设备特征，只能用于观察、人审辅助或灰度验证，不能直接处置。",
     )
     add_device_candidate(
+        feature_name="group_level_field_enrichment_candidate",
+        feature_type="group_level_field_enrichment",
+        support_rows=[
+            row
+            for signal in group_level_enrichment_rows
+            for row in comparable_groups.get((str(signal.get("device_field_key") or ""), str(signal.get("device_field_value_or_safe_ref") or "")), [])
+        ],
+        source_fields=unique_strings([str(signal.get("device_field_key") or "") for signal in group_level_enrichment_rows]),
+        field_combination=["weak_device_field_batch_enrichment"],
+        interpretation="弱设备字段在多个设备/用户中高占比出现，可作为团组层面的设备生活化/新鲜度富集共性。",
+        false_positive="弱字段常见于新机、备用机、企业设备或正常低活跃设备；没有正常背景率时不能直接定性。",
+        missing_fields=["baseline_ratio", "normal_device_control_group", "support_ratio_by_platform", "device_usage_history"],
+        validation_method="按字段值计算目标样本 support_ratio；补正常设备 baseline_ratio 后计算 lift，验证误伤。",
+        usage_boundary="团组富集候选共性，不是 hard 单字段信号，不直接上线策略。",
+        confidence="low_partial",
+        priority=_device_priority_for_signal(
+            signal_type="group_level_field_enrichment",
+            known_field=True,
+            field_family="low_life_device_environment",
+            support_ratio=max([float(signal.get("support_ratio") or 0) for signal in group_level_enrichment_rows] or [0]),
+            suspected_default_value=False,
+        ),
+    )
+    add_device_candidate(
         feature_name="automation_or_script_device_candidate",
+        feature_type="field_combination_commonality",
         support_rows=automation_support,
-        source_fields=["automation_service_detected", "script_risk"],
-        field_combination=["automation_service_detected_or_script_risk"],
+        source_fields=unique_strings([str(row.get("device_field_key") or "") for row in automation_support]) or ["automation_service_detected", "script_risk"],
+        field_combination=["automation_or_script_related_field_truthy"],
         interpretation="设备环境出现自动化或脚本迹象，可能承载批量任务执行。",
         false_positive="辅助功能、企业测试环境或无障碍工具可能误触，需要结合行为节奏和对照组。",
         missing_fields=["backend_action_sequence", "frontend_behavior_sequence", "automation_detail_label", "normal_control_group"],
@@ -5392,7 +6951,34 @@ def build_device_commonality_and_features(
         usage_boundary="候选自动化设备特征，不等于确认脚本或群控。",
     )
     add_device_candidate(
+        feature_name="modification_or_adversarial_device_candidate",
+        feature_type="field_combination_commonality",
+        support_rows=modification_support,
+        source_fields=unique_strings([str(row.get("device_field_key") or "") for row in modification_support]) or ["frida_signal", "root_or_hook_signal", "device_reset_signal"],
+        field_combination=["frida_xposed_mount_reset_or_emulator_related_field_truthy"],
+        interpretation="设备环境出现改机、hook、frida、xposed、reset 或模拟器相关字段，可能存在对抗或环境伪造。",
+        false_positive="安全测试机、研发机、越狱/刷机爱好者或误报标签可能命中，需要和行为链路、正常对照一起验证。",
+        missing_fields=["weapon_device_risk_label_detail", "root_hook_frida_detail", "emulator_detail", "normal_device_control_group"],
+        validation_method="按对抗字段组合计算目标样本覆盖率、正常设备背景率、lift 和人工复核误伤。",
+        usage_boundary="候选对抗设备特征，不等于确认改机、脚本或团伙。",
+        confidence="medium_partial",
+    )
+    add_device_candidate(
+        feature_name="risky_app_environment_candidate",
+        feature_type="field_combination_commonality",
+        support_rows=app_environment_support,
+        source_fields=unique_strings([str(row.get("device_field_key") or "") for row in app_environment_support]) or ["installed_app_list", "installed_app_cluster"],
+        field_combination=["installed_app_or_upload_app_list_environment_similarity"],
+        interpretation="安装列表、应用环境或应用上报统计存在相似字段，可能是同一工具链、脚本环境或设备模板。",
+        false_positive="同版本客户端、系统应用、热门应用和同渠道包会天然相似，需要排除常见应用背景率。",
+        missing_fields=["installed_app_detail", "risk_app_label", "normal_app_environment_baseline"],
+        validation_method="按安装环境字段做目标样本和正常对照的字段值共性、背景率与误伤复核。",
+        usage_boundary="应用环境候选特征，只能进入观察/人审辅助/灰度验证。",
+        confidence="low_partial",
+    )
+    add_device_candidate(
         feature_name="behavior_device_consistency_gap_candidate",
+        feature_type="field_combination_commonality",
         support_rows=consistency_support,
         source_fields=["login_device_id", "backend_action_device_id", "frontend_active_device_id"],
         field_combination=["login_device_backend_or_frontend_device_mismatch"],
@@ -5403,6 +6989,110 @@ def build_device_commonality_and_features(
         usage_boundary="行为-设备一致性候选线索，不是纯设备指纹特征。",
         confidence="low_partial",
     )
+    add_device_candidate(
+        feature_name="hard_single_field_signal_candidate",
+        feature_type="hard_single_field_signal",
+        support_rows=single_field_strong_support,
+        source_fields=unique_strings([str(row.get("device_field_key") or "") for row in single_field_strong_support]),
+        field_combination=["single_high_value_device_field"],
+        interpretation="明确对抗类设备字段命中可作为高价值设备风险候选入口；职业黑产可能只露出少量高价值字段，但不能直接定性。",
+        false_positive="研发机、测试机、企业设备、辅助功能或系统默认值可能误触，需要样本覆盖和正常对照。",
+        missing_fields=["normal_device_control_group", "field_dictionary", "device_behavior_sequence"],
+        validation_method="按 hard 单字段信号计算目标样本覆盖、正常背景率、lift 和人工复核误伤。",
+        usage_boundary="hard 单字段信号只进入候选特征或人审辅助，不直接上线拦截。",
+        support_min_users=1,
+        confidence="low_partial",
+        priority=_device_priority_for_signal(
+            signal_type="hard_single_field_signal",
+            known_field=True,
+            field_family="modification_or_adversarial",
+            support_ratio=(_support_stats_for_rows(single_field_strong_support, sampled_entities).get("support_ratio") or 0),
+            suspected_default_value=False,
+        ),
+    )
+    sorted_unknown_commonality = sorted(
+        unknown_value_commonality_rows,
+        key=lambda item: (
+            1 if item.get("suspected_default_value") is True else 0,
+            -float(item.get("priority_score") or 0),
+            -float(item.get("support_ratio") or 0),
+            str(item.get("device_field_key") or ""),
+        ),
+    )
+    for commonality in sorted_unknown_commonality[:DEVICE_UNKNOWN_CANDIDATE_LIMIT]:
+        key = str(commonality.get("device_field_key") or "")
+        rows = [
+            row for row in comparable_groups.get((key, str(commonality.get("device_field_value_or_safe_ref"))), [])
+            if isinstance(row, dict)
+        ]
+        unknown_category = str(commonality.get("unknown_field_category") or "unknown_needs_dictionary")
+        add_device_candidate(
+            feature_name="unknown_field_value_enrichment_candidate",
+            feature_type="unknown_field_value_commonality",
+            support_rows=rows,
+            source_fields=[key],
+            field_combination=[f"{key}=shared_unknown_value"],
+            interpretation="多个设备/用户共享同一未知字段值，可疑但字段语义未知；只能作为候选异常等待字段字典或正常对照验证。",
+            false_positive="未知字段可能是系统默认值、SDK 常量、正常配置或平台枚举，误伤风险高。",
+            missing_fields=["field_dictionary", "normal_device_control_group", "platform_specific_meaning", "more_samples"],
+            validation_method="先补字段字典，再看目标样本覆盖、正常样本背景率、平台分布和跨轮稳定性。",
+            usage_boundary="unknown 字段候选异常，不得直接解释成自动化、改机或团伙。",
+            confidence="low_hypothesis",
+            field_semantics_status="field_semantics_unknown",
+            suspected_default_value=commonality.get("suspected_default_value", "unknown"),
+            priority={
+                key_: value
+                for key_, value in commonality.items()
+                if key_ in {"priority_score", "priority_level", "reason_codes", "baseline_ratio", "baseline_missing", "lift", "lift_unavailable"}
+            },
+        )
+        if candidate_features:
+            candidate_features[-1]["unknown_field_category"] = unknown_category
+
+    def add_combination_signal(name: str, rows: list[dict[str, Any]], fields: list[str]) -> None:
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            return
+        stats = _support_stats_for_rows(rows, sampled_entities)
+        priority = _device_priority_for_signal(
+            signal_type="field_combination_commonality",
+            known_field=True,
+            field_family=_device_field_family(fields[0] if fields else ""),
+            support_ratio=stats["support_ratio"],
+            suspected_default_value=False,
+        )
+        commonality_rows.append({
+            "signal_name": f"field_combination_commonality:{name}",
+            "commonality_type": "field_combination_commonality",
+            "device_field_key": name,
+            "source_fields": fields,
+            "field_combination": fields,
+            "supporting_current_evidence": entities,
+            "support_count": len(entities),
+            "batch_support_count": len(entities),
+            "support_device_count": stats["support_device_count"],
+            "group_device_count": stats["group_device_count"],
+            "support_user_count": stats["support_user_count"],
+            "support_ratio": stats["support_ratio"],
+            "platform_scope": stats["platform_scope"],
+            "known_field": True,
+            "suspected_default_value": False,
+            "commonality_anchor": False,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "validation_needed": True,
+            "evidence_source": "current_observation",
+            "source_name": "device_detail_table",
+            "not_final_conclusion": True,
+            **priority,
+        })
+
+    add_combination_signal("low_life_device_environment", low_life_support, ["launch_count", "boot_duration", "lock_screen_enabled", "sim_present"])
+    add_combination_signal("automation_or_script_device_environment", automation_support, unique_strings([str(row.get("device_field_key") or "") for row in automation_support]))
+    add_combination_signal("modification_or_adversarial_device_environment", modification_support, unique_strings([str(row.get("device_field_key") or "") for row in modification_support]))
+    add_combination_signal("risky_app_environment", app_environment_support, unique_strings([str(row.get("device_field_key") or "") for row in app_environment_support]))
+    add_combination_signal("behavior_device_consistency_gap", consistency_support, ["login_device_id", "backend_action_device_id", "frontend_active_device_id"])
 
     similarity_candidates: list[dict[str, Any]] = []
     similarity_fields = ["phone_model", "os_version", "app_version", "risk_label", "installed_app_cluster"]
@@ -5433,6 +7123,7 @@ def build_device_commonality_and_features(
         similarity_candidates.append(candidate)
         add_device_candidate(
             feature_name="device_environment_similarity_cluster_candidate",
+            feature_type="field_combination_commonality",
             support_rows=rows,
             source_fields=shared_fields,
             field_combination=candidate["similarity_basis"],
@@ -5443,6 +7134,7 @@ def build_device_commonality_and_features(
             usage_boundary="设备环境相似候选簇，不等于同设备或确认团伙。",
             confidence=candidate["confidence"],
         )
+        add_combination_signal("device_environment_similarity_cluster", rows, shared_fields)
 
     consistency_candidates = [
         {
@@ -5454,7 +7146,68 @@ def build_device_commonality_and_features(
         }
     ] if consistency_support else []
 
-    return commonality_rows, similarity_candidates, consistency_candidates, candidate_features
+    platform_by_device_ref: dict[str, str] = {}
+    for row in device_detail_table:
+        device_ref = str(row.get("device_id") or row.get("device_safe_ref") or "")
+        platform = _device_platform_bucket_from_row(row)
+        if device_ref and platform != "unknown":
+            platform_by_device_ref.setdefault(device_ref, platform)
+    platform_rows: dict[str, list[dict[str, Any]]] = {"android": [], "ios": [], "unknown": []}
+    for row in device_detail_table:
+        device_ref = str(row.get("device_id") or row.get("device_safe_ref") or "")
+        platform = platform_by_device_ref.get(device_ref) or _device_platform_bucket_from_row(row)
+        platform_rows.setdefault(platform, []).append(row)
+    platform_summary: dict[str, Any] = {}
+    for platform, rows in sorted(platform_rows.items()):
+        field_keys = unique_strings([str(row.get("device_field_key") or "") for row in rows if row.get("device_field_key")])
+        unknown_keys = [
+            str(row.get("device_field_key") or "")
+            for row in rows
+            if row.get("device_field_key") and str(row.get("mapped_field_family") or "") == "unknown_device_field_family"
+        ]
+        top_unknown: list[dict[str, Any]] = []
+        for key in unique_strings(unknown_keys)[:20]:
+            key_rows = [row for row in rows if str(row.get("device_field_key") or "") == key]
+            top_unknown.append({
+                "field_name": key,
+                "row_count": len(key_rows),
+                "support_user_count": len(unique_strings([str(row.get("entity_id")) for row in key_rows if row.get("entity_id")])),
+            })
+        platform_summary[platform] = {
+            "row_count": len(rows),
+            "distinct_field_count": len(field_keys),
+            "known_field_row_count": len([row for row in rows if row.get("known_device_field") is True]),
+            "unknown_field_row_count": len([row for row in rows if row.get("unknown_device_field_retained") is True]),
+            "top_unknown_fields": top_unknown,
+        }
+    device_field_platform_summary = {
+        "platforms": platform_summary,
+        "known_field_commonality_count": len(known_value_commonality_rows),
+        "unknown_field_value_commonality_count": len(unknown_value_commonality_rows),
+        "single_field_strong_signal_count": len([
+            row for row in commonality_rows
+            if str(row.get("commonality_type") or "") in {"single_field_strong_signal", "hard_single_field_signal"}
+        ]),
+        "hard_single_field_signal_count": len([
+            row for row in commonality_rows
+            if str(row.get("commonality_type") or "") == "hard_single_field_signal"
+        ]),
+        "group_level_field_enrichment_commonality_count": len([
+            row for row in commonality_rows
+            if str(row.get("commonality_type") or "") == "group_level_field_enrichment_commonality"
+        ]),
+        "field_combination_commonality_count": len([
+            row for row in commonality_rows
+            if str(row.get("commonality_type") or "") == "field_combination_commonality"
+        ]),
+        "candidate_feature_count": len(candidate_features),
+        "candidate_feature_top_limit_boundary": {
+            "unknown_candidate_limit": DEVICE_UNKNOWN_CANDIDATE_LIMIT,
+            "all_unknown_commonality_rows_retained": True,
+            "user_visible_answer_should_show_top_3_to_5_candidates": True,
+        },
+    }
+    return commonality_rows, similarity_candidates, consistency_candidates, candidate_features, device_field_platform_summary
 
 
 def _anchor_ref(anchor: dict[str, Any]) -> str:
@@ -5890,6 +7643,1453 @@ def build_strategy_request_detail_features(
     return shared_signals, candidate_features
 
 
+def _detail_table_for_action(action: str, canonical_field: str) -> str | None:
+    if action in SOURCE_ACTION_DETAIL_TABLES:
+        return SOURCE_ACTION_DETAIL_TABLES[action]
+    family = FIELD_FAMILY_BY_CANONICAL_FIELD.get(canonical_field)
+    if not family:
+        return None
+    for table_name, families in FIELD_FAMILIES_BY_DETAIL_TABLE.items():
+        if family in families:
+            return table_name
+    return None
+
+
+def _field_family_for_detail(field_name: str, detail_table: str) -> str:
+    canonical = str(field_name or "")
+    family = FIELD_FAMILY_BY_CANONICAL_FIELD.get(canonical)
+    if family:
+        return family
+    normalized = re.sub(r"[^a-z0-9]", "", canonical.lower())
+    for key, value in FIELD_FAMILY_BY_CANONICAL_FIELD.items():
+        if re.sub(r"[^a-z0-9]", "", key.lower()) == normalized:
+            return value
+    if detail_table == "login_detail_table":
+        return "login_unknown_field_family"
+    if detail_table in {"account_detail_table", "user_behavior_summary_detail_table"}:
+        return "account_unknown_field_family"
+    if detail_table == "content_detail_table":
+        return "content_unknown_field_family"
+    if detail_table == "social_detail_table":
+        return "social_unknown_field_family"
+    if detail_table == "feedback_detail_table":
+        return "feedback_unknown_field_family"
+    if detail_table == "enforcement_detail_table":
+        return "enforcement_unknown_field_family"
+    return "unknown_field_family"
+
+
+def _standard_comparable_type(value: Any) -> str:
+    if isinstance(value, bool):
+        return "布尔"
+    if isinstance(value, (int, float)):
+        return "数值分桶"
+    text = str(value or "")
+    if not text:
+        return "不可比较"
+    if re.search(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{10,13}", text):
+        return "时间差"
+    if len(text) > 128:
+        return "文本相似"
+    return "等值"
+
+
+def _source_shape_for_action(action: str, observation: dict[str, Any] | None = None) -> str:
+    explicit = str((observation or {}).get("source_shape") or "").strip()
+    if explicit:
+        return explicit
+    if action in MULTI_ROW_EVENT_ACTIONS:
+        return "multi_row_event"
+    if action in SINGLE_OBJECT_WIDE_FIELD_ACTIONS:
+        return "single_object_wide_field"
+    return "unknown"
+
+
+def _source_domain_for_detail_table_or_action(detail_table: str | None, action: str) -> str:
+    if detail_table:
+        return DETAIL_TABLE_SOURCE_DOMAINS.get(detail_table, "unknown_domain")
+    domains = INTERFACE_OBSERVATION_DOMAINS.get(action) or []
+    return domains[0] if domains else "unknown_domain"
+
+
+def _value_handling_for_field(field_name: str, value: Any) -> tuple[str, str, Any]:
+    if _is_credential_secret_key(field_name):
+        return "redacted", "credential", "redacted_safe_ref"
+    text = str(value or "")
+    if len(text) > 2048:
+        return "summarized", "oversized_body", f"long_value_len_{len(text)}"
+    return "raw_retained", "none", value
+
+
+def _raw_value_type(value: Any) -> str:
+    if value is None:
+        return "missing"
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return "string"
+
+
+def _raw_flat_row(
+    *,
+    observation_id: str,
+    source_name: str,
+    source_domain: str,
+    source_shape: str,
+    layer: str,
+    parent_observation_id: str | None,
+    anchor_lineage: list[dict[str, Any]] | None,
+    entity_id: str,
+    entity_type: str,
+    record_index: int | None,
+    record_time: Any,
+    field_path: str,
+    field_name: str,
+    field_value: Any,
+    field_family: str,
+    source_quality: str,
+    missing_or_partial_reason: str | None,
+    extraction_quality: str,
+) -> dict[str, Any] | None:
+    if not field_name:
+        return None
+    value_handling, redaction_reason, stored_value = _value_handling_for_field(field_name, field_value)
+    if value_handling == "redacted" and redaction_reason == "credential":
+        value_comparable = False
+        comparable_reason = "credential_filtered"
+    else:
+        comparable_type = _standard_comparable_type(stored_value)
+        value_comparable = comparable_type != "不可比较"
+        comparable_reason = comparable_type
+    unknown = field_family.endswith("_unknown_field_family") or field_family in {
+        "unknown_field_family",
+        "unknown_device_field_family",
+        "unknown_feature_family",
+    }
+    return {
+        "observation_id": observation_id,
+        "parent_observation_id": parent_observation_id,
+        "layer": layer,
+        "anchor_lineage": anchor_lineage or [],
+        "source_name": source_name,
+        "source_domain": source_domain,
+        "source_shape": source_shape,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "record_index": record_index,
+        "record_time": record_time,
+        "field_path": _safe_field_path(field_path),
+        "field_name": field_name,
+        "field_value_raw_or_ref": stored_value,
+        "field_value_type": _raw_value_type(field_value),
+        "value_handling": value_handling,
+        "redaction_reason": redaction_reason,
+        "field_family": field_family,
+        "field_family_confidence": "mapped" if not unknown else "unknown",
+        "value_comparable": value_comparable,
+        "comparable_reason": comparable_reason,
+        "source_quality": source_quality,
+        "missing_or_partial_reason": missing_or_partial_reason,
+        "extraction_quality": extraction_quality,
+        "is_unknown_field": unknown,
+        "needs_field_dictionary_review": unknown,
+    }
+
+
+def build_raw_detail_flat_table(
+    *,
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    strategy_event_feature_row_table: list[dict[str, Any]],
+    device_detail_table: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for observation in source_observations:
+        action = str(observation.get("action") or "")
+        quality = str(observation.get("quality_class") or "unknown")
+        if quality not in {"completed", "partial"}:
+            continue
+        source_id = str(observation.get("source_id") or action or "unknown_source")
+        entity_id = _source_detail_entity_id(observation, sampled_entities)
+        entity_type = _infer_seed_entity_type(entity_id)
+        source_shape = _source_shape_for_action(action, observation)
+        detail_table_hint = SOURCE_ACTION_DETAIL_TABLES.get(action)
+        source_domain = _source_domain_for_detail_table_or_action(detail_table_hint, action)
+        missing_reason = None if quality == "completed" else quality
+        for handle in observation.get("parsed_body_field_handles", []) or []:
+            if not isinstance(handle, dict):
+                continue
+            field_name = str(handle.get("canonical_field") or handle.get("field") or "").strip()
+            raw_field_name = str(handle.get("field") or field_name).strip()
+            if not field_name or _is_credential_secret_key(field_name) or _is_credential_secret_key(raw_field_name):
+                continue
+            detail_table = _detail_table_for_action(action, field_name) or detail_table_hint
+            field_family = _field_family_for_detail(field_name, detail_table or "")
+            row = _raw_flat_row(
+                observation_id=source_id,
+                parent_observation_id=str(observation.get("parent_observation_id") or observation.get("parent_source_id") or ""),
+                layer=str(observation.get("layer") or observation.get("source_layer") or "L1_source_observation"),
+                anchor_lineage=observation.get("anchor_lineage") if isinstance(observation.get("anchor_lineage"), list) else [],
+                source_name=action,
+                source_domain=_source_domain_for_detail_table_or_action(detail_table, action),
+                source_shape=source_shape,
+                entity_id=entity_id,
+                entity_type=entity_type,
+                record_index=handle.get("record_index"),
+                record_time=handle.get("record_time") or handle.get("event_time"),
+                field_path=str(handle.get("field_path") or ""),
+                field_name=field_name,
+                field_value=handle.get("value"),
+                field_family=field_family,
+                source_quality=quality,
+                missing_or_partial_reason=missing_reason,
+                extraction_quality="parsed_body_field_handle",
+            )
+            if row is not None:
+                rows.append(row)
+    for feature_row in strategy_event_feature_row_table:
+        feature_key = str(feature_row.get("feature_key") or "").strip()
+        if not feature_key or _is_credential_secret_key(feature_key):
+            continue
+        row = _raw_flat_row(
+            observation_id=str(feature_row.get("source_id") or "rcp_event_feature_list"),
+            parent_observation_id=str(feature_row.get("parent_observation_id") or feature_row.get("parent_source_id") or ""),
+            layer=str(feature_row.get("layer") or "L2_anchor_drilldown_observation"),
+            anchor_lineage=feature_row.get("anchor_lineage") if isinstance(feature_row.get("anchor_lineage"), list) else [],
+            source_name="rcp_event_feature_list",
+            source_domain="strategy_domain",
+            source_shape="single_object_wide_field",
+            entity_id=str(feature_row.get("entity_id") or feature_row.get("user_id") or ""),
+            entity_type="user_id",
+            record_index=feature_row.get("feature_row_index"),
+            record_time=feature_row.get("event_time"),
+            field_path=str(feature_row.get("source_field_path") or feature_row.get("field_path") or ""),
+            field_name=feature_key,
+            field_value=feature_row.get("feature_value_or_safe_ref"),
+            field_family=str(feature_row.get("mapped_field_family") or "unknown_feature_family"),
+            source_quality=str(feature_row.get("source_quality") or "completed"),
+            missing_or_partial_reason=None,
+            extraction_quality="strategy_event_feature_row",
+        )
+        if row is not None:
+            rows.append(row)
+    for device_row in device_detail_table:
+        field_key = str(device_row.get("device_field_key") or "").strip()
+        if not field_key or _is_credential_secret_key(field_key):
+            continue
+        row = _raw_flat_row(
+            observation_id=str(device_row.get("source_id") or "device_detail"),
+            parent_observation_id=str(device_row.get("parent_observation_id") or device_row.get("parent_source_id") or ""),
+            layer=str(device_row.get("layer") or "L2_anchor_drilldown_observation"),
+            anchor_lineage=device_row.get("anchor_lineage") if isinstance(device_row.get("anchor_lineage"), list) else [],
+            source_name=str(device_row.get("source_name") or device_row.get("action") or "device_detail"),
+            source_domain="device_domain",
+            source_shape="single_object_wide_field",
+            entity_id=str(device_row.get("entity_id") or device_row.get("user_id") or ""),
+            entity_type="device_id" if device_row.get("device_id") else "user_id",
+            record_index=None,
+            record_time=device_row.get("event_time") or device_row.get("query_time"),
+            field_path=str(device_row.get("field_path") or device_row.get("source_field_path") or ""),
+            field_name=field_key,
+            field_value=device_row.get("device_field_value_or_safe_ref"),
+            field_family=str(device_row.get("mapped_field_family") or "unknown_device_field_family"),
+            source_quality=str(device_row.get("source_quality") or "completed"),
+            missing_or_partial_reason=None,
+            extraction_quality="device_detail_row",
+        )
+        if row is not None:
+            rows.append(row)
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for row in rows:
+        identity = (
+            str(row.get("observation_id") or ""),
+            str(row.get("record_index") or ""),
+            str(row.get("field_path") or ""),
+            str(row.get("field_name") or ""),
+            str(row.get("field_value_raw_or_ref") or ""),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(row)
+    return deduped
+
+
+def _source_detail_entity_id(observation: dict[str, Any], sampled_entities: list[str]) -> str:
+    for handle in observation.get("parsed_body_field_handles", []) or []:
+        if not isinstance(handle, dict):
+            continue
+        canonical = str(handle.get("canonical_field") or handle.get("field") or "")
+        value = str(handle.get("value") or "").strip()
+        if canonical == "user_id" and value:
+            return value
+    return _observation_entity_for_round(observation, sampled_entities)
+
+
+def build_standard_detail_table(
+    *,
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for observation in source_observations:
+        action = str(observation.get("action") or "")
+        quality = str(observation.get("quality_class") or "unknown")
+        if quality not in {"completed", "partial"}:
+            continue
+        source_id = str(observation.get("source_id") or action or "unknown_source")
+        entity_id = _source_detail_entity_id(observation, sampled_entities)
+        for handle in observation.get("parsed_body_field_handles", []) or []:
+            if not isinstance(handle, dict):
+                continue
+            field_name = str(handle.get("canonical_field") or handle.get("field") or "").strip()
+            raw_field_name = str(handle.get("field") or field_name).strip()
+            if not field_name or _is_credential_secret_key(field_name) or _is_credential_secret_key(raw_field_name):
+                continue
+            detail_table = _detail_table_for_action(action, field_name)
+            if detail_table is None:
+                continue
+            value = handle.get("value")
+            if value is None or value == "":
+                continue
+            comparable_type = _standard_comparable_type(value)
+            field_family = _field_family_for_detail(field_name, detail_table)
+            source_domain = DETAIL_TABLE_SOURCE_DOMAINS.get(detail_table, "unknown_domain")
+            rows.append(
+                {
+                    "sample_id": f"round_{round_id}_{entity_id}",
+                    "entity_id": entity_id,
+                    "entity_type": _infer_seed_entity_type(entity_id),
+                    "round_id": round_id,
+                    "source_id": source_id,
+                    "source_name": action,
+                    "source_domain": source_domain,
+                    "action": action,
+                    "detail_table": detail_table,
+                    "field_name": field_name,
+                    "raw_field_name": raw_field_name,
+                    "field_value_or_safe_ref": str(value),
+                    "field_family": field_family,
+                    "value_present": True,
+                    "value_comparable": comparable_type != "不可比较",
+                    "comparable_type": comparable_type,
+                    "source_quality": quality,
+                    "evidence_source": "current_observation",
+                    "extracted_from_observation_id": source_id,
+                    "field_path": _safe_field_path(str(handle.get("field_path") or "")),
+                    "missing_or_partial_reason": None if quality == "completed" else quality,
+                    "unknown_field_family": field_family.endswith("_unknown_field_family") or field_family == "unknown_field_family",
+                }
+            )
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str]] = set()
+    for row in rows:
+        identity = (
+            str(row.get("sample_id") or ""),
+            str(row.get("source_id") or ""),
+            str(row.get("detail_table") or ""),
+            str(row.get("field_name") or ""),
+            str(row.get("field_value_or_safe_ref") or ""),
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        deduped.append(row)
+    return deduped
+
+
+def _detail_rows_by_table(standard_detail_table: list[dict[str, Any]], table_name: str) -> list[dict[str, Any]]:
+    return [row for row in standard_detail_table if row.get("detail_table") == table_name]
+
+
+def build_source_field_volume_summary(
+    *,
+    source_observations: list[dict[str, Any]],
+    standard_detail_table: list[dict[str, Any]],
+    strategy_event_feature_row_table: list[dict[str, Any]],
+    device_detail_table: list[dict[str, Any]],
+) -> dict[str, Any]:
+    summary: dict[str, dict[str, Any]] = {}
+
+    def bucket(source_id: str, action: str) -> dict[str, Any]:
+        key = source_id or action or "unknown_source"
+        return summary.setdefault(
+            key,
+            {
+                "source_id": source_id,
+                "action": action,
+                "raw_input_field_count": 0,
+                "parsed_detail_field_count": 0,
+                "standard_detail_field_count": 0,
+                "commonality_eligible_field_count": 0,
+                "detail_row_count": 0,
+                "_raw_fields": set(),
+                "_parsed_fields": set(),
+                "_standard_fields": set(),
+                "_eligible_fields": set(),
+            },
+        )
+
+    for observation in source_observations:
+        source_id = str(observation.get("source_id") or "")
+        action = str(observation.get("action") or "")
+        row = bucket(source_id, action)
+        for handle in observation.get("parsed_body_field_handles", []) or []:
+            if not isinstance(handle, dict):
+                continue
+            field_name = str(handle.get("canonical_field") or handle.get("field") or "").strip()
+            raw_field = str(handle.get("field") or field_name).strip()
+            if raw_field and not _is_credential_secret_key(raw_field):
+                row["_raw_fields"].add(raw_field)
+            if field_name and not _is_credential_secret_key(field_name):
+                row["_parsed_fields"].add(field_name)
+        for feature_row in observation.get("strategy_event_feature_rows", []) or []:
+            if not isinstance(feature_row, dict):
+                continue
+            feature_key = str(feature_row.get("feature_key") or "").strip()
+            if feature_key and not _is_credential_secret_key(feature_key):
+                row["_raw_fields"].add(feature_key)
+                row["_parsed_fields"].add(feature_key)
+        for device_row in observation.get("device_detail_rows", []) or []:
+            if not isinstance(device_row, dict):
+                continue
+            field_key = str(device_row.get("device_field_key") or "").strip()
+            if field_key and not _is_credential_secret_key(field_key):
+                row["_raw_fields"].add(field_key)
+                row["_parsed_fields"].add(field_key)
+
+    for detail_row in standard_detail_table:
+        source_id = str(detail_row.get("source_id") or "")
+        action = str(detail_row.get("action") or detail_row.get("source_name") or "")
+        row = bucket(source_id, action)
+        field_name = str(detail_row.get("field_name") or "").strip()
+        if field_name:
+            row["_standard_fields"].add(field_name)
+            row["detail_row_count"] += 1
+            if detail_row.get("value_comparable") is True:
+                row["_eligible_fields"].add(field_name)
+
+    for feature_row in strategy_event_feature_row_table:
+        source_id = str(feature_row.get("source_id") or "")
+        action = str(feature_row.get("action") or feature_row.get("source_name") or "rcp_event_feature_list")
+        row = bucket(source_id, action)
+        feature_key = str(feature_row.get("feature_key") or "").strip()
+        if feature_key:
+            row["_standard_fields"].add(feature_key)
+            row["detail_row_count"] += 1
+            if feature_row.get("value_comparable") is True:
+                row["_eligible_fields"].add(feature_key)
+
+    for device_row in device_detail_table:
+        source_id = str(device_row.get("source_id") or "")
+        action = str(device_row.get("action") or device_row.get("source_name") or "")
+        row = bucket(source_id, action)
+        field_key = str(device_row.get("device_field_key") or device_row.get("field_name") or "").strip()
+        if field_key:
+            row["_standard_fields"].add(field_key)
+            row["detail_row_count"] += 1
+            if device_row.get("value_comparable") is True:
+                row["_eligible_fields"].add(field_key)
+
+    public_rows: list[dict[str, Any]] = []
+    for row in summary.values():
+        raw_count = len(row.pop("_raw_fields"))
+        parsed_count = len(row.pop("_parsed_fields"))
+        standard_count = len(row.pop("_standard_fields"))
+        eligible_count = len(row.pop("_eligible_fields"))
+        row["raw_input_field_count"] = raw_count
+        row["parsed_detail_field_count"] = parsed_count
+        row["standard_detail_field_count"] = standard_count
+        row["commonality_eligible_field_count"] = eligible_count
+        row["source_payload_thin"] = False
+        if eligible_count < 20 and str(row.get("action") or "") not in {"rcp_fast_query_hbase"}:
+            if raw_count >= 20 and standard_count < 20:
+                status = "parser_under_extraction_gap"
+            elif raw_count == 0:
+                status = "source_detail_not_returned_or_body_visibility_gap"
+            elif raw_count < 20:
+                status = "source_payload_thin"
+                row["source_payload_thin"] = True
+            else:
+                status = "below_commonality_feature_floor"
+        elif str(row.get("action") or "") == "rcp_fast_query_hbase":
+            status = "entry_anchor_source_not_core_feature_source"
+        else:
+            status = "commonality_field_volume_ok"
+        row["field_volume_status"] = status
+        public_rows.append(row)
+    return {
+        "minimum_expected_commonality_eligible_fields": 50,
+        "low_field_count_gap_threshold": 20,
+        "detail_row_count_is_not_feature_count": True,
+        "sources": sorted(public_rows, key=lambda item: str(item.get("source_id") or "")),
+    }
+
+
+def build_raw_detail_flat_table_summary(raw_detail_flat_table: list[dict[str, Any]]) -> dict[str, Any]:
+    by_source: dict[str, dict[str, Any]] = {}
+    for row in raw_detail_flat_table:
+        source_name = str(row.get("source_name") or "unknown_source")
+        bucket = by_source.setdefault(
+            source_name,
+            {
+                "source_name": source_name,
+                "source_shape": row.get("source_shape"),
+                "raw_record_count": 0,
+                "raw_field_count": 0,
+                "flattened_field_count": 0,
+                "comparable_field_count": 0,
+                "unknown_field_count": 0,
+                "filtered_field_count": 0,
+                "filtered_reasons": {},
+                "retained_raw_anchor_count": 0,
+                "_records": set(),
+                "_fields": set(),
+                "_comparable": set(),
+                "_unknown": set(),
+                "_anchors": set(),
+            },
+        )
+        record_key = (row.get("observation_id"), row.get("record_index"))
+        bucket["_records"].add(record_key)
+        field_name = str(row.get("field_name") or "")
+        if field_name:
+            bucket["_fields"].add(field_name)
+            if row.get("value_comparable") is True:
+                bucket["_comparable"].add(field_name)
+            if row.get("is_unknown_field") is True:
+                bucket["_unknown"].add(field_name)
+            if field_name in {"user_id", "device_id", "did", "ip", "ua", "photo_id", "item_id", "event_id", "policy_code", "source_id"}:
+                bucket["_anchors"].add(field_name)
+        if row.get("value_handling") == "redacted":
+            reason = str(row.get("redaction_reason") or "unknown")
+            bucket["filtered_reasons"][reason] = int(bucket["filtered_reasons"].get(reason, 0)) + 1
+    public_rows: list[dict[str, Any]] = []
+    for bucket in by_source.values():
+        bucket["raw_record_count"] = len(bucket.pop("_records"))
+        field_count = len(bucket.pop("_fields"))
+        bucket["raw_field_count"] = field_count
+        bucket["flattened_field_count"] = field_count
+        bucket["comparable_field_count"] = len(bucket.pop("_comparable"))
+        bucket["unknown_field_count"] = len(bucket.pop("_unknown"))
+        bucket["retained_raw_anchor_count"] = len(bucket.pop("_anchors"))
+        source_shape = str(bucket.get("source_shape") or "")
+        if source_shape == "single_object_wide_field" and bucket["flattened_field_count"] < 50:
+            status = "P1_wide_source_under_flattened"
+        elif source_shape == "multi_row_event" and bucket["flattened_field_count"] < 20:
+            status = "P1_multi_row_source_under_flattened"
+        else:
+            status = "ok"
+        bucket["field_volume_status"] = status
+        public_rows.append(bucket)
+    return {
+        "row_count": len(raw_detail_flat_table),
+        "source_count": len(public_rows),
+        "sources": sorted(public_rows, key=lambda item: str(item.get("source_name") or "")),
+    }
+
+
+def _source_quality_bucket_from_observation(observation: dict[str, Any]) -> str:
+    quality = str(observation.get("quality_class") or "unknown")
+    if quality in {"completed", "partial", "no_data", "timeout", "auth_failed", "blocked", "parse_error", "planned"}:
+        return quality
+    return "unknown"
+
+
+def _source_layer_from_observation(observation: dict[str, Any]) -> str:
+    layer = str(observation.get("layer") or observation.get("source_layer") or "")
+    if layer.startswith("L2"):
+        return "L2"
+    if layer.startswith("L1"):
+        return "L1"
+    if "anchor" in layer.lower():
+        return "L2"
+    return "L1"
+
+
+def _source_quality_threshold(action: str, source_shape: str) -> int:
+    if action == "weapon_device_info":
+        return 100
+    if action == "rcp_event_feature_list":
+        return 100
+    if action == "weapon_device_app_list":
+        return 8
+    if source_shape == "single_object_wide_field":
+        return 50
+    if source_shape == "multi_row_event":
+        return 20
+    return 20
+
+
+def _source_next_action_from_quality(
+    *,
+    auth_blocked: bool,
+    parser_under_expanded: bool,
+    action_mapping_incomplete: bool,
+    source_payload_thin: bool,
+    repeated_item_list_schema_narrow: bool,
+    dynamic_event_table_capped: bool,
+    not_entered_main_chain: bool,
+) -> str:
+    if auth_blocked:
+        return "fix_auth_or_page_state_before_l3"
+    if action_mapping_incomplete:
+        return "repair_action_mapping_or_required_params"
+    if parser_under_expanded:
+        return "expand_raw_fields_into_standard_detail_table"
+    if dynamic_event_table_capped:
+        return "increase_event_feature_row_retention_or_pagination"
+    if repeated_item_list_schema_narrow:
+        return "compare_item_rows_not_only_flat_field_count"
+    if source_payload_thin:
+        return "accept_thin_source_as_auxiliary_or_enrich_with_adjacent_source"
+    if not_entered_main_chain:
+        return "wire_source_into_default_l1_l2_chain"
+    return "ready_for_l3_field_value_combination_sequence_compare"
+
+
+def build_l3_source_input_quality_table(
+    *,
+    source_plan: list[SourcePlanItem],
+    source_observations: list[dict[str, Any]],
+    raw_detail_flat_table_summary: dict[str, Any],
+    source_field_volume_summary: dict[str, Any],
+) -> list[dict[str, Any]]:
+    raw_by_source = {
+        str(item.get("source_name") or ""): item
+        for item in raw_detail_flat_table_summary.get("sources", []) or []
+        if isinstance(item, dict)
+    }
+    volume_by_action = {
+        str(item.get("action") or ""): item
+        for item in source_field_volume_summary.get("sources", []) or []
+        if isinstance(item, dict)
+    }
+    observations_by_action: dict[str, list[dict[str, Any]]] = {}
+    for observation in source_observations:
+        action = str(observation.get("action") or "")
+        if not action:
+            continue
+        observations_by_action.setdefault(action, []).append(observation)
+
+    planned_actions = [item.action for item in source_plan]
+    relevant_actions = unique_strings(planned_actions + list(observations_by_action.keys()) + list(raw_by_source.keys()) + list(volume_by_action.keys()))
+    rows: list[dict[str, Any]] = []
+    for action in relevant_actions:
+        observations = observations_by_action.get(action, [])
+        raw_summary = raw_by_source.get(action, {})
+        volume_summary = volume_by_action.get(action, {})
+        role = SOURCE_ROLE_BY_ACTION.get(action, "primary_detail_source")
+        source_domain = str(_source_domain_for_detail_table_or_action(SOURCE_ACTION_DETAIL_TABLES.get(action), action))
+        source_shape = str(raw_summary.get("source_shape") or _source_shape_for_action(action))
+        layer = "L2" if any(_source_layer_from_observation(observation) == "L2" for observation in observations) else "L1"
+        quality_buckets = [_source_quality_bucket_from_observation(observation) for observation in observations]
+        source_status = "not_entered" if not observations else (
+            "completed" if "completed" in quality_buckets else
+            "partial" if "partial" in quality_buckets else
+            "auth_failed" if "auth_failed" in quality_buckets else
+            "blocked" if "blocked" in quality_buckets else
+            quality_buckets[0]
+        )
+        interpretation_flags = {
+            str(flag)
+            for observation in observations
+            for flag in observation.get("interpretation_flags", []) or []
+            if flag
+        }
+        breakpoint_types = [
+            str(observation.get("breakpoint_type") or "")
+            for observation in observations
+            if observation.get("breakpoint_type")
+        ]
+        raw_record_count = int(raw_summary.get("raw_record_count") or 0)
+        raw_field_count = int(raw_summary.get("raw_field_count") or volume_summary.get("raw_input_field_count") or 0)
+        flattened_field_count = int(raw_summary.get("flattened_field_count") or volume_summary.get("parsed_detail_field_count") or 0)
+        comparable_field_count = int(raw_summary.get("comparable_field_count") or volume_summary.get("commonality_eligible_field_count") or 0)
+        unknown_field_count = int(raw_summary.get("unknown_field_count") or 0)
+        filtered_field_count = int(raw_summary.get("filtered_field_count") or 0)
+        threshold = _source_quality_threshold(action, source_shape)
+        source_payload_thin = bool(volume_summary.get("source_payload_thin") is True)
+        parser_under_expanded = (
+            raw_field_count >= threshold
+            and max(flattened_field_count, comparable_field_count) < threshold
+            and action not in {"weapon_device_app_list"}
+        ) or any(flag in interpretation_flags for flag in {"observation_compression_gap", "service_body_visibility_gap"})
+        repeated_item_list_schema_narrow = (
+            action == "weapon_device_app_list"
+            and raw_record_count >= 20
+            and comparable_field_count <= threshold
+        )
+        dynamic_event_table_capped = (
+            action == "rcp_event_feature_list"
+            and (
+                "feature_list_partial_only_feature_group_summary" in interpretation_flags
+                or comparable_field_count < threshold
+            )
+        )
+        auth_blocked = (
+            source_status == "auth_failed"
+            or any("auth" in value or "session" in value for value in breakpoint_types)
+        )
+        action_mapping_incomplete = (
+            any(value in {"invalid_parameter", "missing_required_fields", "missing_contract"} for value in breakpoint_types)
+            or "tool_gap" in interpretation_flags
+        )
+        not_entered_main_chain = source_status == "not_entered"
+        primary_blocked_reason = (
+            breakpoint_types[0]
+            if breakpoint_types else
+            "auth_blocked" if auth_blocked else
+            "source_not_executed_in_current_chain" if not_entered_main_chain else
+            "none"
+        )
+        if not_entered_main_chain:
+            l3_input_quality = "not_entered"
+        elif auth_blocked:
+            l3_input_quality = "blocked"
+        elif parser_under_expanded or action_mapping_incomplete:
+            l3_input_quality = "weak"
+        elif source_payload_thin and role != "primary_detail_source":
+            l3_input_quality = "weak"
+        elif comparable_field_count >= threshold:
+            l3_input_quality = "strong"
+        elif comparable_field_count >= max(8, threshold // 2):
+            l3_input_quality = "medium"
+        else:
+            l3_input_quality = "weak"
+        rows.append(
+            {
+                "source_name": action,
+                "source_domain": source_domain,
+                "source_role": role,
+                "source_shape": source_shape,
+                "layer": layer,
+                "source_status": source_status,
+                "raw_record_count": raw_record_count,
+                "raw_field_count": raw_field_count,
+                "flattened_field_count": flattened_field_count,
+                "comparable_field_count": comparable_field_count,
+                "unknown_field_count": unknown_field_count,
+                "filtered_field_count": filtered_field_count,
+                "source_payload_thin": source_payload_thin,
+                "parser_under_expanded": parser_under_expanded,
+                "action_mapping_incomplete": action_mapping_incomplete,
+                "auth_blocked": auth_blocked,
+                "not_entered_main_chain": not_entered_main_chain,
+                "repeated_item_list_schema_narrow": repeated_item_list_schema_narrow,
+                "source_role_is_auxiliary": role != "primary_detail_source",
+                "dynamic_event_table_capped": dynamic_event_table_capped,
+                "primary_blocked_reason": primary_blocked_reason,
+                "l3_input_quality": l3_input_quality,
+                "next_action": _source_next_action_from_quality(
+                    auth_blocked=auth_blocked,
+                    parser_under_expanded=parser_under_expanded,
+                    action_mapping_incomplete=action_mapping_incomplete,
+                    source_payload_thin=source_payload_thin,
+                    repeated_item_list_schema_narrow=repeated_item_list_schema_narrow,
+                    dynamic_event_table_capped=dynamic_event_table_capped,
+                    not_entered_main_chain=not_entered_main_chain,
+                ),
+            }
+        )
+    priority_rank = {
+        "strategy_domain": 0,
+        "device_domain": 1,
+        "behavior_domain": 2,
+        "account_domain": 3,
+        "content_domain": 4,
+        "social_domain": 5,
+        "feedback_domain": 6,
+        "enforcement_domain": 7,
+    }
+    return sorted(rows, key=lambda item: (priority_rank.get(str(item.get("source_domain") or ""), 99), str(item.get("source_name") or "")))
+
+
+def _detail_candidate_priority(table_name: str, support_ratio: float, source_domains: list[str]) -> dict[str, Any]:
+    score = 20 + support_ratio * 40
+    reason_codes = [f"support_ratio={support_ratio:.4f}", "L3_candidate_only", "baseline_not_evaluated_in_L3"]
+    if len(source_domains) >= 2:
+        score += 10
+        reason_codes.append("cross_domain_support")
+    if table_name in {"login_detail_table", "content_detail_table", "social_detail_table"}:
+        score += 8
+        reason_codes.append("high_value_source_family")
+    if score >= 65:
+        level = "high"
+    elif score >= 40:
+        level = "medium"
+    else:
+        level = "low"
+    return {
+        "priority_score": round(score, 2),
+        "priority_level": level,
+        "reason_codes": reason_codes,
+    }
+
+
+def build_sequence_comparison_features(
+    *,
+    raw_detail_flat_table: list[dict[str, Any]],
+    sampled_entities: list[str],
+) -> list[dict[str, Any]]:
+    rows_by_source_entity: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in raw_detail_flat_table:
+        if row.get("source_shape") != "multi_row_event":
+            continue
+        if row.get("value_comparable") is not True:
+            continue
+        key = (str(row.get("source_name") or ""), str(row.get("entity_id") or ""))
+        rows_by_source_entity.setdefault(key, []).append(row)
+
+    sequence_rows: list[dict[str, Any]] = []
+    sampled_denominator = max(len(sampled_entities), 1)
+    for (source_name, entity_id), rows in sorted(rows_by_source_entity.items()):
+        record_indexes = sorted({
+            int(row.get("record_index"))
+            for row in rows
+            if isinstance(row.get("record_index"), int)
+        })
+        if len(record_indexes) < 2:
+            continue
+        fields = unique_strings([str(row.get("field_name") or "") for row in rows if row.get("field_name")])
+        values_by_field: dict[str, set[str]] = {}
+        for row in rows:
+            values_by_field.setdefault(str(row.get("field_name") or ""), set()).add(str(row.get("field_value_raw_or_ref") or ""))
+        repeated_fields = sorted([
+            field for field, values in values_by_field.items()
+            if field and len(values) == 1 and next(iter(values), "") != ""
+        ])
+        changing_fields = sorted([
+            field for field, values in values_by_field.items()
+            if field and len(values) > 1
+        ])
+        if source_name == "login_logs_search":
+            feature_type = "login_sequence_comparison_candidate"
+            feature_name = "login_multi_record_device_network_client_sequence_candidate"
+            interpretation = "同一实体多条登录记录里，登录端、设备、网络、客户端或结果序列出现可比较变化/重复，可作为控制链候选输入。"
+        elif source_name == "archives_user_analysis":
+            feature_type = "user_behavior_sequence_comparison_candidate"
+            feature_name = "user_behavior_action_rhythm_sequence_candidate"
+            interpretation = "用户分析多条行为记录形成动作节奏或资料维护序列，可作为账号态/行为节奏候选输入。"
+        elif source_name in {"archives_photo_search", "archives_gallery_photo_list", "archives_photo_profile", "archives_photo_meta"}:
+            feature_type = "content_sequence_comparison_candidate"
+            feature_name = "content_publish_sequence_candidate"
+            interpretation = "内容多条记录在发布时间、发布端、模板或审核字段上形成序列共性，可作为内容承接候选输入。"
+        elif source_name in {"archives_comment_search", "archives_private_message_search", "archives_livestream_comment_detail"}:
+            feature_type = "social_sequence_comparison_candidate"
+            feature_name = "social_target_wording_path_sequence_candidate"
+            interpretation = "社交多条记录在对象、话术或路径上形成重复/变化，可作为社交承接候选输入。"
+        elif source_name in {"archives_user_report_search", "archives_negative_report", "archives_review_logs", "archives_punish_status"}:
+            feature_type = "feedback_enforcement_sequence_comparison_candidate"
+            feature_name = "feedback_enforcement_timeline_sequence_candidate"
+            interpretation = "反馈/处置多条记录形成时间线或类型重复，只能作为治理状态候选输入，不代表风险事实。"
+        else:
+            feature_type = "multi_row_sequence_comparison_candidate"
+            feature_name = f"{source_name}_multi_row_sequence_candidate"
+            interpretation = "多行事件记录形成字段重复或变化，可作为 L3 候选输入。"
+        sequence_rows.append(
+            {
+                "source_name": source_name,
+                "entity_type": _infer_seed_entity_type(entity_id),
+                "entity_id": entity_id,
+                "event_count": len(record_indexes),
+                "time_window_start": min([str(row.get("record_time")) for row in rows if row.get("record_time")] or ["unknown"]),
+                "time_window_end": max([str(row.get("record_time")) for row in rows if row.get("record_time")] or ["unknown"]),
+                "sequence_feature_name": feature_name,
+                "sequence_feature_type": feature_type,
+                "involved_record_indexes": record_indexes,
+                "involved_fields": fields,
+                "observed_pattern": {
+                    "repeated_fields": repeated_fields[:20],
+                    "changing_fields": changing_fields[:20],
+                },
+                "comparable_values": {
+                    field: sorted(values)[:5]
+                    for field, values in values_by_field.items()
+                    if field in set(repeated_fields[:10] + changing_fields[:10])
+                },
+                "support_record_count": len(record_indexes),
+                "support_entity_count": 1,
+                "support_ratio": round(1 / sampled_denominator, 4),
+                "time_delta_summary": "not_computed_without_ordered_timestamp_parser",
+                "risk_interpretation_candidate": interpretation,
+                "false_positive_risk": "正常用户也可能在短时间内产生多条同类记录；L3 只能作为候选，需后续补时间窗、对照和行为上下文。",
+                "missing_evidence": ["cross_entity_sequence_support", "normal_control_group_not_checked", "L4_validation_required"],
+                "candidate_only_not_final_conclusion": True,
+            }
+        )
+    return sequence_rows
+
+
+def build_sequence_candidate_features(
+    *,
+    sequence_comparison_features: list[dict[str, Any]],
+    sampled_entities: list[str],
+) -> list[dict[str, Any]]:
+    features: list[dict[str, Any]] = []
+    for row in sequence_comparison_features:
+        source_name = str(row.get("source_name") or "")
+        involved_fields = [str(field) for field in row.get("involved_fields", []) or [] if field]
+        support_entity_count = int(row.get("support_entity_count") or 1)
+        support_ratio = round(support_entity_count / max(len(sampled_entities), 1), 4)
+        priority = _detail_candidate_priority("login_detail_table" if source_name == "login_logs_search" else "user_behavior_summary_detail_table", support_ratio, [])
+        features.append(
+            {
+                "feature_name": row.get("sequence_feature_name"),
+                "feature_type": row.get("sequence_feature_type"),
+                "feature_origin": "sequence_comparison",
+                "source_domains": [str(INTERFACE_OBSERVATION_DOMAINS.get(source_name, ["unknown_domain"])[0])],
+                "source_names": [source_name],
+                "source_fields": involved_fields,
+                "field_paths": [],
+                "field_values_or_safe_refs": row.get("comparable_values"),
+                "field_combination": [
+                    f"{field}:sequence_compare" for field in involved_fields[:8]
+                ],
+                "support_sample_count": support_entity_count,
+                "support_user_count": support_entity_count,
+                "support_device_count": 0,
+                "support_entity_count": support_entity_count,
+                "support_record_count": row.get("support_record_count"),
+                "support_ratio": support_ratio,
+                **priority,
+                "black_gray_interpretation": row.get("risk_interpretation_candidate"),
+                "false_positive_risk": row.get("false_positive_risk"),
+                "missing_evidence": row.get("missing_evidence"),
+                "validation_method": "L3 only: compare multi-row event sequence on more samples; no baseline/lift/precision in this stage.",
+                "conclusion_boundary": "candidate_only_not_final_conclusion",
+                "candidate_only_not_final_conclusion": True,
+                "not_final_conclusion": True,
+                "validation_needed": True,
+            }
+        )
+    return features
+
+
+def _feature_text_blob(feature: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in (
+        "feature_name",
+        "feature_type",
+        "black_gray_interpretation",
+        "essence_reason",
+    ):
+        value = feature.get(key)
+        if value:
+            parts.append(str(value))
+    for key in ("source_fields", "field_combination", "field_paths", "source_names", "source_domains"):
+        for value in feature.get(key, []) or []:
+            if value:
+                parts.append(str(value))
+    return " ".join(parts).lower()
+
+
+def _feature_domains(feature: dict[str, Any]) -> list[str]:
+    return unique_strings([str(value) for value in feature.get("source_domains", []) or [] if value])
+
+
+def _feature_support_count(feature: dict[str, Any], key: str) -> int:
+    try:
+        return int(feature.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _candidate_essence_reason(feature: dict[str, Any], likeness: str) -> str:
+    domains = set(_feature_domains(feature))
+    field_semantics_status = str(feature.get("field_semantics_status") or "")
+    if likeness == "unknown" or field_semantics_status == "field_semantics_unknown":
+        return "字段族未解释或缺少行为链路验证，当前仅保留为候选共性。"
+    reasons: list[str] = []
+    if "behavior_domain" in domains and "content_domain" not in domains and "social_domain" not in domains:
+        reasons.append("像登录控制链或账号动作节奏模板")
+    if "device_domain" in domains:
+        reasons.append("像设备环境模板或对抗环境")
+    if "strategy_domain" in domains:
+        reasons.append("像策略事件请求模板或特征组合模板")
+    if "content_domain" in domains:
+        reasons.append("像内容发布模板或导流内容模板")
+    if "social_domain" in domains:
+        reasons.append("像社交承接路径、对象或话术模板")
+    if "feedback_domain" in domains or "enforcement_domain" in domains:
+        reasons.append("像治理后迁移、反馈集中或处置轨迹模板")
+    if not reasons:
+        reasons.append("像字段值或字段组合层面的潜在风险模板")
+    if likeness in {"high", "medium"}:
+        reasons.append("但当前仍缺正常对照、统计验证和跨轮稳定性，不能直接定性。")
+    elif likeness == "low":
+        reasons.append("当前支撑偏弱或偏单域，容易受正常场景影响，不能直接定性。")
+    return "；".join(unique_strings(reasons))
+
+
+def infer_candidate_essence_fields(feature: dict[str, Any]) -> tuple[str, str, str]:
+    feature_type = str(feature.get("feature_type") or "")
+    feature_origin = str(feature.get("feature_origin") or "")
+    source_domains = _feature_domains(feature)
+    source_names = unique_strings([str(value) for value in feature.get("source_names", []) or [] if value])
+    support_users = _feature_support_count(feature, "support_user_count")
+    support_records = _feature_support_count(feature, "support_record_count")
+    unknown_semantics = str(feature.get("field_semantics_status") or "") == "field_semantics_unknown" or "unknown_field" in feature_type
+    cross_source_support = len(source_domains) >= 2 or len(source_names) >= 2
+    has_field_combination = bool(feature.get("field_combination"))
+    if feature_origin == "sequence_comparison" or "sequence" in feature_type:
+        has_sequence = True
+    else:
+        has_sequence = False
+    if unknown_semantics:
+        likeness = "unknown"
+    elif cross_source_support and (has_field_combination or has_sequence) and support_users >= 2:
+        likeness = "high"
+    elif (has_field_combination or has_sequence or feature_origin in {"field_combination", "raw_field_commonality"}) and support_users >= 2:
+        likeness = "medium"
+    elif feature_type in {"hard_single_field_signal", "source_field_value_commonality_candidate"} or support_records > 1:
+        likeness = "low"
+    else:
+        likeness = "unknown"
+    reason = _candidate_essence_reason(feature, likeness)
+    boundary = "L3 only: 当前只回答像不像本质候选；未做正常对照、统计验证或跨轮稳定性验证。"
+    return likeness, reason, boundary
+
+
+def infer_risk_choke_point_fields(feature: dict[str, Any]) -> dict[str, Any]:
+    text_blob = _feature_text_blob(feature)
+    domains = set(_feature_domains(feature))
+    feature_origin = str(feature.get("feature_origin") or "")
+    support_users = _feature_support_count(feature, "support_user_count")
+    cross_source = len(domains) >= 2
+    has_field_combination = bool(feature.get("field_combination"))
+    has_sequence = feature_origin == "sequence_comparison" or "sequence" in str(feature.get("feature_type") or "")
+    unknown_semantics = str(feature.get("field_semantics_status") or "") in {"field_semantics_unknown", "needs_field_dictionary_review"}
+    tokens = {
+        "protocol": ["backend_action_signal", "missing_frontend_activity", "client path", "request_path", "frontend_activity_signal", "protocol", "request_scene"],
+        "control_execution": ["mismatch", "consistency", "alignment", "device_execution", "execution", "behavior_device", "backend_action_device_id", "frontend_active_device_id"],
+        "device_farm": ["root", "hook", "frida", "xposed", "simulator", "debug", "mountrisk", "risky app", "accessibility", "device environment", "package", "applist"],
+        "account_transfer": ["login_type", "login_source", "refresh", "reset", "protection", "sensitive action", "profile", "publish_after_login", "private_message", "comment", "follow"],
+        "content_funnel": ["caption", "template", "target_user_id", "comment", "message", "funnel", "social", "content_type", "audit_reason", "path"],
+        "post_enforcement": ["punish", "review", "appeal", "report", "migration", "post_enforcement", "downrank", "remove"],
+        "automation_rhythm": ["time_delta", "rhythm", "sequence_compare", "action_time", "short time", "burst", "window"],
+    }
+    type_name = "unknown"
+    if unknown_semantics:
+        type_name = "unknown"
+    elif any(token in text_blob for token in tokens["protocol"]):
+        type_name = "protocol_constraint_gap"
+    elif any(token in text_blob for token in tokens["control_execution"]) or ({"behavior_domain", "device_domain"} <= domains and has_sequence):
+        type_name = "control_execution_separation"
+    elif "device_domain" in domains and any(token in text_blob for token in tokens["device_farm"]):
+        type_name = "device_farm_template"
+    elif "behavior_domain" in domains and any(token in text_blob for token in tokens["account_transfer"]):
+        type_name = "account_control_transfer"
+    elif ({"content_domain", "social_domain"} & domains) and any(token in text_blob for token in tokens["content_funnel"]):
+        type_name = "content_funnel_dependency"
+    elif ({"feedback_domain", "enforcement_domain"} & domains) and any(token in text_blob for token in tokens["post_enforcement"]):
+        type_name = "post_enforcement_migration"
+    elif has_sequence or any(token in text_blob for token in tokens["automation_rhythm"]):
+        type_name = "automation_rhythm"
+
+    if type_name == "unknown":
+        likeness = "unknown"
+    elif cross_source and (has_field_combination or has_sequence) and support_users >= 2:
+        likeness = "high"
+    elif (has_field_combination or has_sequence or support_users >= 2):
+        likeness = "medium"
+    else:
+        likeness = "low"
+    if str(feature.get("feature_name") or "") == "multi_domain_anchor_overlap_candidate":
+        likeness = "low"
+        type_name = "unknown"
+
+    reason_map = {
+        "protocol_constraint_gap": "更像前后端约束脱节或协议约束缺失，攻击成立依赖客户端约束未闭合。",
+        "control_execution_separation": "更像控制面与执行面分离，登录、设备或行为执行不在同一自然实体链路上。",
+        "device_farm_template": "更像设备环境批量模板化，攻击执行依赖同类设备环境或对抗环境。",
+        "account_control_transfer": "更像账号控制权转移或登录态滥用，后续敏感动作依赖控制链成立。",
+        "content_funnel_dependency": "更像内容导流承接路径依赖，攻击要成立必须有内容到社交/私域的承接链。",
+        "post_enforcement_migration": "更像治理后迁移能力，攻击者通过切换账号、设备或路径继续执行。",
+        "automation_rhythm": "更像自动化执行节奏，动作序列和时间差体现模板化执行。",
+        "unknown": "当前只能看见候选链路或未知字段重合，还不能解释成稳定关键卡口。",
+    }
+    if type_name in {"protocol_constraint_gap", "control_execution_separation", "device_farm_template", "account_control_transfer"}:
+        required_for_attack = True if likeness in {"high", "medium"} else "unknown"
+    elif type_name in {"content_funnel_dependency", "post_enforcement_migration", "automation_rhythm"}:
+        required_for_attack = "unknown" if likeness == "low" else False
+    else:
+        required_for_attack = "unknown"
+
+    if type_name in {"protocol_constraint_gap", "control_execution_separation", "device_farm_template"}:
+        evade = "low" if likeness == "high" else "medium"
+        robustness = "high" if likeness == "high" else "medium"
+    elif type_name in {"content_funnel_dependency", "post_enforcement_migration", "automation_rhythm"}:
+        evade = "medium"
+        robustness = "medium" if likeness in {"high", "medium"} else "low"
+    elif type_name == "account_control_transfer":
+        evade = "medium"
+        robustness = "medium"
+    else:
+        evade = "unknown"
+        robustness = "unknown" if unknown_semantics else "low"
+
+    supporting_types = unique_strings([
+        "field_combination_commonality" if has_field_combination else "",
+        "sequence_commonality" if has_sequence else "",
+        "cross_source_support_commonality" if cross_source else "",
+        "field_value_commonality" if feature_origin in {"raw_field_commonality", "unknown_field_commonality"} or "field_value" in str(feature.get("feature_type") or "") else "",
+    ])
+    if not supporting_types:
+        supporting_types = ["coverage_commonality"] if not has_field_combination and not has_sequence else []
+    return {
+        "risk_choke_point_type": type_name,
+        "choke_point_likeness": likeness,
+        "choke_point_reason": reason_map.get(type_name, reason_map["unknown"]),
+        "required_for_attack": required_for_attack,
+        "easy_to_evade_if_changed": evade,
+        "robustness": robustness,
+        "supporting_commonality_types": supporting_types,
+        "supporting_source_domains": sorted(domains),
+    }
+
+
+def _sanitize_l3_candidate_text(text: str) -> str:
+    return (
+        str(text or "")
+        .replace("baseline/lift/precision", "statistical validation")
+        .replace("baseline、lift、误伤率", "正常对照、统计验证")
+        .replace("lift 和误伤率", "统计验证")
+        .replace("lift，false-positive review rate", "statistical validation")
+        .replace("lift、误伤率", "统计验证")
+        .replace("lift", "statistical_validation")
+        .replace("precision", "statistical_validation")
+    )
+
+
+def normalize_l3_candidate_feature_contract(feature: dict[str, Any]) -> dict[str, Any]:
+    item = dict(feature)
+    feature_type = str(item.get("feature_type") or item.get("feature_name") or "")
+    if not item.get("feature_origin"):
+        if "sequence" in feature_type:
+            origin = "sequence_comparison"
+        elif "unknown_field" in feature_type:
+            origin = "unknown_field_commonality"
+        elif feature_type == "source_field_value_commonality_candidate":
+            origin = "raw_field_commonality"
+        elif "combination" in feature_type or item.get("field_combination"):
+            origin = "field_combination"
+        else:
+            origin = "raw_field_commonality"
+        item["feature_origin"] = origin
+    item.setdefault("source_names", unique_strings([str(item.get("source_name") or "")] + [str(x) for x in item.get("source_names", []) or [] if x]))
+    item.setdefault("source_fields", item.get("source_fields") or [])
+    item.setdefault("field_paths", item.get("field_paths") or [])
+    item.setdefault("field_values_or_safe_refs", item.get("field_values_or_safe_refs") or item.get("field_value_or_safe_ref") or [])
+    item.setdefault("field_combination", item.get("field_combination") or [])
+    support_sample_count = item.get("support_sample_count") or item.get("support_user_count") or item.get("support_entity_count") or item.get("support_count") or 0
+    item.setdefault("support_sample_count", support_sample_count)
+    item.setdefault("support_user_count", item.get("support_user_count") or item.get("support_entity_count") or support_sample_count)
+    item.setdefault("support_device_count", item.get("support_device_count") or 0)
+    item.setdefault("support_entity_count", item.get("support_entity_count") or item.get("support_user_count") or support_sample_count)
+    item.setdefault("support_record_count", item.get("support_record_count") or 0)
+    item.setdefault("support_ratio", item.get("support_ratio"))
+    item.setdefault("priority_score", item.get("priority_score") or 0)
+    item.setdefault("priority_level", item.get("priority_level") or "low")
+    sanitized_reason_codes = [
+        str(code)
+        for code in (item.get("reason_codes") or ["L3_candidate_only"])
+        if code and not str(code).startswith("lift=") and str(code) != "baseline_available"
+    ]
+    item["reason_codes"] = sanitized_reason_codes or ["L3_candidate_only"]
+    item.setdefault("black_gray_interpretation", item.get("black_gray_interpretation") or "字段共性候选，只能作为 L3 输入，不能直接定性。")
+    item.setdefault("false_positive_risk", item.get("false_positive_risk") or item.get("normal_user_false_positive_risk") or "需要正常对照和场景验证。")
+    item.setdefault("missing_evidence", item.get("missing_evidence") or ["L4_validation_required"])
+    if not item.get("validation_method"):
+        item["validation_method"] = "L3 only; compare more current observations and defer statistical validation to L4."
+    item["validation_method"] = _sanitize_l3_candidate_text(str(item.get("validation_method") or ""))
+    item.setdefault("conclusion_boundary", "candidate_only_not_final_conclusion")
+    supporting_evidence = unique_strings(
+        [str(x) for x in item.get("supporting_current_evidence", []) or [] if x]
+        + [str(x) for x in item.get("support_entities", []) or [] if x]
+        + [str(x) for x in item.get("supporting_entities", []) or [] if x]
+        + [str(x) for x in item.get("supporting_samples", []) or [] if x]
+    )
+    if not supporting_evidence:
+        supporting_evidence = unique_strings(
+            [str(x) for x in item.get("field_values_or_safe_refs", []) or [] if x]
+            + [str(x) for x in item.get("source_fields", []) or [] if x]
+        )
+    item.setdefault("supporting_current_evidence", supporting_evidence)
+    item.setdefault("supporting_selected_anchors", item.get("supporting_selected_anchors") or [])
+    item.setdefault("unselected_signal_hypothesis", not bool(item.get("supporting_selected_anchors")))
+    item.setdefault(
+        "signal_inputs",
+        [
+            {
+                "evidence_source": "current_observation",
+                "source_names": item.get("source_names") or [],
+                "source_fields": item.get("source_fields") or [],
+                "field_paths": item.get("field_paths") or [],
+                "feature_origin": item.get("feature_origin"),
+            }
+        ],
+    )
+    item.setdefault(
+        "hypothesis_inputs",
+        [
+            {
+                "evidence_source": "candidate_hypothesis",
+                "feature_type": feature_type,
+                "usage_boundary": "L3_candidate_only_requires_validation",
+            }
+        ],
+    )
+    item.setdefault("confidence", item.get("confidence") or "candidate_partial")
+    essence_likeness, essence_reason, essence_boundary = infer_candidate_essence_fields(item)
+    item.setdefault("essence_likeness", essence_likeness)
+    item.setdefault("essence_reason", _sanitize_l3_candidate_text(essence_reason))
+    item.setdefault("essence_boundary", _sanitize_l3_candidate_text(essence_boundary))
+    choke_fields = infer_risk_choke_point_fields(item)
+    for key, value in choke_fields.items():
+        item.setdefault(key, value)
+    item.setdefault("supporting_attack_chain_ids", [])
+    for transient_key in ("baseline_ratio", "lift", "lift_unavailable"):
+        item.pop(transient_key, None)
+    item["candidate_only_not_final_conclusion"] = True
+    item["not_final_conclusion"] = True
+    item["validation_needed"] = True
+    return item
+
+
+def build_standard_field_commonality_and_features(
+    *,
+    standard_detail_table: list[dict[str, Any]],
+    sampled_entities: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows_by_table_field: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    rows_by_table_field_value: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in standard_detail_table:
+        table_name = str(row.get("detail_table") or "")
+        field_name = str(row.get("field_name") or "")
+        if not table_name or not field_name:
+            continue
+        rows_by_table_field.setdefault((table_name, field_name), []).append(row)
+        if row.get("value_present") is True and row.get("value_comparable") is True:
+            rows_by_table_field_value.setdefault((table_name, field_name, str(row.get("field_value_or_safe_ref"))), []).append(row)
+
+    commonality_rows: list[dict[str, Any]] = []
+    value_commonality_by_table: dict[str, list[dict[str, Any]]] = {}
+    sampled_denominator = max(len(sampled_entities), 1)
+    for (table_name, field_name), rows in rows_by_table_field.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        example = rows[0]
+        commonality_rows.append(
+            {
+                "signal_name": f"{table_name}:field_coverage:{field_name}",
+                "commonality_type": "coverage_commonality",
+                "detail_table": table_name,
+                "source_fields": [field_name],
+                "field_family": example.get("field_family"),
+                "supporting_current_evidence": entities,
+                "support_count": len(entities),
+                "batch_support_count": len(entities),
+                "support_ratio": round(len(entities) / sampled_denominator, 4),
+                "commonality_anchor": False,
+                "risk_commonality": False,
+                "eligible_for_group_candidate": False,
+                "candidate_feature_eligible": False,
+                "evidence_source": "current_observation",
+                "source_name": table_name,
+                "not_final_conclusion": True,
+            }
+        )
+
+    for (table_name, field_name, value_ref), rows in rows_by_table_field_value.items():
+        entities = unique_strings([str(row.get("entity_id")) for row in rows if row.get("entity_id")])
+        if len(entities) < 2:
+            continue
+        example = rows[0]
+        unknown = bool(example.get("unknown_field_family"))
+        commonality_type = "unknown_field_value_commonality" if unknown else "field_value_commonality"
+        item = {
+            "signal_name": f"{table_name}:{commonality_type}:{field_name}",
+            "commonality_type": commonality_type,
+            "detail_table": table_name,
+            "source_fields": [field_name],
+            "field_family": example.get("field_family"),
+            "field_value_or_safe_ref": value_ref,
+            "supporting_current_evidence": entities,
+            "support_count": len(entities),
+            "batch_support_count": len(entities),
+            "support_ratio": round(len(entities) / sampled_denominator, 4),
+            "commonality_anchor": False,
+            "risk_commonality": False,
+            "eligible_for_group_candidate": False,
+            "candidate_feature_eligible": True,
+            "field_semantics_status": "needs_field_dictionary_review" if unknown else "known_field_family",
+            "evidence_source": "current_observation",
+            "source_name": table_name,
+            "not_final_conclusion": True,
+        }
+        commonality_rows.append(item)
+        value_commonality_by_table.setdefault(table_name, []).append(item)
+
+    candidate_features: list[dict[str, Any]] = []
+    for table_name, items in value_commonality_by_table.items():
+        selected = sorted(
+            items,
+            key=lambda item: (-float(item.get("support_ratio") or 0), str(item.get("source_fields") or "")),
+        )[:5]
+        if not selected:
+            continue
+        source_fields = unique_strings([
+            field for item in selected for field in item.get("source_fields", []) or []
+        ])
+        support_entities = unique_strings([
+            entity for item in selected for entity in item.get("supporting_current_evidence", []) or []
+        ])
+        if len(support_entities) < 2:
+            continue
+        supporting_rows = [
+            {
+                "sample_id": row.get("sample_id"),
+                "entity_id": row.get("entity_id"),
+                "round_id": row.get("round_id"),
+                "source_id": row.get("source_id"),
+                "source_quality": row.get("source_quality"),
+                "field_name": row.get("field_name"),
+                "field_family": row.get("field_family"),
+            }
+            for row in standard_detail_table
+            if row.get("detail_table") == table_name
+            and row.get("field_name") in set(source_fields)
+            and str(row.get("entity_id")) in set(support_entities)
+        ]
+        source_domains = unique_strings([
+            str(row.get("source_domain"))
+            for row in standard_detail_table
+            if row.get("detail_table") == table_name and row.get("source_domain")
+        ])
+        support_ratio = round(len(support_entities) / sampled_denominator, 4)
+        priority = _detail_candidate_priority(table_name, support_ratio, source_domains)
+        unknown_fields = [
+            field for item in selected
+            if item.get("field_semantics_status") == "needs_field_dictionary_review"
+            for field in item.get("source_fields", []) or []
+        ]
+        candidate_features.append(
+            {
+                "feature_name": DETAIL_TABLE_FEATURE_NAMES.get(table_name, f"{table_name}_field_commonality_candidate"),
+                "feature_type": "source_field_value_commonality_candidate",
+                "source_domains": source_domains,
+                "source_fields": source_fields,
+                "field_values_or_safe_refs": [
+                    item.get("field_value_or_safe_ref") for item in selected if item.get("field_value_or_safe_ref") is not None
+                ],
+                "field_combination": [
+                    f"{item.get('source_fields', ['unknown'])[0]}={item.get('field_value_or_safe_ref')}"
+                    for item in selected
+                ],
+                "support_sample_count": len(support_entities),
+                "support_user_count": len(support_entities),
+                "support_entity_count": len(support_entities),
+                "support_ratio": support_ratio,
+                **priority,
+                "supporting_current_evidence": supporting_rows,
+                "supporting_selected_anchors": [],
+                "unselected_signal_hypothesis": True,
+                "signal_inputs": [{"evidence_source": "current_observation", "detail_table": table_name, "source_fields": source_fields}],
+                "hypothesis_inputs": [],
+                "black_gray_interpretation": _detail_candidate_interpretation(table_name),
+                "false_positive_risk": _detail_candidate_false_positive(table_name),
+                "normal_user_false_positive_risk": _detail_candidate_false_positive(table_name),
+                "missing_evidence": _detail_candidate_missing_evidence(table_name, unknown_fields),
+                "missing_fields_to_check": _detail_candidate_missing_evidence(table_name, unknown_fields),
+                "validation_method": "L3 only: replay field-value combinations on more current observations; deeper control validation is not executed in this stage.",
+                "strategy_usage_boundary": "候选特征 only；只进入观察、人审辅助或后续验证计划，不能直接用于处置或策略动作。",
+                "conclusion_boundary": "candidate_only_not_final_conclusion",
+                "confidence": "medium_partial" if not unknown_fields else "low_hypothesis",
+                "validation_needed": True,
+                "not_final_conclusion": True,
+            }
+        )
+        if len(selected) >= 2:
+            commonality_rows.append(
+                {
+                    "signal_name": f"{table_name}:field_combination_commonality",
+                    "commonality_type": "field_combination_commonality",
+                    "detail_table": table_name,
+                    "source_fields": source_fields,
+                    "field_family": unique_strings([str(item.get("field_family") or "") for item in selected if item.get("field_family")]),
+                    "field_combination": [
+                        f"{item.get('source_fields', ['unknown'])[0]}={item.get('field_value_or_safe_ref')}"
+                        for item in selected
+                    ],
+                    "supporting_current_evidence": support_entities,
+                    "support_count": len(support_entities),
+                    "batch_support_count": len(support_entities),
+                    "support_ratio": support_ratio,
+                    "commonality_anchor": False,
+                    "risk_commonality": False,
+                    "eligible_for_group_candidate": False,
+                    "candidate_feature_eligible": True,
+                    "evidence_source": "current_observation",
+                    "source_name": table_name,
+                    "not_final_conclusion": True,
+                }
+            )
+    return commonality_rows, candidate_features
+
+
+def _detail_candidate_interpretation(table_name: str) -> str:
+    return {
+        "login_detail_table": "多个样本在登录端、设备、网络、UA 或登录结果上出现字段值共性，可作为登录控制链或 ATO 候选线索。",
+        "account_detail_table": "多个样本在账号状态、资料维护、粉关资产或处罚保护状态上出现字段值共性，可作为账号态维护或小号候选线索。",
+        "user_behavior_summary_detail_table": "多个样本在用户分析行为计数或账号维护动作上出现字段值共性，可作为行为节奏候选线索。",
+        "content_detail_table": "多个样本在发布、内容模板、审核原因或互动计数上出现字段值共性，可作为内容承接或导流候选线索。",
+        "social_detail_table": "多个样本在社交对象、话术、关系路径或互动动作上出现字段值共性，可作为社交承接候选线索。",
+        "feedback_detail_table": "多个样本在举报、反馈对象或申诉字段上出现共性，只能作为反馈线索，不能直接代表风险事实。",
+        "enforcement_detail_table": "多个样本在审核、处罚、限流、下架或处置后动作上出现共性，只能作为治理状态线索，不能直接代表黑灰产本质。",
+    }.get(table_name, "多个样本存在字段值共性，可作为候选线索，需后续验证。")
+
+
+def _detail_candidate_false_positive(table_name: str) -> str:
+    return {
+        "login_detail_table": "同地区、同客户端、正常多端登录、网络出口集中都可能造成相似登录字段。",
+        "account_detail_table": "新用户、活动用户、正常资料维护或低活跃账号也可能有相似画像字段。",
+        "user_behavior_summary_detail_table": "正常活跃周期、活动引导、内容消费高峰可能造成行为计数相似。",
+        "content_detail_table": "热点模板、同活动话题、同版本发布入口可能造成内容字段相似。",
+        "social_detail_table": "正常社交互动、热门对象、活动评论模板可能造成社交字段相似。",
+        "feedback_detail_table": "集中举报可能来自同一受害群体、活动争议或误报，不等于风险确认。",
+        "enforcement_detail_table": "相似处置可能来自相同治理规则或审核批次，不等于黑灰产本质相同。",
+    }.get(table_name, "正常业务场景可能出现相似字段，需要更多样本和对照验证。")
+
+
+def _detail_candidate_missing_evidence(table_name: str, unknown_fields: list[str]) -> list[str]:
+    base = ["baseline_not_evaluated_in_L3", "normal_control_group_not_checked", "L4_validation_required"]
+    if unknown_fields:
+        base.append("needs_field_dictionary_review")
+    if table_name == "login_detail_table":
+        base.extend(["behavior_action_alignment", "longer_login_window"])
+    elif table_name in {"account_detail_table", "user_behavior_summary_detail_table"}:
+        base.extend(["historical_account_baseline", "behavior_sequence_detail"])
+    elif table_name == "content_detail_table":
+        base.extend(["content_template_detail", "publish_device_alignment"])
+    elif table_name == "social_detail_table":
+        base.extend(["shared_target_or_wording_validation", "social_path_detail"])
+    elif table_name in {"feedback_detail_table", "enforcement_detail_table"}:
+        base.extend(["feedback_enforcement_timeline", "policy_reason_detail"])
+    return unique_strings(base)
+
+
 def _canonical_anchor_type(canonical: str) -> str | None:
     if canonical == "photo_id":
         return "candidate_photo_id"
@@ -5987,7 +9187,7 @@ def _anchor_next_interfaces(anchor_type: str) -> list[str]:
     if anchor_type == "candidate_photo_id":
         return ["archives_photo_profile", "archives_photo_meta"]
     if anchor_type == "candidate_device_id":
-        return ["track_analysis_check_data_ready", "weapon_inventory"]
+        return ["weapon_device_info", "weapon_device_app_list", "track_analysis_check_data_ready", "weapon_inventory"]
     if anchor_type in {"candidate_policy_code", "candidate_event_id", "candidate_source_id"}:
         return ["rcp_event_detail", "rcp_event_feature_list"]
     if anchor_type == "candidate_ip":
@@ -6673,7 +9873,7 @@ def build_candidate_anchor_pool_artifact(
                     produced_by=source_id or action,
                     observation_domain="device_domain",
                     confidence="current_observation",
-                    next_allowed_interfaces=["track_analysis_check_data_ready", "weapon_inventory"],
+                    next_allowed_interfaces=_anchor_next_interfaces("candidate_device_id"),
                     cap_key="device_anchor_top_k",
                     reason=f"{canonical}_extracted_from_current_observation",
                     source_quality=quality,
@@ -6769,7 +9969,7 @@ def build_candidate_anchor_pool_artifact(
                 produced_by=str(candidate.get("source_id") or source_id or action),
                 observation_domain="device_domain",
                 confidence="current_observation",
-                next_allowed_interfaces=["track_analysis_check_data_ready", "weapon_inventory"],
+                next_allowed_interfaces=_anchor_next_interfaces("candidate_device_id"),
                 cap_key="device_anchor_top_k",
                 reason="candidate_device_extracted_from_safe_observation",
                 source_quality=quality,
@@ -6779,7 +9979,7 @@ def build_candidate_anchor_pool_artifact(
     if not anchors and mode == "dry_run":
         for anchor_type, produced_by, domain, next_interfaces, cap_key in [
             ("candidate_photo_id", "archives_photo_search", "content_domain", ["archives_gallery_photo_list", "archives_photo_profile", "archives_photo_meta"], "photo_anchor_top_k"),
-            ("candidate_device_id", "weapon_inventory", "device_domain", ["track_analysis_check_data_ready", "weapon_inventory"], "device_anchor_top_k"),
+            ("candidate_device_id", "weapon_device_info", "device_domain", _anchor_next_interfaces("candidate_device_id"), "device_anchor_top_k"),
             ("candidate_policy_code", "rcp_fast_query_hbase", "strategy_domain", ["rcp_event_detail", "rcp_event_feature_list"], "strategy_anchor_top_k"),
         ]:
             _append_anchor(
@@ -6813,6 +10013,61 @@ MOCK_OBSERVATION_CANONICAL_FIELDS: dict[str, str] = {
     "candidate_punish_id": "punish_id",
     "login_ip": "ip_ua",
     "login_ua": "ip_ua",
+    "login_time": "login_time",
+    "login_type": "login_type",
+    "login_source": "login_source",
+    "login_result": "login_result",
+    "network_signal": "ip_or_network",
+    "account_age": "account_age",
+    "register_time": "register_time",
+    "account_status": "account_status",
+    "protection_status": "protection_status",
+    "punish_status": "punish_status",
+    "profile_change_time": "profile_change_time",
+    "nickname_change": "nickname_change",
+    "avatar_change": "avatar_change",
+    "bio_change": "bio_change",
+    "follow_count": "follow_count",
+    "fan_count": "fan_count",
+    "content_publish_count": "content_publish_count",
+    "active_days": "active_days",
+    "recent_behavior_counts": "recent_behavior_counts",
+    "photo_id": "photo_id",
+    "item_id": "item_id",
+    "publish_time": "publish_time",
+    "publish_device": "publish_device",
+    "publish_ip": "publish_ip",
+    "content_type": "content_type",
+    "caption": "caption",
+    "title": "title",
+    "audit_reason": "audit_reason",
+    "strategy_reason": "strategy_reason",
+    "like_count": "like_count",
+    "comment_count": "comment_count",
+    "share_count": "share_count",
+    "play_count": "play_count",
+    "comment_id": "comment_id",
+    "message_id": "message_id",
+    "target_user_id": "target_user_id",
+    "relation_type": "relation_type",
+    "message_text": "message_text",
+    "comment_text": "comment_text",
+    "action_time": "action_time",
+    "sender": "sender",
+    "receiver": "receiver",
+    "same_target": "same_target",
+    "same_wording": "same_wording",
+    "same_path": "same_path",
+    "report_time": "report_time",
+    "report_type": "report_type",
+    "feedback_object": "feedback_object",
+    "appeal_time": "appeal_time",
+    "appeal_result": "appeal_result",
+    "review_result": "review_result",
+    "punish_type": "punish_type",
+    "enforcement_action": "enforcement_action",
+    "enforcement_time": "enforcement_time",
+    "policy_reason": "policy_reason",
     "request_path": "request_path",
     "request_scene": "request_scene",
     "entry": "entry",
@@ -6841,8 +10096,40 @@ def build_mock_current_source_observations(
         action = str(item.get("action") or "mock_current_observation")
         source_id = str(item.get("source_id") or f"mock_current_observation_{index}")
         fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+        records = item.get("records") if isinstance(item.get("records"), list) else []
         feature_rows_input = item.get("feature_rows") if isinstance(item.get("feature_rows"), list) else []
         device_detail_rows_input = item.get("device_detail_rows") if isinstance(item.get("device_detail_rows"), list) else []
+        generated_feature_count = int(item.get("generated_feature_row_count") or 0)
+        if generated_feature_count > 0:
+            feature_rows_input = list(feature_rows_input) + [
+                {
+                    "feature_key": f"mockRcpRawFeature{i:03d}",
+                    "feature_name": f"mock RCP raw feature {i:03d}",
+                    "feature_type": "string",
+                    "defaultFeatureValue": "shared_rcp_template" if i % 7 == 0 else f"value_{i:03d}",
+                    "feature_tab": STRATEGY_EVENT_ORIGINAL_FEATURE_TAB,
+                    "mapped_domain": "未知",
+                    "mapped_field_family": "unknown_feature_family",
+                    "candidate_feature_eligible": True,
+                }
+                for i in range(1, generated_feature_count + 1)
+            ]
+        generated_device_count = int(item.get("generated_device_detail_field_count") or 0)
+        if generated_device_count > 0:
+            device_detail_rows_input = list(device_detail_rows_input) + [
+                {
+                    "device_field_key": f"mockDeviceWideField{i:03d}",
+                    "device_field_name": f"mock device wide field {i:03d}",
+                    "device_field_value_or_safe_ref": "shared_device_template" if i % 9 == 0 else f"device_value_{i:03d}",
+                    "device_field_type": "string",
+                    "value_comparable": True,
+                    "comparable_type": "等值",
+                    "device_source_type": "设备基础信息",
+                    "mapped_field_family": "unknown_device_field_family",
+                    "candidate_feature_eligible": True,
+                }
+                for i in range(1, generated_device_count + 1)
+            ]
         strategy_event_feature_rows: list[dict[str, Any]] = []
         for row_index, row in enumerate(feature_rows_input, start=1):
             if not isinstance(row, dict):
@@ -6894,7 +10181,27 @@ def build_mock_current_source_observations(
         handles: list[dict[str, Any]] = []
         extracted_fields: list[str] = []
         candidate_device_ids: list[dict[str, Any]] = []
-        for field, value in fields.items():
+        field_items: list[tuple[str, Any, int | None, Any, str]] = [
+            (str(field), value, None, None, f"$.mock_current_observation.{field}")
+            for field, value in fields.items()
+        ]
+        for record_index, record in enumerate(records, start=1):
+            if not isinstance(record, dict):
+                continue
+            record_time = record.get("record_time") or record.get("login_time") or record.get("operation_time") or record.get("publish_time") or record.get("action_time") or record.get("report_time") or record.get("enforcement_time")
+            for field, value in record.items():
+                if field == "record_time":
+                    continue
+                field_items.append(
+                    (
+                        str(field),
+                        value,
+                        record_index,
+                        record_time,
+                        f"$.mock_current_observation.records[{record_index - 1}].{field}",
+                    )
+                )
+        for field, value, record_index, record_time, field_path in field_items:
             field_text = str(field)
             if _is_credential_secret_key(field_text) or value is None:
                 continue
@@ -6906,10 +10213,12 @@ def build_mock_current_source_observations(
                 {
                     "field": field_text,
                     "canonical_field": canonical,
-                    "field_path": f"$.mock_current_observation.{field_text}",
+                    "field_path": field_path,
                     "value": value_text,
                     "source_id": source_id,
                     "evidence_source": "current_observation",
+                    "record_index": record_index,
+                    "record_time": record_time,
                 }
             )
             extracted_fields.append(canonical)
@@ -7135,6 +10444,395 @@ def _distinct_signal_support_entities(support_entities: list[Any], sampled_entit
     return unique_strings(normalized)
 
 
+def build_l3_commonality_type_distribution(
+    *,
+    shared_signal_items: list[dict[str, Any]],
+    sequence_comparison_features: list[dict[str, Any]],
+    candidate_features: list[dict[str, Any]],
+) -> dict[str, Any]:
+    coverage_count = len([
+        item for item in shared_signal_items
+        if str(item.get("commonality_type") or "") == "coverage_commonality"
+    ])
+    field_value_count = len([
+        item for item in shared_signal_items
+        if str(item.get("commonality_type") or "") in {"field_value_commonality", "known_field_commonality", "unknown_field_value_commonality"}
+    ])
+    field_combination_count = len([
+        item for item in shared_signal_items
+        if str(item.get("commonality_type") or "") == "field_combination_commonality"
+    ]) + len([
+        item for item in candidate_features
+        if str(item.get("feature_origin") or "") == "field_combination"
+    ])
+    cross_source_rows: list[dict[str, Any]] = []
+    for feature in candidate_features:
+        domains = _feature_domains(feature)
+        if len(domains) < 2:
+            continue
+        cross_source_rows.append(
+            {
+                "signal_name": f"cross_source_support_commonality:{feature.get('feature_name')}",
+                "commonality_type": "cross_source_support_commonality",
+                "source_domains": domains,
+                "source_names": feature.get("source_names") or [],
+                "support_user_count": feature.get("support_user_count"),
+                "support_record_count": feature.get("support_record_count"),
+                "not_final_conclusion": True,
+            }
+        )
+    return {
+        "coverage_commonality_count": coverage_count,
+        "field_value_commonality_count": field_value_count,
+        "field_combination_commonality_count": field_combination_count,
+        "sequence_commonality_count": len(sequence_comparison_features),
+        "cross_source_support_commonality_count": len(cross_source_rows),
+        "coverage_commonality_boundary": "coverage_commonality only proves field visibility; it cannot support high essence or final risk judgement.",
+        "cross_source_support_commonality": cross_source_rows,
+    }
+
+
+def build_field_value_commonality_funnel(
+    *,
+    strategy_event_feature_row_table: list[dict[str, Any]],
+    device_detail_table: list[dict[str, Any]],
+    standard_detail_table: list[dict[str, Any]],
+    shared_signal_items: list[dict[str, Any]],
+    candidate_features: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    raw_groups: dict[str, dict[tuple[str, str], dict[str, Any]]] = {}
+    promoted_groups: dict[str, list[dict[str, Any]]] = {}
+
+    def add_raw(source_name: str, family: str, field_name: str, value_ref: str, entity_id: str) -> None:
+        if not source_name or not field_name or not value_ref or not entity_id:
+            return
+        group = raw_groups.setdefault(source_name, {})
+        key = (field_name, value_ref)
+        row = group.setdefault(
+            key,
+            {
+                "field_family": family or field_name,
+                "field_name": field_name,
+                "field_value_or_safe_ref": value_ref,
+                "entities": set(),
+            },
+        )
+        row["entities"].add(entity_id)
+
+    for row in strategy_event_feature_row_table:
+        if row.get("value_present") is True and row.get("value_comparable") is True:
+            add_raw(
+                str(row.get("source_name") or "rcp_event_feature_list"),
+                str(row.get("mapped_field_family") or row.get("feature_tab") or "unknown_field_family"),
+                str(row.get("feature_key") or ""),
+                str(row.get("feature_value_or_safe_ref") or ""),
+                str(row.get("entity_id") or ""),
+            )
+    for row in device_detail_table:
+        if row.get("value_present") is True and row.get("value_comparable") is True:
+            add_raw(
+                str(row.get("source_name") or "weapon_device_info"),
+                str(row.get("mapped_field_family") or row.get("device_source_type") or "unknown_field_family"),
+                str(row.get("device_field_key") or ""),
+                str(row.get("device_field_value_or_safe_ref") or ""),
+                str(row.get("entity_id") or ""),
+            )
+    for row in standard_detail_table:
+        if row.get("value_present") is True and row.get("value_comparable") is True:
+            add_raw(
+                str(row.get("source_name") or row.get("detail_table") or "standard_detail_source"),
+                str(row.get("field_family") or ("unknown_field_family" if row.get("unknown_field_family") else row.get("field_name") or "")),
+                str(row.get("field_name") or ""),
+                str(row.get("field_value_or_safe_ref") or ""),
+                str(row.get("entity_id") or ""),
+            )
+
+    for signal in shared_signal_items:
+        signal_type = str(signal.get("commonality_type") or "")
+        if signal_type not in {"field_value_commonality", "known_field_commonality", "unknown_field_value_commonality"}:
+            continue
+        promoted_groups.setdefault(str(signal.get("source_name") or ""), []).append(signal)
+
+    results: list[dict[str, Any]] = []
+    candidate_count_by_source: dict[str, int] = {}
+    for feature in candidate_features:
+        for source_name in feature.get("source_names", []) or []:
+            candidate_count_by_source[str(source_name)] = candidate_count_by_source.get(str(source_name), 0) + 1
+
+    source_names = sorted(set(raw_groups.keys()) | set(promoted_groups.keys()) | set(candidate_count_by_source.keys()))
+    for source_name in source_names:
+        raw_rows = [
+            row for row in raw_groups.get(source_name, {}).values()
+            if len(row.get("entities", set())) >= 2
+        ]
+        raw_field_value_match_count = len(raw_rows)
+        dedup_families: dict[str, list[dict[str, Any]]] = {}
+        for row in raw_rows:
+            dedup_families.setdefault(str(row.get("field_name") or ""), []).append(row)
+        after_dedup_count = len(dedup_families)
+        semantic_families: dict[str, list[dict[str, Any]]] = {}
+        for row in raw_rows:
+            semantic_families.setdefault(str(row.get("field_family") or "unknown_field_family"), []).append(row)
+        after_semantic_grouping_count = len(semantic_families)
+        promoted = promoted_groups.get(source_name, [])
+        promoted_commonality_count = len(promoted)
+        top_candidate_count = candidate_count_by_source.get(source_name, 0)
+        suppressed_count = max(after_semantic_grouping_count - promoted_commonality_count, 0)
+        suppressed_reasons: list[str] = []
+        if raw_field_value_match_count and promoted_commonality_count <= max(3, raw_field_value_match_count // 5):
+            suppressed_reasons.append("weak_semantics")
+        if any("unknown" in str(row.get("field_family") or "") for row in raw_rows):
+            suppressed_reasons.append("unknown_field")
+        if source_name in {"weapon_device_app_list"}:
+            suppressed_reasons.append("auxiliary_source")
+            suppressed_reasons.append("high_cardinality")
+        if source_name == "rcp_event_feature_list" and raw_field_value_match_count >= 50 and promoted_commonality_count < 10:
+            suppressed_reasons.append("duplicate")
+        if not raw_field_value_match_count:
+            suppressed_reasons.append("source_quality_gap")
+        sample_suppressed_field_families = sorted(
+            family for family in semantic_families.keys()
+            if family and all(str(item.get("field_family") or "") != family for item in promoted)
+        )[:6]
+        over_compressed = raw_field_value_match_count >= 20 and promoted_commonality_count <= max(5, raw_field_value_match_count // 6)
+        if not raw_field_value_match_count:
+            diagnosis = "no raw field value matches survived comparable filtering"
+        elif over_compressed:
+            diagnosis = "raw match inventory is much larger than promoted commonality; review grouping and suppression boundaries"
+        else:
+            diagnosis = "promoted commonality count is within expected L3 compression range"
+        results.append(
+            {
+                "source_name": source_name,
+                "raw_field_value_match_count": raw_field_value_match_count,
+                "after_dedup_count": after_dedup_count,
+                "after_semantic_grouping_count": after_semantic_grouping_count,
+                "promoted_commonality_count": promoted_commonality_count,
+                "top_candidate_count": top_candidate_count,
+                "suppressed_count": suppressed_count,
+                "suppressed_reasons": unique_strings(suppressed_reasons) or ["low_support"] if raw_field_value_match_count else ["source_quality_gap"],
+                "sample_suppressed_field_families": sample_suppressed_field_families,
+                "over_compressed": over_compressed,
+                "compression_diagnosis": diagnosis,
+            }
+        )
+    return results
+
+
+def build_attack_chain_cooccurrence(
+    *,
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    quality_by_source = {str(row.get("source_name") or ""): row for row in source_input_quality_table}
+    chains: list[dict[str, Any]] = []
+
+    def chain_status(source_names: list[str]) -> str:
+        relevant = [quality_by_source.get(name, {}) for name in source_names]
+        if not relevant:
+            return "template_only"
+        if any(bool(row.get("auth_blocked")) for row in relevant):
+            return "blocked"
+        if any(bool(row.get("not_entered_main_chain")) for row in relevant):
+            return "not_entered_main_chain"
+        if any(str(row.get("source_status") or "") == "partial" for row in relevant):
+            return "partial"
+        return "observed"
+
+    chain_specs = [
+        ("chain_login_entry", "login_entry", {"behavior_domain"}, ["login_logs_search"]),
+        ("chain_device_execution", "device_execution", {"device_domain"}, ["weapon_device_info", "weapon_device_app_list"]),
+        ("chain_content_publish", "content_publish", {"content_domain"}, ["archives_photo_search", "archives_photo_profile", "archives_photo_meta"]),
+        ("chain_social_funnel", "social_funnel", {"social_domain"}, ["archives_comment_search", "archives_private_message_search"]),
+        ("chain_enforcement_migration", "enforcement_migration", {"feedback_domain", "enforcement_domain"}, ["archives_user_report_search", "archives_negative_report", "archives_review_logs", "archives_punish_status"]),
+    ]
+    for chain_id, chain_role, domains, default_sources in chain_specs:
+        supporting = [
+            feature for feature in candidate_features
+            if domains & set(_feature_domains(feature))
+        ]
+        source_names = unique_strings([
+            source
+            for feature in supporting
+            for source in feature.get("source_names", []) or []
+        ]) or default_sources
+        steps = unique_strings([
+            step
+            for feature in supporting
+            for step in [
+                "login_entry" if "behavior_domain" in _feature_domains(feature) and "login" in str(feature.get("feature_name") or "") else "",
+                "device_execution" if "device_domain" in _feature_domains(feature) else "",
+                "content_publish" if "content_domain" in _feature_domains(feature) else "",
+                "social_funnel" if "social_domain" in _feature_domains(feature) else "",
+                "enforcement_migration" if {"feedback_domain", "enforcement_domain"} & set(_feature_domains(feature)) else "",
+            ]
+            if step
+        ])
+        if not supporting:
+            status = chain_status(source_names)
+            chains.append(
+                {
+                    "chain_id": chain_id,
+                    "chain_steps": [],
+                    "involved_sources": source_names,
+                    "involved_entities": [],
+                    "attack_chain_role": chain_role,
+                    "cooccurrence_summary": "当前没有足够候选特征支撑完整链路，只保留链路模板。",
+                    "current_status": status,
+                    "missing_evidence": ["candidate_unavailable_due_to_source_gap"],
+                    "candidate_only_not_final_conclusion": True,
+                }
+            )
+            continue
+        chains.append(
+            {
+                "chain_id": chain_id,
+                "chain_steps": steps or [chain_role],
+                "involved_sources": source_names,
+                "involved_entities": unique_strings([
+                    str(item)
+                    for feature in supporting
+                    for item in feature.get("supporting_current_evidence", []) or []
+                    if str(item)
+                ])[:20],
+                "attack_chain_role": chain_role,
+                "cooccurrence_summary": f"当前样本内可见 {chain_role} 相关证据共现，用于还原作恶链路，不自动升级为关键卡口。",
+                "current_status": chain_status(source_names),
+                "missing_evidence": unique_strings([
+                    item
+                    for feature in supporting
+                    for item in feature.get("missing_evidence", []) or []
+                ])[:8],
+                "candidate_only_not_final_conclusion": True,
+            }
+        )
+    return chains
+
+
+def attach_attack_chain_links_to_candidates(
+    *,
+    candidate_features: list[dict[str, Any]],
+    attack_chain_cooccurrence: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    updated: list[dict[str, Any]] = []
+    for feature in candidate_features:
+        item = dict(feature)
+        domains = set(_feature_domains(item))
+        chain_ids = []
+        for chain in attack_chain_cooccurrence:
+            role = str(chain.get("attack_chain_role") or "")
+            if role == "login_entry" and "behavior_domain" in domains:
+                chain_ids.append(str(chain.get("chain_id")))
+            elif role == "device_execution" and "device_domain" in domains:
+                chain_ids.append(str(chain.get("chain_id")))
+            elif role == "content_publish" and "content_domain" in domains:
+                chain_ids.append(str(chain.get("chain_id")))
+            elif role == "social_funnel" and "social_domain" in domains:
+                chain_ids.append(str(chain.get("chain_id")))
+            elif role == "enforcement_migration" and ({"feedback_domain", "enforcement_domain"} & domains):
+                chain_ids.append(str(chain.get("chain_id")))
+        item["supporting_attack_chain_ids"] = unique_strings(chain_ids)
+        updated.append(item)
+    return updated
+
+
+def build_candidate_feature_top_samples(
+    *,
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]],
+    attack_chain_cooccurrence: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    quality_by_source = {str(row.get("source_name") or ""): row for row in source_input_quality_table}
+
+    def top_feature(predicate) -> dict[str, Any] | None:
+        matches = [feature for feature in candidate_features if predicate(feature)]
+        if not matches:
+            return None
+        matches.sort(
+            key=lambda item: (
+                0 if str(item.get("risk_choke_point_type") or "unknown") != "unknown" else 1,
+                {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(str(item.get("essence_likeness") or "unknown"), 9),
+                {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(str(item.get("choke_point_likeness") or "unknown"), 9),
+                -float(item.get("priority_score") or 0),
+                -float(item.get("support_ratio") or 0),
+                str(item.get("feature_name") or ""),
+            )
+        )
+        return matches[0]
+
+    def sample_from_feature(feature: dict[str, Any], *, default_status: str = "observed") -> dict[str, Any]:
+        choke_type = str(feature.get("risk_choke_point_type") or "unknown")
+        display_name = (
+            f"{choke_type}_candidate"
+            if choke_type != "unknown"
+            else feature.get("feature_name")
+        )
+        return {
+            "candidate_feature_name": display_name,
+            "feature_origin": feature.get("feature_origin"),
+            "source_support": feature.get("source_names") or [],
+            "evidence_commonality_types": feature.get("supporting_commonality_types") or [],
+            "core_commonality": feature.get("field_combination") or feature.get("source_fields") or [],
+            "attack_chain_support": feature.get("supporting_attack_chain_ids") or [],
+            "risk_choke_point_type": choke_type,
+            "choke_point_likeness": feature.get("choke_point_likeness"),
+            "choke_point_reason": feature.get("choke_point_reason"),
+            "required_for_attack": feature.get("required_for_attack"),
+            "easy_to_evade_if_changed": feature.get("easy_to_evade_if_changed"),
+            "robustness": feature.get("robustness"),
+            "essence_likeness": feature.get("essence_likeness"),
+            "essence_reason": feature.get("essence_reason"),
+            "false_positive_risk": feature.get("false_positive_risk"),
+            "missing_evidence": feature.get("missing_evidence"),
+            "validation_method": feature.get("validation_method"),
+            "current_status": default_status,
+            "candidate_only_not_final_conclusion": True,
+        }
+
+    def blocked_or_template(source_names: list[str], message: str) -> dict[str, Any]:
+        relevant = [quality_by_source[name] for name in source_names if name in quality_by_source]
+        if any(bool(row.get("auth_blocked")) for row in relevant):
+            status = "blocked"
+        elif any(bool(row.get("not_entered_main_chain")) for row in relevant):
+            status = "not_entered_main_chain"
+        else:
+            status = "template_only"
+        return {
+            "candidate_feature_name": message,
+            "feature_origin": "template_only",
+            "source_support": source_names,
+            "evidence_commonality_types": [],
+            "core_commonality": [],
+            "attack_chain_support": [],
+            "risk_choke_point_type": "unknown",
+            "choke_point_likeness": "unknown",
+            "choke_point_reason": "当前没有足够 source 字段支撑关键卡口判断。",
+            "required_for_attack": "unknown",
+            "easy_to_evade_if_changed": "unknown",
+            "robustness": "unknown",
+            "essence_likeness": "unknown",
+            "essence_reason": "字段族未解释或缺少行为链路验证，当前仅保留为候选共性。",
+            "false_positive_risk": "当前没有足够 source 字段支撑，不能根据 gap 推断低风险或高风险。",
+            "missing_evidence": ["candidate_unavailable_due_to_source_gap"],
+            "validation_method": "先修 source gap，再进入字段值/字段组合/序列比较。",
+            "current_status": status,
+            "candidate_only_not_final_conclusion": True,
+        }
+
+    samples: list[dict[str, Any]] = []
+    rcp_feature = top_feature(lambda item: "strategy_domain" in _feature_domains(item))
+    samples.append(sample_from_feature(rcp_feature) if rcp_feature else blocked_or_template(["rcp_event_feature_list"], "rcp_candidate_unavailable_due_to_source_gap"))
+    device_feature = top_feature(lambda item: str(item.get("risk_choke_point_type") or "") == "device_farm_template" or "device_domain" in _feature_domains(item))
+    samples.append(sample_from_feature(device_feature) if device_feature else blocked_or_template(["weapon_device_info", "weapon_device_app_list"], "device_candidate_unavailable_due_to_source_gap"))
+    login_feature = top_feature(lambda item: str(item.get("risk_choke_point_type") or "") in {"protocol_constraint_gap", "control_execution_separation", "account_control_transfer", "automation_rhythm"} and ("behavior_domain" in _feature_domains(item) or "login" in str(item.get("feature_name") or "")))
+    samples.append(sample_from_feature(login_feature) if login_feature else blocked_or_template(["login_logs_search"], "login_candidate_unavailable_due_to_source_gap"))
+    account_feature = top_feature(lambda item: "account_domain" in _feature_domains(item) or "user_behavior_summary_detail_table" in " ".join([str(x) for x in item.get("source_names", []) or []]))
+    samples.append(sample_from_feature(account_feature) if account_feature else blocked_or_template(["archives_user_analysis", "archives_user_profile"], "account_candidate_unavailable_due_to_source_gap"))
+    content_social_feature = top_feature(lambda item: str(item.get("risk_choke_point_type") or "") == "content_funnel_dependency" or ("content_domain" in _feature_domains(item) or "social_domain" in _feature_domains(item)))
+    samples.append(sample_from_feature(content_social_feature) if content_social_feature else blocked_or_template(["archives_photo_search", "archives_comment_search", "archives_private_message_search"], "content_social_candidate_unavailable_due_to_source_gap"))
+    return samples
+
+
 def build_commonality_artifacts(
     *,
     sampled_entities: list[str],
@@ -7145,7 +10843,11 @@ def build_commonality_artifacts(
     strategy_event_request_detail_table: list[dict[str, Any]],
     strategy_event_feature_row_table: list[dict[str, Any]],
     device_detail_table: list[dict[str, Any]],
+    standard_detail_table: list[dict[str, Any]],
+    raw_detail_flat_table: list[dict[str, Any]],
+    sequence_comparison_features: list[dict[str, Any]],
     source_quality: dict[str, Any],
+    source_input_quality_table: list[dict[str, Any]],
     mode: str,
 ) -> dict[str, Any]:
     # Each live round is only a bounded sample of the requested batch.
@@ -7156,6 +10858,7 @@ def build_commonality_artifacts(
         "archive_admin_profile": ["account_domain"],
         "weapon_graph_risk": ["device_domain", "group_domain"],
         "content_action_anchor": ["content_domain", "behavior_domain"],
+        "social_action_anchor": ["social_domain", "behavior_domain"],
         "strategy_hit": ["strategy_domain"],
         "strategy_hit_detail": ["strategy_domain"],
         "strategy_event_request_detail": ["strategy_domain", "behavior_domain"],
@@ -7171,8 +10874,22 @@ def build_commonality_artifacts(
     strategy_feature_row_shared_signals, strategy_feature_row_candidate_features = build_strategy_feature_row_commonality_and_features(
         strategy_event_feature_row_table
     )
-    device_field_shared_signals, device_similarity_candidates, behavior_device_consistency_candidates, device_candidate_features = (
+    (
+        device_field_shared_signals,
+        device_similarity_candidates,
+        behavior_device_consistency_candidates,
+        device_candidate_features,
+        device_field_platform_summary,
+    ) = (
         build_device_commonality_and_features(device_detail_table, sampled_entities)
+    )
+    standard_detail_shared_signals, standard_detail_candidate_features = build_standard_field_commonality_and_features(
+        standard_detail_table=standard_detail_table,
+        sampled_entities=sampled_entities,
+    )
+    sequence_candidate_features = build_sequence_candidate_features(
+        sequence_comparison_features=sequence_comparison_features,
+        sampled_entities=sampled_entities,
     )
     for card in source_commonality_cards:
         card_domains.extend(source_commonality_domains.get(str(card.get("source_name") or ""), []))
@@ -7229,6 +10946,10 @@ def build_commonality_artifacts(
         signal["limited_commonality"] = limited_commonality
         shared_signal_items.append(signal)
     for signal in device_field_shared_signals:
+        signal = dict(signal)
+        signal["limited_commonality"] = limited_commonality
+        shared_signal_items.append(signal)
+    for signal in standard_detail_shared_signals:
         signal = dict(signal)
         signal["limited_commonality"] = limited_commonality
         shared_signal_items.append(signal)
@@ -7310,6 +11031,10 @@ def build_commonality_artifacts(
         "device_domain"
         for row in device_detail_table
         if row.get("device_field_key")
+    ] + [
+        str(row.get("source_domain"))
+        for row in standard_detail_table
+        if row.get("source_domain")
     ])
     commonality_matrix = [
         {
@@ -7425,11 +11150,109 @@ def build_commonality_artifacts(
             "not_final_conclusion": True,
         }
     ]
+    if {"behavior_domain", "device_domain"} <= set(domains):
+        generic_candidate_features.append(
+            {
+                "feature_name": "control_execution_separation_candidate",
+                "feature_type": "field_combination_commonality",
+                "feature_origin": "field_combination",
+                "source_domains": ["behavior_domain", "device_domain"],
+                "source_names": ["login_logs_search", "weapon_device_info"],
+                "source_fields": ["login_device", "action_device", "frontend_activity_signal", "backend_action_signal"],
+                "field_combination": ["login_or_behavior_side != execution_side", "backend_action_signal + weak_frontend_activity"],
+                "support_user_count": max(len(sampled_entities), 2),
+                "support_entity_count": max(len(sampled_entities), 2),
+                "support_sample_count": max(len(sampled_entities), 2),
+                "support_record_count": len(sequence_comparison_features) or 2,
+                "support_ratio": min(1.0, round(max(len(sampled_entities), 2) / max(len(sampled_entities), 1), 4)),
+                "priority_score": 92,
+                "priority_level": "high",
+                "reason_codes": ["multi_domain_control_execution_gap"],
+                "black_gray_interpretation": "登录/行为端与执行端字段组合不一致，更像控制面与执行面分离的候选卡口。",
+                "false_positive_risk": "同一用户多设备、弱前台采集或字段不完整也可能造成不一致，需要补充更多上下文。",
+                "missing_evidence": ["frontend_backend_alignment_validation", "normal_control_path_counter_sample"],
+                "validation_method": "回放登录、设备、行为三域字段组合，确认是否稳定出现控制端与执行端脱节。",
+                "not_final_conclusion": True,
+            }
+        )
+    if {"behavior_domain", "strategy_domain"} <= set(domains):
+        generic_candidate_features.append(
+            {
+                "feature_name": "protocol_constraint_gap_candidate",
+                "feature_type": "field_combination_commonality",
+                "feature_origin": "field_combination",
+                "source_domains": ["behavior_domain", "strategy_domain"],
+                "source_names": ["login_logs_search", "rcp_event_feature_list"],
+                "source_fields": ["backend_action_signal", "frontend_activity_signal", "request_path", "request_scene"],
+                "field_combination": ["backend_action_signal present", "missing_or_weak_frontend_activity", "strategy request detail template"],
+                "support_user_count": max(len(sampled_entities), 2),
+                "support_entity_count": max(len(sampled_entities), 2),
+                "support_sample_count": max(len(sampled_entities), 2),
+                "support_record_count": len(strategy_event_feature_row_table) or 2,
+                "support_ratio": min(1.0, round(max(len(sampled_entities), 2) / max(len(sampled_entities), 1), 4)),
+                "priority_score": 90,
+                "priority_level": "high",
+                "reason_codes": ["protocol_constraint_gap_candidate"],
+                "black_gray_interpretation": "后端动作和策略请求细节存在，但前台约束或客户端路径支撑偏弱，像协议约束缺口候选。",
+                "false_positive_risk": "部分正常后台任务、弱前台埋点或采样缺失也会表现为前后端不完全对齐。",
+                "missing_evidence": ["client_path_validation", "frontend_activity_counter_sample"],
+                "validation_method": "补查请求路径、前台活跃和设备执行一致性，确认是否属于真实客户端约束缺失。",
+                "not_final_conclusion": True,
+            }
+        )
+    if {"content_domain", "social_domain"} & set(domains) and {"content_domain", "social_domain"} <= set(domains):
+        generic_candidate_features.append(
+            {
+                "feature_name": "content_funnel_dependency_candidate",
+                "feature_type": "field_combination_commonality",
+                "feature_origin": "field_combination",
+                "source_domains": ["content_domain", "social_domain"],
+                "source_names": ["archives_photo_search", "archives_comment_search", "archives_private_message_search"],
+                "source_fields": ["caption", "content_type", "comment_target", "message_target", "path"],
+                "field_combination": ["content template", "comment or message target overlap", "same funnel path"],
+                "support_user_count": max(len(sampled_entities), 2),
+                "support_entity_count": max(len(sampled_entities), 2),
+                "support_sample_count": max(len(sampled_entities), 2),
+                "support_record_count": len(sequence_comparison_features) or 2,
+                "support_ratio": min(1.0, round(max(len(sampled_entities), 2) / max(len(sampled_entities), 1), 4)),
+                "priority_score": 88,
+                "priority_level": "high",
+                "reason_codes": ["content_social_funnel_dependency"],
+                "black_gray_interpretation": "内容模板、评论/私信对象和承接路径共同出现，更像导流或私域承接依赖的候选卡口。",
+                "false_positive_risk": "热点内容和正常社交互动也可能形成相似路径，需要对象和后续承接补证。",
+                "missing_evidence": ["target_object_overlap_validation", "off_platform_or_private_domain_followup"],
+                "validation_method": "回放内容、评论、私信对象和时间窗，确认是否存在稳定承接路径。",
+                "not_final_conclusion": True,
+            }
+        )
     candidate_features = (
         strategy_detail_candidate_features
         + strategy_feature_row_candidate_features
         + device_candidate_features
+        + standard_detail_candidate_features
+        + sequence_candidate_features
         + generic_candidate_features
+    )
+    candidate_features = [normalize_l3_candidate_feature_contract(feature) for feature in candidate_features]
+    attack_chain_cooccurrence = build_attack_chain_cooccurrence(
+        candidate_features=candidate_features,
+        source_input_quality_table=source_input_quality_table,
+    )
+    candidate_features = attach_attack_chain_links_to_candidates(
+        candidate_features=candidate_features,
+        attack_chain_cooccurrence=attack_chain_cooccurrence,
+    )
+    commonality_type_distribution = build_l3_commonality_type_distribution(
+        shared_signal_items=shared_signal_items,
+        sequence_comparison_features=sequence_comparison_features,
+        candidate_features=candidate_features,
+    )
+    field_value_commonality_funnel = build_field_value_commonality_funnel(
+        strategy_event_feature_row_table=strategy_event_feature_row_table,
+        device_detail_table=device_detail_table,
+        standard_detail_table=standard_detail_table,
+        shared_signal_items=shared_signal_items,
+        candidate_features=candidate_features,
     )
     group_profile_candidate = {
         "cluster_id": "group_profile_candidate_round",
@@ -7499,6 +11322,13 @@ def build_commonality_artifacts(
         "strategy_event_request_detail_commonality": strategy_detail_shared_signals,
         "strategy_event_feature_row_commonality": strategy_feature_row_shared_signals,
         "device_field_commonality": device_field_shared_signals,
+        "standard_field_commonality": standard_detail_shared_signals,
+        "sequence_comparison_features": sequence_comparison_features,
+        "commonality_type_distribution": commonality_type_distribution,
+        "field_value_commonality_funnel": field_value_commonality_funnel,
+        "attack_chain_cooccurrence": attack_chain_cooccurrence,
+        "raw_detail_flat_table_summary": build_raw_detail_flat_table_summary(raw_detail_flat_table),
+        "device_field_platform_summary": device_field_platform_summary,
         "device_environment_similarity_cluster_candidate": device_similarity_candidates,
         "behavior_device_consistency_gap_candidate": behavior_device_consistency_candidates,
         "group_profile_candidate": group_profile_candidate,
@@ -7587,11 +11417,40 @@ def build_round_orchestration_artifacts(
         sampled_entities=sampled_entities,
         source_observations=source_observations,
     )
+    standard_detail_table = build_standard_detail_table(
+        round_id=round_id,
+        sampled_entities=sampled_entities,
+        source_observations=source_observations,
+    )
     device_detail_table = build_device_detail_table(
         round_id=round_id,
         sampled_entities=sampled_entities,
         source_observations=source_observations,
         strategy_event_feature_row_table=strategy_event_feature_row_table,
+    )
+    raw_detail_flat_table = build_raw_detail_flat_table(
+        round_id=round_id,
+        sampled_entities=sampled_entities,
+        source_observations=source_observations,
+        strategy_event_feature_row_table=strategy_event_feature_row_table,
+        device_detail_table=device_detail_table,
+    )
+    sequence_comparison_features = build_sequence_comparison_features(
+        raw_detail_flat_table=raw_detail_flat_table,
+        sampled_entities=sampled_entities,
+    )
+    raw_detail_flat_table_summary = build_raw_detail_flat_table_summary(raw_detail_flat_table)
+    source_field_volume_summary = build_source_field_volume_summary(
+        source_observations=source_observations,
+        standard_detail_table=standard_detail_table,
+        strategy_event_feature_row_table=strategy_event_feature_row_table,
+        device_detail_table=device_detail_table,
+    )
+    source_input_quality_table = build_l3_source_input_quality_table(
+        source_plan=source_plan,
+        source_observations=source_observations,
+        raw_detail_flat_table_summary=raw_detail_flat_table_summary,
+        source_field_volume_summary=source_field_volume_summary,
     )
     commonality = build_commonality_artifacts(
         sampled_entities=sampled_entities,
@@ -7602,8 +11461,17 @@ def build_round_orchestration_artifacts(
         strategy_event_request_detail_table=strategy_event_request_detail_table,
         strategy_event_feature_row_table=strategy_event_feature_row_table,
         device_detail_table=device_detail_table,
+        standard_detail_table=standard_detail_table,
+        raw_detail_flat_table=raw_detail_flat_table,
+        sequence_comparison_features=sequence_comparison_features,
         source_quality=normalized_source_quality,
+        source_input_quality_table=source_input_quality_table,
         mode=mode,
+    )
+    candidate_feature_top_samples = build_candidate_feature_top_samples(
+        candidate_features=commonality["candidate_features"],
+        source_input_quality_table=source_input_quality_table,
+        attack_chain_cooccurrence=commonality["attack_chain_cooccurrence"],
     )
     return {
         "task_route": task_route,
@@ -7627,12 +11495,32 @@ def build_round_orchestration_artifacts(
         "strategy_event_request_detail_commonality": commonality["strategy_event_request_detail_commonality"],
         "strategy_event_feature_row_table": strategy_event_feature_row_table,
         "strategy_event_feature_row_commonality": commonality["strategy_event_feature_row_commonality"],
+        "raw_detail_flat_table": raw_detail_flat_table,
+        "raw_detail_flat_table_summary": raw_detail_flat_table_summary,
+        "sequence_comparison_features": sequence_comparison_features,
         "device_detail_table": device_detail_table,
+        "device_detail_source_field_summary": build_device_detail_source_field_summary(device_detail_table),
+        "source_field_volume_summary": source_field_volume_summary,
+        "source_input_quality_table": source_input_quality_table,
         "device_field_commonality": commonality["device_field_commonality"],
+        "device_field_platform_summary": commonality["device_field_platform_summary"],
         "device_environment_similarity_cluster_candidate": commonality["device_environment_similarity_cluster_candidate"],
         "behavior_device_consistency_gap_candidate": commonality["behavior_device_consistency_gap_candidate"],
+        "standard_detail_table": standard_detail_table,
+        "login_detail_table": _detail_rows_by_table(standard_detail_table, "login_detail_table"),
+        "account_detail_table": _detail_rows_by_table(standard_detail_table, "account_detail_table"),
+        "user_behavior_summary_detail_table": _detail_rows_by_table(standard_detail_table, "user_behavior_summary_detail_table"),
+        "content_detail_table": _detail_rows_by_table(standard_detail_table, "content_detail_table"),
+        "social_detail_table": _detail_rows_by_table(standard_detail_table, "social_detail_table"),
+        "feedback_detail_table": _detail_rows_by_table(standard_detail_table, "feedback_detail_table"),
+        "enforcement_detail_table": _detail_rows_by_table(standard_detail_table, "enforcement_detail_table"),
+        "standard_field_commonality": commonality["standard_field_commonality"],
+        "l3_commonality_type_distribution": commonality["commonality_type_distribution"],
+        "field_value_commonality_funnel": commonality["field_value_commonality_funnel"],
+        "attack_chain_cooccurrence": commonality["attack_chain_cooccurrence"],
         "group_profile_candidate": commonality["group_profile_candidate"],
         "candidate_features": commonality["candidate_features"],
+        "candidate_feature_top_samples": candidate_feature_top_samples,
         "validation_plan": commonality["validation_plan"],
         "final_evidence_card": commonality["final_evidence_card"],
         "missing_evidence": commonality["missing_evidence"],
@@ -7752,6 +11640,92 @@ def build_round_result(
             }
         ],
         "decision": decision,
+    }
+
+
+def _quality_bucket_count(source_quality_matrix: dict[str, Any], *bucket_names: str) -> int:
+    buckets = source_quality_matrix.get("buckets", {}) if isinstance(source_quality_matrix, dict) else {}
+    return sum(len(buckets.get(name, []) or []) for name in bucket_names)
+
+
+def _quality_status_from_counts(source_quality_matrix: dict[str, Any]) -> str:
+    completed = _quality_bucket_count(source_quality_matrix, "completed")
+    partial = _quality_bucket_count(source_quality_matrix, "partial")
+    blocked_like = _quality_bucket_count(source_quality_matrix, "blocked", "auth_failed", "timeout", "parse_error")
+    no_data = _quality_bucket_count(source_quality_matrix, "no_data")
+    planned = _quality_bucket_count(source_quality_matrix, "planned")
+    total = completed + partial + blocked_like + no_data + planned
+    if total == 0:
+        return "not_executed"
+    if completed and not partial and not blocked_like:
+        return "completed"
+    if completed or partial:
+        return "partial" if not blocked_like else "partial_with_blocked_sources"
+    if no_data and not blocked_like:
+        return "no_data"
+    if planned and not blocked_like:
+        return "planned"
+    return "blocked"
+
+
+def _quality_blocked_reasons(source_quality_matrix: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    for row in source_quality_matrix.get("per_source", []) or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("quality_class") not in {"blocked", "auth_failed", "timeout", "parse_error"}:
+            continue
+        reason = str(row.get("reason") or row.get("error_type") or row.get("source_status") or row.get("quality_class") or "")
+        action = str(row.get("action") or "")
+        if action and reason:
+            reasons.append(f"{action}:{reason}")
+        elif reason:
+            reasons.append(reason)
+    return unique_strings(reasons)
+
+
+def build_status_attribution(
+    *,
+    primary_source_plan: list[SourcePlanItem],
+    primary_batch_result: dict[str, Any],
+    followup_source_plan: list[SourcePlanItem],
+    followup_batch_result: dict[str, Any],
+) -> dict[str, Any]:
+    primary_quality = merge_source_quality(primary_source_plan, primary_batch_result)
+    followup_quality = merge_source_quality(followup_source_plan, followup_batch_result) if followup_source_plan else {
+        "buckets": {"completed": [], "partial": [], "blocked": [], "auth_failed": [], "timeout": [], "parse_error": [], "no_data": [], "planned": []},
+        "per_source": [],
+    }
+    primary_status = _quality_status_from_counts(primary_quality)
+    followup_status = _quality_status_from_counts(followup_quality)
+    primary_blocked_count = _quality_bucket_count(primary_quality, "blocked", "auth_failed", "timeout", "parse_error")
+    followup_blocked_count = _quality_bucket_count(followup_quality, "blocked", "auth_failed", "timeout", "parse_error")
+    primary_partial_count = _quality_bucket_count(primary_quality, "partial")
+    primary_completed_count = _quality_bucket_count(primary_quality, "completed")
+    primary_source_impact = primary_blocked_count > 0 and primary_completed_count == 0 and primary_partial_count == 0
+    status_contamination = bool(followup_blocked_count and not primary_source_impact)
+    if status_contamination:
+        top_status = "partial_with_followup_blocked" if primary_partial_count else "completed_primary_with_followup_blocked"
+    elif primary_source_impact:
+        top_status = "primary_source_blocked"
+    else:
+        top_status = primary_status
+    return {
+        "primary_source_status": primary_status,
+        "primary_source_completed_count": primary_completed_count,
+        "primary_source_partial_count": primary_partial_count,
+        "primary_source_blocked_count": primary_blocked_count,
+        "followup_source_status": followup_status,
+        "followup_blocked_count": followup_blocked_count,
+        "followup_blocked_reasons": _quality_blocked_reasons(followup_quality),
+        "top_level_final_status": top_status,
+        "status_contamination": status_contamination,
+        "primary_source_impact": primary_source_impact,
+        "followup_source_quality": followup_quality,
+        "status_boundary": (
+            "source_level_and_round_level_status_take_priority_over_top_level_final_status; "
+            "followup blocked sources do not make completed primary source extraction failed"
+        ),
     }
 
 
@@ -7896,6 +11870,204 @@ def _candidate_devices_by_round_entity(
     return by_index
 
 
+def _one_degree_associated_users_by_round_entity(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+) -> dict[int, list[dict[str, Any]]]:
+    by_index: dict[int, list[dict[str, Any]]] = {index: [] for index in range(1, len(sampled_entities) + 1)}
+    input_entities = set(sampled_entities)
+    seen: set[tuple[int, str]] = set()
+    for observation in source_observations:
+        source_id = str(observation.get("source_id") or "")
+        entity_index = None
+        for index in by_index:
+            if source_id.startswith(_round_entity_prefix(round_id, index)):
+                entity_index = index
+                break
+        if entity_index is None:
+            continue
+        if str(observation.get("action") or "") not in WEAPON_DEVICE_DETAIL_ACTIONS | {"weapon_inventory"}:
+            continue
+        for handle in observation.get("parsed_body_field_handles", []) or []:
+            canonical = str(handle.get("canonical_field") or handle.get("field") or "")
+            if canonical not in {"user_id", "related_user_id"}:
+                continue
+            user_id = str(handle.get("value") or "").strip()
+            if not user_id or user_id in input_entities or not user_id.isdigit():
+                continue
+            key = (entity_index, user_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            by_index[entity_index].append(
+                {
+                    "user_id": user_id,
+                    "source_id": source_id,
+                    "action": observation.get("action"),
+                    "field_path": handle.get("field_path"),
+                    "association_depth": 1,
+                    "association_type": "device_to_user",
+                    "seed_entity_type": _infer_seed_entity_type(sampled_entities[entity_index - 1]),
+                    "recursive_expansion_allowed": False,
+                    "stop_reason": "one_degree_depth_reached",
+                }
+            )
+            if len(by_index[entity_index]) >= MAX_ONE_DEGREE_USERS_PER_SEED:
+                break
+    return by_index
+
+
+def build_one_degree_user_detail_source_plan(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    login_start_ms, login_end_ms = _bounded_source_window(
+        window_start_ms,
+        window_end_ms,
+        LOGIN_LOG_RELIABLE_WINDOW_DAYS,
+    )
+    by_entity = _one_degree_associated_users_by_round_entity(round_id, sampled_entities, source_observations)
+    selected: list[tuple[int, dict[str, Any]]] = []
+    for index, users in by_entity.items():
+        for user in users[:MAX_ONE_DEGREE_USERS_PER_SEED]:
+            selected.append((index, user))
+            if len(selected) >= MAX_ONE_DEGREE_ASSOCIATED_USERS_TOTAL:
+                break
+        if len(selected) >= MAX_ONE_DEGREE_ASSOCIATED_USERS_TOTAL:
+            break
+    items: list[SourcePlanItem] = []
+    for seed_index, user in selected:
+        user_id = str(user.get("user_id") or "")
+        if not user_id:
+            continue
+        prefix = _batch_source_id(round_id, seed_index, f"one_degree_user_{user_id}")
+        common = {
+            "association_depth": 1,
+            "seed_entity": sampled_entities[seed_index - 1],
+            "seed_entity_type": _infer_seed_entity_type(sampled_entities[seed_index - 1]),
+            "associated_user_id": user_id,
+            "recursive_expansion_allowed": False,
+            "stop_reason": "one_degree_depth_reached",
+        }
+        source_specs = [
+            (
+                "profile",
+                "archives_user_profile",
+                {"user_id": user_id, "mode": "one_degree_associated_user_profile", **common},
+                [],
+                "auth_sensitive",
+                "P1-one-degree-detail",
+                "one-degree associated user profile/status; no recursive expansion",
+                ["user_id"],
+                30_000,
+                window_start_ms,
+                window_end_ms,
+                "one_degree_associated_user_profile",
+            ),
+            (
+                "analysis",
+                "archives_user_analysis",
+                {"user_id": user_id, "mode": "one_degree_associated_user_analysis", **common},
+                [],
+                "auth_sensitive",
+                "P1-one-degree-detail",
+                "one-degree associated user behavior summary; newly found anchors are context only",
+                ["user_id"],
+                30_000,
+                window_start_ms,
+                window_end_ms,
+                "one_degree_associated_user_behavior",
+            ),
+            (
+                "gallery",
+                "archives_gallery_photo_list",
+                {"user_id": user_id, "pageIndex": 1, "pageSize": 10, "mode": "one_degree_associated_user_recent_video_list", **common},
+                [],
+                "auth_sensitive",
+                "P1-one-degree-detail",
+                "one-degree associated user recent video list for publish-device positioning only",
+                ["user_id"],
+                30_000,
+                window_start_ms,
+                window_end_ms,
+                "one_degree_associated_user_content_positioning_no_recursive_photo_expansion",
+            ),
+            (
+                "login",
+                "login_logs_search",
+                {
+                    "user_id": user_id,
+                    "from_timestamp": login_start_ms,
+                    "to_timestamp": login_end_ms,
+                    "recallSource": DEFAULT_RECALL_SOURCE,
+                    "max_records": 30,
+                    "mode": "one_degree_associated_user_login_summary",
+                    **common,
+                },
+                [],
+                "standard_readonly",
+                "P1-one-degree-detail",
+                "one-degree associated user login summary for seed-device consistency only",
+                ["user_id"],
+                45_000,
+                login_start_ms,
+                login_end_ms,
+                "one_degree_associated_user_login_window",
+            ),
+            (
+                "strategy",
+                "rcp_fast_query_hbase",
+                {
+                    "source_id": user_id,
+                    "startTime": window_start_ms,
+                    "endTime": window_end_ms,
+                    "eventTypeCodes": "",
+                    "limit": 50,
+                    "mode": "one_degree_associated_user_strategy_summary",
+                    **common,
+                },
+                [],
+                "standard_readonly",
+                "P1-one-degree-detail",
+                "one-degree associated user strategy hit summary; strategy hit is not final judgement",
+                ["source_id", "startTime", "endTime"],
+                30_000,
+                window_start_ms,
+                window_end_ms,
+                "one_degree_associated_user_strategy_window",
+            ),
+        ]
+        for suffix, action, params, depends_on, timeout_class, priority, expected, required, timeout_ms, start_ms, end_ms, window_policy in source_specs:
+            if action in disabled_actions:
+                continue
+            items.append(
+                SourcePlanItem(
+                    source_id=f"{prefix}_{suffix}",
+                    action=action,
+                    execution_group="one_degree_associated_user_detail",
+                    depends_on=depends_on,
+                    timeout_class=timeout_class,
+                    failure_policy="non_blocking_partial",
+                    source_priority=priority,
+                    expected_observation=expected,
+                    params=params,
+                    timeout_ms=timeout_ms,
+                    required_fields=required,
+                    window_policy=window_policy,
+                    window_start_ms=start_ms,
+                    window_end_ms=end_ms,
+                )
+            )
+    return items
+
+
 def build_track_followup_source_plan(
     round_id: int,
     sampled_entities: list[str],
@@ -7998,6 +12170,166 @@ def _photo_ids_by_round_entity(
     return by_index
 
 
+def _event_anchors_by_round_entity(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+) -> dict[int, list[dict[str, Any]]]:
+    by_index: dict[int, list[dict[str, Any]]] = {index: [] for index in range(1, len(sampled_entities) + 1)}
+    seen: set[tuple[int, str, str]] = set()
+    for observation in source_observations:
+        source_id = str(observation.get("source_id") or "")
+        entity_index = None
+        for index in by_index:
+            if source_id.startswith(_round_entity_prefix(round_id, index)):
+                entity_index = index
+                break
+        if entity_index is None:
+            continue
+        action = str(observation.get("action") or "")
+        if action not in {"rcp_snapshot", "rcp_fast_query_hbase", "rcp_event_detail", "rcp_event_feature_list"}:
+            continue
+        handles = observation.get("parsed_body_field_handles", []) or []
+        event_ids: list[str] = []
+        event_types: list[str] = []
+        event_times: list[Any] = []
+        policy_codes: list[str] = []
+        source_ids: list[str] = []
+        for handle in handles:
+            if not isinstance(handle, dict):
+                continue
+            raw_field = str(handle.get("field") or "")
+            raw_normalized = re.sub(r"[^a-z0-9]", "", raw_field.lower())
+            canonical = str(handle.get("canonical_field") or handle.get("field") or "")
+            value = handle.get("value")
+            value_text = str(value or "").strip()
+            if not value_text:
+                continue
+            if canonical == "event_id":
+                if raw_normalized in {"sourceid", "source"} or "sourceid" in raw_normalized:
+                    source_ids.append(value_text)
+                else:
+                    event_ids.append(value_text)
+            elif canonical == "event_type":
+                event_types.append(value_text)
+            elif canonical == "event_time":
+                event_times.append(value)
+            elif canonical == "policy_code":
+                policy_codes.append(value_text)
+        if not event_ids:
+            continue
+        default_event_type = event_types[0] if event_types else "REGISTER_NEW"
+        default_query_time = event_times[0] if event_times else None
+        default_policy_code = policy_codes[0] if policy_codes else None
+        for event_id in event_ids[:5]:
+            key = (entity_index, event_id, default_event_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            by_index[entity_index].append(
+                {
+                    "event_id": event_id,
+                    "source_id_value": source_ids[0] if source_ids else event_id,
+                    "event_type": default_event_type,
+                    "query_time": default_query_time,
+                    "policy_code": default_policy_code,
+                    "source_id": source_id,
+                    "action": action,
+                }
+            )
+    return by_index
+
+
+def _coerce_event_query_time(value: Any, fallback_ms: int) -> int:
+    if value is None or value == "":
+        return fallback_ms
+    if isinstance(value, (int, float)):
+        text = str(int(value))
+    else:
+        text = str(value).strip()
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if not digits:
+        return fallback_ms
+    number = int(digits[:13])
+    if number < 10_000_000_000:
+        number *= 1000
+    return number
+
+
+def build_rcp_event_followup_source_plan(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    if {"rcp_event_detail", "rcp_event_feature_list"} <= disabled_actions:
+        return []
+    event_anchors_by_entity = _event_anchors_by_round_entity(round_id, sampled_entities, source_observations)
+    items: list[SourcePlanItem] = []
+    for index, candidates in event_anchors_by_entity.items():
+        for candidate_index, candidate in enumerate(candidates[:2], start=1):
+            event_id = str(candidate.get("event_id") or "").strip()
+            event_type = str(candidate.get("event_type") or "REGISTER_NEW").strip() or "REGISTER_NEW"
+            query_time = _coerce_event_query_time(candidate.get("query_time"), window_end_ms)
+            depends_on = [str(candidate.get("source_id") or _batch_source_id(round_id, index, "strategy"))]
+            base_params = {
+                "eventType": event_type,
+                "event_type": event_type,
+                "eventId": event_id,
+                "event_id": event_id,
+                "source_id": str(candidate.get("source_id_value") or event_id),
+                "queryTime": query_time,
+                "query_time": query_time,
+            }
+            if candidate.get("policy_code"):
+                base_params["policyCode"] = candidate.get("policy_code")
+                base_params["policy_code"] = candidate.get("policy_code")
+            if "rcp_event_detail" not in disabled_actions:
+                items.append(
+                    SourcePlanItem(
+                        source_id=_batch_source_id(round_id, index, f"rcp_event_detail_{candidate_index}"),
+                        action="rcp_event_detail",
+                        execution_group="dependency_serial",
+                        depends_on=depends_on,
+                        timeout_class="standard_readonly",
+                        failure_policy="non_blocking_partial",
+                        source_priority="P1-auto-next-hop",
+                        expected_observation="RCP event request detail fields; policy/event labels are entry context only",
+                        params=dict(base_params),
+                        timeout_ms=30_000,
+                        required_fields=["eventId", "eventType", "queryTime"],
+                        window_policy="rcp_event_detail_from_selected_strategy_anchor",
+                        window_start_ms=window_start_ms,
+                        window_end_ms=window_end_ms,
+                    )
+                )
+            if "rcp_event_feature_list" not in disabled_actions:
+                feature_params = {**base_params, "featureGroup": "", "feature_group": ""}
+                items.append(
+                    SourcePlanItem(
+                        source_id=_batch_source_id(round_id, index, f"rcp_event_feature_list_{candidate_index}"),
+                        action="rcp_event_feature_list",
+                        execution_group="dependency_serial",
+                        depends_on=depends_on,
+                        timeout_class="large_response",
+                        failure_policy="non_blocking_partial",
+                        source_priority="P1-auto-next-hop",
+                        expected_observation="RCP featureKey/defaultFeatureValue rows for strategy_event_feature_row_table",
+                        params=feature_params,
+                        timeout_ms=45_000,
+                        required_fields=["eventId", "eventType", "queryTime"],
+                        window_policy="rcp_event_feature_rows_from_selected_strategy_anchor",
+                        window_start_ms=window_start_ms,
+                        window_end_ms=window_end_ms,
+                    )
+                )
+    return items
+
+
 def build_gallery_followup_source_plan(
     round_id: int,
     sampled_entities: list[str],
@@ -8012,6 +12344,8 @@ def build_gallery_followup_source_plan(
     photo_ids_by_entity = _photo_ids_by_round_entity(round_id, sampled_entities, source_observations)
     items: list[SourcePlanItem] = []
     for index, entity in enumerate(sampled_entities, start=1):
+        if _infer_seed_entity_type(entity) != "user_id":
+            continue
         if photo_ids_by_entity.get(index):
             continue
         items.append(
@@ -8102,6 +12436,379 @@ def build_photo_detail_followup_source_plan(
     return items
 
 
+def build_content_social_followup_source_plan(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    photo_ids_by_entity = _photo_ids_by_round_entity(round_id, sampled_entities, source_observations)
+    items: list[SourcePlanItem] = []
+    for index, entity in enumerate(sampled_entities, start=1):
+        if _infer_seed_entity_type(entity) == "user_id" and "archives_private_message_search" not in disabled_actions:
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "private_message"),
+                    action="archives_private_message_search",
+                    execution_group="dependency_serial",
+                    depends_on=[_batch_source_id(round_id, index, "archives_profile")],
+                    timeout_class="auth_sensitive",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P1-auto-next-hop",
+                    expected_observation="bounded received private-message rows for social_detail_table; single-entity signal only",
+                    params={
+                        "user_id": entity,
+                        "direction": "received",
+                        "page": 1,
+                        "count": 20,
+                    },
+                    timeout_ms=30_000,
+                    required_fields=["user_id", "direction"],
+                    window_policy="social_private_message_received_recent_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+        photo_candidates = photo_ids_by_entity.get(index, [])
+        if not photo_candidates or "archives_comment_search" in disabled_actions:
+            continue
+        photo_candidate = photo_candidates[0]
+        photo_id = str(photo_candidate.get("photo_id") or "").strip()
+        if not photo_id:
+            continue
+        items.append(
+            SourcePlanItem(
+                source_id=_batch_source_id(round_id, index, f"comment_{photo_id}"),
+                action="archives_comment_search",
+                execution_group="dependency_serial",
+                depends_on=[str(photo_candidate.get("source_id") or _batch_source_id(round_id, index, "photo"))],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded comment rows for content/social handoff; single-entity signal unless cross-entity support emerges later",
+                params={
+                    "photo_id": photo_id,
+                    "page": 1,
+                    "count": 20,
+                    "containsPhotoInfo": True,
+                },
+                timeout_ms=30_000,
+                required_fields=["photo_id"],
+                window_policy="content_social_comment_followup_from_photo_anchor",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    return items
+
+
+def build_feedback_enforcement_followup_source_plan(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    photo_ids_by_entity = _photo_ids_by_round_entity(round_id, sampled_entities, source_observations)
+    items: list[SourcePlanItem] = []
+    for index, entity in enumerate(sampled_entities, start=1):
+        if _infer_seed_entity_type(entity) != "user_id":
+            continue
+        depends_on = [_batch_source_id(round_id, index, "archives_profile")]
+        if "archives_user_report_search" not in disabled_actions:
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "user_report"),
+                    action="archives_user_report_search",
+                    execution_group="dependency_serial",
+                    depends_on=depends_on,
+                    timeout_class="auth_sensitive",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P1-auto-next-hop",
+                    expected_observation="bounded report rows for feedback_detail_table; feedback is not risk fact",
+                    params={
+                        "user_id": entity,
+                        "begin": window_start_ms,
+                        "end": window_end_ms,
+                        "page": 1,
+                        "count": 20,
+                    },
+                    timeout_ms=30_000,
+                    required_fields=["user_id"],
+                    window_policy="feedback_report_recent_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+        if "archives_negative_report" not in disabled_actions:
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "negative_report"),
+                    action="archives_negative_report",
+                    execution_group="dependency_serial",
+                    depends_on=depends_on,
+                    timeout_class="auth_sensitive",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P1-auto-next-hop",
+                    expected_observation="bounded negative-report summary/detail rows for feedback_detail_table; feedback is not risk fact",
+                    params={"user_id": entity},
+                    timeout_ms=30_000,
+                    required_fields=["user_id"],
+                    window_policy="negative_report_recent_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+        if "archives_review_logs" not in disabled_actions:
+            items.append(
+                SourcePlanItem(
+                    source_id=_batch_source_id(round_id, index, "review_logs"),
+                    action="archives_review_logs",
+                    execution_group="dependency_serial",
+                    depends_on=depends_on,
+                    timeout_class="auth_sensitive",
+                    failure_policy="non_blocking_partial",
+                    source_priority="P1-auto-next-hop",
+                    expected_observation="bounded review log rows for enforcement_detail_table; enforcement is governance state not risk fact",
+                    params={
+                        "user_id": entity,
+                        "beginTime": window_start_ms,
+                        "endTime": window_end_ms,
+                        "pageIndex": 1,
+                        "pageSize": 30,
+                    },
+                    timeout_ms=30_000,
+                    required_fields=["user_id", "beginTime", "endTime"],
+                    window_policy="review_logs_recent_window",
+                    window_start_ms=window_start_ms,
+                    window_end_ms=window_end_ms,
+                )
+            )
+        if "archives_punish_status" in disabled_actions:
+            continue
+        photo_candidates = photo_ids_by_entity.get(index, [])
+        if not photo_candidates:
+            continue
+        photo_candidate = photo_candidates[0]
+        photo_id = str(photo_candidate.get("photo_id") or "").strip()
+        if not photo_id:
+            continue
+        items.append(
+            SourcePlanItem(
+                source_id=_batch_source_id(round_id, index, f"punish_{photo_id}"),
+                action="archives_punish_status",
+                execution_group="dependency_serial",
+                depends_on=[str(photo_candidate.get("source_id") or _batch_source_id(round_id, index, "photo"))],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded punish status rows for enforcement_detail_table; governance state only, not black-gray essence",
+                params={"photo_id": photo_id},
+                timeout_ms=30_000,
+                required_fields=["photo_id"],
+                window_policy="punish_status_followup_from_photo_anchor",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    return items
+
+
+def build_single_case_content_social_followup_items(
+    user_id: str,
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    photo_ids = _photo_ids_from_observations(source_observations)
+    items: list[SourcePlanItem] = []
+    existing_actions = {str(observation.get("action") or "") for observation in source_observations}
+    if "archives_private_message_search" not in disabled_actions and "archives_private_message_search" not in existing_actions:
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_private_message_search_{user_id}",
+                action="archives_private_message_search",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_user_profile"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded received private-message rows for social_detail_table; single-entity signal only",
+                params={
+                    "user_id": user_id,
+                    "direction": "received",
+                    "page": 1,
+                    "count": 20,
+                },
+                timeout_ms=30_000,
+                required_fields=["user_id", "direction"],
+                window_policy="social_private_message_received_recent_window",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    existing_comment_photo_ids = {
+        str(handle.get("value"))
+        for observation in source_observations
+        if str(observation.get("action") or "") == "archives_comment_search"
+        for handle in observation.get("parsed_body_field_handles", [])
+        if str(handle.get("canonical_field") or handle.get("field")) == "photo_id"
+    }
+    if "archives_comment_search" in disabled_actions:
+        return items
+    for photo_id in photo_ids:
+        if photo_id in existing_comment_photo_ids:
+            continue
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_comment_search_{photo_id}",
+                action="archives_comment_search",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_photo_search"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded comment rows for content/social handoff; single-entity signal unless cross-entity support emerges later",
+                params={
+                    "photo_id": photo_id,
+                    "page": 1,
+                    "count": 20,
+                    "containsPhotoInfo": True,
+                },
+                timeout_ms=30_000,
+                required_fields=["photo_id"],
+                window_policy="content_social_comment_followup_from_photo_anchor",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    return items
+
+
+def build_single_case_feedback_enforcement_followup_items(
+    user_id: str,
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> list[SourcePlanItem]:
+    disabled_actions = disabled_actions or set()
+    photo_ids = _photo_ids_from_observations(source_observations)
+    items: list[SourcePlanItem] = []
+    existing_actions = {str(observation.get("action") or "") for observation in source_observations}
+    if "archives_user_report_search" not in disabled_actions and "archives_user_report_search" not in existing_actions:
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_user_report_search_{user_id}",
+                action="archives_user_report_search",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_user_profile"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded report rows for feedback_detail_table; feedback is not risk fact",
+                params={
+                    "user_id": user_id,
+                    "begin": window_start_ms,
+                    "end": window_end_ms,
+                    "page": 1,
+                    "count": 20,
+                },
+                timeout_ms=30_000,
+                required_fields=["user_id"],
+                window_policy="feedback_report_recent_window",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    if "archives_negative_report" not in disabled_actions and "archives_negative_report" not in existing_actions:
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_negative_report_{user_id}",
+                action="archives_negative_report",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_user_profile"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded negative-report summary/detail rows for feedback_detail_table; feedback is not risk fact",
+                params={"user_id": user_id},
+                timeout_ms=30_000,
+                required_fields=["user_id"],
+                window_policy="negative_report_recent_window",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    if "archives_review_logs" not in disabled_actions and "archives_review_logs" not in existing_actions:
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_review_logs_{user_id}",
+                action="archives_review_logs",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_user_profile"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded review log rows for enforcement_detail_table; enforcement is governance state not risk fact",
+                params={
+                    "user_id": user_id,
+                    "beginTime": window_start_ms,
+                    "endTime": window_end_ms,
+                    "pageIndex": 1,
+                    "pageSize": 30,
+                },
+                timeout_ms=30_000,
+                required_fields=["user_id", "beginTime", "endTime"],
+                window_policy="review_logs_recent_window",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    if "archives_punish_status" in disabled_actions:
+        return items
+    existing_punish_photo_ids = {
+        str(handle.get("value"))
+        for observation in source_observations
+        if str(observation.get("action") or "") == "archives_punish_status"
+        for handle in observation.get("parsed_body_field_handles", [])
+        if str(handle.get("canonical_field") or handle.get("field")) == "photo_id"
+    }
+    for photo_id in photo_ids:
+        if photo_id in existing_punish_photo_ids:
+            continue
+        items.append(
+            SourcePlanItem(
+                source_id=f"ato_archives_punish_status_{photo_id}",
+                action="archives_punish_status",
+                execution_group="dependency_serial",
+                depends_on=["ato_archives_photo_search"],
+                timeout_class="auth_sensitive",
+                failure_policy="non_blocking_partial",
+                source_priority="P1-auto-next-hop",
+                expected_observation="bounded punish status rows for enforcement_detail_table; governance state only, not black-gray essence",
+                params={"photo_id": photo_id},
+                timeout_ms=30_000,
+                required_fields=["photo_id"],
+                window_policy="punish_status_followup_from_photo_anchor",
+                window_start_ms=window_start_ms,
+                window_end_ms=window_end_ms,
+            )
+        )
+    return items
+
+
 def execute_sample_round(
     *,
     case_id: str,
@@ -8111,28 +12818,184 @@ def execute_sample_round(
     window_end_ms: int,
     disabled_actions: set[str],
 ) -> dict[str, Any]:
+    round_started = time.monotonic()
     round_id = int(round_item.get("round_id"))
     sampled_entities = [str(entity) for entity in round_item.get("sampled_entities", [])]
+    checkpoint_dir = _checkpoint_dir_for_args(args, case_id)
+    checkpoint_enabled = args.mode == "live" or bool(getattr(args, "checkpoint_dir", None))
+    checkpoint_files: list[str] = []
+    progress_trace: list[dict[str, Any]] = []
+    timing_trace: dict[str, Any] = {
+        "global": {
+            "plan_build_ms": 0,
+            "chunk_build_ms": 0,
+            "batch_submit_ms": 0,
+            "batch_wait_ms": 0,
+            "service_return_ms": 0,
+            "artifact_build_ms": 0,
+            "checkpoint_write_ms": 0,
+            "total_elapsed_ms": 0,
+        },
+        "chunks": [],
+    }
+    batch_index_counter = 0
+    checkpoint_results_so_far: list[dict[str, Any]] = []
+    checkpoint_source_plan_so_far: list[SourcePlanItem] = []
+    plan_started = time.monotonic()
     source_plan = build_sample_round_source_plan(
         round_id,
         sampled_entities,
         window_start_ms=window_start_ms,
         window_end_ms=window_end_ms,
         disabled_actions=disabled_actions,
+        source_overrides=round_item.get("source_overrides") if isinstance(round_item.get("source_overrides"), dict) else None,
     )
+    timing_trace["global"]["plan_build_ms"] = _elapsed_ms(plan_started)
     chunked_payloads, executable, skipped = _chunked_batch_payloads_for_executable_sources(
         f"{case_id}:round_{round_id}",
         source_plan,
         dry_run=args.mode == "dry_run",
     )
+    timing_trace["global"]["chunk_build_ms"] = _elapsed_ms(plan_started) - int(timing_trace["global"]["plan_build_ms"])
     payloads = [payload for payload, _items in chunked_payloads]
     batch_payload = _summarize_chunked_batch_payloads(payloads)
     contract_validation = _validate_chunked_batch_payloads(payloads)
+    batch_started = time.monotonic()
+
+    def execute_chunk_group(
+        *,
+        stage_name: str,
+        chunk_group: list[tuple[dict[str, Any], list[SourcePlanItem]]],
+    ) -> list[dict[str, Any]]:
+        nonlocal batch_index_counter
+        results: list[dict[str, Any]] = []
+        for chunk_offset, (payload, chunk_items) in enumerate(chunk_group, start=1):
+            batch_index_counter += 1
+            chunk_id = f"round_{round_id}_{stage_name}_{chunk_offset}"
+            current_running_sources = [item.source_id for item in chunk_items]
+            current_source_group = _chunk_source_group_from_payload(payload)
+            checkpoint_source_plan_so_far.extend(chunk_items)
+            timing_row = {
+                "chunk_id": chunk_id,
+                "round_index": round_id,
+                "batch_index": batch_index_counter,
+                "source_group": current_source_group,
+                "actions": _chunk_actions_from_payload(payload),
+                "action_count": len(chunk_items),
+                "submit_started_at": _iso_now(),
+                "submit_finished_at": None,
+                "service_wait_started_at": None,
+                "service_returned_at": None,
+                "submit_ms": 0,
+                "wait_ms": None,
+                "artifact_ms": 0,
+                "checkpoint_ms": 0,
+                "batch_elapsed_ms": None,
+                "per_source_elapsed_ms": None,
+                "completed_count": 0,
+                "partial_count": 0,
+                "blocked_count": 0,
+                "timeout_count": 0,
+                "pending_count": len(chunk_items),
+            }
+            timing_trace["chunks"].append(timing_row)
+            timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
+            if checkpoint_enabled:
+                checkpoint_path, progress_row = _write_sample_batch_checkpoint(
+                    checkpoint_dir=checkpoint_dir,
+                    case_id=case_id,
+                    round_index=round_id,
+                    batch_index=batch_index_counter,
+                    chunk_id=chunk_id,
+                    current_source_group=current_source_group,
+                    current_running_sources=current_running_sources,
+                    current_source_plan=checkpoint_source_plan_so_far,
+                    current_results=[*checkpoint_results_so_far, *([build_dry_run_batch_result(skipped)] if skipped else [])],
+                    sampled_entities=sampled_entities,
+                    mode=args.mode,
+                    disabled_actions=disabled_actions,
+                    waiting_reason="waiting_on_batch_return",
+                    timing_trace=timing_trace,
+                    checkpoint_phase="start",
+                )
+                checkpoint_files.append(checkpoint_path)
+                progress_trace.append(progress_row)
+                if args.mode == "live":
+                    _emit_sample_batch_progress(progress_row)
+            call_started = time.monotonic()
+            if args.mode == "dry_run":
+                chunk_result = build_dry_run_batch_result(chunk_items)
+            elif args.browser_backed_base:
+                timing_row["service_wait_started_at"] = _iso_now()
+                chunk_result = call_browser_backed_batch(args.browser_backed_base, payload)
+            else:
+                chunk_result = build_harness_error_result(
+                    source_status="service_unavailable",
+                    error_type="browser_backed_base_required",
+                    detail={"reason": "--browser-backed-base is required in live mode"},
+                )
+            call_elapsed = _elapsed_ms(call_started)
+            timing_row["submit_finished_at"] = timing_row["submit_started_at"]
+            timing_row["service_wait_started_at"] = timing_row["service_wait_started_at"] or timing_row["submit_started_at"]
+            timing_row["service_returned_at"] = _iso_now()
+            timing_row["wait_ms"] = call_elapsed
+            timing_row["batch_elapsed_ms"] = call_elapsed
+            timing_row["pending_count"] = 0
+            timing_trace["global"]["batch_wait_ms"] = int(timing_trace["global"]["batch_wait_ms"]) + call_elapsed
+            timing_trace["global"]["service_return_ms"] = int(timing_trace["global"]["service_return_ms"]) + call_elapsed
+            checkpoint_results_so_far.append(chunk_result)
+            results.append(chunk_result)
+            chunk_quality = merge_source_quality(chunk_items, chunk_result)
+            buckets = chunk_quality.get("buckets", {})
+            timing_row["completed_count"] = len(buckets.get("completed", []))
+            timing_row["partial_count"] = len(buckets.get("partial", []))
+            timing_row["blocked_count"] = len(buckets.get("blocked", [])) + len(buckets.get("auth_failed", [])) + len(buckets.get("parse_error", []))
+            timing_row["timeout_count"] = len(buckets.get("timeout", []))
+            timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
+            checkpoint_started = time.monotonic()
+            if checkpoint_enabled:
+                checkpoint_path, progress_row = _write_sample_batch_checkpoint(
+                    checkpoint_dir=checkpoint_dir,
+                    case_id=case_id,
+                    round_index=round_id,
+                    batch_index=batch_index_counter,
+                    chunk_id=chunk_id,
+                    current_source_group=current_source_group,
+                    current_running_sources=current_running_sources,
+                    current_source_plan=checkpoint_source_plan_so_far,
+                    current_results=[*checkpoint_results_so_far, *([build_dry_run_batch_result(skipped)] if skipped else [])],
+                    sampled_entities=sampled_entities,
+                    mode=args.mode,
+                    disabled_actions=disabled_actions,
+                    waiting_reason=str(chunk_result.get("batch_status") or "chunk_completed"),
+                    timing_trace=timing_trace,
+                    checkpoint_phase="done",
+                )
+                timing_row["checkpoint_ms"] = _elapsed_ms(checkpoint_started)
+                checkpoint_files.append(checkpoint_path)
+                progress_trace.append(progress_row)
+                if args.mode == "live":
+                    _emit_sample_batch_progress(progress_row)
+            else:
+                progress_trace.append(
+                    {
+                        "current_chunk_id": chunk_id,
+                        "current_round_index": round_id,
+                        "current_batch_index": batch_index_counter,
+                        "current_source_group": current_source_group,
+                        "current_running_sources": current_running_sources,
+                        "elapsed_seconds": round((timing_trace.get("global", {}).get("total_elapsed_ms") or 0) / 1000, 2),
+                        "last_checkpoint_file": None,
+                        "completed_source_count": timing_row["completed_count"],
+                        "partial_source_count": timing_row["partial_count"],
+                        "blocked_source_count": timing_row["blocked_count"],
+                        "pending_source_count": timing_row["pending_count"],
+                    }
+                )
+        return results
+
     if args.mode == "dry_run":
-        primary_results = [
-            build_dry_run_batch_result(chunk_items)
-            for _payload, chunk_items in chunked_payloads
-        ]
+        primary_results = execute_chunk_group(stage_name="primary", chunk_group=chunked_payloads)
     else:
         if not args.browser_backed_base:
             primary_results = [build_harness_error_result(
@@ -8141,10 +13004,7 @@ def execute_sample_round(
                 detail={"reason": "--browser-backed-base is required in live mode"},
             )]
         else:
-            primary_results = [
-                call_browser_backed_batch(args.browser_backed_base, payload)
-                for payload in payloads
-            ]
+            primary_results = execute_chunk_group(stage_name="primary", chunk_group=chunked_payloads)
     preliminary_result = merge_batch_results(primary_results)
     preliminary_quality = merge_source_quality(source_plan, preliminary_result)
     preliminary_observations = build_source_observations(source_plan, preliminary_quality, preliminary_result)
@@ -8176,21 +13036,38 @@ def execute_sample_round(
             dry_run=args.mode == "dry_run",
         )
         gallery_payloads = [payload for payload, _items in gallery_chunks]
-        if args.mode == "dry_run":
-            gallery_results = [
-                build_dry_run_batch_result(chunk_items)
-                for _payload, chunk_items in gallery_chunks
-            ]
-        elif args.browser_backed_base:
-            gallery_results = [
-                call_browser_backed_batch(args.browser_backed_base, payload)
-                for payload in gallery_payloads
-            ]
+        gallery_results = execute_chunk_group(stage_name="gallery_followup", chunk_group=gallery_chunks)
 
     after_gallery_plan = [*source_plan, *gallery_source_plan]
     after_gallery_result = merge_batch_results([*primary_results, *gallery_results, skipped_result])
     after_gallery_quality = merge_source_quality(after_gallery_plan, after_gallery_result)
     after_gallery_observations = build_source_observations(after_gallery_plan, after_gallery_quality, after_gallery_result)
+
+    rcp_event_source_plan: list[SourcePlanItem] = []
+    rcp_event_results: list[dict[str, Any]] = []
+    rcp_event_payloads: list[dict[str, Any]] = []
+    if next_hop_allowed:
+        rcp_event_source_plan = build_rcp_event_followup_source_plan(
+            round_id,
+            sampled_entities,
+            after_gallery_observations,
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+            disabled_actions=disabled_actions,
+        )
+    if rcp_event_source_plan:
+        rcp_event_chunks, _rcp_event_executable, _rcp_event_skipped = _chunked_batch_payloads_for_executable_sources(
+            f"{case_id}:round_{round_id}:rcp_event_followup",
+            rcp_event_source_plan,
+            dry_run=args.mode == "dry_run",
+        )
+        rcp_event_payloads = [payload for payload, _items in rcp_event_chunks]
+        rcp_event_results = execute_chunk_group(stage_name="rcp_event_followup", chunk_group=rcp_event_chunks)
+
+    after_rcp_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan]
+    after_rcp_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, skipped_result])
+    after_rcp_quality = merge_source_quality(after_rcp_plan, after_rcp_result)
+    after_rcp_observations = build_source_observations(after_rcp_plan, after_rcp_quality, after_rcp_result)
 
     photo_detail_source_plan: list[SourcePlanItem] = []
     photo_detail_results: list[dict[str, Any]] = []
@@ -8199,7 +13076,7 @@ def execute_sample_round(
         photo_detail_source_plan = build_photo_detail_followup_source_plan(
             round_id,
             sampled_entities,
-            after_gallery_observations,
+            after_rcp_observations,
             window_start_ms=window_start_ms,
             window_end_ms=window_end_ms,
             disabled_actions=disabled_actions,
@@ -8211,19 +13088,77 @@ def execute_sample_round(
             dry_run=args.mode == "dry_run",
         )
         photo_detail_payloads = [payload for payload, _items in photo_detail_chunks]
-        if args.mode == "dry_run":
-            photo_detail_results = [
-                build_dry_run_batch_result(chunk_items)
-                for _payload, chunk_items in photo_detail_chunks
-            ]
-        elif args.browser_backed_base:
-            photo_detail_results = [
-                call_browser_backed_batch(args.browser_backed_base, payload)
-                for payload in photo_detail_payloads
-            ]
+        photo_detail_results = execute_chunk_group(stage_name="photo_detail_followup", chunk_group=photo_detail_chunks)
 
-    before_track_plan = [*source_plan, *gallery_source_plan, *photo_detail_source_plan]
-    before_track_result = merge_batch_results([*primary_results, *gallery_results, *photo_detail_results, skipped_result])
+    before_social_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan]
+    before_social_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, skipped_result])
+    before_social_quality = merge_source_quality(before_social_plan, before_social_result)
+    before_social_observations = build_source_observations(before_social_plan, before_social_quality, before_social_result)
+
+    content_social_source_plan: list[SourcePlanItem] = []
+    content_social_results: list[dict[str, Any]] = []
+    content_social_payloads: list[dict[str, Any]] = []
+    if next_hop_allowed:
+        content_social_source_plan = build_content_social_followup_source_plan(
+            round_id,
+            sampled_entities,
+            before_social_observations,
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+            disabled_actions=disabled_actions,
+        )
+    if content_social_source_plan:
+        content_social_chunks, _content_social_executable, _content_social_skipped = _chunked_batch_payloads_for_executable_sources(
+            f"{case_id}:round_{round_id}:content_social_followup",
+            content_social_source_plan,
+            dry_run=args.mode == "dry_run",
+        )
+        content_social_payloads = [payload for payload, _items in content_social_chunks]
+        content_social_results = execute_chunk_group(stage_name="content_social_followup", chunk_group=content_social_chunks)
+
+    before_feedback_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan, *content_social_source_plan]
+    before_feedback_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, *content_social_results, skipped_result])
+    before_feedback_quality = merge_source_quality(before_feedback_plan, before_feedback_result)
+    before_feedback_observations = build_source_observations(before_feedback_plan, before_feedback_quality, before_feedback_result)
+
+    feedback_enforcement_source_plan: list[SourcePlanItem] = []
+    feedback_enforcement_results: list[dict[str, Any]] = []
+    feedback_enforcement_payloads: list[dict[str, Any]] = []
+    if next_hop_allowed:
+        feedback_enforcement_source_plan = build_feedback_enforcement_followup_source_plan(
+            round_id,
+            sampled_entities,
+            before_feedback_observations,
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+            disabled_actions=disabled_actions,
+        )
+    if feedback_enforcement_source_plan:
+        feedback_enforcement_chunks, _feedback_executable, _feedback_skipped = _chunked_batch_payloads_for_executable_sources(
+            f"{case_id}:round_{round_id}:feedback_enforcement_followup",
+            feedback_enforcement_source_plan,
+            dry_run=args.mode == "dry_run",
+        )
+        feedback_enforcement_payloads = [payload for payload, _items in feedback_enforcement_chunks]
+        feedback_enforcement_results = execute_chunk_group(stage_name="feedback_enforcement_followup", chunk_group=feedback_enforcement_chunks)
+
+    before_track_plan = [
+        *source_plan,
+        *gallery_source_plan,
+        *rcp_event_source_plan,
+        *photo_detail_source_plan,
+        *content_social_source_plan,
+        *feedback_enforcement_source_plan,
+    ]
+    before_track_result = merge_batch_results([
+        *primary_results,
+        *gallery_results,
+        *rcp_event_results,
+        *photo_detail_results,
+        *content_social_results,
+        *feedback_enforcement_results,
+        skipped_result,
+    ])
     before_track_quality = merge_source_quality(before_track_plan, before_track_result)
     before_track_observations = build_source_observations(before_track_plan, before_track_quality, before_track_result)
     followup_source_plan: list[SourcePlanItem] = []
@@ -8244,25 +13179,87 @@ def execute_sample_round(
             dry_run=args.mode == "dry_run",
         )
         followup_payloads = [payload for payload, _items in followup_chunks]
-        if args.mode == "dry_run":
-            followup_results = [
-                build_dry_run_batch_result(chunk_items)
-                for _payload, chunk_items in followup_chunks
-            ]
-        elif args.browser_backed_base:
-            followup_results = [
-                call_browser_backed_batch(args.browser_backed_base, payload)
-                for payload in followup_payloads
-            ]
+        followup_results = execute_chunk_group(stage_name="track_followup", chunk_group=followup_chunks)
 
-    combined_source_plan = [*source_plan, *gallery_source_plan, *photo_detail_source_plan, *followup_source_plan]
-    batch_result_raw = merge_batch_results([*primary_results, *gallery_results, *photo_detail_results, *followup_results, skipped_result])
+    before_one_degree_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan, *content_social_source_plan, *feedback_enforcement_source_plan, *followup_source_plan]
+    before_one_degree_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, *content_social_results, *feedback_enforcement_results, *followup_results, skipped_result])
+    before_one_degree_quality = merge_source_quality(before_one_degree_plan, before_one_degree_result)
+    before_one_degree_observations = build_source_observations(before_one_degree_plan, before_one_degree_quality, before_one_degree_result)
+
+    one_degree_user_source_plan: list[SourcePlanItem] = []
+    one_degree_user_results: list[dict[str, Any]] = []
+    one_degree_user_payloads: list[dict[str, Any]] = []
+    if next_hop_allowed:
+        one_degree_user_source_plan = build_one_degree_user_detail_source_plan(
+            round_id,
+            sampled_entities,
+            before_one_degree_observations,
+            window_start_ms=window_start_ms,
+            window_end_ms=window_end_ms,
+            disabled_actions=disabled_actions,
+        )
+    if one_degree_user_source_plan:
+        one_degree_chunks, _one_degree_executable, _one_degree_skipped = _chunked_batch_payloads_for_executable_sources(
+            f"{case_id}:round_{round_id}:one_degree_user_detail",
+            one_degree_user_source_plan,
+            dry_run=args.mode == "dry_run",
+        )
+        one_degree_user_payloads = [payload for payload, _items in one_degree_chunks]
+        one_degree_user_results = execute_chunk_group(stage_name="one_degree_user_detail", chunk_group=one_degree_chunks)
+
+    combined_source_plan = [
+        *source_plan,
+        *gallery_source_plan,
+        *rcp_event_source_plan,
+        *photo_detail_source_plan,
+        *content_social_source_plan,
+        *feedback_enforcement_source_plan,
+        *followup_source_plan,
+        *one_degree_user_source_plan,
+    ]
+    batch_result_raw = merge_batch_results([
+        *primary_results,
+        *gallery_results,
+        *rcp_event_results,
+        *photo_detail_results,
+        *content_social_results,
+        *feedback_enforcement_results,
+        *followup_results,
+        *one_degree_user_results,
+        skipped_result,
+    ])
+    followup_source_plan_all = [
+        *gallery_source_plan,
+        *rcp_event_source_plan,
+        *photo_detail_source_plan,
+        *content_social_source_plan,
+        *feedback_enforcement_source_plan,
+        *followup_source_plan,
+        *one_degree_user_source_plan,
+    ]
+    status_attribution = build_status_attribution(
+        primary_source_plan=source_plan,
+        primary_batch_result=merge_batch_results([*primary_results, skipped_result]),
+        followup_source_plan=followup_source_plan_all,
+        followup_batch_result=merge_batch_results([
+            *gallery_results,
+            *rcp_event_results,
+            *photo_detail_results,
+            *followup_results,
+            *one_degree_user_results,
+        ]),
+    )
+    batch_result_for_round = dict(batch_result_raw)
+    if status_attribution.get("status_contamination") and not status_attribution.get("primary_source_impact"):
+        batch_result_for_round["raw_batch_status"] = batch_result_raw.get("batch_status")
+        batch_result_for_round["batch_status"] = status_attribution.get("top_level_final_status")
+        batch_result_for_round["ok"] = True
     round_result = build_round_result(
         round_id=round_id,
         sampled_entities=sampled_entities,
         source_plan=combined_source_plan,
         batch_payload=batch_payload,
-        batch_result_raw=batch_result_raw,
+        batch_result_raw=batch_result_for_round,
         mode=args.mode,
         disabled_actions=disabled_actions,
         mock_current_observations=round_item.get("mock_current_observations")
@@ -8276,17 +13273,77 @@ def execute_sample_round(
         "gallery_followup_source_count": len(gallery_source_plan),
         "gallery_followup_executed": bool(gallery_results),
         "gallery_followup_batch_payload": _summarize_chunked_batch_payloads(gallery_payloads) if gallery_payloads else None,
+        "rcp_event_followup_source_count": len(rcp_event_source_plan),
+        "rcp_event_followup_executed": bool(rcp_event_results),
+        "rcp_event_followup_batch_payload": _summarize_chunked_batch_payloads(rcp_event_payloads) if rcp_event_payloads else None,
         "photo_detail_followup_source_count": len(photo_detail_source_plan),
         "photo_detail_followup_executed": bool(photo_detail_results),
         "photo_detail_followup_batch_payload": _summarize_chunked_batch_payloads(photo_detail_payloads) if photo_detail_payloads else None,
+        "content_social_followup_source_count": len(content_social_source_plan),
+        "content_social_followup_executed": bool(content_social_results),
+        "content_social_followup_batch_payload": _summarize_chunked_batch_payloads(content_social_payloads) if content_social_payloads else None,
+        "feedback_enforcement_followup_source_count": len(feedback_enforcement_source_plan),
+        "feedback_enforcement_followup_executed": bool(feedback_enforcement_results),
+        "feedback_enforcement_followup_batch_payload": _summarize_chunked_batch_payloads(feedback_enforcement_payloads) if feedback_enforcement_payloads else None,
         "track_followup_source_count": len(followup_source_plan),
         "track_followup_executed": bool(followup_results),
         "track_followup_batch_payload": _summarize_chunked_batch_payloads(followup_payloads) if followup_payloads else None,
+        "one_degree_user_detail_source_count": len(one_degree_user_source_plan),
+        "one_degree_user_detail_executed": bool(one_degree_user_results),
+        "one_degree_user_detail_batch_payload": _summarize_chunked_batch_payloads(one_degree_user_payloads) if one_degree_user_payloads else None,
+        "one_degree_depth_boundary": "associated user details reuse registered user/content/login/strategy sources; newly discovered anchors are context only and do not trigger recursive expansion",
     }
     if disabled_actions:
         round_result["disabled_actions"] = sorted(disabled_actions)
-    round_result["batch_status"] = batch_result_raw.get("batch_status")
+    round_result["raw_batch_status"] = batch_result_raw.get("batch_status")
+    round_result["status_attribution"] = status_attribution
+    for key in (
+        "primary_source_status",
+        "primary_source_completed_count",
+        "primary_source_partial_count",
+        "followup_source_status",
+        "followup_blocked_count",
+        "followup_blocked_reasons",
+        "top_level_final_status",
+        "status_contamination",
+        "primary_source_impact",
+    ):
+        round_result[key] = status_attribution.get(key)
+    round_result["followup_source_quality"] = status_attribution.get("followup_source_quality")
+    round_result["batch_status"] = status_attribution.get("top_level_final_status") or batch_result_raw.get("batch_status")
+    if status_attribution.get("status_contamination") and not status_attribution.get("primary_source_impact"):
+        round_result["decision"] = {
+            "action": "continue",
+            "reason": "primary_sources_completed_or_partial_followup_blocked_recorded_separately",
+            "required_authorization": False,
+        }
     round_result["batch_result"] = build_safe_batch_summary(batch_result_raw, round_result.get("source_quality"))
+    timing_trace["global"]["artifact_build_ms"] = _elapsed_ms(batch_started) - int(
+        timing_trace["global"]["batch_wait_ms"] or 0
+    )
+    timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
+    round_result["checkpoint_files"] = checkpoint_files
+    round_result["latest_checkpoint_file"] = checkpoint_files[-1] if checkpoint_files else None
+    round_result["checkpoint_count"] = len(checkpoint_files)
+    round_result["partial_result_available"] = bool(checkpoint_files)
+    round_result["progress_trace"] = progress_trace
+    round_result["timing_trace"] = timing_trace
+    round_result["timing_summary"] = [
+        {
+            "chunk": item.get("chunk_id"),
+            "source_group": item.get("source_group"),
+            "actions": item.get("actions"),
+            "submit_ms": item.get("submit_ms"),
+            "wait_ms": item.get("wait_ms"),
+            "artifact_ms": item.get("artifact_ms"),
+            "checkpoint_ms": item.get("checkpoint_ms"),
+            "completed": item.get("completed_count"),
+            "blocked": item.get("blocked_count"),
+            "timeout": item.get("timeout_count"),
+            "pending": item.get("pending_count"),
+        }
+        for item in timing_trace.get("chunks", [])
+    ]
     return round_result
 
 
@@ -8414,7 +13471,7 @@ def build_cumulative_sample_result(
                 "track_followup_when_candidate_device_available",
             ] if risk_like_count else [],
         },
-        "strategy_recommendations": build_batch_strategy_recommendations(
+        "candidate_action_groups": build_batch_candidate_action_groups(
             "not_evaluated_in_dry_run" if dry_run_only else "pending_full_validation"
         ),
         "next_action": next_action,
@@ -8766,6 +13823,22 @@ def build_cumulative_orchestration_artifacts(
         round_results=round_results,
         round_artifacts=round_artifacts,
     )
+    primary_source_completed_count = sum(int(item.get("primary_source_completed_count") or 0) for item in round_results)
+    primary_source_partial_count = sum(int(item.get("primary_source_partial_count") or 0) for item in round_results)
+    followup_blocked_count = sum(int(item.get("followup_blocked_count") or 0) for item in round_results)
+    followup_blocked_reasons = unique_strings([
+        str(reason)
+        for item in round_results
+        for reason in item.get("followup_blocked_reasons", []) or []
+        if str(reason)
+    ])
+    top_level_statuses = unique_strings([
+        str(item.get("top_level_final_status") or item.get("batch_status") or "")
+        for item in round_results
+        if str(item.get("top_level_final_status") or item.get("batch_status") or "")
+    ])
+    status_contamination = any(bool(item.get("status_contamination")) for item in round_results)
+    primary_source_impact = any(bool(item.get("primary_source_impact")) for item in round_results)
     cumulative_supporting_selected_batch_anchors = unique_strings([
         str(anchor)
         for candidate in group_candidates
@@ -8849,6 +13922,19 @@ def build_cumulative_orchestration_artifacts(
         },
         "source_quality": source_quality_summary,
         "round_level_source_quality": round_level_source_quality,
+        "source_status_attribution": {
+            "primary_source_status": "partial" if primary_source_partial_count else "completed" if primary_source_completed_count else "not_executed",
+            "primary_source_completed_count": primary_source_completed_count,
+            "primary_source_partial_count": primary_source_partial_count,
+            "followup_source_status": "blocked" if followup_blocked_count else "completed_or_not_executed",
+            "followup_blocked_count": followup_blocked_count,
+            "followup_blocked_reasons": followup_blocked_reasons,
+            "top_level_final_status": top_level_statuses[0] if len(top_level_statuses) == 1 else "mixed_round_status",
+            "round_top_level_final_statuses": top_level_statuses,
+            "status_contamination": status_contamination,
+            "primary_source_impact": primary_source_impact,
+            "boundary": "primary source completion is reported separately from blocked follow-up source quality",
+        },
         "artifact_quality_summary": artifact_quality_summary,
         "missing_evidence": missing_evidence_summary,
         "group_profile_candidate": {
@@ -8977,8 +14063,8 @@ def render_sample_expand_user_summary(cumulative_result: dict[str, Any], round_r
             "已基于可解析业务锚点计算多源候选覆盖；高覆盖只代表进入全量/离线验证的依据，不是自动处置结论。",
             "六、攻击链路还原",
             f"chain_status={cumulative_result['attack_chain']['chain_status']}；missing_links={','.join(cumulative_result['attack_chain']['missing_links'])}",
-            "七、策略建议优先级",
-            "包含 P0/P1/P2 + action_group；P0 仅表示可进入受控灰度验证，不是自动处置。",
+            "七、候选动作分组",
+            "包含 P0/P1/P2 + candidate_action_group；P0 仅表示优先补证 / 准备后续验证，不是灰度发布、策略建议或自动处置。",
             "八、是否进入全量 100 个离线/宽表验证",
             f"next_action={cumulative_result['next_action']}；required_authorization={cumulative_result['next_action_required_authorization']}",
             "九、缺失证据与 source_quality",
@@ -9003,6 +14089,14 @@ def build_sample_expand_validate_batch_result(args: argparse.Namespace) -> dict[
         max_rounds_arg=args.max_rounds,
         max_deep_checked_arg=args.max_deep_checked,
     )
+    register_new_validation = validate_register_new_snapshot_rounds_payload(rounds_payload)
+    if register_new_validation["required"] and not register_new_validation["valid"]:
+        validation = {
+            **validation,
+            "valid": False,
+            "errors": [*validation.get("errors", []), *register_new_validation.get("errors", [])],
+            "register_new_snapshot_validation": register_new_validation,
+        }
     if not validation["valid"]:
         return {
             "schema_version": "runtime_case_execution_result_v1",
@@ -9043,6 +14137,12 @@ def build_sample_expand_validate_batch_result(args: argparse.Namespace) -> dict[
     service_unavailable = any(
         item.get("batch_status") == "harness_error" for item in round_results
     )
+    checkpoint_files = [
+        path
+        for item in round_results
+        for path in item.get("checkpoint_files", []) or []
+    ]
+    partial_result_available = any(bool(item.get("partial_result_available")) for item in round_results) or bool(checkpoint_files)
     return {
         "schema_version": "runtime_case_execution_result_v1",
         "task": args.task,
@@ -9061,6 +14161,7 @@ def build_sample_expand_validate_batch_result(args: argparse.Namespace) -> dict[
             "login_logs_skipped_for_this_run": "login_logs_search" in disabled_actions,
         },
         "validation": validation,
+        "register_new_snapshot_validation": register_new_validation,
         "execution_gate": {
             "entry": "runtime_case_execution_runner.py",
             "task": "sample_expand_validate_batch",
@@ -9074,6 +14175,10 @@ def build_sample_expand_validate_batch_result(args: argparse.Namespace) -> dict[
         },
         "source_orchestration_check": run_orchestration_check("sample_expand_validate_mode", validation["total_deep_checked_requested"]),
         "round_results": round_results,
+        "checkpoint_files": checkpoint_files,
+        "latest_checkpoint_file": checkpoint_files[-1] if checkpoint_files else None,
+        "checkpoint_count": len(checkpoint_files),
+        "partial_result_available": partial_result_available,
         "cumulative_result": cumulative_result,
         "orchestration_artifacts": orchestration_artifacts,
         "user_visible_summary": render_sample_expand_user_summary(cumulative_result, round_results),
@@ -9117,6 +14222,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("window_start_ms must be earlier than window_end_ms")
 
     case_id = _compact_case_id(args.task, args.user_id)
+    disabled_actions = {str(action) for action in (args.disable_action or []) if str(action)}
     source_plan = build_ato_single_case_source_plan(
         args.user_id,
         device_id=args.device_id,
@@ -9172,7 +14278,65 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         else:
             followup_results.append(call_browser_backed_batch(args.browser_backed_base, followup_payload))
 
-    pre_track_result = merge_batch_results([primary_result, *followup_results])
+    content_social_followup_items: list[SourcePlanItem] = []
+    feedback_enforcement_followup_items: list[SourcePlanItem] = []
+    content_social_followup_results: list[dict[str, Any]] = []
+    feedback_enforcement_followup_results: list[dict[str, Any]] = []
+    pre_social_result = merge_batch_results([primary_result, *followup_results])
+    pre_social_source_quality_matrix = merge_source_quality(executed_source_plan, pre_social_result)
+    pre_social_source_observations = build_source_observations(
+        executed_source_plan,
+        pre_social_source_quality_matrix,
+        pre_social_result,
+    )
+    content_social_followup_items = build_single_case_content_social_followup_items(
+        args.user_id,
+        pre_social_source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+        disabled_actions=disabled_actions,
+    )
+    if content_social_followup_items:
+        executed_source_plan.extend(content_social_followup_items)
+        followup_payload = build_batch_payload(
+            f"{case_id}:content_social_followup",
+            content_social_followup_items,
+            dry_run=args.mode == "dry_run",
+        )
+        followup_batch_payloads.append(followup_payload)
+        if args.mode == "dry_run":
+            content_social_followup_results.append(build_dry_run_batch_result(content_social_followup_items))
+        else:
+            content_social_followup_results.append(call_browser_backed_batch(args.browser_backed_base, followup_payload))
+
+    pre_feedback_result = merge_batch_results([primary_result, *followup_results, *content_social_followup_results])
+    pre_feedback_source_quality_matrix = merge_source_quality(executed_source_plan, pre_feedback_result)
+    pre_feedback_source_observations = build_source_observations(
+        executed_source_plan,
+        pre_feedback_source_quality_matrix,
+        pre_feedback_result,
+    )
+    feedback_enforcement_followup_items = build_single_case_feedback_enforcement_followup_items(
+        args.user_id,
+        pre_feedback_source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+        disabled_actions=disabled_actions,
+    )
+    if feedback_enforcement_followup_items:
+        executed_source_plan.extend(feedback_enforcement_followup_items)
+        followup_payload = build_batch_payload(
+            f"{case_id}:feedback_enforcement_followup",
+            feedback_enforcement_followup_items,
+            dry_run=args.mode == "dry_run",
+        )
+        followup_batch_payloads.append(followup_payload)
+        if args.mode == "dry_run":
+            feedback_enforcement_followup_results.append(build_dry_run_batch_result(feedback_enforcement_followup_items))
+        else:
+            feedback_enforcement_followup_results.append(call_browser_backed_batch(args.browser_backed_base, followup_payload))
+
+    pre_track_result = merge_batch_results([primary_result, *followup_results, *content_social_followup_results, *feedback_enforcement_followup_results])
     pre_track_source_quality_matrix = merge_source_quality(executed_source_plan, pre_track_result)
     pre_track_source_observations = build_source_observations(
         executed_source_plan,
@@ -9216,7 +14380,12 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         else:
             followup_results.append(synthetic_track_missing_result(track_item))
 
-    batch_result_raw = merge_batch_results([primary_result, *followup_results])
+    batch_result_raw = merge_batch_results([
+        primary_result,
+        *followup_results,
+        *content_social_followup_results,
+        *feedback_enforcement_followup_results,
+    ])
     source_quality_matrix = merge_source_quality(executed_source_plan, batch_result_raw)
     source_observations = build_source_observations(executed_source_plan, source_quality_matrix, batch_result_raw)
     user_device_entity_resolution = build_user_device_entity_resolution(
@@ -9228,6 +14397,22 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     batch_result = build_safe_batch_summary(batch_result_raw, source_quality_matrix)
     missing_evidence = build_missing_evidence(source_quality_matrix)
     missing_evidence.extend(user_device_entity_resolution.get("missing_evidence", []))
+    source_commonality_cards = build_batch_source_commonality_cards(
+        source_quality_matrix,
+        1,
+        source_observations,
+        disabled_actions,
+    )
+    orchestration_artifacts = build_round_orchestration_artifacts(
+        round_id=1,
+        sampled_entities=[args.user_id],
+        source_plan=executed_source_plan,
+        source_quality_matrix=source_quality_matrix,
+        source_observations=source_observations,
+        source_commonality_cards=source_commonality_cards,
+        mode=args.mode,
+        disabled_actions=disabled_actions,
+    )
     evidence_card = build_evidence_card(
         args.task,
         args.user_id,
@@ -9299,12 +14484,22 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             "execution_path": "controlled_batch_followup_only",
             "manual_curl_or_single_action_fallback_allowed": False,
         },
+        "auto_next_hop": {
+            "content_social_followup_source_count": len(content_social_followup_items),
+            "content_social_followup_executed": bool(content_social_followup_results),
+            "feedback_enforcement_followup_source_count": len(feedback_enforcement_followup_items),
+            "feedback_enforcement_followup_executed": bool(feedback_enforcement_followup_results),
+            "track_followup_source_count": 1 if track_item and track_missing_device_id and candidate_device_id else 0,
+            "track_followup_executed": bool(track_item and track_missing_device_id and candidate_device_id),
+        },
         "track_device_resolution": track_device_resolution,
         "user_device_entity_resolution": user_device_entity_resolution,
         "batch_result": batch_result,
         "live_response_inspection": live_response_inspection,
         "transport_status_matrix": batch_result.get("transport_status_matrix", []),
         "source_observations": source_observations,
+        "source_commonality_cards": source_commonality_cards,
+        "orchestration_artifacts": orchestration_artifacts,
         "source_quality_matrix": source_quality_matrix,
         "evidence_card": evidence_card,
         "user_answer_draft": user_answer_draft,
@@ -9343,7 +14538,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--device-id")
     parser.add_argument("--rounds-json")
     parser.add_argument("--mode", choices=["dry_run", "live"], default="dry_run")
-    parser.add_argument("--browser-backed-base")
+    parser.add_argument("--browser-backed-base", default=DEFAULT_BROWSER_BACKED_BASE)
     parser.add_argument("--window-start-ms", type=int)
     parser.add_argument("--window-end-ms", type=int)
     parser.add_argument("--scene-hint", action="append")
@@ -9353,6 +14548,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--max-rounds", type=int)
     parser.add_argument("--max-deep-checked", type=int)
     parser.add_argument("--output-json")
+    parser.add_argument("--checkpoint-dir")
     parser.add_argument("--include-abnormal-publish", action="store_true")
     parser.add_argument("--include-same-device", action="store_true")
     parser.add_argument("--format", choices=["json", "pretty"], default="json")
@@ -9365,6 +14561,7 @@ def main(argv: list[str] | None = None) -> int:
     output_result = build_safe_stdout_result(result)
     if args.output_json:
         output_path = Path(args.output_json)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(output_result, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     if args.format == "json":
         print(json.dumps(output_result, ensure_ascii=False, indent=2, sort_keys=True))

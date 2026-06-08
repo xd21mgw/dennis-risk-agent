@@ -56,8 +56,12 @@
       ],
       "device_detail_fact_flow": {
         "status": "phase_c_contract_and_mock_runtime_minimum",
-        "primary_device_input": "weapon_inventory_graphData_riskData_or_future_weapon_device_detail",
+        "primary_device_input": "weapon_device_info_direct_device_detail",
+        "relation_entry_input": "weapon_inventory_graphData_riskData_for_user_device_graph_and_candidate_device_discovery",
         "supplemental_inputs": [
+          "weapon_device_app_list_app_environment",
+          "weapon_device_location_info_when_user_id_and_device_id_available",
+          "weapon_user_klink_status_account_device_session_context",
           "rcp_event_feature_list_event_context_only",
           "login_logs_search_login_device",
           "track_analysis_behavior_device_consistency_only"
@@ -2015,6 +2019,22 @@
           "weapon_device_relation_or_risk": {
             "action_name": "weapon_inventory",
             "endpoint": "/actions/weapon_inventory"
+          },
+          "weapon_device_detail_primary": {
+            "action_name": "weapon_device_info",
+            "endpoint": "/actions/weapon_device_info"
+          },
+          "weapon_device_app_environment": {
+            "action_name": "weapon_device_app_list",
+            "endpoint": "/actions/weapon_device_app_list"
+          },
+          "weapon_device_location_context": {
+            "action_name": "weapon_device_location_info",
+            "endpoint": "/actions/weapon_device_location_info"
+          },
+          "weapon_user_klink_context": {
+            "action_name": "weapon_user_klink_status",
+            "endpoint": "/actions/weapon_user_klink_status"
           },
           "login_log_online_source": {
             "action_name": "login_logs_search",

@@ -106,3 +106,36 @@ Web:
 
 - may show longer reports, evidence tables, and exports.
 - still obey field output classification and DataAgent boundaries.
+
+## 7. L1-L4 Responsibility Split
+
+Default responsibility split for Dennis field-fact and commonality workflow:
+
+- `L1` / seed observation layer:
+  - run registered primary sources from seed entity
+  - collect first-hop business facts and candidate anchors
+  - do not output final risk judgement or group conclusion
+
+- `L2` / anchor drilldown layer:
+  - drill down only with explicit anchors such as `device_id`, `photo_id`, `event_id`, `policy_code`, `comment_id`, `message_id`, `target_user_id`
+  - expand raw detail rows from follow-up sources
+  - keep `layer`, `parent_observation_id`, and `anchor_lineage`
+  - do not turn single-source / single-entity clues into final commonality
+
+- `L3` / unified commonality and candidate feature layer:
+  - merge `raw_detail_flat_table` and `standard_detail_table` across L1/L2 sources
+  - compare field-value commonality, field-combination commonality, sequence commonality, and cross-source support
+  - output `standard_field_commonality`, `sequence_comparison_features`, `candidate_features`, `commonality_matrix`, and candidate-only `group_profile_candidate`
+  - answer only “像不像本质候选”, not “已经证明高覆盖/高鲁棒/低误伤”
+
+- `L4` / validation layer:
+  - validate whether L3 candidate features are truly high-coverage, robust, and low false-positive
+  - requires baseline, control samples, lift, false-positive evaluation, wider coverage, and stability checks
+  - only here can wording upgrade from candidate-like to validated pattern
+
+Hard boundaries:
+
+- L1/L2 are for clue discovery, field acquisition, and bounded drilldown control.
+- L3 is for unified comparison and candidate feature generation.
+- L4 is for validation, not for first-time discovery.
+- `source completed`, `field extracted`, and `coverage_commonality` are not by themselves risk essence.

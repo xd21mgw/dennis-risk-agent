@@ -32,11 +32,20 @@
             {"device_id": "dev_A_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
             {"device_id": "dev_A_1", "device_field_key": "automation_service_detected", "device_field_name": "自动化服务", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
             {"device_id": "dev_A_1", "device_field_key": "script_risk", "device_field_name": "脚本风险", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "appLaunchCount", "device_field_name": "app启动次数", "device_field_value_or_safe_ref": 2, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "lockScreenTime", "device_field_name": "锁屏时间", "device_field_value_or_safe_ref": 0, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "installAccessibility", "device_field_name": "安装无障碍服务", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "frida", "device_field_name": "frida", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "xposed", "device_field_name": "xposed", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "mountRiskCheck", "device_field_name": "mount风险检测", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
             {"device_id": "dev_A_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "tool_env_cluster_7", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "packageName", "device_field_name": "安装包名", "device_field_value_or_safe_ref": "risk.tool.env", "device_field_type": "string", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
             {"device_id": "dev_A_1", "device_field_key": "login_device_id", "device_field_name": "登录设备", "device_field_value_or_safe_ref": "dev_A_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "登录设备"},
             {"device_id": "dev_A_1", "device_field_key": "backend_action_device_id", "device_field_name": "后端行为设备", "device_field_value_or_safe_ref": "dev_A_2", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "后端行为设备"},
             {"device_id": "dev_A_1", "device_field_key": "frontend_active_device_id", "device_field_name": "前端活跃设备", "device_field_value_or_safe_ref": "dev_A_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "Track 关联设备"},
-            {"device_id": "dev_A_1", "device_field_key": "unknown_device_vendor_flag", "device_field_name": "未知厂商字段", "device_field_value_or_safe_ref": "unknown_flag_A", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"}
+            {"device_id": "dev_A_1", "device_field_key": "unknown_device_vendor_flag", "device_field_name": "未知厂商字段", "device_field_value_or_safe_ref": "unknown_flag_A", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "unknownKernelTemplateFlag", "device_field_name": "未知内核模板字段", "device_field_value_or_safe_ref": "template_unknown_42", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"},
+            {"device_id": "dev_A_1", "device_field_key": "unknownClipboardReadBucket", "device_field_name": "未知剪切板读次数桶", "device_field_value_or_safe_ref": "clip_bucket_high", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"}
           ]
         },
         {
@@ -58,10 +67,20 @@
             {"device_id": "dev_B_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": false, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
             {"device_id": "dev_B_1", "device_field_key": "automation_service_detected", "device_field_name": "自动化服务", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
             {"device_id": "dev_B_1", "device_field_key": "script_risk", "device_field_name": "脚本风险", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "appLaunchCount", "device_field_name": "app启动次数", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "lockScreenTime", "device_field_name": "锁屏时间", "device_field_value_or_safe_ref": 0, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "installAccessibility", "device_field_name": "安装无障碍服务", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "frida", "device_field_name": "frida", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "xposed", "device_field_name": "xposed", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "mountRiskCheck", "device_field_name": "mount风险检测", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
             {"device_id": "dev_B_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "tool_env_cluster_7", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "packageName", "device_field_name": "安装包名", "device_field_value_or_safe_ref": "risk.tool.env", "device_field_type": "string", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
             {"device_id": "dev_B_1", "device_field_key": "login_device_id", "device_field_name": "登录设备", "device_field_value_or_safe_ref": "dev_B_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "登录设备"},
             {"device_id": "dev_B_1", "device_field_key": "backend_action_device_id", "device_field_name": "后端行为设备", "device_field_value_or_safe_ref": "dev_B_2", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "后端行为设备"},
-            {"device_id": "dev_B_1", "device_field_key": "frontend_active_device_id", "device_field_name": "前端活跃设备", "device_field_value_or_safe_ref": "dev_B_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "Track 关联设备"}
+            {"device_id": "dev_B_1", "device_field_key": "frontend_active_device_id", "device_field_name": "前端活跃设备", "device_field_value_or_safe_ref": "dev_B_1", "device_field_type": "string", "device_source_type": "行为-设备一致性", "device_role": "Track 关联设备"},
+            {"device_id": "dev_B_1", "device_field_key": "unknownKernelTemplateFlag", "device_field_name": "未知内核模板字段", "device_field_value_or_safe_ref": "template_unknown_42", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "unknownClipboardReadBucket", "device_field_name": "未知剪切板读次数桶", "device_field_value_or_safe_ref": "clip_bucket_high", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"},
+            {"device_id": "dev_B_1", "device_field_key": "rootCertificates", "device_field_name": "root证书", "device_field_value_or_safe_ref": 1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"}
           ]
         },
         {
@@ -81,7 +100,15 @@
             {"device_id": "dev_C_1", "device_field_key": "boot_duration", "device_field_name": "开机时长秒", "device_field_value_or_safe_ref": 86400, "device_field_type": "int", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
             {"device_id": "dev_C_1", "device_field_key": "lock_screen_enabled", "device_field_name": "是否启用锁屏", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
             {"device_id": "dev_C_1", "device_field_key": "sim_present", "device_field_name": "是否有 SIM", "device_field_value_or_safe_ref": true, "device_field_type": "boolean", "device_source_type": "设备使用画像", "device_role": "Weapon 设备"},
-            {"device_id": "dev_C_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "normal_app_env", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"}
+            {"device_id": "dev_C_1", "device_field_key": "installed_app_cluster", "device_field_name": "安装环境簇", "device_field_value_or_safe_ref": "normal_app_env", "device_field_type": "set_ref", "device_source_type": "安装列表 / 应用环境", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "hwModel", "device_field_name": "硬件型号", "device_field_value_or_safe_ref": "iPhone15,3", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "kernOsProductVersion", "device_field_name": "系统版本", "device_field_value_or_safe_ref": "17.5", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "hwNcpu", "device_field_name": "CPU 核数", "device_field_value_or_safe_ref": 6, "device_field_type": "int", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "diskFree", "device_field_name": "剩余磁盘", "device_field_value_or_safe_ref": 5376921600, "device_field_type": "int", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "hwMemsize", "device_field_name": "内存容量", "device_field_value_or_safe_ref": 3840311296, "device_field_type": "int", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "resolution", "device_field_name": "分辨率", "device_field_value_or_safe_ref": "2532*1170", "device_field_type": "string", "device_source_type": "设备基础信息", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "safe_status", "device_field_name": "硬件可信", "device_field_value_or_safe_ref": -1, "device_field_type": "int", "device_source_type": "设备风险标签", "device_role": "Weapon 设备"},
+            {"device_id": "dev_C_1", "device_field_key": "unknownIosKernelFlag", "device_field_name": "未知 iOS 内核字段", "device_field_value_or_safe_ref": "ios_unknown_normal", "device_field_type": "string", "device_source_type": "未知", "device_role": "Weapon 设备"}
           ]
         },
         {

@@ -7110,7 +7110,7 @@
 - test_id: SOURCE-PLAN-REQUIRED-001
 - input: 检查 `computer_use_poc/source_orchestration_plan_v1.yaml`。
 - expected_runtime_behavior: source_plan_exists_and_defines_required_p0
-- expected_output_boundary: 必须定义 `single_user_account_security` 的当前 browser-backed 70 action 主接口：`login_logs_search`、`weapon_inventory`；stop condition 必须禁止 login_log-only 停止和无 source matrix 完整结论。
+- expected_output_boundary: 必须定义 `single_user_account_security` 的当前 browser-backed 74 action 主接口：`login_logs_search`、`weapon_inventory`；stop condition 必须禁止 login_log-only 停止和无 source matrix 完整结论。
 
 ## 720. Login-log only cannot conclude
 
@@ -8676,23 +8676,23 @@ Text gate checks:
 - expected_runtime_behavior: partial_subtype_next_hop_decision_table
 - expected_output_boundary: Dennis must not collapse all gaps into `partial`; each chain uses `partial_transport`, `partial_fields`, `partial_baseline`, `partial_consistency`, or `partial_authorization_required`, then maps to `auto_realtime_next_hop`, `auto_plan_only_next_hop`, `user_authorized_next_hop`, or `blocked_next_hop`.
 
-- test_id: EVIDENCE-PROJECTION-BEFORE-OBSERVATION-001
-- input: login log capped body contains evidence anchors plus UI/debug/blob/repeated bulk and token/session/cookie control-chain fields.
-- expected_runtime_behavior: evidence_projection_applied
-- expected_output_boundary: Dennis applies evidence projection before observation, drops obvious useless/repeated/huge fields, preserves risk anchors and sensitive control-chain presence as safe handles, and never outputs credential raw values in final answer.
+- test_id: FACT-EXTRACTION-BEFORE-DISPLAY-PROJECTION-001
+- input: login log or Weapon capped body contains field-level evidence plus UI/debug/blob/repeated bulk and token/session/cookie control-chain fields.
+- expected_runtime_behavior: fact_extraction_before_display_projection
+- expected_output_boundary: Dennis uses pre-projection prepared body for fact tables/commonality and applies projection only to stdout/final answer/safe summary; credential raw values are still never output.
 
 Keyword check:
 
 ```bash
-grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|candidate_device_id_missing_after_resolution\|active_missing_evidence_next_hop_planner\|partial_login_log_parsed_from_capped_body\|service_body_visibility_gap_for_truncated_login_log\|login_log_window_shrink_anchor_missing\|active_backfill_recomputes_evidence_chain\|generic_missing_entity_next_hop_planner\|partial_transport\|partial_fields\|partial_baseline\|partial_consistency\|partial_authorization_required\|auto_realtime_next_hop\|user_authorized_next_hop\|evidence_projection_applied\|projection_not_business_normalizer\|projection_preserves_sensitive_control_chain_as_safe_handle\|photo_detail_next_hop_executes_before_track_resolution\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser\|service_body_visibility_gap\|parser_mapping_gap\|renderer_consumption_gap" computer_use_poc skills AGENTS.md 2>/dev/null
+grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_enters_missing_evidence\|candidate_device_id_missing_after_resolution\|active_missing_evidence_next_hop_planner\|partial_login_log_parsed_from_capped_body\|service_body_visibility_gap_for_truncated_login_log\|login_log_window_shrink_anchor_missing\|active_backfill_recomputes_evidence_chain\|generic_missing_entity_next_hop_planner\|partial_transport\|partial_fields\|partial_baseline\|partial_consistency\|partial_authorization_required\|auto_realtime_next_hop\|user_authorized_next_hop\|fact_extraction_before_display_projection\|display_projection_only\|projection_not_business_normalizer\|projection_preserves_sensitive_control_chain_as_safe_handle\|photo_detail_next_hop_executes_before_track_resolution\|content_chain_business_fields_missing\|behavior_chain_business_fields_missing\|publish_device_login_device_alignment_required\|login_network_error_subtyped\|raw_body_suppressed_not_body_missing\|offline_backfill_dynamic_authorization\|safe_raw_capped_body_parser_enabled\|dennis_safe_raw_capped_body_parser\|service_body_visibility_gap\|parser_mapping_gap\|renderer_consumption_gap" computer_use_poc skills AGENTS.md 2>/dev/null
 ```
 
-## 895. Browser-backed action_count=70 interface orchestration contract
+## 895. Browser-backed action_count=74 interface orchestration contract
 
 - test_id: INTERFACE-ACTION-COUNT-70-ASSET-TABLE-001
-- input: Current adjacent browser-backed service registry reports `Current callable action count: 70`.
+- input: Current adjacent browser-backed service registry reports `Current callable action count: 74`.
 - expected_runtime_behavior: phase2_interface_asset_table_registered
-- expected_output_boundary: Dennis references `interface_orchestration_contract_v1.md` and `browser_backed_interface_asset_table_v1.yaml`; current action fact is `action_count=70`, not the historical 37-action inventory. The 70 interfaces are grouped by business observation domain and call role, not rendered as 70 default execution nodes.
+- expected_output_boundary: Dennis references `interface_orchestration_contract_v1.md` and `browser_backed_interface_asset_table_v1.yaml`; current action fact is `action_count=74`, not the historical 37-action inventory. The 74 interfaces are grouped by business observation domain and call role, not rendered as 74 default execution nodes.
 
 - test_id: INTERFACE-ASSET-TABLE-DRIFT-CHECK-001
 - input: `python3 computer_use_poc/interface_asset_table_check.py --format json`
@@ -8902,10 +8902,80 @@ grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_ent
 - expected_runtime_behavior: device_candidate_features_from_field_values_and_combinations
 - expected_output_boundary: `device_id` is anchor-only; device candidate features cite `source_device_fields`, `field_combination`, support device/user/sample counts, false-positive risk, validation method, and `not_final_conclusion=true`. Field coverage cannot become risk commonality. Device environment similarity candidate requires different device_id values and multiple shared device fields.
 
+- test_id: SAMPLE-EXPAND-PHASE-C3-WEAPON-FIELD-FAMILY-MAPPING-001
+- input: `device_detail_multi_source_v1.json` with real Weapon-style keys such as `appLaunchCount`, `lockScreenTime`, `installAccessibility`, `frida`, `xposed`, `mountRiskCheck`, and `packageName`.
+- expected_runtime_behavior: weapon_device_real_field_family_mapping
+- expected_output_boundary: non-credential device rows remain row-level facts; mapped families include device freshness, low-life environment, automation/script, modification/adversarial, and app environment. Unknown fields are retained, but known high-value Weapon/iOS/Android keys must not remain mostly `unknown_device_field_family`; candidate features must cite `source_device_fields`.
+
+- test_id: SAMPLE-EXPAND-PHASE-C4-DEVICE-COMMONALITY-001
+- input: `device_detail_multi_source_v1.json` with Android/iOS field rows, shared unknown fields, high-value single fields, and field combinations.
+- expected_runtime_behavior: device_field_commonality_engine_handles_known_unknown_single_and_combination
+- expected_output_boundary: output includes `known_field_commonality`, `unknown_field_value_commonality`, `hard_single_field_signal`, `group_level_field_enrichment_commonality`, `field_combination_commonality`, `device_field_platform_summary`, and candidate features with `feature_type`, `field_values_or_safe_refs`, `support_ratio`, `platform_scope`, `priority_level`, `priority_score`, `reason_codes`, `missing_evidence`, `validation_method`, and `conclusion_boundary=candidate_only_not_final_conclusion`. Unknown fields are retained and can become candidate anomalies, but are not over-interpreted as automation/modification/group conclusions.
+
+- test_id: SAMPLE-EXPAND-PHASE-C5-DEVICE-FEATURE-RANKING-DENOISE-001
+- input: `device_detail_multi_source_v1.json` with many unknown values, suspected default enum fields, weak low-life fields, and hard adversarial fields.
+- expected_runtime_behavior: device_candidate_feature_ranking_and_denoise
+- expected_output_boundary: `groupname`/`grouplevel`/`safestatus` style unknown values are marked `suspected_default_value` and not high priority; weak fields such as no lock screen / no SIM / low launch count do not become `hard_single_field_signal_candidate` on a single device, but can become `group_level_field_enrichment_candidate` when support ratio is high; hard fields such as frida/xposed/root/hook/mountRisk can become `hard_single_field_signal_candidate`; user-visible answer shows Top 3-5 candidates rather than dumping all unknown commonality rows.
+
 - test_id: SAMPLE-EXPAND-PHASE-C-FRONTEND-ACTIVITY-BOUNDARY-001
 - input: fixture with login_device_id, backend_action_device_id, frontend_active_device_id, frontend_activity_signal.
 - expected_runtime_behavior: behavior_device_consistency_not_device_fingerprint
 - expected_output_boundary: Track activity / frontend activity stays in behavior_domain; only the consistency check between login/backend/frontend device roles can be expressed as `behavior_device_consistency_gap_candidate`, not as a device fingerprint feature.
+
+- test_id: SAMPLE-EXPAND-PHASE-D-SOURCE-L1L3-FIELD-COMMONALITY-001
+- input: `source_l1_l3_field_commonality_multi_source_v1.json` with login, account, content, social, feedback, and enforcement mock observations.
+- expected_runtime_behavior: source_family_detail_rows_flow_into_shared_L3_commonality
+- expected_output_boundary: output includes `standard_detail_table`, `login_detail_table`, `account_detail_table`, `user_behavior_summary_detail_table`, `content_detail_table`, `social_detail_table`, `feedback_detail_table`, `enforcement_detail_table`, `standard_field_commonality`, and `candidate_features` with `feature_type=source_field_value_commonality_candidate`, `validation_needed=true`, and `not_final_conclusion=true`. Coverage-only commonality does not support group candidates.
+
+- test_id: SAMPLE-EXPAND-PHASE-D-SOURCE-L1L3-NO-L4L5-LEAK-001
+- input: mixed source field commonality candidate without normal controls or baseline.
+- expected_runtime_behavior: L3_candidate_only_no_strategy_launch_or_lift
+- expected_output_boundary: no `confirmed_group`, no `fraud_ring`, no direct launch suggestion, no precision/lift/false-positive-rate claim. The answer can mention missing L4 validation but must not pretend baseline/lift was computed.
+
+- test_id: SAMPLE-EXPAND-PHASE-F-RAW-DETAIL-FLAT-TABLE-001
+- input: `source_l1_l3_field_commonality_multi_source_v1.json` with multi-row login/user-analysis records plus wide Weapon/RCP mock fields.
+- expected_runtime_behavior: raw_detail_flat_table_before_standard_detail_table
+- expected_output_boundary: output includes `raw_detail_flat_table`, `raw_detail_flat_table_summary`, `layer`, `parent_observation_id`, `anchor_lineage`, `raw_field_count`, `flattened_field_count`, `comparable_field_count`, `unknown_field_count`, and `filtered_field_count`; non-secret anchors such as user_id/device_id/IP/UA/event_id/policy_code are retained for internal comparison, while cookie/token/session/header/password/API key are redacted.
+
+- test_id: SAMPLE-EXPAND-PHASE-F-SEQUENCE-COMPARISON-001
+- input: multi-row `login_logs_search` and `archives_user_analysis` mock records.
+- expected_runtime_behavior: multi_row_event_sources_generate_sequence_inputs
+- expected_output_boundary: output includes `sequence_comparison_features` with `event_count`, `involved_record_indexes`, `involved_fields`, `support_record_count`, `risk_interpretation_candidate`, and `candidate_only_not_final_conclusion=true`. Sequence features flow into unified `candidate_features` and do not independently confirm ATO, group, or fraud.
+
+- test_id: SAMPLE-EXPAND-PHASE-F-WIDE-SOURCE-FLATTENING-001
+- input: wide single-object `weapon_device_info` and `rcp_event_feature_list` mock fields.
+- expected_runtime_behavior: single_object_wide_sources_expand_to_field_rows
+- expected_output_boundary: wide-source `flattened_field_count` is at least 50 in fixture; unknown fields remain rows with dictionary-review markers; no source is collapsed to “Weapon completed”, “device anchor exists”, or “strategy hit exists”.
+
+- test_id: SAMPLE-EXPAND-PHASE-F-CANDIDATE-FEATURE-CONTRACT-001
+- input: L3 candidate features from raw field commonality, sequence comparison, field combination, and unknown-field commonality.
+- expected_runtime_behavior: unified_candidate_features_contract
+- expected_output_boundary: every candidate feature has `feature_origin`, `source_names`, `field_paths`, `support_entity_count`, `support_record_count`, `priority_level`, `priority_score`, `reason_codes`, `validation_needed=true`, and `candidate_only_not_final_conclusion=true`; no L4/L5 terms such as lift, precision, false-positive rate, direct launch, confirmed_group, or fraud_ring appear.
+
+- test_id: SAMPLE-EXPAND-PHASE-F-L3-L4-ESSENCE-BOUNDARY-001
+- input: L3 candidate feature with strong sample-internal commonality and expert risk interpretation, but without normal controls, baseline, lift, false-positive rate, or cross-round stability.
+- expected_runtime_behavior: L3_assesses_candidate_essence_L4_validates_true_essence
+- expected_output_boundary: L3 may say the feature "looks like" a candidate essence based on statistical commonality plus risk expert judgement, with priority, false-positive risk, and validation method. It must not say the feature is proven true essence, robust, low-false-positive, ready to launch, or confirmed risk until L4 validation computes baseline/lift/stability.
+
+- test_id: SAMPLE-EXPAND-STAGE-G-SOURCE-INPUT-QUALITY-TABLE-001
+- input: mixed RCP / device / login / account / content / social / feedback-enforcement fixture with both thick and thin sources.
+- expected_runtime_behavior: source_input_quality_table_summarizes_l3_readiness
+- expected_output_boundary: output includes `source_input_quality_table` rows with `source_name`, `source_domain`, `source_role`, `source_shape`, `layer`, `raw_record_count`, `raw_field_count`, `flattened_field_count`, `comparable_field_count`, `unknown_field_count`, `source_payload_thin`, `parser_under_expanded`, `action_mapping_incomplete`, `auth_blocked`, `not_entered_main_chain`, `l3_input_quality`, and `next_action`. Low field count must be attributed to an explicit gap reason rather than “weak commonality”.
+
+- test_id: SAMPLE-EXPAND-STAGE-G-COMMONALITY-TYPE-SEPARATION-001
+- input: fixture with coverage rows, field-value rows, field-combination rows, sequence rows, and cross-domain candidate support.
+- expected_runtime_behavior: l3_commonality_types_are_separated
+- expected_output_boundary: output includes `l3_commonality_type_distribution` with separate counts for `coverage_commonality`, `field_value_commonality`, `field_combination_commonality`, `sequence_commonality`, and `cross_source_support_commonality`; coverage commonality cannot support high essence or final risk judgement.
+
+- test_id: SAMPLE-EXPAND-STAGE-G-CANDIDATE-ESSENCE-001
+- input: L3 candidate features across RCP, device, login, account, and content/social.
+- expected_runtime_behavior: candidate_features_have_non_null_essence_fields
+- expected_output_boundary: every candidate feature includes `essence_likeness`, `essence_reason`, and `essence_boundary`; unknown or under-explained candidates explicitly say the field family or behavior chain is not yet explained instead of leaving nulls.
+
+- test_id: SAMPLE-EXPAND-STAGE-G-TOP-FEATURE-SAMPLES-001
+- input: mixed source fixture where some lines are observed and some are blocked or template-only.
+- expected_runtime_behavior: top_candidate_feature_samples_respect_source_status
+- expected_output_boundary: output includes `candidate_feature_top_samples` for RCP, device, login, account, and content/social. Blocked or not-entered lines use `current_status=blocked|not_entered_main_chain|template_only` and `candidate_unavailable_due_to_source_gap`, rather than claiming no commonality exists.
 
 - test_id: SAMPLE-EXPAND-PHASE3-GAP-BOUNDARY-001
 - input: sample expand dry-run with no current platform evidence.
@@ -8931,6 +9001,31 @@ grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_ent
 - input: service exposes RCP governance helpers and Track auxiliary actions.
 - expected_runtime_behavior: explicit_scope_for_auxiliary_actions
 - expected_output_boundary: RCP helpers require event/policy/strategy-governance context; Track auxiliary actions are parameter/dimension discovery only. Neither enters ordinary ATO risk conclusion by default.
+
+- test_id: DEVICE-PRIMARY-SOURCE-FOLLOWUP-BLOCKED-001
+- input: `weapon_device_info` returns completed primary device detail, but one-degree user detail follow-up returns 400 / invalid_params.
+- expected_runtime_behavior: primary_followup_status_split
+- expected_output_boundary: output includes `primary_source_status=completed`, `followup_source_status=blocked`, `top_level_final_status=completed_primary_with_followup_blocked`, `status_contamination=true`, and `primary_source_impact=false`; the answer says primary device details completed and associated follow-up was blocked, not “device batch failed”.
+
+- test_id: LOGIN-RAW-DETAIL-EXPANSION-001
+- input: `login_logs_search` partial / response_limited with visible multi-row login records and nested detail JSON.
+- expected_runtime_behavior: login_raw_records_expand_to_detail_rows
+- expected_output_boundary: `login_detail_table` and `raw_detail_flat_table` retain user_id/device_id/IP/UA/app_version/login_type/login_source/region/province/city and unknown comparable fields. Commonality-eligible field target is >=20 when payload supports it; thin real payloads set `source_payload_thin=true`.
+
+- test_id: USER-ANALYSIS-RAW-DETAIL-EXPANSION-001
+- input: `archives_user_analysis` visible behavior/profile body with more than 20 scalar fields.
+- expected_runtime_behavior: user_analysis_raw_fields_expand_to_detail_rows
+- expected_output_boundary: `user_behavior_summary_detail_table` retains known and unknown comparable fields with field_family/value_comparable/source_quality; low field count is reported as `source_payload_thin` or parser gap, not silently accepted.
+
+- test_id: RCP-REGISTER-NEW-L2-FEATURE-DRILLDOWN-001
+- input: `rcp_snapshot` / eventList discovery returns REGISTER_NEW event anchors.
+- expected_runtime_behavior: rcp_event_anchor_drives_feature_list_l2
+- expected_output_boundary: runner builds L2 `rcp_event_feature_list` only from explicit event_id/eventType/queryTime/sourceId anchors, then feeds `strategy_event_feature_row_table`, `raw_detail_flat_table`, field commonality and candidate_features. No anchor means skipped_missing_anchor, not broad event fanout.
+
+- test_id: SOURCE-QUALITY-BUCKET-CONSISTENCY-001
+- input: one source in a bucket returns completed and another returns auth_failed despite HTTP 200 transport.
+- expected_runtime_behavior: source_quality_detail_over_transport_success
+- expected_output_boundary: source detail and bucket summary stay consistent; auth_failed/error_type rows remain auth_failed and do not get normalized to completed by successful HTTP transport.
 
 ## 896. Batch attack judgement three-mode closure
 
@@ -8964,13 +9059,72 @@ grep -R "user_device_entity_resolution_required\|candidate_device_id_missing_ent
 - expected_runtime_behavior: no_fake_precision_or_lift
 - expected_output_boundary: normal_support_rate, lift and precision are `not_evaluable`; only case-internal commonality and representative follow-up may be recommended.
 
-- test_id: BATCH-STRATEGY-CANDIDATE-PRIORITY-ACTION-GROUP-SMOKE-001
-- input: batch strategy suggestion request.
-- expected_runtime_behavior: strategy_candidates_with_priority_and_action_group
-- expected_output_boundary: each candidate includes priority and action_group; P0 maps to ready_for_controlled_gray_validation only, not auto-launch or auto-disposition; single weak signal or strategy hit itself cannot be P0.
+- test_id: BATCH-CANDIDATE-ACTION-GROUP-BOUNDARY-SMOKE-001
+- input: batch L1-L3 candidate feature request.
+- expected_runtime_behavior: candidate_action_groups_with_priority_and_boundary
+- expected_output_boundary: each candidate action includes priority and candidate_action_group; P0 maps to prioritize_validation only, not auto-launch, gray rollout, strategy recommendation, or auto-disposition; single weak signal or strategy hit itself cannot be P0.
+
+## 897. Stage G-R2 L3 choke-point closure
+
+- test_id: L3-ATTACK-CHAIN-COOCCURRENCE-RETAINED-001
+- input: 登录、设备、内容、社交、反馈/处置 source 在同轮形成链路共现。
+- expected_runtime_behavior: attack_chain_cooccurrence_retained_for_chain_reconstruction
+- expected_output_boundary: output `attack_chain_cooccurrence` with `chain_id`, `chain_steps`, `involved_sources`, `attack_chain_role`, `current_status`, and `missing_evidence`; chain cooccurrence remains candidate-only and is not auto-promoted to choke point.
+
+- test_id: L3-CHOKE-POINT-CANDIDATE-001
+- input: candidate features contain field-value, combination, sequence and cross-source evidence.
+- expected_runtime_behavior: derive_risk_choke_point_candidate_without_new_engine
+- expected_output_boundary: each candidate includes `risk_choke_point_type`, `choke_point_likeness`, `choke_point_reason`, `required_for_attack`, `easy_to_evade_if_changed`, `robustness`, `supporting_commonality_types`, and `supporting_attack_chain_ids`.
+
+- test_id: L3-FIELD-VALUE-COMPRESSION-FUNNEL-001
+- input: RCP / Weapon / 登录 / 内容等来源进入 L3，且存在百级或多行字段。
+- expected_runtime_behavior: retain_field_value_commonality_funnel
+- expected_output_boundary: output `field_value_commonality_funnel` with `raw_field_value_match_count`, `after_dedup_count`, `after_semantic_grouping_count`, `promoted_commonality_count`, `top_candidate_count`, `suppressed_count`, `suppressed_reasons`, and `sample_suppressed_field_families`.
+
+- test_id: L3-COVERAGE-NOT-CHOKE-POINT-001
+- input: 只有覆盖共性和弱字段覆盖。
+- expected_runtime_behavior: coverage_kept_as_visibility_only
+- expected_output_boundary: `coverage_commonality` cannot produce `choke_point_likeness=high`.
+
+- test_id: L3-GENERIC-OVERLAP-DOWNRANK-001
+- input: 存在 `multi_domain_anchor_overlap_candidate` 等泛化候选。
+- expected_runtime_behavior: generic_overlap_downranked
+- expected_output_boundary: generic overlap cannot be a top strong candidate unless it explains a concrete choke point.
+
+## 898. Stage F.5-R3 batch visibility and checkpointing
+
+- test_id: R3-REGISTER-NEW-SNAPSHOT-PLAN-001
+- input: 最新注册攻击 18 用户 batch rounds-json，scene_hint 含 `REGISTER_NEW`。
+- expected_runtime_behavior: keep_fast_query_and_enable_snapshot_discovery
+- expected_output_boundary: keep `rcp_fast_query_hbase` as RCP 快查入口, require `rcp_snapshot.enabled=true`, discover `REGISTER_NEW`, and only drill down `rcp_event_feature_list` from explicit event anchors.
+
+- test_id: R3-BATCH-CHUNKING-6-6-6-001
+- input: 18 个最新注册攻击用户。
+- expected_runtime_behavior: chunk_batch_into_three_rounds
+- expected_output_boundary: split into three 6-user chunks instead of a single giant batch.
+
+- test_id: R3-CHECKPOINT-PARTIAL-RESULT-001
+- input: `sample_expand_validate_batch` 多 chunk 执行。
+- expected_runtime_behavior: write_chunk_level_checkpoints
+- expected_output_boundary: output `checkpoint_files`, `latest_checkpoint_file`, `checkpoint_count`, and `partial_result_available`; partial checkpoints remain readable even if final batch hangs or times out.
+
+- test_id: R3-BATCH-HANG-NOT-SOURCE-NODATA-001
+- input: batch 卡住或 service 未回收。
+- expected_runtime_behavior: preserve_completed_source_status_and_mark_pending
+- expected_output_boundary: unreturned chunk/source must be marked `pending_or_timeout` / `batch_timeout_or_service_hang`, never `source_no_data`, and never as low-risk counter evidence.
+
+- test_id: R3-PROGRESS-VISIBILITY-001
+- input: 长时间运行的 batch。
+- expected_runtime_behavior: emit_progress_trace
+- expected_output_boundary: stdout/JSON expose `current_chunk_id`, `current_batch_index`, `current_running_sources`, `elapsed_seconds`, and `last_checkpoint_file`.
+
+- test_id: R3-TIMING-TRACE-001
+- input: live/dry_run batch with multiple chunks and follow-ups.
+- expected_runtime_behavior: emit_global_and_chunk_timing_trace
+- expected_output_boundary: output `plan_build_ms`, `chunk_build_ms`, `batch_submit_ms`, `batch_wait_ms`, `service_return_ms`, `artifact_build_ms`, `checkpoint_write_ms`, and per-chunk timing summary.
 
 Keyword check:
 
 ```bash
-grep -R "full_observation_mode\|sample_expand_validate_mode\|wide_table_aggregate_mode\|entity_resolution_first\|source_commonality_card\|multi_source_fusion\|cluster_summary_card\|attack_chain_renderer\|wide_table_aggregate_report\|ks_rc_bs.dws_risk_register_gang_user_week_feature_wide_di\|priority\|action_group\|ready_for_controlled_gray_validation\|combine_before_use\|monitor_or_expand_only" AGENTS.md computer_use_poc 2>/dev/null
+grep -R "full_observation_mode\|sample_expand_validate_mode\|wide_table_aggregate_mode\|entity_resolution_first\|source_commonality_card\|multi_source_fusion\|cluster_summary_card\|attack_chain_renderer\|wide_table_aggregate_report\|ks_rc_bs.dws_risk_register_gang_user_week_feature_wide_di\|priority\|candidate_action_group\|prioritize_validation\|combine_before_validation\|observe_or_expand_only" AGENTS.md computer_use_poc 2>/dev/null
 ```

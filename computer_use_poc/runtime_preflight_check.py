@@ -392,8 +392,8 @@ def main() -> int:
         "current_browser_backed_interface_contract",
         current_interface_contract,
         [
-            "interface_count: 70",
-            "action_count=70",
+            "interface_count: 74",
+            "action_count=74",
             "browser_backed_interface_asset_table_v1.yaml",
             "login_logs_search",
             "weapon_inventory",
@@ -488,8 +488,7 @@ def main() -> int:
                 asset_output = json.loads(asset_proc.stdout)
                 if (
                     not asset_output.get("validation_pass")
-                    or asset_output.get("service_allowlist_count") != 70
-                    or asset_output.get("asset_table_count") != 70
+                    or asset_output.get("asset_table_count") != asset_output.get("service_allowlist_count")
                     or asset_output.get("missing_in_asset")
                     or asset_output.get("extra_in_asset")
                 ):
@@ -498,7 +497,7 @@ def main() -> int:
                             "check": "interface_asset_table_check_passes",
                             "severity": "critical",
                             "status": "fail",
-                            "reason": "interface asset table must match 70 service actions with no missing/extra entries",
+                            "reason": "interface asset table must match service ACTION_ALLOWLIST with no missing/extra entries",
                         }
                     )
         except Exception as exc:  # noqa: BLE001 - preflight should report fail-closed reason.

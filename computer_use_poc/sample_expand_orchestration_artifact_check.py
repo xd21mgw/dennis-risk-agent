@@ -5,17 +5,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 from runtime_case_execution_runner import (
+    SourcePlanItem,
+    build_rcp_event_followup_source_plan,
+    build_status_attribution,
     build_missing_evidence,
     build_safe_batch_summary,
     build_safe_stdout_result,
     score_candidate_anchors,
 )
+from passthrough_observation_builder import build_safe_observation
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +35,9 @@ RCP_ORIGINAL_TAB_FEATURE_ROWS_FIXTURE = (
 )
 DEVICE_DETAIL_MULTI_SOURCE_FIXTURE = (
     ROOT / "computer_use_poc" / "test_fixtures" / "device_detail_multi_source_v1.json"
+)
+SOURCE_L1_L3_FIELD_COMMONALITY_FIXTURE = (
+    ROOT / "computer_use_poc" / "test_fixtures" / "source_l1_l3_field_commonality_multi_source_v1.json"
 )
 MOCK_SHAPED_FIXTURES = [
     (
@@ -98,6 +106,12 @@ MOCK_SHAPED_FIXTURES = [
         {"social_domain"},
         {"candidate_message_anchor"},
     ),
+    (
+        "source_l1_l3_field_commonality",
+        SOURCE_L1_L3_FIELD_COMMONALITY_FIXTURE,
+        {"behavior_domain", "account_domain", "content_domain", "social_domain", "feedback_domain", "enforcement_domain"},
+        {"candidate_device_id", "candidate_photo_id", "candidate_comment_id", "candidate_report_id", "candidate_punish_id"},
+    ),
 ]
 
 ROUND_REQUIRED_KEYS = [
@@ -124,8 +138,18 @@ ROUND_REQUIRED_KEYS = [
     "strategy_event_feature_row_commonality",
     "device_detail_table",
     "device_field_commonality",
+    "device_field_platform_summary",
     "device_environment_similarity_cluster_candidate",
     "behavior_device_consistency_gap_candidate",
+    "standard_detail_table",
+    "login_detail_table",
+    "account_detail_table",
+    "user_behavior_summary_detail_table",
+    "content_detail_table",
+    "social_detail_table",
+    "feedback_detail_table",
+    "enforcement_detail_table",
+    "standard_field_commonality",
     "group_profile_candidate",
     "candidate_features",
     "validation_plan",
@@ -252,6 +276,18 @@ DEVICE_ID_ONLY_FEATURE_FIELDS = {
     "login_device_id",
     "backend_action_device_id",
     "frontend_active_device_id",
+}
+DEVICE_NON_DEVICE_DETAIL_BLOCK_KEYS = {
+    "userbehavior",
+    "userinfo",
+    "usercache",
+    "userprofilechanged",
+    "userlastcomments",
+    "usermessageusercnt",
+    "userchargeamountfen30d",
+    "userbanstatus",
+    "query",
+    "cookies",
 }
 
 STRATEGY_ENTRY_LABEL_FIELDS = {"policy_code", "event_type", "risk_decision"}
@@ -1049,6 +1085,221 @@ def _validate_live_safe_summary_projection() -> tuple[list[str], dict[str, Any]]
     return errors, summary
 
 
+def _source_plan_item(source_id: str, action: str) -> SourcePlanItem:
+    return SourcePlanItem(
+        source_id=source_id,
+        action=action,
+        execution_group="independent_parallel",
+        depends_on=[],
+        timeout_class="standard_readonly",
+        failure_policy="non_blocking_partial",
+        source_priority="P0",
+        expected_observation=f"{action} synthetic regression source",
+        params={"user_id": "regression_user"},
+        timeout_ms=30_000,
+        required_fields=["user_id"],
+        window_policy="regression_window",
+        window_start_ms=0,
+        window_end_ms=1,
+    )
+
+
+def _validate_primary_followup_status_attribution() -> tuple[list[str], dict[str, Any]]:
+    primary_plan = [_source_plan_item("primary_weapon_device_info", "weapon_device_info")]
+    followup_plan = [_source_plan_item("followup_archives_user_profile", "archives_user_profile")]
+    primary_result = {
+        "batch_status": "completed",
+        "transport_status_matrix": {
+            "primary_weapon_device_info": {
+                "source_id": "primary_weapon_device_info",
+                "action": "weapon_device_info",
+                "source_status": "completed",
+                "category": "completed",
+                "http_status": 200,
+                "body_present": True,
+            }
+        },
+        "source_results": {},
+    }
+    followup_result = {
+        "batch_status": "harness_error",
+        "transport_status_matrix": {
+            "followup_archives_user_profile": {
+                "source_id": "followup_archives_user_profile",
+                "action": "archives_user_profile",
+                "source_status": "invalid_params",
+                "category": "blocked",
+                "error_type": "invalid_params",
+                "http_status": 400,
+                "body_present": True,
+                "invalid_params": True,
+            }
+        },
+        "source_results": {},
+    }
+    attribution = build_status_attribution(
+        primary_source_plan=primary_plan,
+        primary_batch_result=primary_result,
+        followup_source_plan=followup_plan,
+        followup_batch_result=followup_result,
+    )
+    errors: list[str] = []
+    if attribution.get("primary_source_status") != "completed":
+        errors.append("primary_source_status_not_completed")
+    if attribution.get("followup_source_status") != "blocked":
+        errors.append("followup_source_status_not_blocked")
+    if attribution.get("followup_blocked_count") != 1:
+        errors.append("followup_blocked_count_not_1")
+    if attribution.get("top_level_final_status") != "completed_primary_with_followup_blocked":
+        errors.append("top_level_status_not_completed_primary_with_followup_blocked")
+    if attribution.get("status_contamination") is not True:
+        errors.append("status_contamination_not_true")
+    if attribution.get("primary_source_impact") is not False:
+        errors.append("primary_source_impact_not_false")
+    return errors, attribution
+
+
+def _validate_raw_detail_expansion_handles() -> tuple[list[str], dict[str, Any]]:
+    login_records = [
+        {
+            "loginTime": 1780000000000 + index,
+            "loginType": "password",
+            "loginSource": "APP",
+            "deviceId": f"device_{index}",
+            "clientIp": f"10.0.0.{index}",
+            "userAgent": f"ua_{index}",
+            "appVersion": "14.5.1",
+            "province": "北京",
+            "city": "北京",
+            "loginResult": "success",
+            "operationType": "refresh",
+            "riskScene": "login_audit",
+            "deviceModel": "iPhone13,3",
+            "osVersion": "26.5",
+            "networkType": "wifi",
+            "asn": "AS12345",
+            "region": "华北",
+            "loginChannel": "ks",
+            "securityAction": "none",
+            "browserFingerprint": "fp_shared",
+            "resetLoginType": "normal",
+            "customFieldA": f"value_{index}",
+            "customFieldB": "shared_template",
+            "customFieldC": index,
+            "customFieldD": "retained_unknown",
+            "customFieldE": index % 2,
+        }
+        for index in range(3)
+    ]
+    login_observation = build_safe_observation(
+        source_id="login_raw_expansion",
+        action="login_logs_search",
+        source_payload={"body": {"data": {"logSearchModels": login_records}}},
+        transport_row={"source_id": "login_raw_expansion", "action": "login_logs_search", "quality_class": "partial"},
+        expected_business_fields=[],
+    )
+    user_analysis_body = {
+        "data": {
+            "records": [
+                {
+                    "operationTime": 1780000000000 + index,
+                    "operationType": "profile_change",
+                    "deviceId": f"device_{index}",
+                    "clientIp": f"10.1.0.{index}",
+                    "profileChange": "avatar",
+                    "followCnt30D": 100 + index,
+                    "fanCnt30D": 200 + index,
+                    "activeDays": 7,
+                    "registerTime": 1770000000000,
+                    "accountStatus": "normal",
+                    "punishStatus": "none",
+                    "protectionStatus": "enabled",
+                    "nicknameChange": index,
+                    "avatarChange": index,
+                    "bioChange": 0,
+                    "contentPublishCount": 10 + index,
+                    "recentBehaviorCounts": 100 + index,
+                    "profileCompleteness": "medium",
+                    "customBehaviorA": "shared_behavior_template",
+                    "customBehaviorB": index,
+                    "customBehaviorC": "retained_unknown",
+                    "customBehaviorD": index % 2,
+                }
+                for index in range(3)
+            ]
+        }
+    }
+    user_observation = build_safe_observation(
+        source_id="user_analysis_raw_expansion",
+        action="archives_user_analysis",
+        source_payload={"body": user_analysis_body},
+        transport_row={"source_id": "user_analysis_raw_expansion", "action": "archives_user_analysis", "quality_class": "completed"},
+        expected_business_fields=[],
+    )
+    login_fields = {
+        str(handle.get("field") or handle.get("canonical_field") or "")
+        for handle in login_observation.get("parsed_body_safe_handles", []) or []
+    }
+    user_fields = {
+        str(handle.get("field") or handle.get("canonical_field") or "")
+        for handle in user_observation.get("parsed_body_safe_handles", []) or []
+    }
+    errors: list[str] = []
+    if len(login_fields) < 20:
+        errors.append(f"login_raw_detail_fields_lt_20:{len(login_fields)}")
+    if len(user_fields) < 20:
+        errors.append(f"user_analysis_raw_detail_fields_lt_20:{len(user_fields)}")
+    if "customFieldA" not in login_fields or "customBehaviorA" not in user_fields:
+        errors.append("unknown_raw_fields_not_retained")
+    return errors, {
+        "login_field_count": len(login_fields),
+        "user_analysis_field_count": len(user_fields),
+        "login_unknown_field_retained": "customFieldA" in login_fields,
+        "user_analysis_unknown_field_retained": "customBehaviorA" in user_fields,
+    }
+
+
+def _validate_rcp_register_new_l2_followup_plan() -> tuple[list[str], dict[str, Any]]:
+    observations = [
+        {
+            "source_id": "round_1_entity_1_rcp_snapshot",
+            "action": "rcp_snapshot",
+            "quality_class": "completed",
+            "parsed_body_field_handles": [
+                {"field": "eventId", "canonical_field": "event_id", "value": "evt_register_new_1", "field_path": "$.data.list[0].eventId"},
+                {"field": "eventType", "canonical_field": "event_type", "value": "REGISTER_NEW", "field_path": "$.data.list[0].eventType"},
+                {"field": "queryTime", "canonical_field": "event_time", "value": 1780848177119, "field_path": "$.data.list[0].queryTime"},
+                {"field": "sourceId", "canonical_field": "event_id", "value": "5534768444", "field_path": "$.data.list[0].sourceId"},
+                {"field": "policyCode", "canonical_field": "policy_code", "value": "REGISTER_RISK_POLICY", "field_path": "$.data.list[0].policyCode"},
+            ],
+        }
+    ]
+    followup_plan = build_rcp_event_followup_source_plan(
+        1,
+        ["5534768444"],
+        observations,
+        window_start_ms=1780847877000,
+        window_end_ms=1780848178000,
+    )
+    feature_items = [item for item in followup_plan if item.action == "rcp_event_feature_list"]
+    errors: list[str] = []
+    if not feature_items:
+        errors.append("rcp_event_feature_list_followup_not_planned")
+    else:
+        params = feature_items[0].params
+        if params.get("eventId") != "evt_register_new_1":
+            errors.append("rcp_followup_event_id_not_from_event_anchor")
+        if params.get("source_id") != "5534768444":
+            errors.append("rcp_followup_source_id_not_from_source_anchor")
+        if params.get("eventType") != "REGISTER_NEW":
+            errors.append("rcp_followup_event_type_not_register_new")
+    return errors, {
+        "followup_source_count": len(followup_plan),
+        "rcp_event_feature_list_count": len(feature_items),
+        "first_feature_params": feature_items[0].params if feature_items else {},
+    }
+
+
 def _validate_partial_quality_lowers_anchor_score() -> tuple[list[str], dict[str, Any]]:
     source_observations = [
         {
@@ -1072,7 +1323,7 @@ def _validate_partial_quality_lowers_anchor_score() -> tuple[list[str], dict[str
             "produced_by": "partial_login_source",
             "observation_domain": "device_domain",
             "confidence": "current_observation",
-            "next_allowed_interfaces": ["track_analysis_check_data_ready", "weapon_inventory"],
+            "next_allowed_interfaces": ["weapon_device_info", "weapon_device_app_list", "track_analysis_check_data_ready", "weapon_inventory"],
             "cap_key": "device_anchor_top_k",
             "reason": "device_id_extracted_from_current_observation",
             "source_quality": "partial",
@@ -1193,6 +1444,59 @@ def _validate_runtime_strategy_request_detail_artifacts(result: dict[str, Any]) 
     strategy_features: list[dict[str, Any]] = []
     commonality_rows: list[dict[str, Any]] = []
     for round_index, round_result in enumerate(round_results, start=1):
+        for field in ("checkpoint_files", "latest_checkpoint_file", "checkpoint_count", "partial_result_available", "progress_trace", "timing_trace", "timing_summary"):
+            if field not in round_result:
+                errors.append(f"source_l1_l3_round_{round_index}_missing_{field}")
+        for progress_index, progress in enumerate(round_result.get("progress_trace", []) or [], start=1):
+            for field in (
+                "current_chunk_id",
+                "current_round_index",
+                "current_batch_index",
+                "current_source_group",
+                "current_running_sources",
+                "elapsed_seconds",
+                "last_checkpoint_file",
+                "completed_source_count",
+                "partial_source_count",
+                "blocked_source_count",
+                "pending_source_count",
+            ):
+                if field not in progress:
+                    errors.append(f"source_l1_l3_round_{round_index}_progress_{progress_index}_missing_{field}")
+        timing_trace = round_result.get("timing_trace", {}) or {}
+        global_timing = timing_trace.get("global", {}) if isinstance(timing_trace, dict) else {}
+        for field in (
+            "plan_build_ms",
+            "chunk_build_ms",
+            "batch_submit_ms",
+            "batch_wait_ms",
+            "service_return_ms",
+            "artifact_build_ms",
+            "checkpoint_write_ms",
+            "total_elapsed_ms",
+        ):
+            if field not in global_timing:
+                errors.append(f"source_l1_l3_round_{round_index}_timing_global_missing_{field}")
+        for timing_index, timing_row in enumerate(timing_trace.get("chunks", []) or [], start=1):
+            for field in (
+                "chunk_id",
+                "round_index",
+                "batch_index",
+                "source_group",
+                "action_count",
+                "submit_started_at",
+                "submit_finished_at",
+                "service_wait_started_at",
+                "service_returned_at",
+                "batch_elapsed_ms",
+                "completed_count",
+                "partial_count",
+                "blocked_count",
+                "timeout_count",
+                "pending_count",
+            ):
+                if field not in timing_row:
+                    errors.append(f"source_l1_l3_round_{round_index}_timing_row_{timing_index}_missing_{field}")
         artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
         rows = artifacts.get("strategy_event_request_detail_table", []) or []
         if not rows:
@@ -1381,13 +1685,41 @@ def _validate_runtime_device_detail_artifacts(
             and (
                 str(item.get("feature_name") or "").startswith("low_life_device")
                 or str(item.get("feature_name") or "").startswith("automation_or_script_device")
+                or str(item.get("feature_name") or "").startswith("modification_or_adversarial_device")
+                or str(item.get("feature_name") or "").startswith("risky_app_environment")
                 or str(item.get("feature_name") or "").startswith("device_environment_similarity")
                 or str(item.get("feature_name") or "").startswith("behavior_device_consistency")
+                or str(item.get("feature_name") or "").startswith("single_field_strong_signal")
+                or str(item.get("feature_name") or "").startswith("hard_single_field_signal")
+                or str(item.get("feature_name") or "").startswith("group_level_field_enrichment")
+                or str(item.get("feature_name") or "").startswith("unknown_field_value_commonality")
+                or str(item.get("feature_name") or "").startswith("unknown_field_value_enrichment")
             )
         ])
 
     if len(table_rows) < 20:
         errors.append(f"runtime_device_detail_rows_too_few:{len(table_rows)}")
+    mapped_family_counts: dict[str, int] = {}
+    for row in table_rows:
+        family = str(row.get("mapped_field_family") or "missing")
+        mapped_family_counts[family] = mapped_family_counts.get(family, 0) + 1
+    non_unknown_family_count = sum(
+        count for family, count in mapped_family_counts.items()
+        if family not in {"unknown_device_field_family", "missing"}
+    )
+    if non_unknown_family_count < 12:
+        errors.append(f"runtime_device_mapped_family_rows_too_few:{non_unknown_family_count}")
+    required_families = {
+        "device_basic",
+        "device_freshness",
+        "low_life_device_environment",
+        "automation_or_script",
+        "modification_or_adversarial",
+        "app_environment",
+    }
+    missing_families = sorted(family for family in required_families if mapped_family_counts.get(family, 0) <= 0)
+    if missing_families:
+        errors.append(f"runtime_device_missing_mapped_families:{','.join(missing_families)}")
     source_types = {str(row.get("device_source_type") or "") for row in table_rows}
     required_source_types = {"设备基础信息", "设备风险标签", "设备使用画像", "安装列表 / 应用环境", "账号-设备关系", "行为-设备一致性"}
     missing_source_types = sorted(required_source_types - source_types)
@@ -1401,6 +1733,14 @@ def _validate_runtime_device_detail_artifacts(
             errors.append(f"runtime_device_row_{row_index}_present_value_missing")
         if str(row.get("device_field_key") or "") == "frontend_activity_signal":
             errors.append(f"runtime_device_row_{row_index}_frontend_activity_as_device_field")
+        field_text = "".join(ch for ch in str(row.get("device_field_key") or "").lower() if ch.isalnum())
+        path_parts = [
+            "".join(ch for ch in part.lower() if ch.isalnum())
+            for part in re.split(r"[.\[\]]+", str(row.get("field_path") or ""))
+            if part
+        ]
+        if field_text in DEVICE_NON_DEVICE_DETAIL_BLOCK_KEYS or any(part in DEVICE_NON_DEVICE_DETAIL_BLOCK_KEYS for part in path_parts):
+            errors.append(f"runtime_device_row_{row_index}_non_device_block_in_device_detail")
 
     coverage_rows = [
         item for item in commonality_rows
@@ -1408,7 +1748,27 @@ def _validate_runtime_device_detail_artifacts(
     ]
     value_rows = [
         item for item in commonality_rows
-        if str(item.get("commonality_type") or "") == "field_value_commonality"
+        if str(item.get("commonality_type") or "") in {"field_value_commonality", "known_field_commonality"}
+    ]
+    known_value_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "known_field_commonality"
+    ]
+    unknown_value_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "unknown_field_value_commonality"
+    ]
+    single_field_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") in {"single_field_strong_signal", "hard_single_field_signal"}
+    ]
+    group_enrichment_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "group_level_field_enrichment_commonality"
+    ]
+    combination_rows = [
+        item for item in commonality_rows
+        if str(item.get("commonality_type") or "") == "field_combination_commonality"
     ]
     if not coverage_rows:
         errors.append("runtime_device_coverage_commonality_missing")
@@ -1419,6 +1779,44 @@ def _validate_runtime_device_detail_artifacts(
             errors.append(f"runtime_device_coverage_{item_index}_marked_as_risk")
     if not value_rows:
         errors.append("runtime_device_field_value_commonality_missing")
+    if not known_value_rows:
+        errors.append("runtime_device_known_field_commonality_missing")
+    if not unknown_value_rows:
+        errors.append("runtime_device_unknown_field_value_commonality_missing")
+    for item_index, item in enumerate(unknown_value_rows, start=1):
+        if item.get("known_field") is not False:
+            errors.append(f"runtime_device_unknown_commonality_{item_index}_known_field_not_false")
+        if str(item.get("field_semantics_status") or "") != "field_semantics_unknown":
+            errors.append(f"runtime_device_unknown_commonality_{item_index}_missing_unknown_semantics")
+        if item.get("validation_needed") is not True:
+            errors.append(f"runtime_device_unknown_commonality_{item_index}_validation_needed_missing")
+        if not item.get("priority_level") or item.get("priority_score") is None or not item.get("reason_codes"):
+            errors.append(f"runtime_device_unknown_commonality_{item_index}_priority_fields_missing")
+        if str(item.get("device_field_key") or "").lower() in {"groupname", "grouplevel", "safestatus", "safe_status"}:
+            if item.get("suspected_default_value") is not True:
+                errors.append(f"runtime_device_unknown_commonality_{item_index}_default_enum_not_marked")
+            if str(item.get("priority_level") or "") == "high":
+                errors.append(f"runtime_device_unknown_commonality_{item_index}_default_enum_high_priority")
+        suspicious_text = str(item.get("why_suspicious") or "")
+        if any(word in suspicious_text.lower() for word in ("confirmed", "automation confirmed", "fraud_ring", "团伙确认", "已坐实")):
+            errors.append(f"runtime_device_unknown_commonality_{item_index}_over_interpreted")
+    if not single_field_rows:
+        errors.append("runtime_device_single_field_strong_signal_missing")
+    for item_index, item in enumerate(single_field_rows, start=1):
+        family = str(item.get("device_field_family") or "")
+        if family in {"device_freshness", "low_life_device_environment"}:
+            errors.append(f"runtime_device_single_field_{item_index}_weak_field_promoted_to_hard")
+        if not item.get("priority_level") or item.get("priority_score") is None or not item.get("reason_codes"):
+            errors.append(f"runtime_device_single_field_{item_index}_priority_fields_missing")
+    if not group_enrichment_rows:
+        errors.append("runtime_device_group_level_field_enrichment_missing")
+    for item_index, item in enumerate(group_enrichment_rows, start=1):
+        if int(item.get("support_user_count") or item.get("support_count") or 0) < 2:
+            errors.append(f"runtime_device_group_enrichment_{item_index}_support_lt_2")
+        if item.get("baseline_missing") is not True and item.get("baseline_ratio") is None:
+            errors.append(f"runtime_device_group_enrichment_{item_index}_baseline_boundary_missing")
+    if not combination_rows:
+        errors.append("runtime_device_field_combination_commonality_missing")
 
     if not similarity_candidates:
         errors.append("runtime_device_similarity_candidate_missing")
@@ -1450,8 +1848,19 @@ def _validate_runtime_device_detail_artifacts(
             errors.append(f"runtime_device_candidate_{feature_index}_device_id_only_feature")
         if not feature.get("field_combination"):
             errors.append(f"runtime_device_candidate_{feature_index}_missing_field_combination")
-        if int(feature.get("support_user_count") or feature.get("support_sample_count") or 0) < 2:
+        min_support = 1 if feature_name.startswith(("single_field_strong_signal", "hard_single_field_signal")) else 2
+        if int(feature.get("support_user_count") or feature.get("support_sample_count") or 0) < min_support:
             errors.append(f"runtime_device_candidate_{feature_index}_support_lt_2")
+        if not feature.get("feature_type"):
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_feature_type")
+        if not feature.get("priority_level") or feature.get("priority_score") is None or not feature.get("reason_codes"):
+            errors.append(f"runtime_device_candidate_{feature_index}_priority_fields_missing")
+        if feature.get("support_ratio") is None or not feature.get("platform_scope"):
+            errors.append(f"runtime_device_candidate_{feature_index}_ranking_context_missing")
+        if not feature.get("field_values_or_safe_refs"):
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_field_values")
+        if feature.get("conclusion_boundary") != "candidate_only_not_final_conclusion":
+            errors.append(f"runtime_device_candidate_{feature_index}_missing_conclusion_boundary")
         if not feature.get("normal_user_false_positive_risk"):
             errors.append(f"runtime_device_candidate_{feature_index}_missing_false_positive_risk")
         if not feature.get("validation_method"):
@@ -1461,15 +1870,421 @@ def _validate_runtime_device_detail_artifacts(
         if feature_name.startswith("behavior_device_consistency"):
             if "不是纯设备指纹" not in str(feature.get("strategy_usage_boundary") or "") and "not" not in str(feature.get("strategy_usage_boundary") or ""):
                 errors.append(f"runtime_device_candidate_{feature_index}_consistency_boundary_missing")
+        if feature_name.startswith(("unknown_field_value_commonality", "unknown_field_value_enrichment")):
+            if str(feature.get("field_semantics_status") or "") != "field_semantics_unknown":
+                errors.append(f"runtime_device_candidate_{feature_index}_unknown_semantics_missing")
+            if "不得直接" not in str(feature.get("strategy_usage_boundary") or "") and "not" not in str(feature.get("strategy_usage_boundary") or ""):
+                errors.append(f"runtime_device_candidate_{feature_index}_unknown_boundary_missing")
+            if feature.get("suspected_default_value") is True and str(feature.get("priority_level") or "") == "high":
+                errors.append(f"runtime_device_candidate_{feature_index}_unknown_default_high_priority")
+        if feature_name.startswith("group_level_field_enrichment"):
+            if feature.get("baseline_missing") is not True:
+                errors.append(f"runtime_device_candidate_{feature_index}_group_enrichment_baseline_missing_not_marked")
+            if "团组" not in str(feature.get("black_gray_interpretation") or "") and "富集" not in str(feature.get("black_gray_interpretation") or ""):
+                errors.append(f"runtime_device_candidate_{feature_index}_group_enrichment_interpretation_missing")
+
+    if not any(str(feature.get("feature_name") or "").startswith(("single_field_strong_signal", "hard_single_field_signal")) for feature in device_candidate_features):
+        errors.append("runtime_device_single_field_candidate_missing")
+    if not any(str(feature.get("feature_name") or "").startswith(("unknown_field_value_commonality", "unknown_field_value_enrichment")) for feature in device_candidate_features):
+        errors.append("runtime_device_unknown_field_candidate_missing")
+    if not any(str(feature.get("feature_name") or "").startswith("group_level_field_enrichment") for feature in device_candidate_features):
+        errors.append("runtime_device_group_level_enrichment_candidate_missing")
+
+    platform_summary = {}
+    for round_result in round_results:
+        artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
+        summary = artifacts.get("device_field_platform_summary", {})
+        if isinstance(summary, dict):
+            platform_summary = summary
+            break
+    platforms = platform_summary.get("platforms", {}) if isinstance(platform_summary, dict) else {}
+    android_rows = int((platforms.get("android", {}) or {}).get("row_count") or 0)
+    ios_rows = int((platforms.get("ios", {}) or {}).get("row_count") or 0)
+    if android_rows <= 0:
+        errors.append("runtime_device_android_platform_rows_missing")
+    if ios_rows < 8:
+        errors.append(f"runtime_device_ios_rows_too_compressed:{ios_rows}")
+    if int(platform_summary.get("unknown_field_value_commonality_count") or 0) <= 0:
+        errors.append("runtime_device_platform_summary_unknown_commonality_missing")
+    if int(platform_summary.get("single_field_strong_signal_count") or 0) <= 0:
+        errors.append("runtime_device_platform_summary_single_signal_missing")
 
     return errors, {
         "device_detail_table_rows": len(table_rows),
         "device_source_types": sorted(source_types),
         "device_field_commonality_count": len(commonality_rows),
         "device_field_value_commonality_count": len(value_rows),
+        "device_known_field_commonality_count": len(known_value_rows),
+        "device_unknown_field_value_commonality_count": len(unknown_value_rows),
+        "device_single_field_strong_signal_count": len(single_field_rows),
+        "device_group_level_field_enrichment_count": len(group_enrichment_rows),
+        "device_field_combination_commonality_count": len(combination_rows),
         "device_similarity_candidate_count": len(similarity_candidates),
         "behavior_device_consistency_candidate_count": len(consistency_candidates),
         "device_candidate_feature_count": len(device_candidate_features),
+        "device_mapped_family_counts": mapped_family_counts,
+        "device_non_unknown_family_row_count": non_unknown_family_count,
+        "device_field_platform_summary": platform_summary,
+    }
+
+
+def _validate_weapon_device_detail_pre_projection_retention() -> tuple[list[str], dict[str, Any]]:
+    payload = {f"deviceField{i}": i for i in range(150)}
+    payload.update(
+        {
+            "deviceId": "ANDROID_SYNTHETIC_DEVICE",
+            "phoneModel": "synthetic-phone",
+            "clipboardStats": "{ pasteboardReadCount = 12; pasteboardWriteCount = 3; }",
+            "cookie": "must_not_be_retained",
+            "token": "must_not_be_retained",
+        }
+    )
+    observation = build_safe_observation(
+        source_id="synthetic_weapon_device_info",
+        action="weapon_device_info",
+        source_payload={"body": json.dumps({"data": payload}, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    rows = observation.get("device_detail_rows", []) or []
+    keys = {str(row.get("device_field_key") or "") for row in rows if isinstance(row, dict)}
+    errors: list[str] = []
+    if len(rows) < 153:
+        errors.append("weapon_device_detail_large_json_not_retained_as_rows")
+    if "token" in keys or "cookie" in keys:
+        errors.append("weapon_device_detail_retained_credential_key")
+    if "pasteboardreadcount" not in keys or "pasteboardwritecount" not in keys:
+        errors.append("weapon_device_detail_embedded_scalar_not_parsed")
+    if observation.get("fact_extraction_input_policy") != "pre_projection_prepared_body_credentials_filtered":
+        errors.append("weapon_device_detail_fact_extraction_not_pre_projection")
+    return errors, {
+        "device_detail_rows": len(rows),
+        "retained_large_json_fields": len([key for key in keys if key.startswith("devicefield")]),
+        "credential_keys_retained": sorted(key for key in keys if key in {"token", "cookie"}),
+        "embedded_scalar_keys_present": sorted(
+            key for key in keys if key in {"pasteboardreadcount", "pasteboardwritecount"}
+        ),
+        "fact_extraction_input_policy": observation.get("fact_extraction_input_policy"),
+    }
+
+
+SOURCE_L1_L3_TABLES = [
+    "login_detail_table",
+    "account_detail_table",
+    "user_behavior_summary_detail_table",
+    "content_detail_table",
+    "social_detail_table",
+    "feedback_detail_table",
+    "enforcement_detail_table",
+]
+
+SOURCE_L1_L3_ROW_REQUIRED_FIELDS = [
+    "source_name",
+    "source_domain",
+    "entity_type",
+    "entity_id",
+    "field_name",
+    "field_value_or_safe_ref",
+    "field_family",
+    "value_comparable",
+    "source_quality",
+    "extracted_from_observation_id",
+]
+
+RAW_DETAIL_FLAT_REQUIRED_FIELDS = [
+    "observation_id",
+    "parent_observation_id",
+    "layer",
+    "anchor_lineage",
+    "source_name",
+    "source_shape",
+    "entity_id",
+    "field_path",
+    "field_name",
+    "field_value_raw_or_ref",
+    "value_handling",
+    "redaction_reason",
+    "field_family",
+    "value_comparable",
+    "source_quality",
+    "is_unknown_field",
+    "needs_field_dictionary_review",
+]
+
+
+def _validate_source_l1_l3_field_commonality_artifacts(result: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    round_results = result.get("round_results", []) if isinstance(result, dict) else []
+    table_counts = {table_name: 0 for table_name in SOURCE_L1_L3_TABLES}
+    standard_commonality_count = 0
+    standard_candidate_count = 0
+    raw_flat_row_count = 0
+    sequence_feature_count = 0
+    wide_source_flattened_ok = False
+    multi_row_sequence_seen = False
+    forbidden_l4_terms = {"precision", "lift=", "误伤率=", "confirmed_group", "fraud_ring", "直接上线"}
+    for round_index, round_result in enumerate(round_results, start=1):
+        artifacts = round_result.get("orchestration_artifacts", {}) if isinstance(round_result, dict) else {}
+        raw_rows = artifacts.get("raw_detail_flat_table", []) or []
+        raw_flat_row_count += len(raw_rows)
+        if not raw_rows:
+            errors.append(f"source_l1_l3_round_{round_index}_raw_detail_flat_table_missing")
+        for row_index, row in enumerate(raw_rows, start=1):
+            if not isinstance(row, dict):
+                errors.append(f"source_l1_l3_round_{round_index}_raw_detail_row_{row_index}_not_object")
+                continue
+            for field in RAW_DETAIL_FLAT_REQUIRED_FIELDS:
+                if field not in row:
+                    errors.append(f"source_l1_l3_round_{round_index}_raw_detail_row_{row_index}_missing_{field}")
+            if row.get("field_name") in {"user_id", "device_id", "ip", "ua", "photo_id", "event_id", "policy_code"} and row.get("value_handling") in {"redacted", "safe_ref"}:
+                errors.append(f"source_l1_l3_round_{round_index}_raw_anchor_over_redacted_{row.get('field_name')}")
+            if str(row.get("field_name") or "").lower() in {"cookie", "token", "session", "header", "password", "authorization"} and row.get("value_handling") != "redacted":
+                errors.append(f"source_l1_l3_round_{round_index}_credential_field_not_redacted_{row.get('field_name')}")
+        raw_summary = artifacts.get("raw_detail_flat_table_summary", {}) or {}
+        source_input_quality_table = artifacts.get("source_input_quality_table", []) or []
+        if not source_input_quality_table:
+            errors.append(f"source_l1_l3_round_{round_index}_source_input_quality_table_missing")
+        for source_index, source_summary in enumerate(source_input_quality_table, start=1):
+            for field in (
+                "source_name",
+                "source_domain",
+                "source_role",
+                "source_shape",
+                "layer",
+                "raw_record_count",
+                "raw_field_count",
+                "flattened_field_count",
+                "comparable_field_count",
+                "unknown_field_count",
+                "filtered_field_count",
+                "source_payload_thin",
+                "parser_under_expanded",
+                "action_mapping_incomplete",
+                "auth_blocked",
+                "not_entered_main_chain",
+                "primary_blocked_reason",
+                "l3_input_quality",
+                "next_action",
+            ):
+                if field not in source_summary:
+                    errors.append(f"source_l1_l3_round_{round_index}_source_input_quality_{source_index}_missing_{field}")
+        for source_summary in raw_summary.get("sources", []) or []:
+            if source_summary.get("source_shape") == "single_object_wide_field" and int(source_summary.get("flattened_field_count") or 0) >= 50:
+                wide_source_flattened_ok = True
+            if source_summary.get("source_shape") == "multi_row_event" and int(source_summary.get("raw_record_count") or 0) >= 2:
+                multi_row_sequence_seen = True
+        sequence_rows = artifacts.get("sequence_comparison_features", []) or []
+        sequence_feature_count += len(sequence_rows)
+        if not sequence_rows:
+            errors.append(f"source_l1_l3_round_{round_index}_sequence_comparison_features_missing")
+        for seq_index, seq in enumerate(sequence_rows, start=1):
+            for field in (
+                "source_name",
+                "entity_id",
+                "event_count",
+                "sequence_feature_name",
+                "sequence_feature_type",
+                "involved_record_indexes",
+                "involved_fields",
+                "risk_interpretation_candidate",
+                "candidate_only_not_final_conclusion",
+            ):
+                if field not in seq:
+                    errors.append(f"source_l1_l3_round_{round_index}_sequence_{seq_index}_missing_{field}")
+            if seq.get("candidate_only_not_final_conclusion") is not True:
+                errors.append(f"source_l1_l3_round_{round_index}_sequence_{seq_index}_not_candidate_boundary")
+        standard_rows = artifacts.get("standard_detail_table", []) or []
+        if not standard_rows:
+            errors.append(f"source_l1_l3_round_{round_index}_standard_detail_table_missing")
+        for table_name in SOURCE_L1_L3_TABLES:
+            rows = artifacts.get(table_name, []) or []
+            table_counts[table_name] += len(rows)
+            if not rows:
+                errors.append(f"source_l1_l3_round_{round_index}_{table_name}_missing_or_empty")
+            for row_index, row in enumerate(rows, start=1):
+                if not isinstance(row, dict):
+                    errors.append(f"source_l1_l3_round_{round_index}_{table_name}_{row_index}_not_object")
+                    continue
+                for field in SOURCE_L1_L3_ROW_REQUIRED_FIELDS:
+                    if field not in row:
+                        errors.append(f"source_l1_l3_round_{round_index}_{table_name}_{row_index}_missing_{field}")
+                if row.get("source_quality") in {"no_data", "timeout", "auth_failed", "blocked"}:
+                    errors.append(f"source_l1_l3_round_{round_index}_{table_name}_{row_index}_gap_row_should_not_enter_detail_table")
+        commonality_rows = [
+            item for item in artifacts.get("standard_field_commonality", []) or []
+            if isinstance(item, dict)
+        ]
+        standard_commonality_count += len(commonality_rows)
+        if not any(str(item.get("commonality_type") or "") == "field_value_commonality" for item in commonality_rows):
+            errors.append(f"source_l1_l3_round_{round_index}_field_value_commonality_missing")
+        for item in commonality_rows:
+            if item.get("commonality_type") == "coverage_commonality":
+                if item.get("candidate_feature_eligible") is True or item.get("risk_commonality") is True:
+                    errors.append(f"source_l1_l3_round_{round_index}_coverage_commonality_promoted")
+        commonality_distribution = artifacts.get("l3_commonality_type_distribution", {}) or {}
+        for field in (
+            "coverage_commonality_count",
+            "field_value_commonality_count",
+            "field_combination_commonality_count",
+            "sequence_commonality_count",
+            "cross_source_support_commonality_count",
+        ):
+            if field not in commonality_distribution:
+                errors.append(f"source_l1_l3_round_{round_index}_commonality_distribution_missing_{field}")
+        if int(commonality_distribution.get("field_combination_commonality_count") or 0) <= 0:
+            errors.append(f"source_l1_l3_round_{round_index}_field_combination_commonality_not_promoted")
+        if int(commonality_distribution.get("cross_source_support_commonality_count") or 0) <= 1:
+            errors.append(f"source_l1_l3_round_{round_index}_cross_source_support_commonality_too_few")
+        attack_chain_rows = artifacts.get("attack_chain_cooccurrence", []) or []
+        if not attack_chain_rows:
+            errors.append(f"source_l1_l3_round_{round_index}_attack_chain_cooccurrence_missing")
+        for chain_index, chain in enumerate(attack_chain_rows, start=1):
+            for field in (
+                "chain_id",
+                "chain_steps",
+                "involved_sources",
+                "involved_entities",
+                "attack_chain_role",
+                "cooccurrence_summary",
+                "current_status",
+                "missing_evidence",
+                "candidate_only_not_final_conclusion",
+            ):
+                if field not in chain:
+                    errors.append(f"source_l1_l3_attack_chain_{chain_index}_missing_{field}")
+        field_value_funnel = artifacts.get("field_value_commonality_funnel", []) or []
+        if not field_value_funnel:
+            errors.append(f"source_l1_l3_round_{round_index}_field_value_commonality_funnel_missing")
+        for funnel_index, funnel in enumerate(field_value_funnel, start=1):
+            for field in (
+                "source_name",
+                "raw_field_value_match_count",
+                "after_dedup_count",
+                "after_semantic_grouping_count",
+                "promoted_commonality_count",
+                "top_candidate_count",
+                "suppressed_count",
+                "suppressed_reasons",
+                "sample_suppressed_field_families",
+                "over_compressed",
+                "compression_diagnosis",
+            ):
+                if field not in funnel:
+                    errors.append(f"source_l1_l3_field_value_funnel_{funnel_index}_missing_{field}")
+        candidate_features = [
+            item for item in artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict)
+        ]
+        source_candidate_features = [
+            item for item in artifacts.get("candidate_features", []) or []
+            if isinstance(item, dict)
+            and str(item.get("feature_type") or "") == "source_field_value_commonality_candidate"
+        ]
+        standard_candidate_count += len(source_candidate_features)
+        if len(source_candidate_features) < 4:
+            errors.append(f"source_l1_l3_round_{round_index}_source_candidate_features_too_few")
+        for feature_index, feature in enumerate(candidate_features, start=1):
+            for field in (
+                "feature_name",
+                "source_domains",
+                "source_fields",
+                "field_combination",
+                "support_sample_count",
+                "support_user_count",
+                "support_ratio",
+                "priority_score",
+                "priority_level",
+                "reason_codes",
+                "black_gray_interpretation",
+                "false_positive_risk",
+                "missing_evidence",
+                "validation_method",
+                "conclusion_boundary",
+                "feature_origin",
+                "source_names",
+                "field_paths",
+                "support_entity_count",
+                "candidate_only_not_final_conclusion",
+                "not_final_conclusion",
+                "validation_needed",
+                "essence_likeness",
+                "essence_reason",
+                "essence_boundary",
+                "risk_choke_point_type",
+                "choke_point_likeness",
+                "choke_point_reason",
+                "required_for_attack",
+                "easy_to_evade_if_changed",
+                "robustness",
+                "supporting_commonality_types",
+                "supporting_source_domains",
+                "supporting_attack_chain_ids",
+            ):
+                if field not in feature:
+                    errors.append(f"source_l1_l3_feature_{feature_index}_missing_{field}")
+            if feature.get("essence_likeness") is None or feature.get("essence_reason") in {None, ""}:
+                errors.append(f"source_l1_l3_feature_{feature_index}_essence_fields_empty")
+            if feature.get("choke_point_likeness") is None or feature.get("choke_point_reason") in {None, ""}:
+                errors.append(f"source_l1_l3_feature_{feature_index}_choke_point_fields_empty")
+            if feature.get("not_final_conclusion") is not True:
+                errors.append(f"source_l1_l3_feature_{feature_index}_not_final_conclusion_not_true")
+            if feature.get("validation_needed") is not True:
+                errors.append(f"source_l1_l3_feature_{feature_index}_validation_needed_not_true")
+            if feature.get("candidate_only_not_final_conclusion") is not True:
+                errors.append(f"source_l1_l3_feature_{feature_index}_candidate_boundary_missing")
+            if "coverage_commonality" in set(str(item) for item in feature.get("supporting_commonality_types", []) or []) and feature.get("choke_point_likeness") == "high":
+                errors.append(f"source_l1_l3_feature_{feature_index}_coverage_promoted_to_high_choke_point")
+            text = json.dumps(feature, ensure_ascii=False)
+            if any(term in text for term in forbidden_l4_terms):
+                errors.append(f"source_l1_l3_feature_{feature_index}_contains_forbidden_l4_or_final_term")
+        top_samples = artifacts.get("candidate_feature_top_samples", []) or []
+        if len(top_samples) < 5:
+            errors.append(f"source_l1_l3_round_{round_index}_candidate_feature_top_samples_too_few")
+        for sample_index, sample in enumerate(top_samples, start=1):
+            for field in (
+                "candidate_feature_name",
+                "feature_origin",
+                "source_support",
+                "evidence_commonality_types",
+                "core_commonality",
+                "attack_chain_support",
+                "risk_choke_point_type",
+                "choke_point_likeness",
+                "choke_point_reason",
+                "required_for_attack",
+                "easy_to_evade_if_changed",
+                "robustness",
+                "essence_likeness",
+                "essence_reason",
+                "false_positive_risk",
+                "missing_evidence",
+                "validation_method",
+                "current_status",
+                "candidate_only_not_final_conclusion",
+            ):
+                if field not in sample:
+                    errors.append(f"source_l1_l3_top_sample_{sample_index}_missing_{field}")
+        if any(str(sample.get("candidate_feature_name") or "") == "multi_domain_anchor_overlap_candidate" and str(sample.get("choke_point_likeness") or "") in {"high", "medium"} for sample in top_samples):
+            errors.append(f"source_l1_l3_round_{round_index}_generic_overlap_not_downranked")
+        group_candidate = artifacts.get("group_profile_candidate", {})
+        if isinstance(group_candidate, dict):
+            if group_candidate.get("not_confirmed_as_group") is not True:
+                errors.append(f"source_l1_l3_round_{round_index}_group_candidate_not_confirmed_flag_missing")
+            if group_candidate.get("supporting_selected_anchors") and not group_candidate.get("supporting_selected_batch_anchors"):
+                errors.append(f"source_l1_l3_round_{round_index}_group_candidate_context_anchor_mixed")
+    if raw_flat_row_count < 100:
+        errors.append("source_l1_l3_raw_detail_flat_table_too_small_for_stage_f")
+    if not wide_source_flattened_ok:
+        errors.append("source_l1_l3_wide_source_flattened_field_count_below_50")
+    if not multi_row_sequence_seen or sequence_feature_count < 1:
+        errors.append("source_l1_l3_multi_row_sequence_not_validated")
+    return errors, {
+        "table_counts": table_counts,
+        "raw_detail_flat_table_count": raw_flat_row_count,
+        "sequence_comparison_feature_count": sequence_feature_count,
+        "standard_field_commonality_count": standard_commonality_count,
+        "standard_candidate_feature_count": standard_candidate_count,
+        "wide_source_flattened_ok": wide_source_flattened_ok,
+        "multi_row_sequence_seen": multi_row_sequence_seen,
     }
 
 
@@ -1512,6 +2327,10 @@ def run_check() -> dict[str, Any]:
             runtime_device_errors, runtime_device_summary = _validate_runtime_device_detail_artifacts(mock_result)
             mock_errors_by_name[name].extend(runtime_device_errors)
             mock_results[name]["runtime_device_detail_summary"] = runtime_device_summary
+        if name == "source_l1_l3_field_commonality":
+            source_l1_l3_errors, source_l1_l3_summary = _validate_source_l1_l3_field_commonality_artifacts(mock_result)
+            mock_errors_by_name[name].extend(source_l1_l3_errors)
+            mock_results[name]["runtime_source_l1_l3_summary"] = source_l1_l3_summary
     errors = [f"fixed:{error}" for error in fixed_errors] + [
         f"mock_{name}:{error}"
         for name, fixture_errors in mock_errors_by_name.items()
@@ -1539,10 +2358,18 @@ def run_check() -> dict[str, Any]:
     errors.extend(f"rolling:{error}" for error in rolling_errors)
     live_safe_errors, live_safe_summary = _validate_live_safe_summary_projection()
     errors.extend(f"live_safe_summary:{error}" for error in live_safe_errors)
+    status_attribution_errors, status_attribution_summary = _validate_primary_followup_status_attribution()
+    errors.extend(f"status_attribution:{error}" for error in status_attribution_errors)
+    raw_expansion_errors, raw_expansion_summary = _validate_raw_detail_expansion_handles()
+    errors.extend(f"raw_detail_expansion:{error}" for error in raw_expansion_errors)
+    rcp_l2_errors, rcp_l2_summary = _validate_rcp_register_new_l2_followup_plan()
+    errors.extend(f"rcp_register_new_l2:{error}" for error in rcp_l2_errors)
     partial_quality_errors, partial_quality_summary = _validate_partial_quality_lowers_anchor_score()
     errors.extend(f"anchor_scoring:{error}" for error in partial_quality_errors)
     strategy_detail_errors, strategy_detail_summary = _validate_strategy_event_request_detail_fixture()
     errors.extend(f"strategy_event_request_detail:{error}" for error in strategy_detail_errors)
+    weapon_retention_errors, weapon_retention_summary = _validate_weapon_device_detail_pre_projection_retention()
+    errors.extend(f"weapon_device_detail_retention:{error}" for error in weapon_retention_errors)
 
     single_sample_payload = {
         "route_mode": "sample_expand_validate_mode",
@@ -1622,6 +2449,18 @@ def run_check() -> dict[str, Any]:
             "source_quality_partial": live_safe_summary.get("source_quality", {}).get("partial"),
             "raw_passthrough_omitted": live_safe_summary.get("safe_projection", {}).get("raw_passthrough_omitted"),
         },
+        "primary_followup_status_attribution": {
+            "validation_pass": not status_attribution_errors,
+            **status_attribution_summary,
+        },
+        "raw_detail_expansion": {
+            "validation_pass": not raw_expansion_errors,
+            **raw_expansion_summary,
+        },
+        "rcp_register_new_l2_feature_drilldown": {
+            "validation_pass": not rcp_l2_errors,
+            **rcp_l2_summary,
+        },
         "anchor_scoring_partial_quality": {
             "validation_pass": not partial_quality_errors,
             **partial_quality_summary,
@@ -1630,11 +2469,18 @@ def run_check() -> dict[str, Any]:
             "validation_pass": not strategy_detail_errors,
             **strategy_detail_summary,
         },
+        "weapon_device_detail_pre_projection_retention": {
+            "validation_pass": not weapon_retention_errors,
+            **weapon_retention_summary,
+        },
         "strategy_event_feature_rows": (
             mock_results.get("rcp_original_tab_feature_rows", {}).get("runtime_strategy_feature_row_summary", {})
         ),
         "device_detail_multi_source": (
             mock_results.get("device_detail_multi_source", {}).get("runtime_device_detail_summary", {})
+        ),
+        "source_l1_l3_field_commonality": (
+            mock_results.get("source_l1_l3_field_commonality", {}).get("runtime_source_l1_l3_summary", {})
         ),
         "single_sample_limited_commonality": {
             "validation_pass": not single_sample_errors,

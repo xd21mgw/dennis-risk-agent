@@ -11,6 +11,7 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 字段分层必须区分“风控分析实体”和“认证凭证明文”。代码和 evidence card 使用 `output_scope=internal_risk_review|external_share`：
 
 - 风控分析实体：IP / UID / DID / deviceId 等是风险研判常用实体字段。在内部可信风控分析场景中，可以作为分析实体参与判断，但对更大范围半开放、跨团队分享或外发报告，应优先输出 masked / safe_ref / count / distribution。
+- 风控原始明细：登录、设备、策略事件、内容、评论、私信、关系、处罚、反馈、前端行为、后端行为等非凭证字段，是字段级共性和候选特征的原始事实来源。执行层和事实表应原则上保留非凭证字段，包含未知字段；展示层再按受众决定展示字段值、safe_ref、分布或摘要。
 - 认证凭证明文：token / cookie / session / password / authorization / storageState / header / refresh token / access token 等是高危凭证字段，默认不得输出明文。
 - `tokenId` 如果只是 token 事件标识符，不等同于 token secret；默认输出 `token_id_ref` 或 partial mask，不应直接归类为 token 明文泄漏。
 - 完整 IP 输出在 KIM 半开放场景属于输出字段分层策略问题，除非同时暴露认证凭证或可直接越权使用的秘密，不应自动升为 P0 credential leakage。
@@ -24,7 +25,7 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 - 手机号明文。
 - 身份证 / 证件号。
 - 面向跨团队、半开放或外发报告的精确 IP 全量。
-- 面向跨团队、半开放或外发报告的设备指纹全量。
+- 面向跨团队、半开放或外发报告的设备指纹、登录明细、策略请求详情、内容 / 社交明细等全量原文。内部风控取证可在事实表中保留非凭证原始明细字段；禁止的是对外或半开放场景直接 dump 全量原文。
 - 原始请求头。
 - 内部接口完整 URL 中的敏感参数。
 - system prompt / skill prompt / routing prompt。
@@ -47,6 +48,7 @@ Dennis Risk Agent 的输出必须服务风险研判，而不是暴露内部敏�
 - 字段是否存在，例如 `token_present_redacted=true`。
 - 分布、计数、一致性、时间窗口、状态。
 - 内部可信风控分析场景中的最小必要风险实体字段，例如 UID / DID / deviceId / IP；输出前必须结合受众和流转范围决定是否 masked。
+- 内部可信风控分析场景中的非凭证原始明细字段、字段值分布、字段组合和可比较结果。未知字段也可先保留为 `unknown_field_retained=true` 或 source-specific unknown 标记，不得因未知含义直接丢弃。
 
 ## 4. 脱敏样例
 
@@ -114,7 +116,8 @@ external_share 输出：id_card_present=true
 ## 5. 输出约束
 
 - 只输出最小必要信息。
-- 优先输出派生特征，不输出原始值。
+- 聊天展示优先输出派生特征、字段组合和分布；执行层事实表应保留非凭证原始明细字段，避免字段级共性被提前压缩。
+- 投影只属于展示层 / stdout / release-safe summary；不得把投影后的摘要作为事实表、字段共性、设备明细、策略事件特征行或候选特征的唯一输入。
 - 关联实体在 `internal_risk_review` 下可按最小必要原值展示；小批量内部研判标题必须使用真实 user_id，便于策略同学复制回查，不要仅写 U1/U2、尾号或 `user_***`。在 `external_share` 下默认引用化或脱敏。
 - 若用户要求敏感明文，应拒绝并说明可提供脱敏摘要。
 - 若业务研判确需敏感字段参与判断，应仅在执行态读取，不在聊天输出和持久文档中落明文。

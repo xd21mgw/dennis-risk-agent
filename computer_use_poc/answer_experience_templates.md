@@ -102,7 +102,7 @@ Failure Triage Card 使用 `computer_use_poc/failure_triage_card_template_v1.md`
 
 ```yaml
 browser_backed_passthrough_envelope:
-  action_name: rcp_snapshot | weapon_inventory | login_logs_search | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
+  action_name: rcp_snapshot | weapon_inventory | weapon_device_info | weapon_device_app_list | weapon_device_location_info | weapon_user_klink_status | login_logs_search | track_analysis_check_data_ready | archives_user_profile | archives_user_analysis | archives_photo_search | archives_related_users | rcp_event_detail | rcp_event_feature_list | rcp_policy_tree_lookup
   source_id:
   platform:
   http_status:
@@ -142,6 +142,8 @@ dennis_passthrough_interpretation:
 `blocked` / `auth_failed` / `network_error` / `platform_error` 是 Dennis 侧 source quality，不是 runtime failure；必须继续输出 partial evidence card，不得启动浏览器调试、SSO 调试或手工凭据读取。
 
 默认 `output_scope=internal_risk_review`。内部研判 evidence card 可以展示最小必要风控实体字段，例如 UID / user_id、DID / device_id、IP、eventId、sourceId、hitFusePolicyCode、login method、logSource、timestamp。`output_scope=external_share` 时这些实体字段必须 masked。cookie / token / session / header / authorization / password、raw source body、raw login records、raw labelInfo、raw originalLog 任何模式都禁止输出。`sensitive_output=false` 只表示没有认证秘密和 raw dump，不表示没有展示风控实体字段。
+
+所有风控原始明细都不要被“安全摘要”提前压缩。登录、设备、策略事件、内容、评论、私信、关系、处罚、反馈、前端行为、后端行为等 source 中的非凭证字段，在执行层应进入标准明细表或 source-specific fact table：字段名、字段值或 safe_ref、字段类型、来源、用户 / 设备 / 内容 / 事件实体、是否可比较、source_quality 都要尽量保留。用户可见答案不 dump 完整 raw body，但应基于这些字段行输出“字段值共性 / 字段组合共性 / 候选特征 / 缺字段”，而不是只写“有登录 / 有设备锚点 / 有策略命中 / 有内容记录”。设备信息只是其中一类；iOS 和 Android 字段名、字段数不同是映射问题，不是删除理由。
 
 小批量 evidence 输出的用户标题同样受 `output_scope` 控制。`internal_risk_review` 必须直接展示可复制回查的真实 user_id，例如 `用户 772671837`、`用户 3481089791`；不得写成 `U1` / `U2`、尾号、`user_***1837`。`external_share` 才允许写 `用户 U1（user_***1837）`、`用户 U2（user_***9791）` 或用户 A/B。deviceId / DID、IP、eventId、sourceId、hitFusePolicyCode、logSource、method、timestamp 在 `internal_risk_review` 下可按最小必要原值展示；在 `external_share` 下必须 masked。
 
@@ -343,10 +345,10 @@ ATO 单案用户正文必须使用业务证据卡，不输出 runtime 过程 YAM
 - ATO 单案默认要先跑 `user_device_entity_resolution` 这一层：从登录日志、档案中心用户分析、作品搜索、Weapon 图谱和 Track readiness 中提取候选 `device_id` / DID，再驱动 Track、Weapon、发布设备对齐和历史设备基线。提取不到时写 `candidate_device_id_missing`，让 Track 进入 `missing_evidence`，不能让整个 batch 失败，也不能简单写“Track 未执行”。
 - `archives_user_analysis` 或 `archives_photo_search` 到达 transport 层不等于业务证据闭合。若无法提取改密 / 换绑 / 保护账号 / 发布操作时间线，写 `behavior_chain_business_fields_missing`；若无法提取 `photo_id` / 发布时间 / 发布设备 / 发布来源，写 `content_chain_business_fields_missing`。
 - 登录日志 `network_error` 必须细分为 `transport_error` / `service_gap` / `batch_contract_error` / `passthrough_interpretation_gap` / `invalid_params`，不能笼统作为最终解释。`response_too_large` / `body_truncated` 建议围绕可疑锚点缩小窗口，不是登录正常或登录很多的证据。
-- pure passthrough 下，`raw_body_handling=suppressed/capped` 是安全传输策略，不等于 `body_missing`；Dennis 可以保留 `device_id` / DID、发布设备、登录设备、IP/UA 派生、时间锚点和字段路径等 safe handle，但不得输出 raw body、cookie、token、session、header 或 password。
-- Dennis 可以在内部安全解析 `body` / `raw_body` / `response_body` / `upstream_body` / `raw_payload` / `capped_body` / `body_snippet` 等可见 body 字段；解析结果只保留 allowlisted 风控字段和字段路径，不把 raw full body 写入 final answer、evidence card 展示层或 run log。
-- 大响应进入 observation 前先做 evidence projection：只裁掉 UI/debug/blob/重复/空值等明显低价值字段，优先保留登录端、发布时间、设备、IP/UA、endpoint、operation、photo_id、policy/event 等风控锚点；token/session/cookie/header/password 字段名不得导致整行被删除，只保留存在性、路径、类型、长度、hash 等安全句柄，最终用户正文不输出原文。
-- 高价值 source 必须优先沉淀 source-specific safe parser：`login_logs_search` 抽登录时间、登录端、登录方式、设备、IP/UA；`archives_photo_search` 抽 photo_id、发布时间、发布端、发布设备、发布 IP/UA；`archives_user_analysis` 抽安全动作、操作时间、操作设备；`archives_related_users` / `weapon_inventory` 抽扩散设备和 user-device 图谱线索。
+- pure passthrough 下，`raw_body_handling=suppressed/capped` 是展示层 / 传输层安全策略，不等于 `body_missing`，也不等于执行层只能保留少数字段。Dennis 必须保留 `device_id` / DID、发布设备、登录设备、IP/UA 派生、时间锚点、字段路径，以及各 source 中的非凭证字段行；不得输出 raw body、cookie、token、session、header 或 password。
+- Dennis 可以在内部安全解析 `body` / `raw_body` / `response_body` / `upstream_body` / `raw_payload` / `capped_body` / `body_snippet` 等可见 body 字段；字段级事实表、锚点、设备明细、RCP 特征行必须使用 pre-projection prepared body，不把展示层投影摘要当共性分析输入。
+- 展示层 / stdout / safe summary 才做 projection：只裁掉 UI/debug/blob/重复/空值等明显低价值字段和纯凭证控制材料。对所有 source，非凭证原始明细字段默认进入事实抽取，不因未知字段名、字段量大、平台差异或 source 类型差异而提前压缩；token/session/cookie/header/password 字段名不得导致整行风险事实被误删，只剔除真正凭证材料，最终用户正文不输出凭证明文。
+- 高价值 source 必须优先沉淀 source-specific safe parser：`login_logs_search` 抽登录时间、登录端、登录方式、设备、IP/UA；`archives_photo_search` 抽 photo_id、发布时间、发布端、发布设备、发布 IP/UA；`archives_user_analysis` 抽安全动作、操作时间、操作设备；`archives_related_users` / `weapon_inventory` 抽扩散设备和 user-device 图谱线索；`weapon_device_info`、`weapon_device_app_list`、`weapon_device_location_info`、`weapon_user_klink_status` 抽设备详情、应用环境、位置网络和账号-设备会话字段。
 - `login_logs_search` 分类先看 transport envelope：`2xx + body_present=true + body_truncated=true` 写 `transport_success + partial_observation_available / response_too_large`；只有 401/403、`auth_redirect_detected=true`、`api_code=302` 或明确 `error_type` 才写 auth/permission；`ok=false + network_error` 才写 service fetch failure。
 - `login_logs_search raw_body_handling=json_array_capped` 时，只把 `returned_records` 对应的 `upstream.capped_body.data.logSearchModels` 当 partial evidence；`observed_records`、`returned_records`、`missing_records`、`cap_reason=byte_limit` 必须进入 source_quality 和证据边界，不能把 missing records 当 no_data。
 - 已有 `photo_id` 且发布事实链缺发布端、发布设备、发布 IP/UA、`uploadSource` 或 `photoMethod` 时，Dennis 在 execution mode 下应先通过 controlled batch 自动执行 `archives_photo_profile + archives_photo_meta`，再用解析出的发布设备 / DID 驱动 Track / 设备一致性链；如果返回 body visible，就把字段回填到发布事实链和设备一致性链；如果 HTTP 200 但 body suppressed 或字段缺失，写 `service_body_visibility_gap` / `parser_mapping_gap` / `publish_device_missing_after_photo_meta`。
@@ -2125,22 +2127,22 @@ required_validation:
   expected_if_path_A_true:
   expected_if_path_B_true:
   priority: P0 | P1 | P2
-  action_group: ready_for_controlled_gray_validation | combine_before_use | monitor_or_expand_only
+  candidate_action_group: prioritize_validation | combine_before_validation | observe_or_expand_only
   suggested_data_source:
   boundary_note:
 
 ## 6. 查询路径建议
-P0 / ready_for_controlled_gray_validation:
+P0 / prioritize_validation:
 - 查什么：
 - 为了验证什么：
 - 预期看到什么：
 
-combine_before_use:
+combine_before_validation:
 - 查什么：
 - 为了验证什么：
 - 预期看到什么：
 
-monitor_or_expand_only:
+observe_or_expand_only:
 - 查什么：
 - 为了验证什么：
 - 预期看到什么：
@@ -2228,7 +2230,7 @@ monitor_or_expand_only:
   expected_if_path_A_true: 本人客户端发布会表现为常用设备、常用 IP、正常客户端版本和常规发布链路。
   expected_if_path_B_true: 异常发布会出现非常用 IP / UA / SDK / 设备指纹或非典型发布入口。
   priority: P0
-  action_group: ready_for_controlled_gray_validation
+  candidate_action_group: prioritize_validation
   suggested_data_source: 发布接口日志 / upload-publish 链路
   boundary_note: API 调用异常不等于协议破解，可能只是合法 token 被复用。
 - evidence_name: Token 使用证据卡
@@ -2237,7 +2239,7 @@ monitor_or_expand_only:
   expected_if_path_A_true: token 在异常 IP / UA / 设备环境调用账号态或发布接口。
   expected_if_path_B_true: token 使用环境与本人常用客户端一致。
   priority: P0
-  action_group: ready_for_controlled_gray_validation
+  candidate_action_group: prioritize_validation
   suggested_data_source: token 使用日志 / token 刷新 / passToken 链路
   boundary_note: 无新增登录不代表 token 未被复用。
 - evidence_name: OAuth 授权证据卡
@@ -2246,7 +2248,7 @@ monitor_or_expand_only:
   expected_if_path_A_true: 异常时间前后存在新增授权、异常 scope 或第三方授权调用。
   expected_if_path_B_true: 无新增授权，异常行为只出现在登录态 token 链路。
   priority: P1
-  action_group: combine_before_use
+  candidate_action_group: combine_before_validation
   suggested_data_source: OAuth / 第三方授权记录
   boundary_note: 授权存在不等于滥用，需要看 scope 与后续调用。
 - evidence_name: 登录日志证据卡
@@ -2255,7 +2257,7 @@ monitor_or_expand_only:
   expected_if_path_A_true: 异常时间附近出现新设备、新 IP、新登录方式或验证链路。
   expected_if_path_B_true: 无新增登录，但 token / 发布接口有异常调用。
   priority: P1
-  action_group: combine_before_use
+  candidate_action_group: combine_before_validation
   suggested_data_source: 统一登录日志 / 离线登录日志
   boundary_note: 在线日志窗口不完整时，no_data 不能作为强反证。
 - evidence_name: 关联发布证据卡
@@ -2264,12 +2266,12 @@ monitor_or_expand_only:
   expected_if_path_A_true: 只有单账号单次异常，关联 IP / UA / 文案不聚集。
   expected_if_path_B_true: 同 IP / UA / token 使用环境关联多个账号发布相似色情或引流内容。
   priority: P2
-  action_group: monitor_or_expand_only
+  candidate_action_group: observe_or_expand_only
   suggested_data_source: 异常 IP / UA / 发布素材关联分析
   boundary_note: 关联聚集只能作为补证，不是单独定性依据。
 
 ## 6. 查询路径建议
-P0 / ready_for_controlled_gray_validation:
+P0 / prioritize_validation:
 - 查什么：发布接口日志 / upload-publish 链路。
 - 为了验证什么：违规作品是否来自本人常用客户端还是异常发布来源。
 - 预期看到什么：发布 IP / UA / 设备 / SDK / 入口和本人常用环境是否一致。
@@ -2277,7 +2279,7 @@ P0 / ready_for_controlled_gray_validation:
 - 为了验证什么：是否存在无新增登录但账号态 token 被异环境复用。
 - 预期看到什么：异常时间 token 调用环境和发布链路是否一致。
 
-combine_before_use:
+combine_before_validation:
 - 查什么：OAuth / 第三方授权记录。
 - 为了验证什么：是否由助力页诱导授权导致授权滥用。
 - 预期看到什么：异常授权、异常 scope、授权后账号态调用。
@@ -2285,7 +2287,7 @@ combine_before_use:
 - 为了验证什么：是否存在新设备盗号登录。
 - 预期看到什么：异常设备 / IP / 登录方式；如果超出在线窗口，需要离线日志。
 
-monitor_or_expand_only:
+observe_or_expand_only:
 - 查什么：异常 IP / UA 关联账号反查。
 - 为了验证什么：是否为批量盗号发布色情 / 引流内容。
 - 预期看到什么：多个账号、相似内容、相同调用环境聚集。
@@ -2990,9 +2992,9 @@ candidate_only 场景：
 - 离线处置类 TASK 事件:
 
 高价值下一批验证：
-- P0 / ready_for_controlled_gray_validation:
-- P1 / combine_before_use:
-- P2 / monitor_or_expand_only:
+- P0 / prioritize_validation:
+- P1 / combine_before_validation:
+- P2 / observe_or_expand_only:
 
 参数缺口：
 - policyTreeList 参数格式:
@@ -3232,10 +3234,12 @@ ANTICRAWL 家族当前是 candidate_only / query_plan_only，缺真实命中 sou
 - no_data / blocked / timeout / partial 不作为无风险反证。
 - 策略命中不单独定性。
 - DataAgent/Hive pending 不等于已验证；执行必须逐次授权。
-- 策略建议必须同时输出 `priority` 与 `action_group`：P0 =
-  `ready_for_controlled_gray_validation`，P1 = `combine_before_use`，P2 =
-  `monitor_or_expand_only`。P0 只表示可进入受控灰度验证，不表示自动上线、
-  自动拦截或直接处置。
+- L3 的职责是判断候选特征“像不像本质”：基于当前样本的字段值共性、字段组合共性、序列共性、跨 source 支撑，再结合风控专家判断，给出候选本质解释、优先级、误伤点和验证方法。L3 不能写“已经证明高覆盖 / 高鲁棒 / 低误伤 / 可上线”。
+- L4 的职责是验证候选特征“是不是真本质”：用更大样本、正常对照、baseline、support_ratio、lift、误伤率、时间稳定性和分群稳定性验证。没有 L4 数据验证时，只能写“候选本质特征 / 值得验证”，不能写成最终风险本质或策略结论。
+- L1-L3 只输出 `priority` 与 `candidate_action_group`：P0 =
+  `prioritize_validation`，P1 = `combine_before_validation`，P2 =
+  `observe_or_expand_only`。P0 只表示优先补证 / 准备后续授权验证，不表示自动上线、
+  自动拦截、灰度发布或直接处置。
 
 ### full_observation_mode
 
@@ -3258,8 +3262,8 @@ cluster_summary_card：主簇、次簇、正常/证据不足簇、边界样本�
 六、攻击链路还原
 每个 cluster 的 chain_status、强证据、推断节点和缺失节点。
 
-七、候选特征与策略建议
-同时输出 priority 与 action_group，给覆盖、准召或不可评估、误伤边界和验证数据。
+七、候选特征与候选动作分组
+同时输出 priority 与 candidate_action_group，给当前字段支持、误伤边界、缺口和下一步验证数据；L1-L3 不输出准召、lift 或上线建议。
 
 八、缺失证据与下一步补查
 还缺哪些 source / 字段 / 窗口；哪些需要用户授权。
@@ -3272,7 +3276,7 @@ cluster_summary_card：主簇、次簇、正常/证据不足簇、边界样本�
 
 ```text
 一、批量结论：8 个样本中 6 个共享 WEB 登录后内容承接，更像 ATO 后异常发布簇；2 个样本是稳定历史设备，单列为边界样本。
-七、策略建议：P0 / ready_for_controlled_gray_validation 是“WEB quickLogin + 非历史设备发布 + 内容导流命中”组合；单独策略命中只能放入 P1 / combine_before_use 或 P2 / monitor_or_expand_only。
+七、候选动作分组：P0 / prioritize_validation 是“WEB quickLogin + 非历史设备发布 + 内容导流命中”组合的优先补证方向；单独策略命中只能放入 P1 / combine_before_validation 或 P2 / observe_or_expand_only，不能写成策略建议。
 ```
 
 ### sample_expand_validate_mode
@@ -3296,8 +3300,8 @@ decision.action 与原因。70% 是验证阈值，不是自动处置阈值。
 六、攻击链假设
 cluster 级 partial / hypothesis chain。
 
-七、候选特征和策略建议
-同时输出 priority 与 action_group；P0 仍只是受控灰度验证，不是自动处置。
+七、候选特征和候选动作分组
+同时输出 priority 与 candidate_action_group；P0 仍只是优先补证 / 准备后续验证，不是灰度发布、策略建议或自动处置。
 
 八、缺失证据与结论边界
 next_action_required_authorization；未授权 DataAgent/Hive 不写成已完成。
@@ -3479,7 +3483,7 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 
 强制边界：
 
-- 不能把 70 个 registered interfaces 展开成 70 个默认调用节点。
+- 不能把 registered interfaces 展开成一个接口一个默认调用节点。
 - 同一接口可按输入动态切层：例如 `archives_photo_meta` 在直接输入 `photo_id` 时可作为 L1；在 `user_id` 场景由 `photo_id` 触发时是 L2。
 - `relation_expansion` 必须带 `expansion_depth`、`entity_cap`、`edge_type`、`edge_strength`、`stop_reason`，不得变全图扫描。
 - `no_data`、`skipped`、`timeout`、`missing_contract`、`cap_reached`、`service_contract_gap` 只能进入 source_quality / missing_evidence，不能当低风险反证。
@@ -3535,6 +3539,7 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 - 策略侧候选特征必须来自请求详情字段组合，例如“同 request_path + 同 action_object + 短 login-to-action 时间差 + 前端弱活跃但后端动作存在”。只看到策略命中集中时，候选特征栏写“当前缺 request detail，暂不能生成策略侧核心特征”。
 - 如果来自 `rcp_event_feature_list`，候选特征必须列出 `source_feature_keys`，例如 `phoneModel + clientId + channel + locale`，并说明哪些是字段值共性、哪些只是字段覆盖。不能把 feature row 先压成“设备字段正常 / 有策略命中 / source completed”。
 - 如果只有 device_id，只能写“设备锚点”，不能写成设备指纹特征。
+- 候选特征的“像不像本质”属于 L3：可以结合统计共性和风控解释给 `priority_score` / `priority_level`，但必须保留 `validation_needed=true` 和 `not_final_conclusion=true`。候选特征的“是不是真本质”属于 L4：需要正常对照、baseline/lift、误伤率、跨时间窗稳定性和扩量验证后才能升级表达。
 
 五、证据缺口
 - 样本数、partial 登录日志、未授权离线验证、请求详情字段缺失、设备指纹字段缺失、正常对照缺失、锚点抽取缺口、反证不足。
@@ -3607,7 +3612,7 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
 设备明细答案口径：
 
 - 设备阶段优先看 `device_detail_table`，不是“设备摘要”。每个设备字段应保留为明细行：用户、设备、安全值或 safe_ref、字段名、字段类型、来源、是否可比较、source_quality。
-- Weapon `weapon_inventory` / graphData / riskData 是设备主输入；RCP `rcp_event_feature_list` 只能补事件发生时的客户端/设备上下文字段；登录日志和 Track 只用于设备链路一致性补证。
+- Weapon 设备输入按角色拆分：`weapon_inventory` / graphData 是关系和候选设备发现入口；`weapon_device_info` 是设备详情主输入；`weapon_device_app_list`、`weapon_device_location_info`、`weapon_user_klink_status` 是应用环境、位置网络和账号-设备会话补充。RCP `rcp_event_feature_list` 只能补事件发生时的客户端/设备上下文字段；登录日志和 Track 只用于设备链路一致性补证。
 - Track 活跃、页面停留、点击路径属于行为域，不是设备指纹。只有“登录设备 / 后端行为设备 / 前端活跃设备是否一致”可以写成行为-设备一致性线索。
 - 设备方向不要写“有 device_id / 有 Android 设备 / 有设备锚点 / 设备画像异常”这种摘要句作为特征。必须写：
   - 已观察字段：phone_model、os_version、app_version、launch_count、boot_duration、lock_screen_enabled、sim_present、automation_service_detected、script_risk、installed_app_cluster 等。
@@ -3619,7 +3624,30 @@ registered actions 和 HAR inventory 在业务表达里统一称为“接口”�
   - 验证方式：目标批次覆盖率 + 正常对照背景率 + lift + 误伤复核 + 跨轮稳定性。
 - `device_id` 本身只能做锚点或关系边；设备候选特征必须来自设备明细字段或字段组合。
 - 设备字段覆盖只能写“字段可见”；字段值相同/相近或多个字段组合异常，才可以进入候选特征。
+- 设备共性必须分层表达：
+  - 已知字段族共性：已知字段族里出现相同/相近值，例如启动次数、锁屏、SIM、frida、安装环境等。
+  - unknown 字段值共性：字段语义未知但多个设备/用户共享同一值，只能写成“可疑字段值共性 / 候选异常 / 需要字段字典和正常对照”，不得强解释成自动化、改机或团伙。
+  - hard 单字段强信号：frida、xposed、mountRiskCheck、root/rootCertificates、明确 hook / 模拟器 / 环境对抗字段、明确高危风险 label。可以进入 `hard_single_field_signal_candidate`，但仍必须写误伤点和验证方式。
+  - weak 单字段观察：无 SIM、无锁屏、低启动、短开机、低活跃、低应用数等只说明生活化/新鲜度偏弱；单设备层面不得独立生成 hard 候选策略特征。
+  - 团组字段富集：weak 字段在多个设备/多个用户里高占比出现时，输出 `group_level_field_enrichment_candidate`。有正常背景率时计算 lift；没有正常背景率时标 `baseline_missing`，只能作为候选共性。
+  - 字段组合共性：低启动 + 短开机 + 无锁屏，reset + frida/xposed/root，安装环境相似，系统参数模板相似，行为-设备不一致等，优先沉淀为候选特征。
+- unknown 字段去噪：`groupname`、`grouplevel`、`safestatus`、系统常量、SDK 默认枚举等即使支持率高，也要标 `suspected_default_value` / `unknown_possible_default_enum` / `unknown_possible_system_constant` 并降级；用户可见默认只展示 Top 3-5 个候选特征，不堆全部 unknown 共性。
+- Android / iOS 要分别说明字段行数、known/unknown 字段参与共性的数量、候选特征数量；不能因为 iOS 字段族暂时少就压缩成十几行。
 - 设备相似簇必须写成 `device_environment_similarity_cluster_candidate`：不同 device_id、多字段相似、至少两个用户支持、需要正常对照；不能写成同设备或确认团伙。
+- 设备候选特征列表至少写：特征名、类型、来源字段、字段值或 safe_ref、支持设备数、团组设备数、支持用户数、support_ratio、platform_scope、priority_level、priority_score、reason_codes、黑灰产解释、误伤点、缺失证据、验证方式、`candidate_only_not_final_conclusion`。
+
+设备 Top 候选特征展示模板：
+
+1. 总体判断：本轮只形成设备字段候选共性，不确认团伙，不直接上线策略。
+2. Top 候选特征，默认 3-5 个：
+   - 特征：`hard_single_field_signal_candidate` / `group_level_field_enrichment_candidate` / `risky_app_environment_candidate` / `unknown_field_value_enrichment_candidate`
+   - 支持：设备数、用户数、support_ratio、Android/iOS 范围
+   - 字段：source_fields + field_values_or_safe_refs
+   - 为什么可疑：黑灰产生产方式解释
+   - 为什么可能误伤：正常设备、企业设备、系统默认值、同版本客户端等
+   - 怎么验证：字段字典、正常背景率、lift、更多样本、人工复核
+3. 降级观察项：疑似默认枚举、系统常量、字段语义未知的字段只列 Top，不作强解释。
+4. 边界：candidate_only_not_final_conclusion；DataAgent/Hive 或正常对照需用户授权后再查。
 
 用户可见答案禁用项：
 

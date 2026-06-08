@@ -1072,11 +1072,11 @@ cases:
     expected_execution_groups: [independent_parallel, auth_sensitive_serial]
     should_not_do: [do_not_call_hive_without_authorization, do_not_use_completed_transport_as_business_closure]
     expected_answer_contract: [source_quality_matrix, evidence_card, final_answer_boundary]
-  - id: EVIDENCE-PROJECTION-BEFORE-OBSERVATION-001
-    user_query: "login_logs_search 大响应里有 UI/debug/blob/重复字段，也有 token/session/cookie 控制链字段；observation 前能不能先 evidence projection，删无用字段但不因 token/session/cookie 字段名删整行？"
+  - id: FACT-EXTRACTION-BEFORE-DISPLAY-PROJECTION-001
+    user_query: "login_logs_search 或 Weapon 大响应里有 UI/debug/blob/重复字段，也有 token/session/cookie 控制链字段；能不能先保留事实字段做共性，再只在展示层做 projection？"
     expected_route_or_actions: [login_logs_search]
-    expected_orchestration: "Evidence projection runs before observation, drops obvious useless/repeated/huge fields, keeps risk anchors and sensitive control-chain field presence as safe handles; final answer never outputs credential raw values."
-    expected_boundary_flags: [evidence_projection_applied, projection_not_business_normalizer, projection_drops_useless_duplicate_huge_fields, projection_preserves_sensitive_control_chain_as_safe_handle, projection_cap_before_observation, raw_body_not_returned_to_final_answer]
+    expected_orchestration: "Fact extraction uses pre-projection prepared body for tables/commonality; display projection only controls stdout/final answer and never outputs credential raw values."
+    expected_boundary_flags: [fact_extraction_before_display_projection, projection_not_business_normalizer, projection_preserves_sensitive_control_chain_as_safe_handle, display_projection_only, raw_body_not_returned_to_final_answer]
     expected_execution_groups: [independent_parallel]
     should_not_do: [do_not_dump_raw_body, do_not_output_cookie, do_not_output_token, do_not_output_session, do_not_output_header, do_not_output_password]
     expected_answer_contract: [source_observations, evidence_card, final_answer_boundary]
