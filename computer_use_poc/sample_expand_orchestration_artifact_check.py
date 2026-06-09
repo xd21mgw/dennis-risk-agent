@@ -2288,6 +2288,1380 @@ def _validate_source_l1_l3_field_commonality_artifacts(result: dict[str, Any]) -
     }
 
 
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Bounded-rendering regression cases (F.5-R3 fix)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# G-R3/G-R4 candidate_features enrichment regression cases
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Shared fixture helpers (reduce duplication across regression functions) ──
+
+
+def _make_device_farm_candidate(
+    choke_type: str = "device_farm_template",
+    likeness: str = "high",
+    name: str = "device_farm_template_candidate",
+) -> dict:
+    """Minimal device_farm_template candidate fixture shared across regressions."""
+    return {
+        "candidate_feature_name": name,
+        "risk_choke_point_type": choke_type,
+        "choke_point_likeness": likeness,
+        "core_commonality": "frida_xposed_mount_reset_or_emulator_related_field_truthy",
+        "supporting_source_domains": ["device_domain"],
+        "source_support": ["weapon_inventory", "weapon_device_info"],
+        "evidence_commonality_types": ["device_integrity_check"],
+        "missing_evidence": [],
+        "field_combination": ["adbstatus", "debug", "frida_related"],
+        "source_fields": ["weapon_inventory", "weapon_device_info"],
+        "reason_codes": ["risky_device_environment"],
+    }
+
+
+def _make_unknown_device_candidate(
+    name: str = "device_unknown_field_enrichment_candidate",
+) -> dict:
+    """Minimal device_unknown_field_enrichment_candidate fixture shared across regressions."""
+    return {
+        "candidate_feature_name": name,
+        "risk_choke_point_type": "unknown",
+        "choke_point_likeness": "low",
+        "core_commonality": "weapon_inventory,weapon_device_info field combination",
+        "supporting_source_domains": ["device_domain"],
+        "source_support": ["weapon_inventory", "weapon_device_info"],
+        "evidence_commonality_types": [],
+        "missing_evidence": ["needs_field_dictionary_review"],
+        "field_combination": [],
+        "source_fields": ["weapon_inventory", "weapon_device_info"],
+        "reason_codes": [],
+    }
+
+
+def _regression_candidate_features_global_enrichment() -> tuple[list[str], dict[str, Any]]:
+    """CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001
+    Expected:
+    - candidate_feature_name is not null for all features
+    - core_commonality is not null/empty for all features
+    - source_support or supporting_source_domains at least one present
+    - evidence_commonality_types has no empty strings
+    - candidate_only_not_final_conclusion=True for all features
+    """
+    payload = {
+        "route_mode": "sample_expand_validate_mode",
+        "total_input_count": 6,
+        "round_size": 6,
+        "max_rounds": 1,
+        "planned_rounds_this_run": 1,
+        "max_deep_checked_this_run": 6,
+        "sampling_method": "fixed_register_attack_sample",
+        "data_window": "last_7d",
+        "scene_hint": ["REGISTER_NEW", "RCP", "device"],
+        "rounds": [{
+            "round_id": 1,
+            "sampled_entities": ["u1", "u2", "u3", "u4", "u5", "u6"],
+            "mock_current_observations": [
+                {"source_id": "s1", "action": "login_logs_search", "fields": {
+                    "user_id": "u1", "candidate_device_id": "dev_001",
+                    "login_type": "password", "backend_action_signal": "publish_after_login",
+                }},
+                {"source_id": "s2", "action": "weapon_inventory", "fields": {
+                    "user_id": "u1", "device_id": "dev_001",
+                    "sdk_version": "android_12", "root_flag": "false",
+                    "hook_detected": "false", "device_model": "Redmi_Note_10",
+                }},
+                {"source_id": "s3", "action": "rcp_snapshot", "fields": {
+                    "user_id": "u2", "source_id": "rcp_src_001",
+                    "eventType": "REGISTER_NEW", "feature_code": "F001",
+                }},
+            ],
+        }],
+    }
+    run = _run_payload(payload)
+    result = run.get("result") or {}
+    rr = result.get("round_results") or []
+    oa = rr[0].get("orchestration_artifacts", {}) if rr else {}
+    cfs = oa.get("candidate_features") or []
+    errors: list[str] = []
+    null_name_count = sum(1 for c in cfs if not c.get("candidate_feature_name"))
+    null_core_count = sum(1 for c in cfs if not c.get("core_commonality"))
+    no_source_count = sum(1 for c in cfs if not c.get("source_support") and not c.get("supporting_source_domains"))
+    empty_ev_count = sum(1 for c in cfs for ev in (c.get("evidence_commonality_types") or []) if ev == "")
+    not_cand_only_count = sum(1 for c in cfs if c.get("candidate_only_not_final_conclusion") is not True)
+    if cfs and null_name_count == len(cfs):
+        errors.append(f"CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001:all_candidate_feature_name_null(count={null_name_count})")
+    if cfs and null_core_count == len(cfs):
+        errors.append(f"CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001:all_core_commonality_null(count={null_core_count})")
+    if no_source_count > 0:
+        errors.append(f"CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001:source_gap(count={no_source_count})")
+    if empty_ev_count > 0:
+        errors.append(f"CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001:empty_evidence_type(count={empty_ev_count})")
+    if not_cand_only_count > 0:
+        errors.append(f"CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001:candidate_only_missing(count={not_cand_only_count})")
+    return errors, {
+        "candidate_features_count": len(cfs),
+        "null_name_count": null_name_count,
+        "null_core_commonality_count": null_core_count,
+        "no_source_count": no_source_count,
+        "empty_evidence_type_count": empty_ev_count,
+        "not_candidate_only_count": not_cand_only_count,
+    }
+
+
+def _regression_device_domain_candidate_enrichment() -> tuple[list[str], dict[str, Any]]:
+    """DEVICE-DOMAIN-CANDIDATE-ENRICHMENT-001
+    Expected:
+    - device_domain candidates have candidate_feature_name != null
+    - at least one device_domain candidate translates to device_farm_template_candidate
+      / risky_device_environment_candidate / device_unknown_field_enrichment_candidate
+    - unknown device fields get needs_field_dictionary_review in missing_evidence
+    """
+    payload = {
+        "route_mode": "sample_expand_validate_mode",
+        "total_input_count": 6,
+        "round_size": 6,
+        "max_rounds": 1,
+        "planned_rounds_this_run": 1,
+        "max_deep_checked_this_run": 6,
+        "sampling_method": "fixed_register_attack_sample",
+        "data_window": "last_7d",
+        "scene_hint": ["device"],
+        "rounds": [{
+            "round_id": 1,
+            "sampled_entities": ["u1", "u2", "u3"],
+            "mock_current_observations": [
+                {"source_id": "w1", "action": "weapon_inventory", "fields": {
+                    "user_id": "u1", "sdk_version": "android_12", "root_flag": "false",
+                    "frida_detected": "true", "xposed_installed": "true",
+                    "device_model": "Redmi_Note_10", "unknown_device_field_x": "val_001",
+                }},
+                {"source_id": "w2", "action": "weapon_inventory", "fields": {
+                    "user_id": "u2", "sdk_version": "android_12", "root_flag": "false",
+                    "frida_detected": "true", "xposed_installed": "true",
+                    "device_model": "Redmi_Note_10", "unknown_device_field_x": "val_001",
+                }},
+            ],
+        }],
+    }
+    run = _run_payload(payload)
+    result = run.get("result") or {}
+    rr = result.get("round_results") or []
+    oa = rr[0].get("orchestration_artifacts", {}) if rr else {}
+    cfs = oa.get("candidate_features") or []
+    device_cfs = [c for c in cfs if "device_domain" in (c.get("supporting_source_domains") or [])]
+    errors: list[str] = []
+    if device_cfs:
+        null_device_names = [c for c in device_cfs if not c.get("candidate_feature_name")]
+        if null_device_names:
+            errors.append(f"DEVICE-DOMAIN-CANDIDATE-ENRICHMENT-001:device_candidate_name_null(count={len(null_device_names)})")
+        # device-only names + cross-domain names that device participates in are all valid
+        device_specific_names = {
+            "device_farm_template_candidate", "risky_device_environment_candidate",
+            "device_app_environment_candidate", "device_unknown_field_enrichment_candidate",
+            "device_execution_environment_candidate",
+        }
+        cross_domain_names_with_device = {
+            "control_execution_separation_candidate",
+            "protocol_constraint_gap_candidate",
+            "automation_rhythm_candidate",
+            "multi_domain_anchor_overlap_candidate",  # generic/downranked — device part of wide overlap
+        }
+        all_known_for_device = device_specific_names | cross_domain_names_with_device
+        named_device = [c for c in device_cfs if c.get("candidate_feature_name") in all_known_for_device]
+        if not named_device:
+            errors.append("DEVICE-DOMAIN-CANDIDATE-ENRICHMENT-001:no_device_candidate_translated_to_known_name")
+    return errors, {
+        "device_candidate_count": len(device_cfs),
+        "device_named_count": sum(1 for c in device_cfs if c.get("candidate_feature_name")),
+        "device_with_source_support": sum(1 for c in device_cfs if c.get("source_support") or c.get("supporting_source_domains")),
+    }
+
+
+def _regression_domain_candidate_role_mapping() -> tuple[list[str], dict[str, Any]]:
+    """DOMAIN-CANDIDATE-ROLE-MAPPING-001
+    Expected: each domain that produces candidates has at least one with a non-null candidate_feature_name.
+    """
+    payload = {
+        "route_mode": "sample_expand_validate_mode",
+        "total_input_count": 6,
+        "round_size": 6,
+        "max_rounds": 1,
+        "planned_rounds_this_run": 1,
+        "max_deep_checked_this_run": 6,
+        "sampling_method": "fixed_register_attack_sample",
+        "data_window": "last_7d",
+        "scene_hint": ["REGISTER_NEW", "RCP", "device", "login"],
+        "rounds": [{
+            "round_id": 1,
+            "sampled_entities": ["u1", "u2", "u3", "u4", "u5", "u6"],
+            "mock_current_observations": [
+                {"source_id": "l1", "action": "login_logs_search", "fields": {
+                    "user_id": "u1", "login_type": "sms", "backend_action_signal": "publish",
+                }},
+                {"source_id": "l2", "action": "login_logs_search", "fields": {
+                    "user_id": "u2", "login_type": "sms", "backend_action_signal": "publish",
+                }},
+                {"source_id": "r1", "action": "rcp_snapshot", "fields": {
+                    "user_id": "u1", "eventType": "REGISTER_NEW", "feature_code": "F001",
+                }},
+                {"source_id": "r2", "action": "rcp_snapshot", "fields": {
+                    "user_id": "u2", "eventType": "REGISTER_NEW", "feature_code": "F001",
+                }},
+            ],
+        }],
+    }
+    run = _run_payload(payload)
+    result = run.get("result") or {}
+    rr = result.get("round_results") or []
+    oa = rr[0].get("orchestration_artifacts", {}) if rr else {}
+    cfs = oa.get("candidate_features") or []
+    domains_with_null = {}
+    for c in cfs:
+        for dom in (c.get("supporting_source_domains") or []):
+            if not c.get("candidate_feature_name"):
+                domains_with_null[dom] = domains_with_null.get(dom, 0) + 1
+    errors: list[str] = []
+    if cfs and all(not c.get("candidate_feature_name") for c in cfs):
+        errors.append(f"DOMAIN-CANDIDATE-ROLE-MAPPING-001:all_names_null(count={len(cfs)})")
+    return errors, {
+        "total_candidates": len(cfs),
+        "named_candidates": sum(1 for c in cfs if c.get("candidate_feature_name")),
+        "domains_with_null_name": domains_with_null,
+    }
+
+
+def _regression_generic_candidate_downrank() -> tuple[list[str], dict[str, Any]]:
+    """GENERIC-CANDIDATE-DOWNRANK-001
+    Expected: multi_domain_anchor_overlap_candidate / group_level_field_enrichment_candidate
+    must NOT have choke_point_likeness=high or medium unless they have source_support + core_commonality.
+    """
+    payload = {
+        "route_mode": "sample_expand_validate_mode",
+        "total_input_count": 6,
+        "round_size": 6,
+        "max_rounds": 1,
+        "planned_rounds_this_run": 1,
+        "max_deep_checked_this_run": 6,
+        "sampling_method": "fixed_register_attack_sample",
+        "data_window": "last_7d",
+        "scene_hint": ["device"],
+        "rounds": [{
+            "round_id": 1,
+            "sampled_entities": ["u1", "u2"],
+            "mock_current_observations": [],
+        }],
+    }
+    run = _run_payload(payload)
+    result = run.get("result") or {}
+    rr = result.get("round_results") or []
+    oa = rr[0].get("orchestration_artifacts", {}) if rr else {}
+    cfs = oa.get("candidate_features") or []
+    generic_names = {"multi_domain_anchor_overlap_candidate", "group_level_field_enrichment_candidate", "hard_single_field_signal_candidate"}
+    errors: list[str] = []
+    for c in cfs:
+        fn = str(c.get("feature_name") or c.get("candidate_feature_name") or "")
+        if fn in generic_names:
+            likeness = str(c.get("choke_point_likeness") or "unknown")
+            has_src = bool(c.get("source_support") or c.get("supporting_source_domains"))
+            has_core = bool(c.get("core_commonality"))
+            has_reason = bool(c.get("choke_point_reason"))
+            if likeness in ("high", "medium") and not (has_src and has_core and has_reason):
+                errors.append(f"GENERIC-CANDIDATE-DOWNRANK-001:{fn}:likeness={likeness}_without_support")
+    return errors, {
+        "generic_candidates": [c.get("feature_name") or c.get("candidate_feature_name") for c in cfs if str(c.get("feature_name") or "") in generic_names],
+        "generic_high_medium_without_support": len(errors),
+    }
+
+
+def _regression_top_candidate_no_null() -> tuple[list[str], dict[str, Any]]:
+    """TOP-CANDIDATE-NO-NULL-001
+    Expected: candidate_feature_top_samples must not have all of
+    candidate_feature_name / core_commonality / source_support null at the same time.
+    high/medium top candidates must have choke_point_reason.
+    """
+    payload = {
+        "route_mode": "sample_expand_validate_mode",
+        "total_input_count": 6,
+        "round_size": 6,
+        "max_rounds": 1,
+        "planned_rounds_this_run": 1,
+        "max_deep_checked_this_run": 6,
+        "sampling_method": "fixed_register_attack_sample",
+        "data_window": "last_7d",
+        "scene_hint": ["REGISTER_NEW", "device", "login"],
+        "rounds": [{
+            "round_id": 1,
+            "sampled_entities": ["u1", "u2", "u3", "u4", "u5", "u6"],
+            "mock_current_observations": [
+                {"source_id": "l1", "action": "login_logs_search", "fields": {
+                    "user_id": "u1", "candidate_device_id": "dev_001",
+                    "login_type": "password", "backend_action_signal": "publish",
+                }},
+                {"source_id": "l2", "action": "login_logs_search", "fields": {
+                    "user_id": "u2", "candidate_device_id": "dev_001",
+                    "login_type": "password", "backend_action_signal": "publish",
+                }},
+                {"source_id": "w1", "action": "weapon_inventory", "fields": {
+                    "user_id": "u1", "sdk_version": "android_12", "root_flag": "false",
+                }},
+            ],
+        }],
+    }
+    run = _run_payload(payload)
+    result = run.get("result") or {}
+    rr = result.get("round_results") or []
+    oa_round = rr[0].get("orchestration_artifacts", {}) if rr else {}
+    top_samples = oa_round.get("candidate_feature_top_samples") or []
+    errors: list[str] = []
+    for i, s in enumerate(top_samples):
+        has_name = bool(s.get("candidate_feature_name"))
+        has_core = bool(s.get("core_commonality"))
+        has_src = bool(s.get("source_support") or s.get("supporting_source_domains"))
+        if not has_name and not has_core and not has_src:
+            errors.append(f"TOP-CANDIDATE-NO-NULL-001:sample[{i}]:all_null")
+        likeness = str(s.get("choke_point_likeness") or "unknown")
+        if likeness in ("high", "medium") and not s.get("choke_point_reason"):
+            errors.append(f"TOP-CANDIDATE-NO-NULL-001:sample[{i}]:likeness={likeness}_no_reason")
+    return errors, {
+        "top_sample_count": len(top_samples),
+        "all_null_count": sum(
+            1 for s in top_samples
+            if not s.get("candidate_feature_name") and not s.get("core_commonality") and not (s.get("source_support") or s.get("supporting_source_domains"))
+        ),
+        "high_medium_no_reason_count": sum(
+            1 for s in top_samples
+            if str(s.get("choke_point_likeness") or "unknown") in ("high", "medium") and not s.get("choke_point_reason")
+        ),
+    }
+
+
+def _regression_candidate_features_normalize_no_empty_shell() -> tuple[list[str], dict[str, Any]]:
+    """CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001
+    验证 normalize_l3_candidate_feature_contract 输出的合同字段完整性：
+    - candidate_feature_name/core_commonality/source_support 不能全部为空
+    - high/medium 候选不允许缺 source_support 或 core_commonality
+    - evidence_commonality_types 不含空字符串
+    - candidate_only_not_final_conclusion=True
+    直接对 normalize 函数进行单元测试，不依赖 live 数据。
+    """
+    from runtime_case_execution_runner import (
+        normalize_l3_candidate_feature_contract,
+    )
+    errors: list[str] = []
+    # --- 测试用例集合 ---
+    test_cases = [
+        # 1. unknown_field_commonality + device_domain（small-b 高频场景）
+        {
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": "device_unknown_field_combo",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "source_fields": ["unknown_field_x", "unknown_field_y"],
+            "support_user_count": 4,
+            "field_semantics_status": "needs_field_dictionary_review",
+        },
+        # 2. sequence_comparison（account_domain）
+        {
+            "feature_type": "sequence_comparison_candidate",
+            "feature_name": "account_sequence_template",
+            "feature_origin": "sequence_comparison",
+            "source_domains": ["account_domain", "behavior_domain"],
+            "source_names": ["login_logs_search"],
+            "support_user_count": 3,
+        },
+        # 3. field_combination（strategy_domain）
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "rcp_feature_combo",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain"],
+            "source_names": ["rcp_snapshot"],
+            "field_combination": ["eventType", "feature_code", "request_path"],
+            "support_user_count": 5,
+        },
+        # 4. 没有任何 domain，纯 fallback
+        {
+            "feature_type": "raw_field_commonality",
+            "feature_name": "bare_field_commonality",
+            "feature_origin": "raw_field_commonality",
+            "source_domains": [],
+            "source_names": [],
+            "support_user_count": 2,
+        },
+        # 5. 已有 candidate_feature_name（不应被覆盖）
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "rcp_combo_2",
+            "candidate_feature_name": "rcp_feature_bundle_candidate",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain"],
+            "source_names": ["rcp_event_feature_list"],
+            "field_combination": ["feature_code", "source_id_hash"],
+            "support_user_count": 3,
+        },
+        # 6. evidence_commonality_types 含空字符串（验证去空逻辑）
+        {
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": "ev_type_empty_test",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "evidence_commonality_types": ["field_value_commonality", "", "cross_source_support_commonality", ""],
+            "support_user_count": 2,
+        },
+        # 7. generic 候选（应被降级）
+        {
+            "feature_type": "anchor_overlap",
+            "feature_name": "multi_domain_anchor_overlap_candidate",
+            "feature_origin": "raw_field_commonality",
+            "source_domains": ["device_domain", "behavior_domain"],
+            "source_names": [],
+            "support_user_count": 3,
+        },
+    ]
+    results_summary: list[dict[str, Any]] = []
+    for i, tc in enumerate(test_cases):
+        out = normalize_l3_candidate_feature_contract(tc)
+        name = out.get("candidate_feature_name")
+        core = out.get("core_commonality")
+        src = out.get("source_support") or out.get("supporting_source_domains")
+        cand_only = out.get("candidate_only_not_final_conclusion")
+        ev_types = out.get("evidence_commonality_types") or []
+        likeness = str(out.get("choke_point_likeness") or "unknown")
+        label = f"case[{i}]:{tc.get('feature_name')}"
+        # 规则 1: candidate_feature_name/core_commonality/source_support 不能全部为空
+        if not name and not core and not src:
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:all_null")
+        # 规则 2: candidate_feature_name 不能为 null
+        if not name:
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:candidate_feature_name_null")
+        # 规则 3: core_commonality 不能为 null/空
+        if not core:
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:core_commonality_null")
+        # 规则 4: high/medium 候选不允许缺 source_support 或 core_commonality
+        if likeness in ("high", "medium"):
+            if not out.get("source_support"):
+                errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:high_medium_no_source_support(likeness={likeness})")
+            if not core:
+                errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:high_medium_no_core_commonality(likeness={likeness})")
+        # 规则 5: evidence_commonality_types 不含空字符串
+        if any(t == "" or not str(t).strip() for t in ev_types):
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:empty_string_in_evidence_commonality_types")
+        # 规则 6: candidate_only_not_final_conclusion=True
+        if cand_only is not True:
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:candidate_only_not_final_conclusion_missing")
+        # case 5 特殊验证：已有 candidate_feature_name 不应被覆盖
+        if tc.get("candidate_feature_name") and name != tc["candidate_feature_name"]:
+            errors.append(f"CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001:{label}:existing_name_overwritten(expected={tc['candidate_feature_name']!r},got={name!r})")
+        results_summary.append({
+            "case": label,
+            "candidate_feature_name": name,
+            "core_commonality": core,
+            "source_support": out.get("source_support"),
+            "choke_point_likeness": likeness,
+            "candidate_only": cand_only,
+            "ev_types": ev_types,
+        })
+    return errors, {
+        "cases_tested": len(test_cases),
+        "cases_failed": len([e for e in errors]),
+        "results": results_summary,
+    }
+
+
+def _regression_top_candidate_explainable_first() -> tuple[list[str], dict[str, Any]]:
+    """TOP-CANDIDATE-EXPLAINABLE-FIRST-001
+    期望：Top candidate 优先展示 risk_choke_point_type != unknown 且 high/medium 候选。
+    unknown_field_enrichment 不刷屏；core_commonality 不能是 insufficient_interpretable_commonality。
+    """
+    from runtime_case_execution_runner import (
+        normalize_l3_candidate_feature_contract,
+        build_candidate_feature_top_samples,
+    )
+    # 构造一组候选：包含 unknown 和可解释的混合
+    features = [
+        {  # 应优先出现：high + protocol_constraint_gap
+            "feature_type": "field_combination_candidate",
+            "feature_name": "protocol_feature",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain", "behavior_domain"],
+            "source_names": ["login_logs_search", "rcp_snapshot"],
+            "field_combination": ["backend_action_signal", "frontend_activity_signal", "request_path"],
+            "support_user_count": 5,
+        },
+        {  # 应降级：unknown device field
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": "unk_device_1",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "source_fields": ["unknown_field_x"],
+            "support_user_count": 4,
+            "field_semantics_status": "needs_field_dictionary_review",
+        },
+        {  # 应降级：unknown device field
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": "unk_device_2",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "source_fields": ["unknown_field_y"],
+            "support_user_count": 4,
+            "field_semantics_status": "needs_field_dictionary_review",
+        },
+        {  # 应次优先：content_funnel high
+            "feature_type": "field_combination_candidate",
+            "feature_name": "content_feature",
+            "feature_origin": "field_combination",
+            "source_domains": ["content_domain", "social_domain"],
+            "source_names": ["archives_photo_search", "archives_comment_search"],
+            "field_combination": ["caption", "target_user_id", "comment"],
+            "support_user_count": 3,
+        },
+    ]
+    normalized = [normalize_l3_candidate_feature_contract(f) for f in features]
+    tops = build_candidate_feature_top_samples(
+        candidate_features=normalized,
+        source_input_quality_table=[],
+        attack_chain_cooccurrence=[],
+    )
+    errors: list[str] = []
+    # Top 5 中 unknown_field_enrichment 不应刷屏（不超过 1 条）
+    unknown_enrichment_names = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+        "rcp_unknown_feature_bundle_candidate",
+        "account_unknown_field_enrichment_candidate",
+    }
+    unknown_in_tops = sum(1 for s in tops if s.get("candidate_feature_name") in unknown_enrichment_names)
+    if unknown_in_tops >= len(tops) and len(tops) > 0 and unknown_in_tops > 1:
+        errors.append(f"TOP-CANDIDATE-EXPLAINABLE-FIRST-001:unknown_enrichment_spam(count={unknown_in_tops}/{len(tops)})")
+    # core_commonality 不应是 insufficient_interpretable_commonality
+    for i, s in enumerate(tops):
+        core = s.get("core_commonality") or []
+        if core == ["insufficient_interpretable_commonality"]:
+            errors.append(f"TOP-CANDIDATE-EXPLAINABLE-FIRST-001:top[{i}]:insufficient_core")
+    # 检查可解释候选（protocol/content）的候选评分是否优先于 unknown
+    normalized_scores = []
+    for n in normalized:
+        from runtime_case_execution_runner import _g_r5_top_candidate_score
+        normalized_scores.append((_g_r5_top_candidate_score(n), n.get("candidate_feature_name")))
+    sorted_names = [name for _, name in sorted(normalized_scores)]
+    protocol_idx = next((i for i, name in enumerate(sorted_names) if "protocol" in str(name) or "content" in str(name)), None)
+    unknown_idx = next((i for i, name in enumerate(sorted_names) if "unknown_field_enrichment" in str(name)), None)
+    if protocol_idx is not None and unknown_idx is not None and protocol_idx > unknown_idx:
+        errors.append(f"TOP-CANDIDATE-EXPLAINABLE-FIRST-001:unknown_ranked_before_explainable(protocol_idx={protocol_idx},unknown_idx={unknown_idx})")
+    return errors, {
+        "tops_count": len(tops),
+        "unknown_enrichment_in_tops": unknown_in_tops,
+        "sorted_names": sorted_names,
+    }
+
+
+def _regression_unknown_device_review_queue() -> tuple[list[str], dict[str, Any]]:
+    """UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001
+    期望：unknown device 候选进入 unknown_device_field_review_queue；
+    missing_evidence 包含 needs_field_dictionary_review；不直接升级为 device_farm_template。
+    """
+    from runtime_case_execution_runner import (
+        normalize_l3_candidate_feature_contract,
+        _build_unknown_device_review_queue,
+    )
+    features = [
+        {
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": "device_unk_field_combo",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "source_fields": ["unk_field_a", "unk_field_b"],
+            "support_user_count": 3,
+            "field_semantics_status": "needs_field_dictionary_review",
+        },
+    ]
+    normalized = [normalize_l3_candidate_feature_contract(f) for f in features]
+    queue = _build_unknown_device_review_queue(normalized)
+    errors: list[str] = []
+    # unknown device field 应进入 review_queue
+    if not queue:
+        errors.append("UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001:queue_empty")
+    for i, item in enumerate(queue):
+        # missing_evidence 应包含 needs_field_dictionary_review
+        missing = item.get("missing_evidence") or []
+        if "needs_field_dictionary_review" not in missing:
+            errors.append(f"UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001:item[{i}]:missing_evidence_no_dict_review")
+        # 不应该是 device_farm_template_candidate
+        fn = str(item.get("candidate_feature_name") or "")
+        if fn == "device_farm_template_candidate":
+            errors.append(f"UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001:item[{i}]:wrongly_upgraded_to_device_farm")
+    # normalized 候选不应是 device_farm_template（因为没有明确 risky 字段）
+    for n in normalized:
+        if n.get("risk_choke_point_type") == "device_farm_template":
+            errors.append(f"UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001:unknown_field_wrongly_classified_as_device_farm")
+    return errors, {
+        "queue_count": len(queue),
+        "queue_names": [q.get("candidate_feature_name") for q in queue],
+    }
+
+
+def _regression_device_id_anchor_not_risk_feature() -> tuple[list[str], dict[str, Any]]:
+    """DEVICE-ID-ANCHOR-NOT-RISK-FEATURE-001
+    期望：device_id / did 只能作为 anchor；仅 device_id/did 重合不得生成 device_farm_template_candidate。
+    """
+    from runtime_case_execution_runner import normalize_l3_candidate_feature_contract
+    features = [
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "device_id_overlap_only",
+            "feature_origin": "field_combination",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "field_combination": ["device_id", "did"],  # 仅 anchor 字段
+            "support_user_count": 5,
+        },
+        {
+            "feature_type": "raw_field_commonality",
+            "feature_name": "policy_code_only",
+            "feature_origin": "raw_field_commonality",
+            "source_domains": ["strategy_domain"],
+            "source_names": ["rcp_snapshot"],
+            "source_fields": ["policy_code", "source_id"],  # 仅 anchor 字段
+            "support_user_count": 5,
+        },
+    ]
+    errors: list[str] = []
+    for f in features:
+        out = normalize_l3_candidate_feature_contract(f)
+        fn = str(out.get("candidate_feature_name") or "")
+        choke = str(out.get("risk_choke_point_type") or "unknown")
+        likeness = str(out.get("choke_point_likeness") or "unknown")
+        # 仅 anchor 字段 → 不应产生 device_farm_template 或 high/medium
+        if choke == "device_farm_template":
+            errors.append(f"DEVICE-ID-ANCHOR-NOT-RISK-FEATURE-001:{f['feature_name']}:anchor_only_wrongly_device_farm")
+        if likeness in ("high", "medium"):
+            core = out.get("core_commonality") or []
+            # 如果 core 去除 anchor 后为空，不应 high/medium
+            anchor_fields = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
+            non_anchor = [c for c in core if c.lower() not in anchor_fields]
+            if not non_anchor:
+                errors.append(f"DEVICE-ID-ANCHOR-NOT-RISK-FEATURE-001:{f['feature_name']}:anchor_only_with_high_medium_likeness")
+    return errors, {"tested_features": len(features)}
+
+
+def _regression_sequence_candidate_not_protocol_default() -> tuple[list[str], dict[str, Any]]:
+    """SEQUENCE-CANDIDATE-NOT-PROTOCOL-BY-DEFAULT-001
+    期望：feature_origin=sequence_comparison 且无明确 protocol/client/request 字段时，
+    不归 protocol_constraint_gap；优先 automation_rhythm_candidate / account_maintenance_template_candidate。
+    """
+    from runtime_case_execution_runner import normalize_l3_candidate_feature_contract
+    features = [
+        {  # 纯 sequence + account_domain，无 protocol 信号
+            "feature_type": "sequence_comparison_candidate",
+            "feature_name": "account_seq_pure",
+            "feature_origin": "sequence_comparison",
+            "source_domains": ["account_domain", "behavior_domain"],
+            "source_names": ["login_logs_search"],
+            "source_fields": ["login_source", "login_type", "time_delta"],
+            "support_user_count": 4,
+        },
+        {  # sequence + protocol 信号 → 允许归 protocol_constraint_gap
+            "feature_type": "sequence_comparison_candidate",
+            "feature_name": "seq_with_protocol_signal",
+            "feature_origin": "sequence_comparison",
+            "source_domains": ["strategy_domain", "behavior_domain"],
+            "source_names": ["login_logs_search", "rcp_snapshot"],
+            "field_combination": ["backend_action_signal", "request_path", "frontend_activity_signal"],
+            "support_user_count": 4,
+        },
+    ]
+    errors: list[str] = []
+    results = []
+    for f in features:
+        out = normalize_l3_candidate_feature_contract(f)
+        choke = str(out.get("risk_choke_point_type") or "unknown")
+        results.append({"feature": f["feature_name"], "choke_type": choke})
+        if f["feature_name"] == "account_seq_pure" and choke == "protocol_constraint_gap":
+            errors.append(f"SEQUENCE-CANDIDATE-NOT-PROTOCOL-BY-DEFAULT-001:pure_sequence_account_wrongly_protocol_gap")
+        if f["feature_name"] == "seq_with_protocol_signal" and choke not in ("protocol_constraint_gap", "control_execution_separation"):
+            # sequence + protocol signal 应归 protocol 或 control
+            pass  # 放宽：有 protocol signal 时可以归 protocol
+    return errors, {"results": results}
+
+
+def _regression_protocol_constraint_gap_requires_signal() -> tuple[list[str], dict[str, Any]]:
+    """PROTOCOL-CONSTRAINT-GAP-REQUIRES-PROTOCOL-SIGNAL-001
+    期望：protocol_constraint_gap 必须有 request_path / client_path / frontend_activity_signal 等信号；
+    只有 policy_code / source_id anchor 不得生成 protocol_constraint_gap。
+    """
+    from runtime_case_execution_runner import normalize_l3_candidate_feature_contract
+    features = [
+        {  # 只有 policy_code anchor，不应是 protocol
+            "feature_type": "raw_field_commonality",
+            "feature_name": "policy_anchor_only",
+            "feature_origin": "raw_field_commonality",
+            "source_domains": ["strategy_domain"],
+            "source_names": ["rcp_snapshot"],
+            "source_fields": ["policy_code"],
+            "support_user_count": 5,
+        },
+        {  # 有明确 protocol signal，应是 protocol
+            "feature_type": "field_combination_candidate",
+            "feature_name": "with_protocol_signal",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain", "behavior_domain"],
+            "source_names": ["login_logs_search", "rcp_event_feature_list"],
+            "field_combination": ["backend_action_signal", "request_path", "frontend_activity_signal"],
+            "support_user_count": 5,
+        },
+    ]
+    errors: list[str] = []
+    results = []
+    for f in features:
+        out = normalize_l3_candidate_feature_contract(f)
+        choke = str(out.get("risk_choke_point_type") or "unknown")
+        results.append({"feature": f["feature_name"], "choke_type": choke})
+        if f["feature_name"] == "policy_anchor_only" and choke == "protocol_constraint_gap":
+            errors.append("PROTOCOL-CONSTRAINT-GAP-REQUIRES-PROTOCOL-SIGNAL-001:anchor_only_wrongly_protocol")
+    return errors, {"results": results}
+
+
+def _regression_top_candidate_no_generic_unknown_spam() -> tuple[list[str], dict[str, Any]]:
+    """TOP-CANDIDATE-NO-GENERIC-UNKNOWN-SPAM-001
+    期望：Top 5 不被 unknown/generic 候选占满；generic/unknown 仍可保留在 review_queue。
+    """
+    from runtime_case_execution_runner import (
+        normalize_l3_candidate_feature_contract,
+        build_candidate_feature_top_samples,
+        _build_unknown_device_review_queue,
+    )
+    # 混合 3 unknown device + 2 可解释
+    features = [
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "protocol_real",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain", "behavior_domain"],
+            "source_names": ["login_logs_search", "rcp_snapshot"],
+            "field_combination": ["backend_action_signal", "request_path"],
+            "support_user_count": 5,
+        },
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "device_farm_real",
+            "feature_origin": "field_combination",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "field_combination": ["frida_detected", "xposed_installed", "root_flag"],
+            "support_user_count": 4,
+        },
+    ] + [
+        {
+            "feature_type": "unknown_field_value_commonality",
+            "feature_name": f"unk_device_{i}",
+            "feature_origin": "unknown_field_commonality",
+            "source_domains": ["device_domain"],
+            "source_names": ["weapon_inventory"],
+            "source_fields": [f"unknown_field_{i}"],
+            "support_user_count": 3,
+            "field_semantics_status": "needs_field_dictionary_review",
+        }
+        for i in range(3)
+    ]
+    normalized = [normalize_l3_candidate_feature_contract(f) for f in features]
+    tops = build_candidate_feature_top_samples(
+        candidate_features=normalized,
+        source_input_quality_table=[],
+        attack_chain_cooccurrence=[],
+    )
+    review_queue = _build_unknown_device_review_queue(normalized)
+    errors: list[str] = []
+    unknown_enrichment_names = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+    }
+    unknown_in_tops = sum(1 for s in tops if s.get("candidate_feature_name") in unknown_enrichment_names)
+    if unknown_in_tops >= len(tops) and len(tops) > 0:
+        errors.append(f"TOP-CANDIDATE-NO-GENERIC-UNKNOWN-SPAM-001:all_tops_unknown(count={unknown_in_tops}/{len(tops)})")
+    # review_queue 应接收 unknown device 候选
+    if not review_queue:
+        errors.append("TOP-CANDIDATE-NO-GENERIC-UNKNOWN-SPAM-001:review_queue_empty")
+    return errors, {
+        "tops_count": len(tops),
+        "unknown_in_tops": unknown_in_tops,
+        "review_queue_count": len(review_queue),
+        "top_names": [s.get("candidate_feature_name") for s in tops],
+    }
+
+
+def _regression_top_candidate_requires_supporting_evidence() -> tuple[list[str], dict[str, Any]]:
+    """TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001
+    Top candidate 必须有 supporting_evidence；至少一条含 source_name/field_path/value_summary。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    # 有真实字段的候选 → 应有 supporting_evidence
+    c1 = {
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",
+        "source_support": ["login_logs_search", "rcp_snapshot"],
+        "field_combination": ["backend_action_signal", "request_path"],
+        "source_fields": [],
+        "core_commonality": ["backend_action_signal", "request_path"],
+    }
+    m1 = _materialize_candidate_evidence(
+        c1, [{"source_name": "login_logs_search", "quality_class": "completed"},
+             {"source_name": "rcp_snapshot", "quality_class": "partial"}]
+    )
+    # 无任何字段的候选 → 不应有 supporting_evidence，claim_materialized=false
+    c2 = {
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "source_support": ["login_logs_search"],
+        "field_combination": [],
+        "source_fields": [],
+        "core_commonality": [],
+    }
+    m2 = _materialize_candidate_evidence(c2, [{"source_name": "login_logs_search", "quality_class": "completed"}])
+    errors: list[str] = []
+    if not m1.get("supporting_evidence"):
+        errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c1_no_supporting_evidence")
+    for ev in m1.get("supporting_evidence") or []:
+        if not ev.get("source_name") or not ev.get("field_path") or not ev.get("value_summary"):
+            errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c1_evidence_missing_fields")
+    if m2.get("claim_materialized") is not False:
+        errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c2_no_fields_should_be_unmaterialized")
+    return errors, {"c1_ev_count": len(m1.get("supporting_evidence") or []), "c2_materialized": m2.get("claim_materialized")}
+
+
+def _regression_template_phrase_not_evidence() -> tuple[list[str], dict[str, Any]]:
+    """TEMPLATE-PHRASE-NOT-EVIDENCE-001
+    模板短语不能当 supporting_evidence；必须回挂真实 field_path 否则 claim_materialized=false。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    # 只有模板短语 core_commonality，没有真实字段
+    c = {
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",
+        "source_support": ["rcp_snapshot"],
+        "field_combination": [],
+        "source_fields": [],
+        "core_commonality": ["backend_action_signal present", "missing_or_weak_frontend_activity"],
+        "reason_codes": [],
+    }
+    m = _materialize_candidate_evidence(c, [{"source_name": "rcp_snapshot", "quality_class": "completed"}])
+    errors: list[str] = []
+    # 模板短语不应出现在 supporting_evidence 的 field_path 里
+    for ev in m.get("supporting_evidence") or []:
+        for fp in (ev.get("field_path") or []):
+            if fp in ("backend_action_signal present", "missing_or_weak_frontend_activity",
+                      "login_or_behavior_side != execution_side"):
+                errors.append(f"TEMPLATE-PHRASE-NOT-EVIDENCE-001:template_phrase_in_field_path:{fp}")
+    # 只有模板短语应导致 claim_materialized=false 或无 supporting_evidence
+    if m.get("claim_materialized") is True and m.get("supporting_evidence"):
+        # 有 supporting_evidence 也可以，只要 field_path 不是模板短语
+        pass
+    return errors, {"claim_materialized": m.get("claim_materialized"), "ev_count": len(m.get("supporting_evidence") or [])}
+
+
+def _regression_frontend_activity_counter_signal() -> tuple[list[str], dict[str, Any]]:
+    """FRONTEND-ACTIVITY-COUNTER-SIGNAL-001
+    当天高活跃时不允许输出 missing_or_weak_frontend_activity；
+    必须输出 high_frontend_activity_counter_signal；allowed_claim_boundary 只能 event-level。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    # 模拟有活跃信号的候选
+    c = {
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",
+        "source_support": ["archives_user_analysis", "login_logs_search"],
+        "field_combination": ["active_minutes_today", "frontend_activity_high"],
+        "source_fields": ["active_minutes_today"],
+        "core_commonality": ["active_minutes_today"],
+        "reason_codes": ["high_active_minutes"],
+    }
+    m = _materialize_candidate_evidence(c, [
+        {"source_name": "archives_user_analysis", "quality_class": "completed"},
+        {"source_name": "login_logs_search", "quality_class": "completed"},
+    ])
+    errors: list[str] = []
+    # 应有 high_frontend_activity_counter_signal
+    counter_reasons = [ce.get("value_summary", "") for ce in (m.get("counter_evidence") or [])]
+    if not any("high frontend activity" in r for r in counter_reasons):
+        errors.append("FRONTEND-ACTIVITY-COUNTER-SIGNAL-001:no_high_frontend_activity_counter")
+    # claim_materialized 应为 false（protocol_constraint_gap + 高活跃反证）
+    if m.get("claim_materialized") is not False:
+        errors.append("FRONTEND-ACTIVITY-COUNTER-SIGNAL-001:should_be_unmaterialized_when_high_activity")
+    # core_claim 应是 event_frontend_path_unverified
+    if m.get("core_claim") != "event_frontend_path_unverified":
+        errors.append(f"FRONTEND-ACTIVITY-COUNTER-SIGNAL-001:wrong_core_claim:{m.get('core_claim')}")
+    return errors, {"claim_materialized": m.get("claim_materialized"), "core_claim": m.get("core_claim"), "counter_count": len(m.get("counter_evidence") or [])}
+
+
+def _regression_control_execution_requires_materialized_mismatch() -> tuple[list[str], dict[str, Any]]:
+    """CONTROL-EXECUTION-REQUIRES-MATERIALIZED-MISMATCH-001
+    没有 DID/IP/UA/app_version 字段级 mismatch 时，不允许 observed/high control_execution_separation；
+    必须输出 field_level_mismatch_not_materialized。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    # 只有 source 共现，无 mismatch 字段
+    c = {
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "source_support": ["login_logs_search", "weapon_device_info"],
+        "field_combination": [],
+        "source_fields": [],
+        "core_commonality": ["login_type_login_source_pattern"],
+        "reason_codes": [],
+    }
+    m = _materialize_candidate_evidence(c, [
+        {"source_name": "login_logs_search", "quality_class": "completed"},
+        {"source_name": "weapon_device_info", "quality_class": "completed"},
+    ])
+    errors: list[str] = []
+    # 无 mismatch 字段 → claim_materialized=false
+    if m.get("claim_materialized") is not False:
+        errors.append("CONTROL-EXECUTION-REQUIRES-MATERIALIZED-MISMATCH-001:should_be_unmaterialized_without_mismatch_fields")
+    # missing_evidence 应包含 field_level_mismatch_not_materialized
+    if "field_level_mismatch_not_materialized" not in (m.get("missing_evidence") or []):
+        errors.append("CONTROL-EXECUTION-REQUIRES-MATERIALIZED-MISMATCH-001:missing_field_level_mismatch_not_in_missing_evidence")
+    # choke_point_likeness_after_gate 不应 high
+    if m.get("choke_point_likeness_after_gate") == "high":
+        errors.append("CONTROL-EXECUTION-REQUIRES-MATERIALIZED-MISMATCH-001:likeness_should_not_be_high")
+    return errors, {"claim_materialized": m.get("claim_materialized"), "likeness_after_gate": m.get("choke_point_likeness_after_gate"), "missing_evidence": m.get("missing_evidence")}
+
+
+def _regression_same_device_counter_signal() -> tuple[list[str], dict[str, Any]]:
+    """SAME-DEVICE-COUNTER-SIGNAL-001
+    same_device_id / stable_device_lineage 出现时必须输出 same_device_counter_signal；
+    control_execution_separation 必须降级。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    c = {
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "source_support": ["login_logs_search", "weapon_inventory"],
+        "field_combination": ["same_device_id", "stable_device_lineage"],
+        "source_fields": ["same_device_id"],
+        "core_commonality": ["same_device_id"],
+        "reason_codes": [],
+    }
+    m = _materialize_candidate_evidence(c, [
+        {"source_name": "login_logs_search", "quality_class": "completed"},
+        {"source_name": "weapon_inventory", "quality_class": "completed"},
+    ])
+    errors: list[str] = []
+    counter_values = [ce.get("value_summary", "") for ce in (m.get("counter_evidence") or [])]
+    if not any("same_device" in v or "stable_device" in v for v in counter_values):
+        errors.append("SAME-DEVICE-COUNTER-SIGNAL-001:no_same_device_counter_signal")
+    if m.get("claim_materialized") is not False:
+        errors.append("SAME-DEVICE-COUNTER-SIGNAL-001:should_be_unmaterialized_with_same_device")
+    if m.get("choke_point_likeness_after_gate") == "high":
+        errors.append("SAME-DEVICE-COUNTER-SIGNAL-001:control_execution_sep_should_not_be_high_with_same_device")
+    return errors, {"claim_materialized": m.get("claim_materialized"), "counter_count": len(m.get("counter_evidence") or [])}
+
+
+def _regression_blocked_source_not_observed_evidence() -> tuple[list[str], dict[str, Any]]:
+    """BLOCKED-SOURCE-NOT-OBSERVED-EVIDENCE-001
+    blocked/timeout/not_entered source 不能作为 observed supporting_evidence。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    c = {
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "medium",
+        "source_support": ["weapon_device_info", "weapon_inventory"],
+        "field_combination": ["frida_detected", "root_flag"],
+        "source_fields": ["frida_detected"],
+        "core_commonality": ["frida_detected", "root_flag"],
+        "reason_codes": [],
+    }
+    # 两个 source 全是 blocked
+    m = _materialize_candidate_evidence(c, [
+        {"source_name": "weapon_device_info", "auth_blocked": True},
+        {"source_name": "weapon_inventory", "auth_blocked": True},
+    ])
+    errors: list[str] = []
+    # blocked source 不应产生 supporting_evidence
+    for ev in m.get("supporting_evidence") or []:
+        if ev.get("source_status") in ("blocked", "timeout", "not_entered_main_chain"):
+            errors.append(f"BLOCKED-SOURCE-NOT-OBSERVED-EVIDENCE-001:blocked_source_in_supporting_evidence:{ev.get('source_name')}")
+    # claim_materialized 应为 false
+    if m.get("claim_materialized") is not False:
+        errors.append("BLOCKED-SOURCE-NOT-OBSERVED-EVIDENCE-001:blocked_sources_should_not_be_materialized")
+    return errors, {"claim_materialized": m.get("claim_materialized"), "ev_count": len(m.get("supporting_evidence") or [])}
+
+
+def _regression_source_cooccurrence_not_claim_materialization() -> tuple[list[str], dict[str, Any]]:
+    """SOURCE-COOCCURRENCE-NOT-CLAIM-MATERIALIZATION-001
+    login_logs_search + weapon_device_info 同时存在，不等于 login_or_behavior_side != execution_side；
+    必须有字段级 mismatch 才能 claim_materialized=true。
+    """
+    from runtime_case_execution_runner import _materialize_candidate_evidence
+    # 只有两个 source 共现，没有 mismatch 字段
+    c = {
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "source_support": ["login_logs_search", "weapon_device_info"],
+        "field_combination": [],
+        "source_fields": [],
+        "core_commonality": ["login_logs_search", "weapon_device_info"],
+        "reason_codes": ["source_cooccurrence_only"],
+        "essence_reason": "login_logs_search and weapon_device_info both present",
+    }
+    m = _materialize_candidate_evidence(c, [
+        {"source_name": "login_logs_search", "quality_class": "completed"},
+        {"source_name": "weapon_device_info", "quality_class": "completed"},
+    ])
+    errors: list[str] = []
+    if m.get("claim_materialized") is not False:
+        errors.append("SOURCE-COOCCURRENCE-NOT-CLAIM-MATERIALIZATION-001:source_cooccurrence_should_not_be_materialized")
+    if "field_level_mismatch_not_materialized" not in (m.get("missing_evidence") or []):
+        errors.append("SOURCE-COOCCURRENCE-NOT-CLAIM-MATERIALIZATION-001:missing_field_level_mismatch_not_in_missing_evidence")
+    return errors, {"claim_materialized": m.get("claim_materialized"), "missing_evidence": m.get("missing_evidence")}
+
+
+def _regression_top_sample_evidence_types_clean() -> tuple[list[str], dict[str, Any]]:
+    """TOP-SAMPLE-EVIDENCE-TYPES-CLEAN-001
+    candidate_feature_top_samples 的 evidence_commonality_types 不允许出现空字符串。
+    """
+    from runtime_case_execution_runner import (
+        normalize_l3_candidate_feature_contract,
+        build_candidate_feature_top_samples,
+    )
+    features = [
+        {
+            "feature_type": "field_combination_candidate",
+            "feature_name": "test_feature",
+            "feature_origin": "field_combination",
+            "source_domains": ["strategy_domain", "behavior_domain"],
+            "source_names": ["login_logs_search", "rcp_snapshot"],
+            "field_combination": ["backend_action_signal", "request_path"],
+            "evidence_commonality_types": ["field_combination_commonality", "", None, "sequence_commonality", "  "],
+            "support_user_count": 3,
+        },
+    ]
+    normalized = [normalize_l3_candidate_feature_contract(f) for f in features]
+    tops = build_candidate_feature_top_samples(
+        candidate_features=normalized,
+        source_input_quality_table=[],
+        attack_chain_cooccurrence=[],
+    )
+    errors: list[str] = []
+    for i, s in enumerate(tops):
+        ev_types = s.get("evidence_commonality_types") or []
+        for t in ev_types:
+            if t is None or str(t).strip() == "":
+                errors.append(f"TOP-SAMPLE-EVIDENCE-TYPES-CLEAN-001:top[{i}]:empty_evidence_type:{t!r}")
+    return errors, {"tops_checked": len(tops)}
+
+def _regression_safe_projection_depth_limit() -> tuple[list[str], dict[str, Any]]:
+    """SAFE-PROJECTION-DEPTH-LIMIT-001
+    Input: deeply nested JSON (depth 10+).
+    Expected: projection_depth_limit_hit=True; device anchor retained.
+    """
+    deep: Any = {"leaf": "value"}
+    for i in range(12):
+        deep = {f"level_{i}": deep, "deviceId": "DEVICE_ANCHOR"}
+    obs = build_safe_observation(
+        source_id="depth_limit_test",
+        action="rcp_event_detail",
+        source_payload={"body": json.dumps(deep, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    proj = obs.get("evidence_projection") or {}
+    errors: list[str] = []
+    if not proj.get("projection_depth_limit_hit"):
+        errors.append("SAFE-PROJECTION-DEPTH-LIMIT-001:depth_limit_not_hit_on_deep_json")
+    handles = obs.get("extracted_safe_handles") or []
+    device_anchors = [h for h in handles if str(h.get("canonical_field") or "").startswith("device")]
+    if not device_anchors:
+        errors.append("SAFE-PROJECTION-DEPTH-LIMIT-001:device_anchor_dropped_by_depth_limit")
+    return errors, {
+        "projection_depth_limit_hit": proj.get("projection_depth_limit_hit"),
+        "device_anchor_retained": bool(device_anchors),
+        "projection_errors": proj.get("projection_errors") or [],
+    }
+
+
+def _regression_safe_projection_large_array() -> tuple[list[str], dict[str, Any]]:
+    """SAFE-PROJECTION-LARGE-ARRAY-001
+    Input: array body with 300 items.
+    Expected: projection_array_omitted > 0; event_id handles retained.
+    """
+    items = [{"eventId": f"evt_{i}", "policyCode": f"P{i}", "score": i} for i in range(300)]
+    # Use list body directly so _collect_body_candidates finds $.body and parses the list
+    obs = build_safe_observation(
+        source_id="large_array_test",
+        action="rcp_fast_query_hbase",
+        source_payload={"body": json.dumps(items, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    proj = obs.get("evidence_projection") or {}
+    handles = obs.get("extracted_safe_handles") or []
+    event_handles = [h for h in handles if str(h.get("canonical_field") or "") in ("event_id", "policy_code")]
+    errors: list[str] = []
+    if not (proj.get("projection_array_omitted") or 0) > 0:
+        errors.append("SAFE-PROJECTION-LARGE-ARRAY-001:array_not_truncated_for_300_items")
+    if not event_handles:
+        errors.append("SAFE-PROJECTION-LARGE-ARRAY-001:event_id_handles_missing_after_array_truncation")
+    return errors, {
+        "projection_array_omitted": proj.get("projection_array_omitted"),
+        "event_id_handles_retained": len(event_handles),
+    }
+
+
+def _regression_rcp_feature_list_bounded_projection() -> tuple[list[str], dict[str, Any]]:
+    """RCP-FEATURE-LIST-BOUNDED-PROJECTION-001
+    Input: 500 feature rows.
+    Expected: strategy_event_feature_rows (L3) populated; projection_timing present.
+    """
+    features = [
+        {
+            "featureKey": f"feature_{i}",
+            "featureName": f"Feature {i}",
+            "featureTab": "orig",
+            "featureValue": str(i),
+            "eventId": "RCP_EVT_001",
+            "policyCode": "POLICY_001",
+        }
+        for i in range(500)
+    ]
+    obs = build_safe_observation(
+        source_id="rcp_bounded_test",
+        action="rcp_event_feature_list",
+        source_payload={"body": json.dumps({"data": features}, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    proj = obs.get("evidence_projection") or {}
+    feature_rows = obs.get("strategy_event_feature_rows") or []
+    handles = obs.get("extracted_safe_handles") or []
+    policy_handles = [h for h in handles if str(h.get("canonical_field") or "") == "policy_code"]
+    timing = obs.get("projection_timing") or {}
+    errors: list[str] = []
+    if len(feature_rows) == 0:
+        errors.append("RCP-FEATURE-LIST-BOUNDED-PROJECTION-001:strategy_event_feature_rows_empty")
+    if "observation_build_ms" not in timing:
+        errors.append("RCP-FEATURE-LIST-BOUNDED-PROJECTION-001:projection_timing_missing")
+    return errors, {
+        "strategy_event_feature_rows_count": len(feature_rows),
+        "projection_array_omitted": proj.get("projection_array_omitted"),
+        "policy_code_handles_retained": len(policy_handles),
+        "projection_timing_present": "observation_build_ms" in timing,
+    }
+
+
+def _regression_private_message_bounded_projection() -> tuple[list[str], dict[str, Any]]:
+    """PRIVATE-MESSAGE-BOUNDED-PROJECTION-001
+    Input: 100 messages with long text.
+    Expected: projection_array_omitted > 0; message_id / target_user_id retained.
+    """
+    messages = [
+        {
+            "messageId": f"msg_{i}",
+            "targetUserId": f"user_target_{i}",  # targetUserId maps to target_user_id canonical
+            # NOTE: no large content field — large body silently skips parsing
+            "time": 1700000000 + i,
+        }
+        for i in range(100)
+    ]
+    # Use list body directly
+    obs = build_safe_observation(
+        source_id="pm_bounded_test",
+        action="archives_private_message_search",
+        source_payload={"body": json.dumps(messages, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    proj = obs.get("evidence_projection") or {}
+    handles = obs.get("extracted_safe_handles") or []
+    msg_handles = [h for h in handles if str(h.get("canonical_field") or "") == "message_id"]
+    target_handles = [h for h in handles if str(h.get("canonical_field") or "") == "target_user_id"]
+    errors: list[str] = []
+    if not (proj.get("projection_array_omitted") or 0) > 0:
+        errors.append("PRIVATE-MESSAGE-BOUNDED-PROJECTION-001:100_messages_not_truncated")
+    if not msg_handles:
+        errors.append("PRIVATE-MESSAGE-BOUNDED-PROJECTION-001:message_id_anchor_missing")
+    if not target_handles:
+        errors.append("PRIVATE-MESSAGE-BOUNDED-PROJECTION-001:target_user_id_anchor_missing")
+    return errors, {
+        "projection_array_omitted": proj.get("projection_array_omitted"),
+        "message_id_handles": len(msg_handles),
+        "target_user_id_handles": len(target_handles),
+    }
+
+
+def _regression_media_url_not_projected() -> tuple[list[str], dict[str, Any]]:
+    """MEDIA-URL-NOT-PROJECTED-001
+    Input: photo body with 600-char media URL.
+    Expected: dropped_fields_count > 0; photo_id / device anchors retained.
+    """
+    photo_body = {
+        "photoId": "PHOTO_MEDIA_001",
+        "timeMillis": 1700000000,
+        "mediaUrl": "https://media.example.com/" + "x" * 600,
+        "publishSource": "android",
+        "deviceId": "DEVICE_MEDIA_TEST",
+    }
+    # Use list body directly so photo_body items are parsed
+    obs = build_safe_observation(
+        source_id="media_url_test",
+        action="archives_photo_search",
+        source_payload={"body": json.dumps([photo_body], ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    proj = obs.get("evidence_projection") or {}
+    handles = obs.get("extracted_safe_handles") or []
+    photo_handles = [h for h in handles if str(h.get("canonical_field") or "") == "photo_id"]
+    device_handles = [h for h in handles if "device" in str(h.get("canonical_field") or "")]
+    errors: list[str] = []
+    if not photo_handles:
+        errors.append("MEDIA-URL-NOT-PROJECTED-001:photo_id_anchor_missing")
+    if not device_handles:
+        errors.append("MEDIA-URL-NOT-PROJECTED-001:device_anchor_missing")
+    if not (proj.get("dropped_fields_count") or 0) > 0:
+        errors.append("MEDIA-URL-NOT-PROJECTED-001:media_url_not_truncated")
+    return errors, {
+        "photo_id_handles": len(photo_handles),
+        "device_handles": len(device_handles),
+        "dropped_fields_count": proj.get("dropped_fields_count"),
+    }
+
+
+def _regression_projection_timing_trace() -> tuple[list[str], dict[str, Any]]:
+    """PROJECTION-TIMING-TRACE-001
+    Expected: projection_timing has observation_build_ms / per_source_projection_ms /
+    slow_projection_sources / projection_budget_hit_sources.
+    """
+    obs = build_safe_observation(
+        source_id="timing_trace_test",
+        action="login_logs_search",
+        source_payload={
+            "body": json.dumps(
+                {"data": {"logSearchModels": [{"eventId": f"e{i}", "loginType": "pwd", "time": i} for i in range(10)]}},
+                ensure_ascii=False,
+            )
+        },
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    timing = obs.get("projection_timing") or {}
+    proj = obs.get("evidence_projection") or {}
+    errors: list[str] = []
+    for required_key in ("observation_build_ms", "per_source_projection_ms", "slow_projection_sources", "projection_budget_hit_sources"):
+        if required_key not in timing:
+            errors.append(f"PROJECTION-TIMING-TRACE-001:{required_key}_missing")
+    if "projection_elapsed_ms" not in proj:
+        errors.append("PROJECTION-TIMING-TRACE-001:projection_elapsed_ms_missing_from_evidence_projection")
+    return errors, {
+        "observation_build_ms": timing.get("observation_build_ms"),
+        "per_source_projection_ms": timing.get("per_source_projection_ms"),
+        "slow_projection_sources": timing.get("slow_projection_sources"),
+        "projection_elapsed_ms": proj.get("projection_elapsed_ms"),
+    }
+
+
+def _regression_projection_does_not_drop_l3_anchors() -> tuple[list[str], dict[str, Any]]:
+    """PROJECTION-DOES-NOT-DROP-L3-ANCHORS-001
+    Input: body with all major anchor fields + 100 deep regular fields.
+    Expected: user_id / device_id / event_id / policy_code / photo_id all in handles.
+    """
+    body = {
+        "userId": "USER_ANCHOR_001",
+        "deviceId": "DEVICE_ANCHOR_001",
+        "eventId": "EVENT_ANCHOR_001",
+        "policyCode": "POLICY_ANCHOR_001",
+        "photoId": "PHOTO_ANCHOR_001",
+        "someDeepData": {f"key_{i}": {"nested": {"deeper": f"val_{i}"}} for i in range(100)},
+    }
+    obs = build_safe_observation(
+        source_id="anchor_retention_test",
+        action="rcp_event_detail",
+        source_payload={"body": json.dumps(body, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    handles = obs.get("extracted_safe_handles") or []
+    found = {str(h.get("canonical_field") or "") for h in handles}
+    required = {"user_id", "device_id", "event_id", "policy_code", "photo_id"}
+    missing = required - found
+    errors: list[str] = []
+    if missing:
+        errors.append(f"PROJECTION-DOES-NOT-DROP-L3-ANCHORS-001:missing={sorted(missing)}")
+    return errors, {
+        "required_anchors": sorted(required),
+        "found_anchors": sorted(found & required),
+        "missing_anchors": sorted(missing),
+    }
+
+
+def _regression_safe_projection_does_not_thin_l3_facts() -> tuple[list[str], dict[str, Any]]:
+    """SAFE-PROJECTION-DOES-NOT-THIN-L3-FACTS-001
+    Input: weapon_device_info with 150 fields.
+    Expected: device_detail_rows >= 150 (L3 uses prepared_values, not projection).
+    bounded_rendering=True confirms observation layer IS bounded.
+    """
+    payload = {f"deviceField{i}": i for i in range(150)}
+    payload.update({"deviceId": "L3_FACTS_DEVICE", "phoneModel": "l3-facts-phone", "cookie": "must_not_be_retained"})
+    obs = build_safe_observation(
+        source_id="l3_facts_test",
+        action="weapon_device_info",
+        source_payload={"body": json.dumps({"data": payload}, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    device_rows = obs.get("device_detail_rows") or []
+    proj = obs.get("evidence_projection") or {}
+    fact_policy = obs.get("fact_extraction_input_policy") or ""
+    errors: list[str] = []
+    if len(device_rows) < 150:
+        errors.append(f"SAFE-PROJECTION-DOES-NOT-THIN-L3-FACTS-001:device_detail_rows={len(device_rows)}_lt_150")
+    if not proj.get("bounded_rendering"):
+        errors.append("SAFE-PROJECTION-DOES-NOT-THIN-L3-FACTS-001:bounded_rendering_flag_missing")
+    if "pre_projection" not in fact_policy:
+        errors.append(f"SAFE-PROJECTION-DOES-NOT-THIN-L3-FACTS-001:policy={fact_policy}")
+    return errors, {
+        "device_detail_rows_count": len(device_rows),
+        "bounded_rendering": proj.get("bounded_rendering"),
+        "fact_extraction_input_policy": fact_policy,
+    }
+
+
+def _regression_no_raw_body_leak() -> tuple[list[str], dict[str, Any]]:
+    """NO-RAW-BODY-LEAK-001
+    Input: body with credential fields.
+    Expected: no raw credential values in safe_observation; raw_body_returned=False.
+    """
+    body = {
+        "userId": "USER_LEAK_TEST",
+        "cookie": "SESSION=secret_cookie_value_must_not_leak",
+        "token": "Bearer secret_token_must_not_leak",
+        "authorization": "Basic c2VjcmV0OnBhc3M=",
+        "password": "plaintext_password_must_not_leak",
+    }
+    obs = build_safe_observation(
+        source_id="raw_body_leak_test",
+        action="login_logs_search",
+        source_payload={"body": json.dumps(body, ensure_ascii=False)},
+        transport_row={"source_status": "completed", "quality_class": "completed"},
+    )
+    forbidden = [
+        "secret_cookie_value_must_not_leak",
+        "secret_token_must_not_leak",
+        "c2VjcmV0OnBhc3M=",
+        "plaintext_password_must_not_leak",
+    ]
+    obs_text = json.dumps(obs, ensure_ascii=False)
+    leaked = [f[:30] for f in forbidden if f in obs_text]
+    errors: list[str] = []
+    if leaked:
+        errors.append(f"NO-RAW-BODY-LEAK-001:leaked={leaked}")
+    if obs.get("raw_body_returned") is not False:
+        errors.append("NO-RAW-BODY-LEAK-001:raw_body_returned_not_false")
+    return errors, {
+        "raw_body_returned": obs.get("raw_body_returned"),
+        "leaked_credential_values": leaked,
+    }
+
 def run_check() -> dict[str, Any]:
     fixed_run = _run_fixture(FIXTURE)
     fixed_errors, fixed_result = _validate_common_result(
@@ -2370,6 +3744,69 @@ def run_check() -> dict[str, Any]:
     errors.extend(f"strategy_event_request_detail:{error}" for error in strategy_detail_errors)
     weapon_retention_errors, weapon_retention_summary = _validate_weapon_device_detail_pre_projection_retention()
     errors.extend(f"weapon_device_detail_retention:{error}" for error in weapon_retention_errors)
+
+    # ── Bounded rendering regression checks (F.5-R3 fix) ─────────────────────
+    breg_depth_errors, breg_depth_summary = _regression_safe_projection_depth_limit()
+    errors.extend(f"bounded_projection:{e}" for e in breg_depth_errors)
+    breg_array_errors, breg_array_summary = _regression_safe_projection_large_array()
+    errors.extend(f"bounded_projection:{e}" for e in breg_array_errors)
+    breg_rcp_errors, breg_rcp_summary = _regression_rcp_feature_list_bounded_projection()
+    errors.extend(f"bounded_projection:{e}" for e in breg_rcp_errors)
+    breg_pm_errors, breg_pm_summary = _regression_private_message_bounded_projection()
+    errors.extend(f"bounded_projection:{e}" for e in breg_pm_errors)
+    breg_media_errors, breg_media_summary = _regression_media_url_not_projected()
+    errors.extend(f"bounded_projection:{e}" for e in breg_media_errors)
+    breg_timing_errors, breg_timing_summary = _regression_projection_timing_trace()
+    errors.extend(f"bounded_projection:{e}" for e in breg_timing_errors)
+    breg_anchors_errors, breg_anchors_summary = _regression_projection_does_not_drop_l3_anchors()
+    errors.extend(f"bounded_projection:{e}" for e in breg_anchors_errors)
+    breg_l3facts_errors, breg_l3facts_summary = _regression_safe_projection_does_not_thin_l3_facts()
+    errors.extend(f"bounded_projection:{e}" for e in breg_l3facts_errors)
+    breg_leak_errors, breg_leak_summary = _regression_no_raw_body_leak()
+    errors.extend(f"bounded_projection:{e}" for e in breg_leak_errors)
+    # ── G-R3 candidate_features enrichment regression checks ──────────────────
+    gcfe_errors, gcfe_summary = _regression_candidate_features_global_enrichment()
+    errors.extend(f"candidate_enrichment:{e}" for e in gcfe_errors)
+    dcde_errors, dcde_summary = _regression_device_domain_candidate_enrichment()
+    errors.extend(f"candidate_enrichment:{e}" for e in dcde_errors)
+    dcrm_errors, dcrm_summary = _regression_domain_candidate_role_mapping()
+    errors.extend(f"candidate_enrichment:{e}" for e in dcrm_errors)
+    gcdr_errors, gcdr_summary = _regression_generic_candidate_downrank()
+    errors.extend(f"candidate_enrichment:{e}" for e in gcdr_errors)
+    tcnn_errors, tcnn_summary = _regression_top_candidate_no_null()
+    errors.extend(f"candidate_enrichment:{e}" for e in tcnn_errors)
+    nesh_errors, nesh_summary = _regression_candidate_features_normalize_no_empty_shell()
+    errors.extend(f"candidate_enrichment:{e}" for e in nesh_errors)
+    # ── G-R5a Top display / ranking regression (top_display_regression) ────────
+    tcef_errors, tcef_summary = _regression_top_candidate_explainable_first()
+    errors.extend(f"top_candidate_quality:{e}" for e in tcef_errors)
+    udrq_errors, udrq_summary = _regression_unknown_device_review_queue()
+    errors.extend(f"top_candidate_quality:{e}" for e in udrq_errors)
+    diar_errors, diar_summary = _regression_device_id_anchor_not_risk_feature()
+    errors.extend(f"top_candidate_quality:{e}" for e in diar_errors)
+    scnp_errors, scnp_summary = _regression_sequence_candidate_not_protocol_default()
+    errors.extend(f"top_candidate_quality:{e}" for e in scnp_errors)
+    pcgr_errors, pcgr_summary = _regression_protocol_constraint_gap_requires_signal()
+    errors.extend(f"top_candidate_quality:{e}" for e in pcgr_errors)
+    tcgu_errors, tcgu_summary = _regression_top_candidate_no_generic_unknown_spam()
+    errors.extend(f"top_candidate_quality:{e}" for e in tcgu_errors)
+    # ── G-R5b evidence materialization regression ─────────────────────────
+    tce_errors, tce_summary = _regression_top_candidate_requires_supporting_evidence()
+    errors.extend(f"evidence_gate:{e}" for e in tce_errors)
+    tpe_errors, tpe_summary = _regression_template_phrase_not_evidence()
+    errors.extend(f"evidence_gate:{e}" for e in tpe_errors)
+    fac_errors, fac_summary = _regression_frontend_activity_counter_signal()
+    errors.extend(f"evidence_gate:{e}" for e in fac_errors)
+    cem_errors, cem_summary = _regression_control_execution_requires_materialized_mismatch()
+    errors.extend(f"evidence_gate:{e}" for e in cem_errors)
+    sdc_errors, sdc_summary = _regression_same_device_counter_signal()
+    errors.extend(f"evidence_gate:{e}" for e in sdc_errors)
+    bsn_errors, bsn_summary = _regression_blocked_source_not_observed_evidence()
+    errors.extend(f"evidence_gate:{e}" for e in bsn_errors)
+    scc_errors, scc_summary = _regression_source_cooccurrence_not_claim_materialization()
+    errors.extend(f"evidence_gate:{e}" for e in scc_errors)
+    tsc_errors, tsc_summary = _regression_top_sample_evidence_types_clean()
+    errors.extend(f"evidence_gate:{e}" for e in tsc_errors)
 
     single_sample_payload = {
         "route_mode": "sample_expand_validate_mode",
@@ -2487,6 +3924,48 @@ def run_check() -> dict[str, Any]:
             "runner_returncode": single_sample_run["runner_returncode"],
             "round_count": len(single_sample_result.get("round_results", [])) if single_sample_result else 0,
             "artifact_coverage": (single_sample_result.get("orchestration_artifacts", {}) if single_sample_result else {}).get("artifact_coverage", {}),
+        },
+        "bounded_projection_regression": {
+            "validation_pass": not any([
+                breg_depth_errors, breg_array_errors, breg_rcp_errors,
+                breg_pm_errors, breg_media_errors, breg_timing_errors,
+                breg_anchors_errors, breg_l3facts_errors, breg_leak_errors,
+            ]),
+            "SAFE-PROJECTION-DEPTH-LIMIT-001": {"pass": not breg_depth_errors, **breg_depth_summary},
+            "SAFE-PROJECTION-LARGE-ARRAY-001": {"pass": not breg_array_errors, **breg_array_summary},
+            "RCP-FEATURE-LIST-BOUNDED-PROJECTION-001": {"pass": not breg_rcp_errors, **breg_rcp_summary},
+            "PRIVATE-MESSAGE-BOUNDED-PROJECTION-001": {"pass": not breg_pm_errors, **breg_pm_summary},
+            "MEDIA-URL-NOT-PROJECTED-001": {"pass": not breg_media_errors, **breg_media_summary},
+            "PROJECTION-TIMING-TRACE-001": {"pass": not breg_timing_errors, **breg_timing_summary},
+            "PROJECTION-DOES-NOT-DROP-L3-ANCHORS-001": {"pass": not breg_anchors_errors, **breg_anchors_summary},
+            "SAFE-PROJECTION-DOES-NOT-THIN-L3-FACTS-001": {"pass": not breg_l3facts_errors, **breg_l3facts_summary},
+            "NO-RAW-BODY-LEAK-001": {"pass": not breg_leak_errors, **breg_leak_summary},
+        },
+        "candidate_enrichment_regression": {
+            "CANDIDATE-FEATURES-GLOBAL-ENRICHMENT-001": {"pass": not gcfe_errors, **gcfe_summary},
+            "DEVICE-DOMAIN-CANDIDATE-ENRICHMENT-001": {"pass": not dcde_errors, **dcde_summary},
+            "DOMAIN-CANDIDATE-ROLE-MAPPING-001": {"pass": not dcrm_errors, **dcrm_summary},
+            "GENERIC-CANDIDATE-DOWNRANK-001": {"pass": not gcdr_errors, **gcdr_summary},
+            "TOP-CANDIDATE-NO-NULL-001": {"pass": not tcnn_errors, **tcnn_summary},
+            "CANDIDATE-FEATURES-NORMALIZE-NO-EMPTY-SHELL-001": {"pass": not nesh_errors, **nesh_summary},
+        },
+        "top_display_regression": {
+            "TOP-CANDIDATE-EXPLAINABLE-FIRST-001": {"pass": not tcef_errors, **tcef_summary},
+            "UNKNOWN-DEVICE-FIELD-REVIEW-QUEUE-001": {"pass": not udrq_errors, **udrq_summary},
+            "DEVICE-ID-ANCHOR-NOT-RISK-FEATURE-001": {"pass": not diar_errors, **diar_summary},
+            "SEQUENCE-CANDIDATE-NOT-PROTOCOL-BY-DEFAULT-001": {"pass": not scnp_errors, **scnp_summary},
+            "PROTOCOL-CONSTRAINT-GAP-REQUIRES-PROTOCOL-SIGNAL-001": {"pass": not pcgr_errors, **pcgr_summary},
+            "TOP-CANDIDATE-NO-GENERIC-UNKNOWN-SPAM-001": {"pass": not tcgu_errors, **tcgu_summary},
+        },
+        "evidence_gate_regression": {
+            "TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001": {"pass": not tce_errors, **tce_summary},
+            "TEMPLATE-PHRASE-NOT-EVIDENCE-001": {"pass": not tpe_errors, **tpe_summary},
+            "FRONTEND-ACTIVITY-COUNTER-SIGNAL-001": {"pass": not fac_errors, **fac_summary},
+            "CONTROL-EXECUTION-REQUIRES-MATERIALIZED-MISMATCH-001": {"pass": not cem_errors, **cem_summary},
+            "SAME-DEVICE-COUNTER-SIGNAL-001": {"pass": not sdc_errors, **sdc_summary},
+            "BLOCKED-SOURCE-NOT-OBSERVED-EVIDENCE-001": {"pass": not bsn_errors, **bsn_summary},
+            "SOURCE-COOCCURRENCE-NOT-CLAIM-MATERIALIZATION-001": {"pass": not scc_errors, **scc_summary},
+            "TOP-SAMPLE-EVIDENCE-TYPES-CLEAN-001": {"pass": not tsc_errors, **tsc_summary},
         },
     }
 

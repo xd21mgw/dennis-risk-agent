@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
+from functools import lru_cache
 from typing import Any
 
 
@@ -667,6 +669,31 @@ MAX_PROJECTED_ARRAY_ITEMS = 200
 MAX_RCP_EVENT_FEATURE_ROWS = 2000
 MAX_RETAINED_FIELD_PATHS = 120
 
+# ── Observation/display-layer bounded rendering limits ─────────────────────
+# These apply ONLY to _project_evidence_body (safe_observation display).
+# They do NOT affect _extract_handles / _extract_device_detail_rows /
+# _extract_rcp_strategy_event_feature_rows which feed the L3 fact tables.
+PROJECTION_MAX_DEPTH = 5           # stop deep-recursing at this depth
+PROJECTION_MAX_OBJ_KEYS = 80       # max dict keys kept per level (non-anchor keys truncated)
+PROJECTION_OBS_ARRAY_ITEMS = 60    # default max array items in safe_observation display
+# Per-source tighter caps for known large-body sources
+PROJECTION_SLOW_THRESHOLD_MS = 5_000   # ms — mark source as slow if projection exceeds this
+PROJECTION_VERY_SLOW_THRESHOLD_MS = 10_000  # ms — mark source as very_slow
+
+PROJECTION_OBS_ARRAY_CAP_BY_SOURCE: dict[str, int] = {
+    "rcp_event_feature_list":             80,
+    "archives_private_message_search":    30,
+    "archives_comment_search":            30,
+    "archives_gallery_photo_list":        40,
+    "archives_photo_search":              40,
+    "archives_photo_profile":             40,
+    "archives_photo_meta":                40,
+    "weapon_device_info":                 60,
+    "weapon_inventory":                   60,
+    "weapon_device_app_list":             60,
+    "login_logs_search":                  50,
+}
+
 RAW_DETAIL_UNKNOWN_RETENTION_ACTIONS = {
     "login_logs_search",
     "archives_user_analysis",
@@ -973,6 +1000,14 @@ def _projection_meta() -> dict[str, Any]:
         "retained_field_paths": [],
         "field_paths_retained": [],
         "projection_errors": [],
+        # bounded rendering stats (display layer only)
+        "bounded_rendering": True,
+        "projection_depth_limit_hit": False,
+        "projection_key_limit_hit": False,
+        "projection_array_omitted": 0,
+        # timing (filled in by _project_evidence_body wrapper)
+        "projection_elapsed_ms": 0.0,
+        "projection_slow": False,
     }
 
 
@@ -1245,10 +1280,65 @@ def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple
 
     meta = _projection_meta()
 
+    # Observation-layer array cap: use per-source cap if available, else default.
+    # NOTE: this cap is for safe_observation display ONLY.
+    # _extract_rcp_strategy_event_feature_rows and _extract_device_detail_rows
+    # operate on prepared_values (pre-projection) and are NOT affected.
+    _obs_array_cap = PROJECTION_OBS_ARRAY_CAP_BY_SOURCE.get(action, PROJECTION_OBS_ARRAY_ITEMS)
+
     def project(item: Any, path: str, depth: int = 0) -> Any:
+        # ── Depth limit ──────────────────────────────────────────────────────
+        # Stop deep-recursing past PROJECTION_MAX_DEPTH.
+        # Anchors (credential / PII / canonical) are already handled before
+        # the recursive call, so they are never truncated by depth.
+        if depth > PROJECTION_MAX_DEPTH:
+            meta["projection_depth_limit_hit"] = True
+            meta["dropped_fields_count"] += 1
+            if isinstance(item, dict):
+                return {
+                    "__depth_limit_truncated__": True,
+                    "depth": depth,
+                    "key_count": len(item),
+                }
+            if isinstance(item, list):
+                return {
+                    "__depth_limit_truncated__": True,
+                    "depth": depth,
+                    "item_count": len(item),
+                }
+            return item  # scalar at deep depth: keep as-is
+
         if isinstance(item, dict):
             projected: dict[str, Any] = {}
+            omitted_keys: list[str] = []
+
+            # Split keys into anchor-priority and regular buckets so that
+            # anchor keys are never evicted by PROJECTION_MAX_OBJ_KEYS.
+            anchor_items: list[tuple[str, Any]] = []
+            regular_items: list[tuple[str, Any]] = []
             for key, child in item.items():
+                canonical = _canonical_for_key(str(key))
+                if (
+                    _is_credential_secret_key(str(key))
+                    or _is_strict_pii_key(str(key))
+                    or (canonical and canonical in RISK_ENTITY_CANONICAL_FIELDS
+                        and isinstance(child, (str, int, float, bool)))
+                    or str(key) in PROJECTION_ALWAYS_KEEP_KEYS
+                ):
+                    anchor_items.append((key, child))
+                else:
+                    regular_items.append((key, child))
+
+            # Always keep all anchor items; cap regular items.
+            max_regular = max(0, PROJECTION_MAX_OBJ_KEYS - len(anchor_items))
+            if len(regular_items) > max_regular:
+                omitted = regular_items[max_regular:]
+                regular_items = regular_items[:max_regular]
+                omitted_keys = [k for k, _ in omitted]
+                meta["projection_key_limit_hit"] = True
+                meta["dropped_fields_count"] += len(omitted_keys)
+
+            for key, child in anchor_items + regular_items:
                 child_path = f"{path}.{key}"
                 if _is_credential_secret_key(str(key)):
                     projected[key] = _safe_sensitive_projection(str(key), child)
@@ -1278,20 +1368,44 @@ def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple
                 projected[key] = projected_child
                 if _canonical_for_key(str(key)) or str(key) in PROJECTION_ALWAYS_KEEP_KEYS:
                     _record_retained_path(meta, child_path)
+
+            if omitted_keys:
+                projected["__omitted_keys__"] = {
+                    "omitted_key_count": len(omitted_keys),
+                    "omitted_key_sample": omitted_keys[:10],
+                    "projection_key_limit": PROJECTION_MAX_OBJ_KEYS,
+                }
             return projected
+
         if isinstance(item, list):
             projected_list = []
-            max_items = MAX_RCP_EVENT_FEATURE_ROWS if action == "rcp_event_feature_list" else MAX_PROJECTED_ARRAY_ITEMS
-            for index, child in enumerate(item[:max_items]):
+            # Use observation-layer cap (NOT MAX_RCP_EVENT_FEATURE_ROWS).
+            # L3 fact tables (_extract_rcp_strategy_event_feature_rows) run on
+            # prepared_values before this projection, so they see the full list.
+            obs_cap = _obs_array_cap
+            total_items = len(item)
+            capped_items = item[:obs_cap]
+            omitted_count = max(0, total_items - obs_cap)
+            for index, child in enumerate(capped_items):
                 child_path = f"{path}[{index}]"
                 projected_child = project(child, child_path, depth + 1)
                 if projected_child in (None, "", [], {}):
                     meta["dropped_fields_count"] += 1
                     continue
                 projected_list.append(projected_child)
+            if omitted_count > 0:
+                meta["projection_array_omitted"] += omitted_count
+                projected_list.append({
+                    "__array_truncated__": True,
+                    "observed_count": total_items,
+                    "projected_count": len(projected_list),
+                    "omitted_count": omitted_count,
+                    "projection_array_cap": obs_cap,
+                })
             if action == "login_logs_search" and path.endswith("logSearchModels"):
                 meta["projected_records"] += len(projected_list)
             return projected_list
+
         if isinstance(item, str):
             if _looks_sensitive_scalar(item):
                 meta["strict_pii_fields_redacted"] += 1
@@ -1305,6 +1419,7 @@ def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple
                 }
         return item
 
+    _t_start = time.monotonic()
     try:
         projected = project(parsed, body_path)
         if projected is not parsed:
@@ -1313,8 +1428,14 @@ def _project_evidence_body(action: str, parsed: Any, *, body_path: str) -> tuple
             records = _value_at_path(projected, LOGIN_LOGS_ARRAY_CAP_PATH)
             if isinstance(records, list):
                 meta["projected_records"] = len(records)
+        elapsed_ms = (time.monotonic() - _t_start) * 1000
+        meta["projection_elapsed_ms"] = round(elapsed_ms, 2)
+        meta["projection_slow"] = elapsed_ms > PROJECTION_SLOW_THRESHOLD_MS
         return projected, meta
     except Exception as exc:  # defensive: projection must never block parsing
+        elapsed_ms = (time.monotonic() - _t_start) * 1000
+        meta["projection_elapsed_ms"] = round(elapsed_ms, 2)
+        meta["projection_slow"] = elapsed_ms > PROJECTION_SLOW_THRESHOLD_MS
         meta["projection_errors"].append(type(exc).__name__)
         return parsed, meta
 
@@ -1339,6 +1460,12 @@ def _aggregate_projection_metadata(items: list[dict[str, Any]]) -> dict[str, Any
     aggregate["retained_field_paths"] = _unique(retained_paths)[:MAX_RETAINED_FIELD_PATHS]
     aggregate["field_paths_retained"] = aggregate["retained_field_paths"]
     aggregate["projection_errors"] = _unique(errors)
+    # aggregate bounded rendering stats
+    aggregate["projection_depth_limit_hit"] = any(bool(item.get("projection_depth_limit_hit")) for item in items)
+    aggregate["projection_key_limit_hit"] = any(bool(item.get("projection_key_limit_hit")) for item in items)
+    aggregate["projection_array_omitted"] = sum(int(item.get("projection_array_omitted") or 0) for item in items)
+    aggregate["projection_elapsed_ms"] = round(sum(float(item.get("projection_elapsed_ms") or 0) for item in items), 2)
+    aggregate["projection_slow"] = any(bool(item.get("projection_slow")) for item in items)
     return aggregate
 
 
@@ -1395,7 +1522,14 @@ def _collect_body_candidates(value: Any, *, path: str = "$", limit: int = 12) ->
     return candidates[:limit]
 
 
+@lru_cache(maxsize=2048)
 def _canonical_for_key(key: str) -> str | None:
+    """Hot-path alias scan, cached (LRU 2048).
+
+    Called per field key at every projection depth; caching eliminates
+    the O(n x m) alias re-scan for repeated keys such as device_id /
+    event_id / policy_code across large RCP / device bodies.
+    """
     normalized = re.sub(r"[^a-z0-9]", "", key.lower())
     for canonical, aliases in BUSINESS_FIELD_ALIASES.items():
         if any(re.sub(r"[^a-z0-9]", "", alias.lower()) == normalized for alias in aliases):
@@ -1842,6 +1976,41 @@ def _expected_fields_for_action(action: str, expected_business_fields: list[str]
     return list(SOURCE_EXPECTED_BUSINESS_FIELDS.get(action, []))
 
 
+def _build_projection_timing(
+    *,
+    action: str,
+    source_id: str,
+    projection_metadata: list[dict[str, Any]],
+    t_obs_start: float,
+) -> dict[str, Any]:
+    """Aggregate per-source projection timing for observation artifact."""
+    observation_build_ms = round((time.monotonic() - t_obs_start) * 1000, 2)
+    per_source_ms = [
+        round(float(m.get("projection_elapsed_ms") or 0), 2)
+        for m in projection_metadata
+    ]
+    total_projection_ms = round(sum(per_source_ms), 2)
+    slow_sources: list[str] = []
+    budget_hit_sources: list[str] = []
+    for m in projection_metadata:
+        elapsed = float(m.get("projection_elapsed_ms") or 0)
+        if elapsed > PROJECTION_SLOW_THRESHOLD_MS:
+            slow_sources.append(action)
+        if elapsed > PROJECTION_VERY_SLOW_THRESHOLD_MS:
+            budget_hit_sources.append(action)
+    projection_slow = bool(slow_sources)
+    return {
+        "observation_build_ms": observation_build_ms,
+        "total_projection_ms": total_projection_ms,
+        "per_source_projection_ms": per_source_ms,
+        "slow_projection_sources": _unique(slow_sources),
+        "projection_budget_hit_sources": _unique(budget_hit_sources),
+        "projection_slow": projection_slow,
+        "source_id": source_id,
+        "action": action,
+    }
+
+
 def build_safe_observation(
     *,
     source_id: str,
@@ -1861,6 +2030,7 @@ def build_safe_observation(
     embedded_json_metadata: list[dict[str, Any]] = []
     flags: list[str] = []
     row_cap_metadata = _row_cap_metadata(source_payload, transport_row)
+    _t_obs_start = time.monotonic()
 
     for body_path, body_value in body_candidates:
         parsed, parse_status = _parse_body_value(body_value)
@@ -2022,6 +2192,12 @@ def build_safe_observation(
         "interpretation_flags": _unique(flags),
         "source_quality_hint": _source_quality_hint(flags, missing_business_fields),
         "evidence_chain_tags": _evidence_chain_tags(action, extracted_business_fields),
+        "projection_timing": _build_projection_timing(
+            action=action,
+            source_id=source_id,
+            projection_metadata=projection_metadata,
+            t_obs_start=_t_obs_start,
+        ),
     }
 
 

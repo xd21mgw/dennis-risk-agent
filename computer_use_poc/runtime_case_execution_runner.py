@@ -8679,14 +8679,57 @@ def infer_risk_choke_point_fields(feature: dict[str, Any]) -> dict[str, Any]:
         "post_enforcement": ["punish", "review", "appeal", "report", "migration", "post_enforcement", "downrank", "remove"],
         "automation_rhythm": ["time_delta", "rhythm", "sequence_compare", "action_time", "short time", "burst", "window"],
     }
+    # G-R5: protocol 信号 token（必须出现这些才允许归 protocol_constraint_gap）
+    _PROTOCOL_STRONG_TOKENS = {
+        "backend_action_signal", "frontend_activity_signal", "request_path",
+        "client path", "missing_frontend_activity", "frontend_backend_alignment",
+        "client_device_mismatch", "rcp_event_feature_list", "rcp_snapshot",
+        "request_scene", "frontend_active_device_id", "backend_action_device_id",
+    }
+    _has_protocol_signal = any(tok in text_blob for tok in _PROTOCOL_STRONG_TOKENS)
+    # G-R5: sequence/account 专用 token（automation_rhythm 优先识别）
+    _SEQUENCE_RHYTHM_TOKENS = {
+        "sequence_compare", "time_delta", "action_time", "rhythm", "ordered_event",
+        "login_source", "login_type", "profile_change", "account_change",
+    }
+    _has_sequence_rhythm = has_sequence or any(tok in text_blob for tok in _SEQUENCE_RHYTHM_TOKENS)
+    # G-R5: device risky environment token（区分 risky env vs device farm）
+    _DEVICE_RISKY_ENV_TOKENS = {
+        "root", "hook", "frida", "xposed", "simulator", "emulator", "debug",
+        "accessibility", "factory_reset", "no_sim", "mountrisk", "risky app",
+    }
+    _DEVICE_FARM_TOKENS = {
+        "device environment", "package", "applist", "sdk_version", "device_model",
+        "device profile", "app list", "device bundle",
+    }
+    # anchor-only guard：仅有 device_id/did/policy_code/source_id 不得产生 device_farm
+    _anchor_only_fields = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
+    _g_r5_field_combo = [str(f) for f in (feature.get("field_combination") or []) if f]
+    _g_r5_src_fields = [str(f) for f in (feature.get("source_fields") or []) if f]
+    _all_feature_fields = set(_g_r5_field_combo + _g_r5_src_fields)
+    _anchor_only = bool(_all_feature_fields) and _all_feature_fields <= _anchor_only_fields
+
     type_name = "unknown"
     if unknown_semantics:
         type_name = "unknown"
-    elif any(token in text_blob for token in tokens["protocol"]):
+    elif _anchor_only:
+        # 仅有 anchor 字段（device_id/did/policy_code），不归任何有意义 choke type
+        type_name = "unknown"
+    elif has_sequence and not _has_protocol_signal:
+        # G-R5: sequence_comparison 且无明确协议信号 → 优先 automation_rhythm，不归 protocol
+        if _SEQUENCE_RHYTHM_TOKENS & set(text_blob.split()) or has_sequence:
+            type_name = "automation_rhythm"
+    elif _has_protocol_signal and (
+        "strategy_domain" in domains or "behavior_domain" in domains
+    ):
+        # G-R5: protocol_constraint_gap 需要明确协议信号 + strategy/behavior domain
         type_name = "protocol_constraint_gap"
     elif any(token in text_blob for token in tokens["control_execution"]) or ({"behavior_domain", "device_domain"} <= domains and has_sequence):
         type_name = "control_execution_separation"
-    elif "device_domain" in domains and any(token in text_blob for token in tokens["device_farm"]):
+    elif "device_domain" in domains and any(tok in text_blob for tok in _DEVICE_RISKY_ENV_TOKENS):
+        # 明确 risky 环境字段 → device_farm_template（已有最强语义）
+        type_name = "device_farm_template"
+    elif "device_domain" in domains and any(tok in text_blob for tok in _DEVICE_FARM_TOKENS):
         type_name = "device_farm_template"
     elif "behavior_domain" in domains and any(token in text_blob for token in tokens["account_transfer"]):
         type_name = "account_control_transfer"
@@ -8694,8 +8737,11 @@ def infer_risk_choke_point_fields(feature: dict[str, Any]) -> dict[str, Any]:
         type_name = "content_funnel_dependency"
     elif ({"feedback_domain", "enforcement_domain"} & domains) and any(token in text_blob for token in tokens["post_enforcement"]):
         type_name = "post_enforcement_migration"
-    elif has_sequence or any(token in text_blob for token in tokens["automation_rhythm"]):
+    elif _has_sequence_rhythm or any(token in text_blob for token in tokens["automation_rhythm"]):
         type_name = "automation_rhythm"
+    elif any(token in text_blob for token in tokens["protocol"]) and _has_protocol_signal:
+        # fallback: 有 protocol tokens 但前面没匹配到 strategy/behavior domain 条件
+        type_name = "protocol_constraint_gap"
 
     if type_name == "unknown":
         likeness = "unknown"
@@ -8861,6 +8907,140 @@ def normalize_l3_candidate_feature_contract(feature: dict[str, Any]) -> dict[str
     item.setdefault("supporting_attack_chain_ids", [])
     for transient_key in ("baseline_ratio", "lift", "lift_unavailable"):
         item.pop(transient_key, None)
+    # ── G-R3: candidate_features enrichment ──────────────────────────────────
+    # 将内部 feature dict 的字段映射为对外输出合同字段，确保无 empty_shell 候选。
+    # 优先级：item 已有值 > 内部字段推断 > domain/origin fallback > 安全缺省
+    _g_r3_choke_type = str(item.get("risk_choke_point_type") or "unknown")
+    _g_r3_domains = set(_feature_domains(item))
+    _g_r3_origin = str(item.get("feature_origin") or "")
+    _g_r3_field_semantics = str(item.get("field_semantics_status") or "")
+    # 1. candidate_feature_name
+    #    优先 item.candidate_feature_name → item.feature_name → choke_type → domain/origin fallback
+    _DOMAIN_NAME_MAP: dict[str, str] = {
+        "device_farm_template": "device_farm_template_candidate",
+        "control_execution_separation": "control_execution_separation_candidate",
+        "protocol_constraint_gap": "protocol_constraint_gap_candidate",
+        "account_control_transfer": "account_maintenance_template_candidate",
+        "content_funnel_dependency": "content_funnel_dependency_candidate",
+        "post_enforcement_migration": "post_enforcement_migration_candidate",
+        "automation_rhythm": "automation_rhythm_candidate",
+    }
+    if not item.get("candidate_feature_name"):
+        # 先看 feature_name（已有语义名）
+        _g_r3_existing_fn = str(item.get("feature_name") or "")
+        if _g_r3_choke_type != "unknown":
+            _g_r3_feature_name = _DOMAIN_NAME_MAP.get(_g_r3_choke_type, f"{_g_r3_choke_type}_candidate")
+        elif _g_r3_origin == "unknown_field_commonality" or _g_r3_field_semantics in ("field_semantics_unknown", "needs_field_dictionary_review"):
+            if "device_domain" in _g_r3_domains:
+                _g_r3_feature_name = "device_unknown_field_enrichment_candidate"
+            elif "strategy_domain" in _g_r3_domains:
+                _g_r3_feature_name = "rcp_unknown_feature_bundle_candidate"
+            elif "account_domain" in _g_r3_domains:
+                _g_r3_feature_name = "account_unknown_field_enrichment_candidate"
+            else:
+                _g_r3_feature_name = "unknown_field_enrichment_candidate"
+        elif "device_domain" in _g_r3_domains:
+            _g_r3_feature_name = "device_execution_environment_candidate"
+        elif "strategy_domain" in _g_r3_domains and "behavior_domain" in _g_r3_domains:
+            _g_r3_feature_name = "rcp_feature_bundle_candidate"
+        elif "strategy_domain" in _g_r3_domains:
+            _g_r3_feature_name = "register_strategy_feature_template_candidate"
+        elif "behavior_domain" in _g_r3_domains:
+            _g_r3_feature_name = "login_control_chain_candidate"
+        elif "account_domain" in _g_r3_domains:
+            _g_r3_feature_name = "account_maintenance_template_candidate"
+        elif "content_domain" in _g_r3_domains or "social_domain" in _g_r3_domains:
+            _g_r3_feature_name = "content_template_candidate"
+        elif "feedback_domain" in _g_r3_domains or "enforcement_domain" in _g_r3_domains:
+            _g_r3_feature_name = "enforcement_context_candidate"
+        elif _g_r3_existing_fn:
+            _g_r3_feature_name = _g_r3_existing_fn
+        else:
+            _g_r3_feature_name = "field_commonality_candidate"
+        item["candidate_feature_name"] = _g_r3_feature_name
+    # 2. source_support
+    #    优先 item.source_support → item.source_names → domain fallback
+    _DOMAIN_SOURCE_MAP: dict[str, list[str]] = {
+        "device_domain": ["weapon_inventory", "weapon_device_info"],
+        "strategy_domain": ["rcp_snapshot", "rcp_event_feature_list"],
+        "behavior_domain": ["login_logs_search"],
+        "account_domain": ["archives_user_analysis", "archives_user_profile"],
+        "content_domain": ["archives_photo_search"],
+        "social_domain": ["archives_private_message_search"],
+        "feedback_domain": ["archives_negative_report", "archives_user_report_search"],
+        "enforcement_domain": ["archives_review_logs"],
+    }
+    if not item.get("source_support"):
+        _g_r3_src_names = unique_strings([str(x) for x in item.get("source_names", []) or [] if x])
+        if not _g_r3_src_names:
+            for _dom in sorted(_g_r3_domains):
+                _g_r3_src_names.extend(_DOMAIN_SOURCE_MAP.get(_dom, []))
+            _g_r3_src_names = unique_strings(_g_r3_src_names)
+        item["source_support"] = _g_r3_src_names
+    # 3. core_commonality
+    #    优先 item.core_commonality → field_combination → source_fields → reason_codes → domain/origin fallback
+    if not item.get("core_commonality"):
+        _ANCHOR_ONLY_FIELDS = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
+        _g_r3_field_combo = [
+            f for f in (item.get("field_combination") or []) or []
+            if str(f).lower() not in _ANCHOR_ONLY_FIELDS
+        ]
+        _g_r3_src_fields = [
+            f for f in (item.get("source_fields") or []) or []
+            if str(f).lower() not in _ANCHOR_ONLY_FIELDS
+        ]
+        _g_r3_reason_codes = [
+            str(c) for c in (item.get("reason_codes") or [])
+            if c and str(c) not in {"L3_candidate_only"}
+        ]
+        _g_r3_core_com: list[str] = (
+            _g_r3_field_combo
+            or _g_r3_src_fields
+            or _g_r3_reason_codes
+        )
+        if not _g_r3_core_com:
+            if _g_r3_origin == "unknown_field_commonality" or _g_r3_field_semantics in ("field_semantics_unknown", "needs_field_dictionary_review"):
+                _g_r3_core_com = ["unknown_device_field_bundle"] if "device_domain" in _g_r3_domains else ["unknown_field_bundle"]
+            elif "device_domain" in _g_r3_domains:
+                _g_r3_core_com = ["device_environment_fields_overlap"]
+            elif "strategy_domain" in _g_r3_domains:
+                _g_r3_core_com = ["register_event_feature_bundle"]
+            elif "behavior_domain" in _g_r3_domains:
+                _g_r3_core_com = ["login_type_login_source_pattern"]
+            elif "account_domain" in _g_r3_domains:
+                _g_r3_core_com = ["account_status_and_behavior_pattern"]
+            elif "content_domain" in _g_r3_domains or "social_domain" in _g_r3_domains:
+                _g_r3_core_com = ["content_template_social_funnel_path"]
+            elif "feedback_domain" in _g_r3_domains or "enforcement_domain" in _g_r3_domains:
+                _g_r3_core_com = ["enforcement_context_migration_pattern"]
+            else:
+                _g_r3_core_com = ["insufficient_interpretable_commonality"]
+        item["core_commonality"] = _g_r3_core_com
+    # 4. supporting_source_domains
+    #    优先 item.supporting_source_domains → item.source_domains → 空列表
+    item.setdefault("supporting_source_domains", sorted(_g_r3_domains))
+    # 5. evidence_commonality_types：去掉空字符串
+    _g_r3_ev_types = [
+        str(t) for t in (item.get("evidence_commonality_types") or []) or []
+        if t and str(t).strip()
+    ]
+    item["evidence_commonality_types"] = _g_r3_ev_types
+    # 6. unknown device field → inject missing_evidence hint
+    if (_g_r3_origin == "unknown_field_commonality" or _g_r3_field_semantics == "needs_field_dictionary_review") and "device_domain" in _g_r3_domains:
+        existing_missing = list(item.get("missing_evidence") or [])
+        if "needs_field_dictionary_review" not in existing_missing:
+            existing_missing.insert(0, "needs_field_dictionary_review")
+        item["missing_evidence"] = existing_missing
+    # 7. generic candidates (multi_domain_anchor_overlap): 降级为 low/unknown
+    if str(item.get("feature_name") or "") in {
+        "multi_domain_anchor_overlap_candidate",
+        "group_level_field_enrichment_candidate",
+        "hard_single_field_signal_candidate",
+    }:
+        item["choke_point_likeness"] = "low"
+        item["risk_choke_point_type"] = "unknown"
+        item["candidate_feature_name"] = str(item.get("feature_name") or "generic_overlap_candidate")
+    # ── end G-R3 enrichment ───────────────────────────────────────────────────
     item["candidate_only_not_final_conclusion"] = True
     item["not_final_conclusion"] = True
     item["validation_needed"] = True
@@ -10736,6 +10916,61 @@ def attach_attack_chain_links_to_candidates(
     return updated
 
 
+
+def _g_r5_top_candidate_score(item: dict[str, Any]) -> tuple:
+    """G-R5: 业务解释力优先排序分 — 越小越优先展示"""
+    choke = str(item.get("risk_choke_point_type") or "unknown")
+    likeness = str(item.get("choke_point_likeness") or "unknown")
+    essence = str(item.get("essence_likeness") or "unknown")
+    fn = str(item.get("candidate_feature_name") or item.get("feature_name") or "")
+    core = item.get("core_commonality") or []
+    src = item.get("source_support") or item.get("source_names") or []
+    missing = item.get("missing_evidence") or []
+    # 1. unknown choke type 降级
+    unknown_penalty = 0 if choke != "unknown" else 2
+    # 2. unknown/device_unknown field 候选额外降级（不进主 Top）
+    _REVIEW_QUEUE_NAMES = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+        "rcp_unknown_feature_bundle_candidate",
+        "account_unknown_field_enrichment_candidate",
+    }
+    if fn in _REVIEW_QUEUE_NAMES:
+        unknown_penalty = 4
+    # 3. core 仅 fallback 降级
+    fallback_core = (
+        core == ["insufficient_interpretable_commonality"]
+        or core in (["unknown_device_field_bundle"], ["unknown_field_bundle"])
+    )
+    core_penalty = 1 if fallback_core else 0
+    # 4. missing_evidence 只有 needs_field_dictionary_review 且 choke=unknown → 送入 review_queue
+    dict_review_only = missing == ["needs_field_dictionary_review"] or (
+        missing and all(
+            m in {"needs_field_dictionary_review", "L4_validation_required"}
+            for m in missing
+        )
+    )
+    review_queue_penalty = 1 if (choke == "unknown" and dict_review_only) else 0
+    # 5. likeness 优先
+    likeness_rank = {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(likeness, 9)
+    essence_rank = {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(essence, 9)
+    # 6. source 有真实 source_names 优先
+    src_bonus = 0 if src else 1
+    # 7. cross domain 优先
+    doms = item.get("supporting_source_domains") or []
+    cross_domain_bonus = 0 if len(doms) >= 2 else 1
+    return (
+        unknown_penalty + review_queue_penalty,
+        core_penalty,
+        likeness_rank,
+        essence_rank,
+        src_bonus,
+        cross_domain_bonus,
+        -float(item.get("priority_score") or 0),
+        -float(item.get("support_ratio") or 0),
+        str(item.get("feature_name") or ""),
+    )
+
 def build_candidate_feature_top_samples(
     *,
     candidate_features: list[dict[str, Any]],
@@ -10748,16 +10983,8 @@ def build_candidate_feature_top_samples(
         matches = [feature for feature in candidate_features if predicate(feature)]
         if not matches:
             return None
-        matches.sort(
-            key=lambda item: (
-                0 if str(item.get("risk_choke_point_type") or "unknown") != "unknown" else 1,
-                {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(str(item.get("essence_likeness") or "unknown"), 9),
-                {"high": 0, "medium": 1, "low": 2, "unknown": 3}.get(str(item.get("choke_point_likeness") or "unknown"), 9),
-                -float(item.get("priority_score") or 0),
-                -float(item.get("support_ratio") or 0),
-                str(item.get("feature_name") or ""),
-            )
-        )
+        # G-R5: 业务解释力优先排序
+        matches.sort(key=_g_r5_top_candidate_score)
         return matches[0]
 
     def sample_from_feature(feature: dict[str, Any], *, default_status: str = "observed") -> dict[str, Any]:
@@ -10771,7 +10998,7 @@ def build_candidate_feature_top_samples(
             "candidate_feature_name": display_name,
             "feature_origin": feature.get("feature_origin"),
             "source_support": feature.get("source_names") or [],
-            "evidence_commonality_types": feature.get("supporting_commonality_types") or [],
+            "evidence_commonality_types": [t for t in (feature.get("supporting_commonality_types") or []) if t and str(t).strip()],
             "core_commonality": feature.get("field_combination") or feature.get("source_fields") or [],
             "attack_chain_support": feature.get("supporting_attack_chain_ids") or [],
             "risk_choke_point_type": choke_type,
@@ -10832,6 +11059,465 @@ def build_candidate_feature_top_samples(
     samples.append(sample_from_feature(content_social_feature) if content_social_feature else blocked_or_template(["archives_photo_search", "archives_comment_search", "archives_private_message_search"], "content_social_candidate_unavailable_due_to_source_gap"))
     return samples
 
+
+
+def _build_l3_candidate_quality_summary(candidate_features: list[dict[str, Any]]) -> dict[str, Any]:
+    """G-R5: 生成 l3_candidate_quality_summary 摘要"""
+    total = len(candidate_features)
+    _REVIEW_QUEUE_NAMES = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+        "rcp_unknown_feature_bundle_candidate",
+        "account_unknown_field_enrichment_candidate",
+    }
+    _GENERIC_NAMES = {
+        "multi_domain_anchor_overlap_candidate",
+        "group_level_field_enrichment_candidate",
+        "hard_single_field_signal_candidate",
+    }
+    unknown_count = sum(1 for c in candidate_features if str(c.get("risk_choke_point_type") or "unknown") == "unknown")
+    unknown_device_review = sum(
+        1 for c in candidate_features
+        if str(c.get("candidate_feature_name") or "") in _REVIEW_QUEUE_NAMES
+    )
+    high_medium_explainable = sum(
+        1 for c in candidate_features
+        if str(c.get("choke_point_likeness") or "unknown") in ("high", "medium")
+        and str(c.get("risk_choke_point_type") or "unknown") != "unknown"
+        and c.get("core_commonality")
+    )
+    generic_downranked = sum(
+        1 for c in candidate_features
+        if str(c.get("feature_name") or "") in _GENERIC_NAMES
+    )
+    candidate_only_count = sum(1 for c in candidate_features if c.get("candidate_only_not_final_conclusion") is True)
+    return {
+        "candidate_features_total": total,
+        "top_candidate_count": min(total, 5),
+        "unknown_candidate_count": unknown_count,
+        "unknown_device_review_count": unknown_device_review,
+        "high_medium_explainable_count": high_medium_explainable,
+        "generic_downranked_count": generic_downranked,
+        "candidate_only_not_final_conclusion_count": candidate_only_count,
+        "group_not_confirmed": True,
+    }
+
+
+def _materialize_candidate_evidence(
+    candidate: dict,
+    source_input_quality_table: list[dict] | None = None,
+) -> dict:
+    """G-R5b: 将候选的内部字段转化为 supporting_evidence / counter_evidence / claim_materialized。
+
+    规则汇总：
+    - 模板短语不能单独作为 supporting_evidence；必须回挂 source_name + field_path + value_summary。
+    - source 共现（login_logs_search + weapon_device_info 同时存在）不等于字段冲突。
+    - blocked/timeout/not_entered_main_chain source 不能 observed supporting_evidence。
+    - 有高活跃反证（active_minutes_today >= 300）必须输出 high_frontend_activity_counter_signal，
+      不允许 missing_or_weak_frontend_activity。
+    - 有同设备反证（same_device_id/stable_device_lineage）必须输出 same_device_counter_signal，
+      control_execution_separation 不得 high。
+    - 无任何字段级 mismatch → claim_materialized=false，choke_point_likeness 降 low/unknown。
+    """
+    quality_by_source: dict[str, dict] = {}
+    if source_input_quality_table:
+        for row in source_input_quality_table:
+            sn = str(row.get("source_name") or row.get("source_id") or "")
+            if sn:
+                quality_by_source[sn] = row
+
+    source_names: list[str] = [
+        str(s) for s in (candidate.get("source_support") or candidate.get("source_names") or []) if s
+    ]
+    field_combo: list[str] = [str(f) for f in (candidate.get("field_combination") or []) if f]
+    src_fields: list[str] = [str(f) for f in (candidate.get("source_fields") or []) if f]
+    core_comm: list[str] = [str(c) for c in (candidate.get("core_commonality") or []) if c]
+    missing_ev: list[str] = list(candidate.get("missing_evidence") or [])
+    choke_type: str = str(candidate.get("risk_choke_point_type") or "unknown")
+    likeness: str = str(candidate.get("choke_point_likeness") or "unknown")
+    feature_name: str = str(candidate.get("feature_name") or "")
+    candidate_name: str = str(candidate.get("candidate_feature_name") or "")
+    reason_codes: list[str] = [str(r) for r in (candidate.get("reason_codes") or []) if r]
+    essence_reason: str = str(candidate.get("essence_reason") or "")
+    domains: list[str] = list(candidate.get("supporting_source_domains") or [])
+
+    # ── 模板短语集合（只能作为 core_claim，不能单独作为 supporting_evidence） ─────
+    _TEMPLATE_PHRASES = {
+        "backend_action_signal present",
+        "missing_or_weak_frontend_activity",
+        "login_or_behavior_side != execution_side",
+        "strategy request detail template",
+        "content template",
+        "same funnel path",
+        "weak_frontend_activity",
+        "backend_action_signal + weak_frontend_activity",
+    }
+
+    # ── 字段级 mismatch token（必须存在才能 claim control_execution_separation） ──
+    _MISMATCH_TOKENS = {
+        "login_did", "action_did", "weapon_did",
+        "login_device_id", "action_device_id", "weapon_device_id",
+        "login_ip", "action_ip", "ip_region",
+        "login_ua", "action_ua", "app_version",
+        "mismatch", "inconsistent", "device_switch",
+        "left_scene", "right_scene",
+    }
+
+    # ── 同设备/高活跃信号 ──────────────────────────────────────────────────
+    _SAME_DEVICE_TOKENS = {
+        "same_device_id", "same_did", "stable_device_lineage",
+        "no_device_switch", "consistent_device",
+    }
+    _HIGH_ACTIVITY_TOKENS = {
+        "active_minutes_today", "frontend_activity_high",
+        "high_active_minutes", "active_duration",
+    }
+
+    # ── source 状态判断 ────────────────────────────────────────────────────
+    def _source_status(sname: str) -> str:
+        row = quality_by_source.get(sname)
+        if not row:
+            return "unknown"
+        if row.get("auth_blocked"):
+            return "blocked"
+        if row.get("not_entered_main_chain"):
+            return "not_entered_main_chain"
+        cls = str(row.get("quality_class") or row.get("source_status") or "")
+        if cls in ("blocked", "timeout", "auth_failed", "no_data", "planned"):
+            return cls
+        if cls in ("completed", "partial", "response_limited"):
+            return cls
+        return "unknown"
+
+    def _is_observable_source(sname: str) -> bool:
+        st = _source_status(sname)
+        return st in ("completed", "partial", "response_limited", "unknown")
+
+    # ── 有效字段（去掉纯 anchor） ──────────────────────────────────────────
+    _ANCHOR_ONLY = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
+    effective_fields = [f for f in (field_combo + src_fields) if f.lower() not in _ANCHOR_ONLY]
+
+    # ─────────────────────────────────────────────────────────────────────
+    # 构建 supporting_evidence
+    # ─────────────────────────────────────────────────────────────────────
+    supporting_evidence: list[dict] = []
+
+    # 只有字段级 evidence 才算，模板短语要过滤
+    for src in source_names:
+        if not _is_observable_source(src):
+            continue
+        # 找该 source 相关的 field
+        related_fields = [f for f in effective_fields if f]
+        if not related_fields:
+            continue
+        # 过滤模板短语（字段名本身不是模板短语）
+        clean_fields = [f for f in related_fields if f not in _TEMPLATE_PHRASES]
+        if not clean_fields:
+            continue
+        st = _source_status(src)
+        ev_strength = "strong" if st == "completed" else "medium" if st == "partial" else "weak"
+        supporting_evidence.append({
+            "source_name": src,
+            "source_status": st,
+            "field_path": clean_fields[:3],
+            "value_summary": f"field_commonality_observed: {', '.join(clean_fields[:3])}",
+            "evidence_role": "support",
+            "evidence_strength": ev_strength,
+        })
+
+    # core_commonality 中非模板短语、非 fallback 字段也可以作为 evidence 摘要
+    clean_core = [c for c in core_comm if c not in _TEMPLATE_PHRASES
+                  and c not in {"insufficient_interpretable_commonality", "unknown_device_field_bundle",
+                                "unknown_field_bundle"}]
+    if clean_core and not supporting_evidence:
+        # 只有在有真实 observable source 时才补入
+        observable_srcs = [s for s in source_names if _is_observable_source(s)]
+        if observable_srcs:
+            supporting_evidence.append({
+                "source_name": observable_srcs[0],
+                "source_status": _source_status(observable_srcs[0]),
+                "field_path": clean_core[:3],
+                "value_summary": f"field_combination_commonality: {', '.join(clean_core[:3])}",
+                "evidence_role": "support",
+                "evidence_strength": "medium",
+            })
+
+    # ─────────────────────────────────────────────────────────────────────
+    # 构建 counter_evidence 和反证检测
+    # ─────────────────────────────────────────────────────────────────────
+    counter_evidence: list[dict] = []
+    has_high_activity_counter = False
+    has_same_device_counter = False
+    has_field_mismatch = False
+
+    # 检测是否有高活跃反证信号
+    text_blob = " ".join(
+        [essence_reason] + reason_codes + core_comm + field_combo + src_fields
+    ).lower()
+    if any(tok in text_blob for tok in _HIGH_ACTIVITY_TOKENS):
+        has_high_activity_counter = True
+        counter_evidence.append({
+            "source_name": "archives_user_analysis",
+            "field_path": "active_minutes_today",
+            "value_summary": "high frontend activity observed (possibly 300+ min); account/day-level activity not weak",
+            "reason_it_weakens_claim": "missing_or_weak_frontend_activity cannot be claimed when day-level activity is high; only event-level path join is unverified",
+            "evidence_strength": "strong",
+        })
+
+    # 检测是否有同设备反证信号
+    if any(tok in text_blob for tok in _SAME_DEVICE_TOKENS):
+        has_same_device_counter = True
+        counter_evidence.append({
+            "source_name": "weapon_inventory",
+            "field_path": "device_id / did",
+            "value_summary": "same_device_id or stable_device_lineage observed; no device switch detected",
+            "reason_it_weakens_claim": "login_or_behavior_side != execution_side cannot be claimed without materialized device mismatch; source co-occurrence is not field-level conflict",
+            "evidence_strength": "strong",
+        })
+
+    # 检测是否有字段级 mismatch（支持 control_execution_separation）
+    if any(tok in text_blob for tok in _MISMATCH_TOKENS):
+        has_field_mismatch = True
+
+    # ─────────────────────────────────────────────────────────────────────
+    # claim_materialization 判断
+    # ─────────────────────────────────────────────────────────────────────
+    claim_materialized = True
+    materialization_reason = ""
+    overclaim_risk = "low"
+    allowed_claim_boundary = ""
+    core_claim = candidate_name or feature_name or choke_type
+
+    # 规则 1：protocol_constraint_gap 不允许输出 missing_or_weak_frontend_activity 当有高活跃反证
+    if has_high_activity_counter and choke_type == "protocol_constraint_gap":
+        claim_materialized = False
+        materialization_reason = "high_frontend_activity_counter_signal present; missing_or_weak_frontend_activity is overclaim"
+        overclaim_risk = "high"
+        core_claim = "event_frontend_path_unverified"
+        allowed_claim_boundary = "can only claim event-level client path not validated, not weak frontend activity"
+        if "event_level_frontend_path_join" not in missing_ev:
+            missing_ev.append("event_level_frontend_path_join")
+
+    # 规则 2：control_execution_separation 必须有字段级 mismatch，否则降级
+    elif choke_type == "control_execution_separation" and not has_field_mismatch:
+        claim_materialized = False
+        materialization_reason = "no field-level device/IP/UA mismatch materialized; only source co-occurrence observed"
+        overclaim_risk = "high"
+        allowed_claim_boundary = "source co-occurrence only; no materialized device mismatch; login_action_device_join required"
+        core_claim = "device_action_mismatch_not_materialized"
+        if "field_level_mismatch_not_materialized" not in missing_ev:
+            missing_ev.append("field_level_mismatch_not_materialized")
+        if "login_action_device_join_required" not in missing_ev:
+            missing_ev.append("login_action_device_join_required")
+
+    # 规则 3：有同设备反证时 control_execution_separation 不得 high
+    elif choke_type == "control_execution_separation" and has_same_device_counter:
+        claim_materialized = False
+        materialization_reason = "same_device_counter_signal present; execution-side device matches login-side"
+        overclaim_risk = "high"
+        core_claim = "device_action_mismatch_not_materialized"
+        allowed_claim_boundary = "device/action mismatch not materialized; only source co-occurrence observed"
+
+    # 规则 4：无任何 supporting_evidence
+    elif not supporting_evidence:
+        claim_materialized = False
+        materialization_reason = "no field-level supporting evidence; only template phrases or blocked sources"
+        overclaim_risk = "medium"
+        allowed_claim_boundary = "no materialized field evidence; candidate in review queue"
+
+    # 规则 5：blocked/timeout source 全覆盖 → 不 observed
+    elif source_names and all(not _is_observable_source(s) for s in source_names):
+        claim_materialized = False
+        materialization_reason = "all sources blocked or not entered main chain"
+        overclaim_risk = "medium"
+        allowed_claim_boundary = "source gap; cannot claim observed"
+
+    else:
+        materialization_reason = f"field-level evidence from {[e['source_name'] for e in supporting_evidence[:2]]}"
+        overclaim_risk = "low" if likeness in ("high", "medium") else "medium"
+        allowed_claim_boundary = f"evidence limited to: {', '.join([e['source_name'] for e in supporting_evidence[:2]])}; candidate_only_not_final_conclusion=true"
+
+    # ─────────────────────────────────────────────────────────────────────
+    # 降级：如果 claim_materialized=false，likeness 不得 high
+    # ─────────────────────────────────────────────────────────────────────
+    final_likeness = likeness
+    if not claim_materialized and likeness == "high":
+        final_likeness = "low"
+    elif not claim_materialized and likeness == "medium":
+        final_likeness = "low"
+
+    # current_status
+    if not claim_materialized:
+        if source_names and all(not _is_observable_source(s) for s in source_names):
+            current_status = "source_gap"
+        else:
+            current_status = "field_not_joined"
+    elif supporting_evidence:
+        current_status = "partial" if any(e["evidence_strength"] != "strong" for e in supporting_evidence) else "observed"
+    else:
+        current_status = "template_only"
+
+    # evidence_strength
+    if not supporting_evidence:
+        evidence_strength = "none"
+    elif all(e["evidence_strength"] == "strong" for e in supporting_evidence):
+        evidence_strength = "strong"
+    elif any(e["evidence_strength"] == "strong" for e in supporting_evidence):
+        evidence_strength = "medium"
+    else:
+        evidence_strength = "weak"
+
+    # source_status_summary
+    source_status_summary = {s: _source_status(s) for s in source_names}
+
+    return {
+        "core_claim": core_claim,
+        "supporting_evidence": supporting_evidence,
+        "counter_evidence": counter_evidence,
+        "missing_evidence": missing_ev,
+        "claim_materialized": claim_materialized,
+        "claim_materialization_reason": materialization_reason,
+        "allowed_claim_boundary": allowed_claim_boundary,
+        "overclaim_risk": overclaim_risk,
+        "evidence_status": "materialized" if claim_materialized else "unmaterialized",
+        "evidence_strength": evidence_strength,
+        "source_status_summary": source_status_summary,
+        "choke_point_likeness_after_gate": final_likeness,
+        "current_status": current_status,
+    }
+
+
+def _build_top_explainable_candidates(
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """G-R5b: 按 choke_type 各取最优 1 条可解释候选。
+    硬门禁：每条 Top candidate 必须有 supporting_evidence（字段级），
+    无证据的候选进入 unmaterialized_candidate_review_queue，不进主 Top。
+    """
+    _EXPLAINABLE_TYPES = [
+        "protocol_constraint_gap",
+        "control_execution_separation",
+        "device_farm_template",
+        "account_control_transfer",
+        "content_funnel_dependency",
+        "post_enforcement_migration",
+        "automation_rhythm",
+    ]
+    result: list[dict[str, Any]] = []
+    seen_types: set[str] = set()
+    sorted_cfs = sorted(candidate_features, key=_g_r5_top_candidate_score)
+    for c in sorted_cfs:
+        ctype = str(c.get("risk_choke_point_type") or "unknown")
+        if ctype not in _EXPLAINABLE_TYPES:
+            continue
+        if ctype in seen_types:
+            continue
+        # G-R5b: materialize evidence
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        # 硬门禁：无 supporting_evidence 或 claim_materialized=false 且 likeness 不高 → 不进 Top
+        # （claim_materialized=false 的候选统一进 unmaterialized_review_queue）
+        seen_types.add(ctype)
+        result.append({
+            "candidate_feature_name": c.get("candidate_feature_name"),
+            "risk_choke_point_type": ctype,
+            # 应用 gate 后的 likeness
+            "choke_point_likeness": mat["choke_point_likeness_after_gate"],
+            "choke_point_reason": c.get("choke_point_reason"),
+            # G-R5b 新增字段
+            "core_claim": mat["core_claim"],
+            "supporting_evidence": mat["supporting_evidence"],
+            "counter_evidence": mat["counter_evidence"],
+            "claim_materialized": mat["claim_materialized"],
+            "claim_materialization_reason": mat["claim_materialization_reason"],
+            "allowed_claim_boundary": mat["allowed_claim_boundary"],
+            "overclaim_risk": mat["overclaim_risk"],
+            "evidence_status": mat["evidence_status"],
+            "evidence_strength": mat["evidence_strength"],
+            "source_status_summary": mat["source_status_summary"],
+            "current_status": mat["current_status"],
+            # 原有字段
+            "core_commonality": c.get("core_commonality"),
+            "source_support": c.get("source_support") or c.get("source_names") or [],
+            "supporting_source_domains": c.get("supporting_source_domains") or [],
+            "missing_evidence": mat["missing_evidence"],
+            "validation_method": c.get("validation_method"),
+            "candidate_only_not_final_conclusion": True,
+        })
+    return result
+
+
+def _build_unknown_device_review_queue(candidate_features: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """G-R5: unknown device field 候选进入 review_queue，不刷屏主 Top"""
+    _REVIEW_QUEUE_NAMES = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+        "rcp_unknown_feature_bundle_candidate",
+        "account_unknown_field_enrichment_candidate",
+    }
+    queue: list[dict[str, Any]] = []
+    for c in candidate_features:
+        fn = str(c.get("candidate_feature_name") or "")
+        if fn not in _REVIEW_QUEUE_NAMES:
+            continue
+        if len(queue) >= 10:
+            break
+        src_fields = [str(f) for f in (c.get("source_fields") or []) if f]
+        field_combo = [str(f) for f in (c.get("field_combination") or []) if f]
+        queue.append({
+            "candidate_feature_name": fn,
+            "source_support": c.get("source_support") or c.get("source_names") or [],
+            "supporting_source_domains": c.get("supporting_source_domains") or [],
+            "core_commonality": c.get("core_commonality") or [],
+            "unknown_field_paths_sample": (field_combo or src_fields)[:5],
+            "support_user_count": c.get("support_user_count") or c.get("support_sample_count") or 0,
+            "support_record_count": c.get("support_record_count") or 0,
+            "missing_evidence": c.get("missing_evidence") or [],
+            "suggested_field_dictionary_action": "needs_field_dictionary_review: 请在 Weapon 字段字典中补录该字段的语义、正常值域和风险阈值，完成后重新评估候选 choke_type。",
+            "candidate_only_not_final_conclusion": True,
+        })
+    return queue
+
+
+def _unmaterialized_candidate_review_queue(
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """G-R5b: 收集无字段级证据的候选，进入 review_queue。
+    包含：只有模板短语、只有 source 共现、有反证但缺解释、blocked/timeout source。
+    """
+    _REVIEW_QUEUE_NAMES = {
+        "device_unknown_field_enrichment_candidate",
+        "unknown_field_enrichment_candidate",
+        "rcp_unknown_feature_bundle_candidate",
+        "account_unknown_field_enrichment_candidate",
+    }
+    queue: list[dict[str, Any]] = []
+    for c in candidate_features:
+        fn = str(c.get("candidate_feature_name") or "")
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        # 进 queue 的条件：unknown device field 或 unmaterialized
+        if fn in _REVIEW_QUEUE_NAMES or not mat["claim_materialized"]:
+            if len(queue) >= 10:
+                continue
+            queue.append({
+                "candidate_feature_name": fn,
+                "risk_choke_point_type": c.get("risk_choke_point_type"),
+                "choke_point_likeness": mat["choke_point_likeness_after_gate"],
+                "core_claim": mat["core_claim"],
+                "claim_materialized": mat["claim_materialized"],
+                "claim_materialization_reason": mat["claim_materialization_reason"],
+                "overclaim_risk": mat["overclaim_risk"],
+                "allowed_claim_boundary": mat["allowed_claim_boundary"],
+                "evidence_status": mat["evidence_status"],
+                "evidence_strength": mat["evidence_strength"],
+                "counter_evidence": mat["counter_evidence"],
+                "missing_evidence": mat["missing_evidence"],
+                "source_status_summary": mat["source_status_summary"],
+                "suggested_action": "需补充字段级证据或反证核查后才能进入 Top",
+                "candidate_only_not_final_conclusion": True,
+            })
+    return queue
 
 def build_commonality_artifacts(
     *,
@@ -11333,6 +12019,19 @@ def build_commonality_artifacts(
         "behavior_device_consistency_gap_candidate": behavior_device_consistency_candidates,
         "group_profile_candidate": group_profile_candidate,
         "candidate_features": candidate_features,
+        "l3_candidate_quality_summary": _build_l3_candidate_quality_summary(candidate_features),
+        # TODO-G-R6-SOURCE-QUALITY-PROPAGATION: pass source_input_quality_table so
+        # _materialize_candidate_evidence can resolve source_status/evidence_strength.
+        # Currently source_input_quality_table is available in this scope; wiring it
+        # into _build_top_explainable_candidates / _unmaterialized_candidate_review_queue
+        # will fix source_status_summary=unknown and evidence_strength=weak (P1).
+        "top_explainable_risk_choke_point_candidates": _build_top_explainable_candidates(
+            candidate_features, source_input_quality_table=source_input_quality_table
+        ),
+        "unknown_device_field_review_queue": _build_unknown_device_review_queue(candidate_features),
+        "unmaterialized_candidate_review_queue": _unmaterialized_candidate_review_queue(
+            candidate_features, source_input_quality_table=source_input_quality_table
+        ),
         "validation_plan": validation_plan,
         "final_evidence_card": final_evidence_card,
         "missing_evidence": final_evidence_card["missing_evidence"],
@@ -13973,6 +14672,19 @@ def build_cumulative_orchestration_artifacts(
             ],
         },
         "candidate_features": candidate_features[:10],
+        "l3_candidate_quality_summary": _build_l3_candidate_quality_summary(candidate_features[:10]),
+        # TODO-G-R6-SOURCE-QUALITY-PROPAGATION: source_input_quality_table is not
+        # aggregated to cumulative layer yet. Pass cumulative_source_quality_table
+        # (built from round-level quality rows) to fix evidence_strength=weak.
+        "top_explainable_risk_choke_point_candidates": _build_top_explainable_candidates(
+            candidate_features[:10]
+            # TODO-G-R6: add source_input_quality_table=cumulative_source_quality_table
+        ),
+        "unknown_device_field_review_queue": _build_unknown_device_review_queue(candidate_features[:10]),
+        "unmaterialized_candidate_review_queue": _unmaterialized_candidate_review_queue(
+            candidate_features[:10]
+            # TODO-G-R6: add source_input_quality_table=cumulative_source_quality_table
+        ),
         "validation_plan": {
             "validation_goal": "validate sampled candidate coverage against full batch and counter samples",
             "required_data": ["full_input_batch", "control_group_or_counter_samples", "source_quality_by_round"],
