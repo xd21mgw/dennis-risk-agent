@@ -11107,18 +11107,18 @@ def _materialize_candidate_evidence(
     candidate: dict,
     source_input_quality_table: list[dict] | None = None,
 ) -> dict:
-    """G-R5b: 将候选的内部字段转化为 supporting_evidence / counter_evidence / claim_materialized。
-
-    规则汇总：
-    - 模板短语不能单独作为 supporting_evidence；必须回挂 source_name + field_path + value_summary。
-    - source 共现（login_logs_search + weapon_device_info 同时存在）不等于字段冲突。
-    - blocked/timeout/not_entered_main_chain source 不能 observed supporting_evidence。
-    - 有高活跃反证（active_minutes_today >= 300）必须输出 high_frontend_activity_counter_signal，
-      不允许 missing_or_weak_frontend_activity。
-    - 有同设备反证（same_device_id/stable_device_lineage）必须输出 same_device_counter_signal，
-      control_execution_separation 不得 high。
-    - 无任何字段级 mismatch → claim_materialized=false，choke_point_likeness 降 low/unknown。
+    """G-R6 enhanced evidence materialization.
+    Changes vs G-R5b:
+    - source_status now follows completed/partial/blocked/timeout mapping (not just unknown)
+    - evidence_display_label / internal_signal_name / raw_field_path / field_role / dictionary_status
+    - candidate_support_summary with support_ratio
+    - value-level counter signals (active_minutes >= 300, same_device=true token)
+    - protocol: missing fields are NOT positive evidence (field_missing vs event_path_unverified)
+    - risk_semantics_strength: strong/medium/weak/unknown
+    - field_dictionary_review_queue eligibility
+    - final_evidence_card bridge fields
     """
+    # ── source quality lookup ──────────────────────────────────────────────
     quality_by_source: dict[str, dict] = {}
     if source_input_quality_table:
         for row in source_input_quality_table:
@@ -11131,7 +11131,8 @@ def _materialize_candidate_evidence(
     ]
     field_combo: list[str] = [str(f) for f in (candidate.get("field_combination") or []) if f]
     src_fields: list[str] = [str(f) for f in (candidate.get("source_fields") or []) if f]
-    core_comm: list[str] = [str(c) for c in (candidate.get("core_commonality") or []) if c]
+    core_comm_raw = candidate.get("core_commonality") or []
+    core_comm: list[str] = [str(c) for c in core_comm_raw if c] if isinstance(core_comm_raw, list) else [str(core_comm_raw)] if core_comm_raw else []
     missing_ev: list[str] = list(candidate.get("missing_evidence") or [])
     choke_type: str = str(candidate.get("risk_choke_point_type") or "unknown")
     likeness: str = str(candidate.get("choke_point_likeness") or "unknown")
@@ -11140,8 +11141,19 @@ def _materialize_candidate_evidence(
     reason_codes: list[str] = [str(r) for r in (candidate.get("reason_codes") or []) if r]
     essence_reason: str = str(candidate.get("essence_reason") or "")
     domains: list[str] = list(candidate.get("supporting_source_domains") or [])
+    # support metrics
+    support_user_count = candidate.get("support_user_count") or candidate.get("support_entity_count") or 0
+    support_sample_count = candidate.get("support_sample_count") or candidate.get("support_count") or support_user_count
+    support_record_count = candidate.get("support_record_count") or 0
+    support_ratio = candidate.get("support_ratio")
 
-    # ── 模板短语集合（只能作为 core_claim，不能单独作为 supporting_evidence） ─────
+    # ── G-R6: compute support_ratio if missing ────────────────────────────
+    if support_ratio is None and support_user_count and support_sample_count and support_sample_count > 0:
+        support_ratio = round(float(support_user_count) / float(support_sample_count), 4)
+    elif support_ratio is None and support_user_count:
+        support_ratio = None  # sample_count unknown
+
+    # ── token sets ──────────────────────────────────────────────────────────
     _TEMPLATE_PHRASES = {
         "backend_action_signal present",
         "missing_or_weak_frontend_activity",
@@ -11152,8 +11164,11 @@ def _materialize_candidate_evidence(
         "weak_frontend_activity",
         "backend_action_signal + weak_frontend_activity",
     }
-
-    # ── 字段级 mismatch token（必须存在才能 claim control_execution_separation） ──
+    # G-R6: missing field prefix tokens — these are NOT positive evidence
+    _MISSING_FIELD_PREFIXES = (
+        "missing_", "not_joined_", "unverified_", "not_materialized_",
+    )
+    # mismatch tokens (must exist for control_execution_separation)
     _MISMATCH_TOKENS = {
         "login_did", "action_did", "weapon_did",
         "login_device_id", "action_device_id", "weapon_device_id",
@@ -11162,8 +11177,6 @@ def _materialize_candidate_evidence(
         "mismatch", "inconsistent", "device_switch",
         "left_scene", "right_scene",
     }
-
-    # ── 同设备/高活跃信号 ──────────────────────────────────────────────────
     _SAME_DEVICE_TOKENS = {
         "same_device_id", "same_did", "stable_device_lineage",
         "no_device_switch", "consistent_device",
@@ -11172,8 +11185,27 @@ def _materialize_candidate_evidence(
         "active_minutes_today", "frontend_activity_high",
         "high_active_minutes", "active_duration",
     }
+    # G-R6: risk-bearing device field tokens
+    _DEVICE_RISK_TOKENS = {
+        "frida", "xposed", "emulator", "hook", "debug", "adbstatus",
+        "root", "magisk", "fake_device", "device_farm", "abnormal_device",
+        "risky_device", "mock_device", "simulator",
+    }
+    # G-R6: status/context field tokens (weak risk semantics)
+    _STATUS_CONTEXT_TOKENS = {
+        "account_status", "code", "color", "caller", "caller_catalog",
+        "callerkn", "callerksn", "webservice", "http_status", "status_code",
+        "default_enum", "id_field",
+    }
+    # G-R6: protocol evidence tokens (positive anomalies, not missing)
+    _PROTOCOL_POSITIVE_TOKENS = {
+        "request_path_anomaly", "scene_mismatch", "entry_mismatch",
+        "client_path_bypass", "frontend_backend_inconsistency",
+        "request_forgery", "path_hijack",
+    }
+    _ANCHOR_ONLY = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
 
-    # ── source 状态判断 ────────────────────────────────────────────────────
+    # ── G-R6: source_status mapping ───────────────────────────────────────
     def _source_status(sname: str) -> str:
         row = quality_by_source.get(sname)
         if not row:
@@ -11183,149 +11215,354 @@ def _materialize_candidate_evidence(
         if row.get("not_entered_main_chain"):
             return "not_entered_main_chain"
         cls = str(row.get("quality_class") or row.get("source_status") or "")
-        if cls in ("blocked", "timeout", "auth_failed", "no_data", "planned"):
-            return cls
-        if cls in ("completed", "partial", "response_limited"):
-            return cls
+        _BLOCKED = ("blocked", "auth_blocked", "auth_failed", "no_data", "planned")
+        _PARTIAL = ("partial", "response_limited", "capped")
+        if cls in _BLOCKED or row.get("is_blocked"):
+            return "blocked"
+        if cls == "timeout" or row.get("is_timeout"):
+            return "timeout"
+        if cls == "not_entered_main_chain":
+            return "not_entered_main_chain"
+        if cls == "completed":
+            return "completed"
+        if cls in _PARTIAL:
+            return "partial"
         return "unknown"
+
+    def _source_status_reason(sname: str) -> str | None:
+        st = _source_status(sname)
+        if st == "unknown":
+            return "source_not_in_quality_table_or_status_unresolved"
+        return None
 
     def _is_observable_source(sname: str) -> bool:
         st = _source_status(sname)
         return st in ("completed", "partial", "response_limited", "unknown")
 
-    # ── 有效字段（去掉纯 anchor） ──────────────────────────────────────────
-    _ANCHOR_ONLY = {"device_id", "did", "policy_code", "source_id", "uid", "user_id"}
-    effective_fields = [f for f in (field_combo + src_fields) if f.lower() not in _ANCHOR_ONLY]
+    def _evidence_strength_from_status(st: str) -> str:
+        if st == "completed":
+            return "strong"
+        if st in ("partial", "response_limited", "capped"):
+            return "medium"
+        return "weak"
 
-    # ─────────────────────────────────────────────────────────────────────
-    # 构建 supporting_evidence
-    # ─────────────────────────────────────────────────────────────────────
+    # ── G-R6: field semantics classification ──────────────────────────────
+    def _classify_field(fname: str) -> tuple[str, str]:
+        """Return (field_role, dictionary_status)."""
+        fl = fname.lower()
+        if any(tok in fl for tok in _DEVICE_RISK_TOKENS):
+            return "risk_signal", "known"
+        if any(fl.startswith(pfx) for pfx in _MISSING_FIELD_PREFIXES):
+            return "context", "needs_field_dictionary_review"
+        if any(tok in fl for tok in _STATUS_CONTEXT_TOKENS):
+            return "status_field", "known"
+        if fl in _ANCHOR_ONLY:
+            return "anchor", "known"
+        if any(tok in fl for tok in {
+            "template", "funnel", "request_path", "request_scene", "entry",
+            "frontend_activity", "backend_action", "rcp_event", "login_event",
+        }):
+            return "context", "needs_field_dictionary_review"
+        return "unknown", "needs_field_dictionary_review"
+
+    def _is_missing_field_token(fname: str) -> bool:
+        fl = fname.lower()
+        return any(fl.startswith(pfx) for pfx in _MISSING_FIELD_PREFIXES) or "missing" in fl
+
+    # G-R6: display label normalization
+    _INTERNAL_SIGNAL_DISPLAY = {
+        "frida_xposed_mount_reset_or_emulator_related_field_truthy": (
+            "设备对抗环境字段组合",
+            "疑似 Hook / 模拟器 / 调试 / 改机相关设备环境信号",
+            "只能说设备环境模板化候选，不能直接断言具体 Frida/Xposed/模拟器工具",
+        ),
+        "backend_action_signal present": (
+            "事件级后端行为信号",
+            "后端存在行为类事件记录（具体字段路径需进一步 join）",
+            "需要字段值级 join 才能确认，不能直接作为强证据",
+        ),
+        "missing_or_weak_frontend_activity": (
+            "事件级客户端路径字段未 materialize",
+            "当前输出中 request_path / request_scene / entry 等事件路径字段缺失或未 join",
+            "只能说 event-level client/request path unverified，不能说 confirmed protocol bypass",
+        ),
+        "login_or_behavior_side != execution_side": (
+            "登录侧与执行侧设备/行为待核查",
+            "尚未完成字段级 device_id / IP / UA join；仅为 source 共现推断",
+            "需要字段值级 mismatch 才能 materialize",
+        ),
+    }
+
+    def _get_display_info(fname: str) -> tuple[str, str, str]:
+        """Return (display_label, description, boundary). Falls back gracefully."""
+        if fname in _INTERNAL_SIGNAL_DISPLAY:
+            return _INTERNAL_SIGNAL_DISPLAY[fname]
+        fl = fname.lower()
+        if any(tok in fl for tok in _DEVICE_RISK_TOKENS):
+            return (
+                "设备对抗环境字段组合",
+                f"设备风险相关字段信号: {fname}",
+                "只能说设备环境候选；需字段语义字典确认具体风险含义",
+            )
+        if any(fl.startswith(pfx) for pfx in _MISSING_FIELD_PREFIXES) or "missing" in fl:
+            return (
+                "事件级路径字段缺失/未 join",
+                f"字段 {fname} 缺失或未 materialize，不是正向异常证据",
+                "event path unverified; field join required",
+            )
+        # default: use field name as label (unrecognized)
+        return (fname, f"字段: {fname}", "needs_field_dictionary_review")
+
+    # ── G-R6: risk_semantics_strength ─────────────────────────────────────
+    def _infer_risk_semantics_strength(fields: list[str], choke: str) -> str:
+        all_fields = " ".join(f.lower() for f in fields)
+        if any(tok in all_fields for tok in _DEVICE_RISK_TOKENS):
+            return "strong" if choke in ("device_farm_template", "risky_device_environment") else "medium"
+        if choke in ("protocol_constraint_gap", "control_execution_separation",
+                     "account_control_transfer", "post_enforcement_migration"):
+            if any(tok in all_fields for tok in _MISMATCH_TOKENS | _PROTOCOL_POSITIVE_TOKENS):
+                return "medium"
+            return "weak"
+        if choke == "automation_rhythm":
+            return "medium"
+        if any(tok in all_fields for tok in _STATUS_CONTEXT_TOKENS):
+            return "weak"
+        return "unknown"
+
+    # ── effective fields (non-anchor, non-missing) ────────────────────────
+    all_raw_fields = field_combo + src_fields
+    effective_fields_raw = [f for f in all_raw_fields if f.lower() not in _ANCHOR_ONLY]
+    # split into positive vs missing
+    positive_fields = [f for f in effective_fields_raw if not _is_missing_field_token(f)]
+    missing_only_fields = [f for f in effective_fields_raw if _is_missing_field_token(f)]
+
+    # ── text blob for token detection ─────────────────────────────────────
+    text_blob = " ".join([essence_reason] + reason_codes + core_comm + field_combo + src_fields).lower()
+
+    # ── G-R6: value-level counter detection ──────────────────────────────
+    # High activity: check for numeric values >= 300 in text_blob
+    has_high_activity_token = any(tok in text_blob for tok in _HIGH_ACTIVITY_TOKENS)
+    has_high_activity_value = False
+    if has_high_activity_token:
+        import re as _re
+        nums = [int(m.group()) for m in _re.finditer(r'[0-9]+', text_blob)]
+        has_high_activity_value = any(n >= 300 for n in nums)
+    has_high_activity_counter = has_high_activity_value  # value-level
+
+    # Same device: check for truthy value tokens
+    has_same_device_token = any(tok in text_blob for tok in _SAME_DEVICE_TOKENS)
+    has_same_device_value = has_same_device_token and any(
+        v in text_blob for v in ("=true", "=1", ": true", ":true", "same_did_match")
+    )
+    # If no value found but token present, treat as token-only (not strong)
+    has_same_device_counter = has_same_device_value  # value-level only
+
+    # Field-level mismatch (control_execution_separation)
+    has_field_mismatch = any(tok in text_blob for tok in _MISMATCH_TOKENS)
+    # G-R6: missing field tokens are NOT positive mismatch evidence
+    has_positive_mismatch = has_field_mismatch and not all(
+        _is_missing_field_token(f) for f in effective_fields_raw if any(
+            tok in f.lower() for tok in _MISMATCH_TOKENS
+        )
+    )
+
+    # Protocol positive evidence (G-R6: missing≠positive)
+    has_protocol_positive = any(tok in text_blob for tok in _PROTOCOL_POSITIVE_TOKENS)
+    all_fields_are_missing = bool(effective_fields_raw) and all(
+        _is_missing_field_token(f) for f in effective_fields_raw
+    )
+
+    # ── build supporting_evidence ─────────────────────────────────────────
     supporting_evidence: list[dict] = []
-
-    # 只有字段级 evidence 才算，模板短语要过滤
     for src in source_names:
         if not _is_observable_source(src):
             continue
-        # 找该 source 相关的 field
-        related_fields = [f for f in effective_fields if f]
-        if not related_fields:
-            continue
-        # 过滤模板短语（字段名本身不是模板短语）
-        clean_fields = [f for f in related_fields if f not in _TEMPLATE_PHRASES]
-        if not clean_fields:
-            continue
         st = _source_status(src)
-        ev_strength = "strong" if st == "completed" else "medium" if st == "partial" else "weak"
+        ev_strength = _evidence_strength_from_status(st)
+        # only positive fields (not missing)
+        related = [f for f in positive_fields if f not in _TEMPLATE_PHRASES]
+        if not related:
+            continue
+        raw_fps = related[:3]
+        int_sig = candidate_name or choke_type
+        display_label, description, boundary = _get_display_info(raw_fps[0] if raw_fps else int_sig)
+        role, dict_status = _classify_field(raw_fps[0] if raw_fps else "")
+        # G-R6: internal_signal → max weak unless raw_field_path present
+        if all(f in _INTERNAL_SIGNAL_DISPLAY or any(f.lower() == k for k in _INTERNAL_SIGNAL_DISPLAY) for f in raw_fps):
+            ev_strength = "weak"
+            dict_status = "needs_field_dictionary_review"
         supporting_evidence.append({
             "source_name": src,
             "source_status": st,
-            "field_path": clean_fields[:3],
-            "value_summary": f"field_commonality_observed: {', '.join(clean_fields[:3])}",
+            "source_status_reason": _source_status_reason(src),
+            # G-R6 new fields
+            "raw_field_path": raw_fps,
+            "internal_signal_name": candidate_name or choke_type,
+            "evidence_display_label": display_label,
+            "evidence_description": description,
+            "field_role": role,
+            "dictionary_status": dict_status,
+            # existing
+            "value_summary": f"field_commonality_observed: {', '.join(raw_fps)}",
             "evidence_role": "support",
             "evidence_strength": ev_strength,
+            "allowed_claim_boundary": boundary,
+            # G-R6: support metrics per-evidence
+            "support_user_count": support_user_count,
+            "sample_user_count": support_sample_count,
+            "support_ratio": support_ratio,
+            "support_record_count": support_record_count,
+            "support_ratio_unknown_reason": None if support_ratio is not None else "sample_count_unknown",
         })
 
-    # core_commonality 中非模板短语、非 fallback 字段也可以作为 evidence 摘要
-    clean_core = [c for c in core_comm if c not in _TEMPLATE_PHRASES
-                  and c not in {"insufficient_interpretable_commonality", "unknown_device_field_bundle",
-                                "unknown_field_bundle"}]
+    # fallback: clean core_comm with positive fields only
+    clean_core = [c for c in core_comm
+                  if c not in _TEMPLATE_PHRASES
+                  and c not in {"insufficient_interpretable_commonality", "unknown_device_field_bundle", "unknown_field_bundle"}
+                  and not _is_missing_field_token(c)]
     if clean_core and not supporting_evidence:
-        # 只有在有真实 observable source 时才补入
         observable_srcs = [s for s in source_names if _is_observable_source(s)]
         if observable_srcs:
+            st = _source_status(observable_srcs[0])
+            ev_strength = _evidence_strength_from_status(st)
+            disp, desc, bnd = _get_display_info(clean_core[0])
+            role, dict_status = _classify_field(clean_core[0])
             supporting_evidence.append({
                 "source_name": observable_srcs[0],
-                "source_status": _source_status(observable_srcs[0]),
-                "field_path": clean_core[:3],
+                "source_status": st,
+                "source_status_reason": _source_status_reason(observable_srcs[0]),
+                "raw_field_path": clean_core[:3],
+                "internal_signal_name": candidate_name or choke_type,
+                "evidence_display_label": disp,
+                "evidence_description": desc,
+                "field_role": role,
+                "dictionary_status": dict_status,
                 "value_summary": f"field_combination_commonality: {', '.join(clean_core[:3])}",
                 "evidence_role": "support",
                 "evidence_strength": "medium",
+                "allowed_claim_boundary": bnd,
+                "support_user_count": support_user_count,
+                "sample_user_count": support_sample_count,
+                "support_ratio": support_ratio,
+                "support_record_count": support_record_count,
+                "support_ratio_unknown_reason": None if support_ratio is not None else "sample_count_unknown",
             })
 
-    # ─────────────────────────────────────────────────────────────────────
-    # 构建 counter_evidence 和反证检测
-    # ─────────────────────────────────────────────────────────────────────
+    # ── counter_evidence ──────────────────────────────────────────────────
     counter_evidence: list[dict] = []
-    has_high_activity_counter = False
-    has_same_device_counter = False
-    has_field_mismatch = False
-
-    # 检测是否有高活跃反证信号
-    text_blob = " ".join(
-        [essence_reason] + reason_codes + core_comm + field_combo + src_fields
-    ).lower()
-    if any(tok in text_blob for tok in _HIGH_ACTIVITY_TOKENS):
-        has_high_activity_counter = True
+    if has_high_activity_counter:
         counter_evidence.append({
             "source_name": "archives_user_analysis",
             "field_path": "active_minutes_today",
-            "value_summary": "high frontend activity observed (possibly 300+ min); account/day-level activity not weak",
-            "reason_it_weakens_claim": "missing_or_weak_frontend_activity cannot be claimed when day-level activity is high; only event-level path join is unverified",
+            "value_summary": "active_minutes_today >= 300 observed; day-level activity confirmed high",
+            "reason_it_weakens_claim": "missing_or_weak_frontend_activity cannot be claimed; only event-level path join is unverified",
             "evidence_strength": "strong",
+            "counter_signal_type": "high_frontend_activity_counter_signal",
+            "value_threshold_used": "active_minutes >= 300",
         })
-
-    # 检测是否有同设备反证信号
-    if any(tok in text_blob for tok in _SAME_DEVICE_TOKENS):
-        has_same_device_counter = True
+    elif has_high_activity_token and not has_high_activity_value:
+        counter_evidence.append({
+            "source_name": "archives_user_analysis",
+            "field_path": "active_minutes_today",
+            "value_summary": "active_minutes_today field present but value not resolved (token-only detection)",
+            "reason_it_weakens_claim": "token-only; value-level threshold not confirmed; counter not strong",
+            "evidence_strength": "weak",
+            "counter_signal_type": "high_frontend_activity_token_only",
+            "value_threshold_used": "field_name_token_only_no_value",
+        })
+    if has_same_device_counter:
         counter_evidence.append({
             "source_name": "weapon_inventory",
             "field_path": "device_id / did",
-            "value_summary": "same_device_id or stable_device_lineage observed; no device switch detected",
-            "reason_it_weakens_claim": "login_or_behavior_side != execution_side cannot be claimed without materialized device mismatch; source co-occurrence is not field-level conflict",
+            "value_summary": "same_device=true or device_id equality confirmed; no device switch detected",
+            "reason_it_weakens_claim": "login_or_behavior_side != execution_side cannot be claimed without field mismatch",
             "evidence_strength": "strong",
+            "counter_signal_type": "same_device_counter_signal",
+            "value_threshold_used": "same_device_value_token_present",
+        })
+    elif has_same_device_token and not has_same_device_value:
+        counter_evidence.append({
+            "source_name": "weapon_inventory",
+            "field_path": "device_id / did",
+            "value_summary": "same_device token found but value not confirmed (token-only)",
+            "reason_it_weakens_claim": "token-only detection; value join not materialized; counter not strong",
+            "evidence_strength": "weak",
+            "counter_signal_type": "same_device_token_only",
+            "value_threshold_used": "field_name_token_only_no_value",
         })
 
-    # 检测是否有字段级 mismatch（支持 control_execution_separation）
-    if any(tok in text_blob for tok in _MISMATCH_TOKENS):
-        has_field_mismatch = True
+    # ── risk_semantics_strength ───────────────────────────────────────────
+    risk_semantics = _infer_risk_semantics_strength(all_raw_fields, choke_type)
 
-    # ─────────────────────────────────────────────────────────────────────
-    # claim_materialization 判断
-    # ─────────────────────────────────────────────────────────────────────
+    # ── candidate_support_summary ─────────────────────────────────────────
+    candidate_support_summary = {
+        "support_user_count": support_user_count,
+        "support_sample_count": support_sample_count,
+        "support_entity_count": candidate.get("support_entity_count") or support_user_count,
+        "support_record_count": support_record_count,
+        "support_ratio": support_ratio,
+        "support_ratio_unknown_reason": None if support_ratio is not None else "sample_count_unknown",
+        "source_count": len(source_names),
+        "supporting_source_domains": domains,
+    }
+
+    # ── claim_materialization rules ───────────────────────────────────────
     claim_materialized = True
     materialization_reason = ""
     overclaim_risk = "low"
     allowed_claim_boundary = ""
     core_claim = candidate_name or feature_name or choke_type
 
-    # 规则 1：protocol_constraint_gap 不允许输出 missing_or_weak_frontend_activity 当有高活跃反证
+    # Rule 1: protocol_constraint_gap + high activity (value-level)
     if has_high_activity_counter and choke_type == "protocol_constraint_gap":
         claim_materialized = False
-        materialization_reason = "high_frontend_activity_counter_signal present; missing_or_weak_frontend_activity is overclaim"
+        materialization_reason = "high_frontend_activity_counter_signal (value-level: >=300 min); missing_or_weak_frontend_activity is overclaim"
         overclaim_risk = "high"
         core_claim = "event_frontend_path_unverified"
         allowed_claim_boundary = "can only claim event-level client path not validated, not weak frontend activity"
         if "event_level_frontend_path_join" not in missing_ev:
             missing_ev.append("event_level_frontend_path_join")
 
-    # 规则 2：control_execution_separation 必须有字段级 mismatch，否则降级
-    elif choke_type == "control_execution_separation" and not has_field_mismatch:
+    # Rule 1b: protocol_constraint_gap + all fields are missing-type
+    elif choke_type == "protocol_constraint_gap" and all_fields_are_missing and not has_protocol_positive:
         claim_materialized = False
-        materialization_reason = "no field-level device/IP/UA mismatch materialized; only source co-occurrence observed"
+        materialization_reason = "all supporting fields are missing/unverified type; no positive protocol anomaly evidence"
         overclaim_risk = "high"
-        allowed_claim_boundary = "source co-occurrence only; no materialized device mismatch; login_action_device_join required"
+        core_claim = "event_frontend_path_unverified"
+        allowed_claim_boundary = "event path unverified; field missing != protocol bypass; positive anomaly required"
+        if "field_missing_not_positive_protocol_evidence" not in missing_ev:
+            missing_ev.append("field_missing_not_positive_protocol_evidence")
+        if "protocol_positive_anomaly_required" not in missing_ev:
+            missing_ev.append("protocol_positive_anomaly_required")
+
+    # Rule 2: control_execution_separation + no positive mismatch
+    elif choke_type == "control_execution_separation" and not has_positive_mismatch:
+        claim_materialized = False
+        materialization_reason = "no field-level device/IP/UA mismatch materialized; only source co-occurrence or missing fields"
+        overclaim_risk = "high"
+        allowed_claim_boundary = "source co-occurrence only; field join missing; login_action_device_join required"
         core_claim = "device_action_mismatch_not_materialized"
         if "field_level_mismatch_not_materialized" not in missing_ev:
             missing_ev.append("field_level_mismatch_not_materialized")
         if "login_action_device_join_required" not in missing_ev:
             missing_ev.append("login_action_device_join_required")
 
-    # 规则 3：有同设备反证时 control_execution_separation 不得 high
+    # Rule 3: control_execution_separation + same_device (value-level)
     elif choke_type == "control_execution_separation" and has_same_device_counter:
         claim_materialized = False
-        materialization_reason = "same_device_counter_signal present; execution-side device matches login-side"
+        materialization_reason = "same_device_counter_signal (value-level); device matches login-side"
         overclaim_risk = "high"
         core_claim = "device_action_mismatch_not_materialized"
-        allowed_claim_boundary = "device/action mismatch not materialized; only source co-occurrence observed"
+        allowed_claim_boundary = "device/action mismatch not materialized; same device observed"
 
-    # 规则 4：无任何 supporting_evidence
+    # Rule 4: no supporting_evidence
     elif not supporting_evidence:
         claim_materialized = False
         materialization_reason = "no field-level supporting evidence; only template phrases or blocked sources"
         overclaim_risk = "medium"
         allowed_claim_boundary = "no materialized field evidence; candidate in review queue"
 
-    # 规则 5：blocked/timeout source 全覆盖 → 不 observed
+    # Rule 5: all sources blocked/timeout
     elif source_names and all(not _is_observable_source(s) for s in source_names):
         claim_materialized = False
         materialization_reason = "all sources blocked or not entered main chain"
@@ -11333,23 +11570,31 @@ def _materialize_candidate_evidence(
         allowed_claim_boundary = "source gap; cannot claim observed"
 
     else:
-        materialization_reason = f"field-level evidence from {[e['source_name'] for e in supporting_evidence[:2]]}"
+        src_list = [e["source_name"] for e in supporting_evidence[:2]]
+        materialization_reason = f"field-level evidence from {src_list}"
         overclaim_risk = "low" if likeness in ("high", "medium") else "medium"
-        allowed_claim_boundary = f"evidence limited to: {', '.join([e['source_name'] for e in supporting_evidence[:2]])}; candidate_only_not_final_conclusion=true"
+        allowed_claim_boundary = (
+            f"evidence limited to: {', '.join(src_list)}; candidate_only_not_final_conclusion=true"
+        )
 
-    # ─────────────────────────────────────────────────────────────────────
-    # 降级：如果 claim_materialized=false，likeness 不得 high
-    # ─────────────────────────────────────────────────────────────────────
+    # Downgrade likeness if not materialized
     final_likeness = likeness
-    if not claim_materialized and likeness == "high":
+    if not claim_materialized and likeness in ("high", "medium"):
         final_likeness = "low"
-    elif not claim_materialized and likeness == "medium":
+
+    # G-R6: risk_semantics + status/context field downgrade
+    # status/context/default_enum fields should not be high/medium
+    if risk_semantics == "weak" and final_likeness in ("high", "medium"):
         final_likeness = "low"
+        if "status_or_context_field_downranked" not in missing_ev:
+            missing_ev.append("status_or_context_field_downranked")
 
     # current_status
     if not claim_materialized:
         if source_names and all(not _is_observable_source(s) for s in source_names):
             current_status = "source_gap"
+        elif all_fields_are_missing:
+            current_status = "field_missing_not_positive"
         else:
             current_status = "field_not_joined"
     elif supporting_evidence:
@@ -11357,7 +11602,7 @@ def _materialize_candidate_evidence(
     else:
         current_status = "template_only"
 
-    # evidence_strength
+    # evidence_strength summary
     if not supporting_evidence:
         evidence_strength = "none"
     elif all(e["evidence_strength"] == "strong" for e in supporting_evidence):
@@ -11368,10 +11613,34 @@ def _materialize_candidate_evidence(
         evidence_strength = "weak"
 
     # source_status_summary
-    source_status_summary = {s: _source_status(s) for s in source_names}
+    source_status_summary = {}
+    for s in source_names:
+        st = _source_status(s)
+        reason = _source_status_reason(s)
+        source_status_summary[s] = {"status": st, "unknown_reason": reason} if reason else st
+
+    # missing_evidence: add missing field paths if they exist and aren't already noted
+    if missing_only_fields and "missing_field_paths_present" not in missing_ev:
+        missing_ev.append("missing_field_paths_present")
+
+    # top_candidate_eligible: G-R6 semantics-aware
+    top_candidate_eligible = (
+        claim_materialized and
+        bool(supporting_evidence) and
+        risk_semantics in ("strong", "medium") and
+        choke_type not in ("unknown",)
+    )
+
+    # field_dictionary_review_eligible
+    field_dictionary_review_eligible = (
+        not top_candidate_eligible or
+        any(e.get("dictionary_status") == "needs_field_dictionary_review" for e in supporting_evidence)
+    )
 
     return {
         "core_claim": core_claim,
+        "risk_semantics_strength": risk_semantics,
+        "candidate_support_summary": candidate_support_summary,
         "supporting_evidence": supporting_evidence,
         "counter_evidence": counter_evidence,
         "missing_evidence": missing_ev,
@@ -11384,16 +11653,23 @@ def _materialize_candidate_evidence(
         "source_status_summary": source_status_summary,
         "choke_point_likeness_after_gate": final_likeness,
         "current_status": current_status,
+        "top_candidate_eligible": top_candidate_eligible,
+        "field_dictionary_review_eligible": field_dictionary_review_eligible,
     }
 
 
 def _build_top_explainable_candidates(
     candidate_features: list[dict[str, Any]],
     source_input_quality_table: list[dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
-    """G-R5b: 按 choke_type 各取最优 1 条可解释候选。
-    硬门禁：每条 Top candidate 必须有 supporting_evidence（字段级），
-    无证据的候选进入 unmaterialized_candidate_review_queue，不进主 Top。
+) -> dict[str, Any]:
+    """G-R6-fix: Top 层严格 gate。
+    只有同时满足以下全部条件的候选才进入 top_explainable_risk_choke_point_candidates:
+      - top_candidate_eligible=True
+      - claim_materialized=True
+      - evidence_strength not in (weak, none)  OR  risk_semantics_strength in (strong, medium)
+      - risk_choke_point_type in _EXPLAINABLE_TYPES (non-unknown)
+    不满足的候选根据情况分流到 high_coverage / weak_materialized / review_queue。
+    返回 dict 包含: candidates, empty_reason (if empty)
     """
     _EXPLAINABLE_TYPES = [
         "protocol_constraint_gap",
@@ -11406,6 +11682,7 @@ def _build_top_explainable_candidates(
     ]
     result: list[dict[str, Any]] = []
     seen_types: set[str] = set()
+    # Sort: best first (risk_semantics strong > medium > evidence_strength > support_ratio)
     sorted_cfs = sorted(candidate_features, key=_g_r5_top_candidate_score)
     for c in sorted_cfs:
         ctype = str(c.get("risk_choke_point_type") or "unknown")
@@ -11413,19 +11690,24 @@ def _build_top_explainable_candidates(
             continue
         if ctype in seen_types:
             continue
-        # G-R5b: materialize evidence
         mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
-        # 硬门禁：无 supporting_evidence 或 claim_materialized=false 且 likeness 不高 → 不进 Top
-        # （claim_materialized=false 的候选统一进 unmaterialized_review_queue）
         seen_types.add(ctype)
+        # G-R6-fix: strict gate — only top_candidate_eligible=True passes
+        if not mat.get("top_candidate_eligible"):
+            continue
+        # Additional gate: must not be both evidence_strength=weak AND semantics=weak/unknown
+        ev_strength = mat.get("evidence_strength") or "none"
+        semantics = mat.get("risk_semantics_strength") or "unknown"
+        if ev_strength in ("weak", "none") and semantics in ("weak", "unknown"):
+            continue
         result.append({
             "candidate_feature_name": c.get("candidate_feature_name"),
             "risk_choke_point_type": ctype,
-            # 应用 gate 后的 likeness
             "choke_point_likeness": mat["choke_point_likeness_after_gate"],
             "choke_point_reason": c.get("choke_point_reason"),
-            # G-R5b 新增字段
             "core_claim": mat["core_claim"],
+            "risk_semantics_strength": mat.get("risk_semantics_strength"),
+            "candidate_support_summary": mat.get("candidate_support_summary"),
             "supporting_evidence": mat["supporting_evidence"],
             "counter_evidence": mat["counter_evidence"],
             "claim_materialized": mat["claim_materialized"],
@@ -11436,7 +11718,8 @@ def _build_top_explainable_candidates(
             "evidence_strength": mat["evidence_strength"],
             "source_status_summary": mat["source_status_summary"],
             "current_status": mat["current_status"],
-            # 原有字段
+            "top_candidate_eligible": mat.get("top_candidate_eligible"),
+            "field_dictionary_review_eligible": mat.get("field_dictionary_review_eligible"),
             "core_commonality": c.get("core_commonality"),
             "source_support": c.get("source_support") or c.get("source_names") or [],
             "supporting_source_domains": c.get("supporting_source_domains") or [],
@@ -11444,7 +11727,256 @@ def _build_top_explainable_candidates(
             "validation_method": c.get("validation_method"),
             "candidate_only_not_final_conclusion": True,
         })
+
+    empty_reason: str | None = None
+    if not result:
+        # Determine why: any eligible types in input at all?
+        any_explainable = any(
+            str(c.get("risk_choke_point_type") or "unknown") in _EXPLAINABLE_TYPES
+            for c in candidate_features
+        )
+        if not any_explainable:
+            empty_reason = "no_explainable_type_candidate_in_input"
+        else:
+            empty_reason = "no_candidate_passed_evidence_strength_and_semantics_gate"
+
+    return {"candidates": result, "empty_reason": empty_reason}
+
+
+
+def _why_not_top(mat: dict) -> str:
+    """G-R6-fix: human-readable reason why candidate didn't make Top."""
+    if not mat.get("claim_materialized"):
+        return "claim_not_materialized: all fields are missing/template tokens"
+    ev = mat.get("evidence_strength") or "none"
+    sem = mat.get("risk_semantics_strength") or "unknown"
+    if not mat.get("top_candidate_eligible"):
+        if sem in ("unknown",):
+            return "risk_semantics_strength=unknown: field semantics not confirmed, needs field dictionary"
+        if sem in ("weak",):
+            return "risk_semantics_strength=weak: status/context/default fields, weak risk explanation"
+        if ev in ("weak", "none"):
+            return f"evidence_strength={ev}: source_status unknown or source not entered main chain"
+        return "top_candidate_eligible=False: combined gate not passed"
+    if ev in ("weak", "none") and sem in ("weak", "unknown"):
+        return f"evidence_strength={ev} AND risk_semantics_strength={sem}: both gates failed"
+    return "gated_out"
+
+
+def _next_action(mat: dict, candidate: dict) -> str:
+    """G-R6-fix: next action for non-Top candidates."""
+    sem = mat.get("risk_semantics_strength") or "unknown"
+    if sem == "unknown":
+        name = candidate.get("candidate_feature_name") or ""
+        if "device" in name.lower() or "weapon" in name.lower():
+            return "补 Weapon/device 字段字典，确认字段含义和正常背景率"
+        return "补字段语义字典，确认字段含义和正常背景率"
+    if sem == "weak":
+        role = ""
+        for ev in (mat.get("supporting_evidence") or []):
+            role = ev.get("field_role") or role
+        if role == "status_field":
+            return "作为 context_commonality 保留，不进入风险 Top；确认是否有背景率异常"
+        return "补字段语义字典，确认 deny/caller/code 等字段的真实含义和正常背景率"
+    return "补 raw_field_path、risk label detail、正常背景率后重新评估"
+
+
+def _build_high_coverage_commonality_candidates(
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]] | None = None,
+    min_support_ratio: float = 0.5,
+    min_support_user_count: int = 3,
+) -> list[dict[str, Any]]:
+    """G-R6-fix: 高覆盖但暂不能进主 Top 的共性展示区.
+    条件: support_ratio >= 0.5 OR support_user_count >= 3, 且 top_candidate_eligible=False.
+    """
+    result: list[dict[str, Any]] = []
+    for c in candidate_features:
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        css = mat.get("candidate_support_summary") or {}
+        sup_ratio = css.get("support_ratio") or 0.0
+        sup_users = css.get("support_user_count") or 0
+        # Must NOT be top_candidate_eligible (those go to Top section)
+        if mat.get("top_candidate_eligible"):
+            continue
+        # Coverage gate
+        if sup_ratio < min_support_ratio and sup_users < min_support_user_count:
+            continue
+        sem = mat.get("risk_semantics_strength") or "unknown"
+        ev = mat.get("evidence_strength") or "none"
+        result.append({
+            "candidate_feature_name": c.get("candidate_feature_name"),
+            "commonality_display_label": (
+                c.get("candidate_feature_name") or
+                str(c.get("risk_choke_point_type") or "unknown")
+            ),
+            "source_support": c.get("source_support") or c.get("source_names") or [],
+            "supporting_source_domains": c.get("supporting_source_domains") or [],
+            "core_commonality": c.get("core_commonality"),
+            "support_user_count": css.get("support_user_count"),
+            "support_sample_count": css.get("support_sample_count"),
+            "support_ratio": css.get("support_ratio"),
+            "support_record_count": css.get("support_record_count"),
+            "risk_choke_point_type": c.get("risk_choke_point_type"),
+            "risk_semantics_strength": sem,
+            "evidence_strength": ev,
+            "dictionary_status": next(
+                (ev_item.get("dictionary_status") for ev_item in (mat.get("supporting_evidence") or [])
+                 if ev_item.get("dictionary_status")),
+                "unknown"
+            ),
+            "field_role": next(
+                (ev_item.get("field_role") for ev_item in (mat.get("supporting_evidence") or [])
+                 if ev_item.get("field_role")),
+                "unknown"
+            ),
+            "top_candidate_eligible": False,
+            "why_not_top": _why_not_top(mat),
+            "next_action": _next_action(mat, c),
+            "claim_materialized": mat.get("claim_materialized"),
+            "candidate_support_summary": css,
+            "candidate_only_not_final_conclusion": True,
+        })
+    # Sort: support_ratio desc, support_user_count desc, semantics (strong > medium > weak > unknown)
+    _sem_order = {"strong": 0, "medium": 1, "weak": 2, "unknown": 3}
+    result.sort(key=lambda x: (
+        -float(x.get("support_ratio") or 0.0),
+        -int(x.get("support_user_count") or 0),
+        _sem_order.get(x.get("risk_semantics_strength") or "unknown", 3),
+    ))
     return result
+
+
+def _build_semantics_review_queue(
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """G-R6-fix: 语义未确认字段进入 semantics_review_queue.
+    包括: action=deny / callerCatalog / callerKsn / 登录链路语义不清字段.
+    """
+    _SEMANTICS_REVIEW_TOKENS = {
+        "action=deny", "action = deny", "caller", "callerCatalog", "callerKsn",
+        "code=0", "code = 0", "callerappid", "callersource",
+    }
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for c in candidate_features:
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        for ev in (mat.get("supporting_evidence") or []):
+            raw_fps = ev.get("raw_field_path") or []
+            val_summary = str(ev.get("value_summary") or "")
+            # Check if any field/value matches semantics review tokens
+            combined_text = " ".join(raw_fps) + " " + val_summary
+            combined_lower = combined_text.lower()
+            for tok in _SEMANTICS_REVIEW_TOKENS:
+                if tok.lower() in combined_lower:
+                    key = f"{c.get('candidate_feature_name')}:{tok}"
+                    if key not in seen:
+                        seen.add(key)
+                        css = mat.get("candidate_support_summary") or {}
+                        result.append({
+                            "candidate_feature_name": c.get("candidate_feature_name"),
+                            "field_path": raw_fps,
+                            "matched_token": tok,
+                            "value_summary": val_summary,
+                            "source_support": ev.get("source_name"),
+                            "support_ratio": css.get("support_ratio"),
+                            "support_user_count": css.get("support_user_count"),
+                            "semantics_question": (
+                                f"字段 '{tok}' 语义未确认: "
+                                "是正常登录服务链路字段还是异常信号? 正常背景率未知"
+                            ),
+                            "next_action": (
+                                "补登录/服务链路字段语义字典，确认正常用户背景率，"
+                                "确认 deny/caller/code 的真实含义"
+                            ),
+                            "candidate_only_not_final_conclusion": True,
+                        })
+    return result
+
+
+def _build_weak_materialized_review_queue(
+    candidate_features: list[dict[str, Any]],
+    source_input_quality_table: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """G-R6-fix: claim_materialized=True 但 top_candidate_eligible=False 的弱候选.
+    这类候选有字段级证据，但语义强度或 source_status 不够进主 Top.
+    """
+    result: list[dict[str, Any]] = []
+    for c in candidate_features:
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        if not mat.get("claim_materialized"):
+            continue
+        if mat.get("top_candidate_eligible"):
+            continue  # 这些进 Top，不在此队列
+        css = mat.get("candidate_support_summary") or {}
+        result.append({
+            "candidate_feature_name": c.get("candidate_feature_name"),
+            "risk_choke_point_type": c.get("risk_choke_point_type"),
+            "candidate_support_summary": css,
+            "supporting_evidence": mat.get("supporting_evidence"),
+            "evidence_strength": mat.get("evidence_strength"),
+            "risk_semantics_strength": mat.get("risk_semantics_strength"),
+            "allowed_claim_boundary": mat.get("allowed_claim_boundary"),
+            "why_not_top": _why_not_top(mat),
+            "next_action": _next_action(mat, c),
+            "candidate_only_not_final_conclusion": True,
+        })
+    return result
+
+
+def _build_l3_candidate_discovery_summary(
+    top_candidates: list[dict],
+    high_coverage_candidates: list[dict],
+    field_dictionary_review: list[dict],
+    context_commonality: list[dict],
+    semantics_review: list[dict],
+    weak_materialized: list[dict],
+) -> dict[str, Any]:
+    """G-R6-fix: 报告层 summary，避免误以为没有共性发现."""
+    top_count = len(top_candidates)
+    hcc_count = len(high_coverage_candidates)
+    fdr_count = len(field_dictionary_review)
+    ctx_count = len(context_commonality)
+    sem_count = len(semantics_review)
+    weak_count = len(weak_materialized)
+
+    has_top = top_count > 0
+    has_hcc = hcc_count > 0
+
+    if has_top:
+        discovery_boundary = (
+            "产出高置信风险核心候选特征；候选均通过 evidence_strength 与 "
+            "risk_semantics_strength 门禁；结论仍需进一步数据验证，"
+            "candidate_only_not_final_conclusion=true"
+        )
+    elif has_hcc:
+        discovery_boundary = (
+            "本批发现多类高覆盖共性，但没有候选同时通过 evidence_strength 与 "
+            "risk_semantics_strength 门禁进入主 Top；"
+            "当前不能说没有发现，只能说未产出高置信风险核心特征。"
+            "高覆盖共性已列入 high_coverage_commonality_candidates，"
+            "需补字段字典和语义确认后再评估。"
+        )
+    else:
+        discovery_boundary = (
+            "本批无高覆盖共性，无高置信风险核心候选特征；"
+            "候选字段均为模板短语或 unknown 语义，"
+            "candidate_only_not_final_conclusion=true"
+        )
+
+    return {
+        "top_explainable_count": top_count,
+        "high_coverage_commonality_count": hcc_count,
+        "field_dictionary_review_count": fdr_count,
+        "context_commonality_count": ctx_count,
+        "semantics_review_count": sem_count,
+        "weak_materialized_review_count": weak_count,
+        "has_top_explainable_risk_candidate": has_top,
+        "has_high_coverage_commonality": has_hcc,
+        "discovery_boundary": discovery_boundary,
+        "candidate_only_not_final_conclusion": True,
+    }
 
 
 def _build_unknown_device_review_queue(candidate_features: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -11518,6 +12050,235 @@ def _unmaterialized_candidate_review_queue(
                 "candidate_only_not_final_conclusion": True,
             })
     return queue
+
+def _build_field_dictionary_review_queue(
+    candidate_features: list[dict],
+    source_input_quality_table: list[dict] | None = None,
+) -> list[dict]:
+    """G-R6: 6/6 unknown/status/default fields that need semantic dictionary review."""
+    queue = []
+    for c in candidate_features:
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        if not mat.get("field_dictionary_review_eligible"):
+            continue
+        if len(queue) >= 10:
+            break
+        queue.append({
+            "candidate_feature_name": c.get("candidate_feature_name"),
+            "risk_choke_point_type": c.get("risk_choke_point_type"),
+            "internal_signal_name": c.get("candidate_feature_name") or c.get("risk_choke_point_type"),
+            "raw_field_path": (c.get("field_combination") or [])[:5],
+            "support_ratio": mat["candidate_support_summary"].get("support_ratio"),
+            "support_user_count": mat["candidate_support_summary"].get("support_user_count"),
+            "dictionary_status": "needs_field_dictionary_review",
+            "why_not_top_candidate": (
+                "risk_semantics_strength=unknown/weak or claim_not_materialized or status_field"
+            ),
+            "suggested_dictionary_action": (
+                "请在 Weapon 字段字典中补录该字段的语义、正常值域和风险阈值，完成后重新评估。"
+            ),
+            "candidate_only_not_final_conclusion": True,
+        })
+    return queue
+
+
+def _build_context_commonality_section(
+    candidate_features: list[dict],
+    source_input_quality_table: list[dict] | None = None,
+) -> list[dict]:
+    """G-R6: account_status/code/color/id/caller context fields go here, not risk Top."""
+    _STATUS_CONTEXT_NAMES = {
+        "account_maintenance_template_candidate",
+        "login_control_chain_candidate",
+        "account_status_commonality_candidate",
+        "default_enum_commonality_candidate",
+    }
+    _STATUS_CONTEXT_CHOKES = {"unknown"}
+    _STATUS_CONTEXT_CORE_TOKENS = {
+        "account_status", "code=0", "code=200", "color=", "callerCatalog",
+        "callerKsn", "webservice", "http_status", "caller_service",
+    }
+    section = []
+    for c in candidate_features:
+        fn = str(c.get("candidate_feature_name") or "")
+        choke = str(c.get("risk_choke_point_type") or "unknown")
+        core = " ".join(str(x) for x in (c.get("core_commonality") or [])).lower()
+        is_context = (
+            fn in _STATUS_CONTEXT_NAMES or
+            any(tok in core for tok in _STATUS_CONTEXT_CORE_TOKENS)
+        )
+        if not is_context:
+            continue
+        if len(section) >= 8:
+            break
+        mat = _materialize_candidate_evidence(c, source_input_quality_table or [])
+        section.append({
+            "candidate_feature_name": fn,
+            "risk_choke_point_type": choke,
+            "field_role": "status_field_or_context",
+            "risk_semantics_strength": mat.get("risk_semantics_strength", "weak"),
+            "support_ratio": mat["candidate_support_summary"].get("support_ratio"),
+            "core_commonality": c.get("core_commonality"),
+            "interpretation": "普通状态/上下文字段，不进入风险 Top。需进行字段语义审查后才能提升。",
+            "why_not_top": "status_or_context_field; support_ratio high ≠ risk_semantics high",
+            "needs_semantics_review": True,
+            "candidate_only_not_final_conclusion": True,
+        })
+    return section
+
+
+def _g_r6_dedup_candidates(
+    candidate_features: list[dict],
+) -> list[dict]:
+    """G-R6: deduplicate candidate list for report layer.
+    Keep highest support_ratio / risk_semantics / claim_materialized per dedup key.
+    """
+    _SEMA_RANK = {"strong": 0, "medium": 1, "weak": 2, "unknown": 3}
+    seen: dict[tuple, dict] = {}
+    for c in candidate_features:
+        name = str(c.get("candidate_feature_name") or "")
+        choke = str(c.get("risk_choke_point_type") or "unknown")
+        # normalize core
+        core_raw = c.get("core_commonality") or []
+        core_key = tuple(sorted(str(x) for x in (core_raw if isinstance(core_raw, list) else [core_raw])))
+        src_key = tuple(sorted(str(s) for s in (c.get("source_support") or c.get("source_names") or [])))
+        key = (name, choke, core_key[:2], src_key[:2])
+        if key not in seen:
+            seen[key] = c
+        else:
+            # Keep better one
+            existing = seen[key]
+            new_ratio = float(c.get("support_ratio") or 0)
+            old_ratio = float(existing.get("support_ratio") or 0)
+            new_sema = _SEMA_RANK.get(str(c.get("risk_semantics_strength") or "unknown"), 3)
+            old_sema = _SEMA_RANK.get(str(existing.get("risk_semantics_strength") or "unknown"), 3)
+            if new_sema < old_sema or (new_sema == old_sema and new_ratio > old_ratio):
+                seen[key] = c
+    return list(seen.values())
+
+
+def _build_final_evidence_card_bridge(
+    top_candidates: list[dict],
+    unmaterialized_queue: list[dict],
+    existing_card: dict,
+    high_coverage_candidates: list[dict] | None = None,
+    discovery_summary: dict | None = None,
+) -> dict:
+    """G-R6-fix: bridge candidate evidence into final_evidence_card with proper layering.
+    - Top candidates with strong/medium evidence -> medium_evidence
+    - High coverage but weak/unknown semantics -> weak_evidence ONLY (never medium)
+    - Counter evidence bridged from all Top candidates
+    - discovery_summary reflected in final_answer_boundary
+    """
+    medium_evidence = list(existing_card.get("medium_evidence") or [])
+    weak_evidence = list(existing_card.get("weak_evidence") or [])
+    counter_evidence_all: list[dict] = []
+    missing_evidence_all: list[str] = list(existing_card.get("missing_evidence") or [])
+    allowed_boundaries: list[str] = []
+
+    # Layer 1: Top candidates (eligible, strong/medium evidence -> medium_evidence)
+    for top in top_candidates:
+        ev_label = top.get("candidate_feature_name") or top.get("risk_choke_point_type") or "unknown"
+        mat = top.get("claim_materialized", False)
+        ev_strength = top.get("evidence_strength") or "none"
+        for ev in (top.get("supporting_evidence") or []):
+            label = ev.get("evidence_display_label") or ev.get("internal_signal_name") or ev_label
+            if mat and ev_strength in ("strong", "medium"):
+                if label not in medium_evidence:
+                    medium_evidence.append(label)
+            else:
+                if label not in weak_evidence:
+                    weak_evidence.append(label)
+        for ce in (top.get("counter_evidence") or []):
+            counter_evidence_all.append({
+                "candidate": ev_label,
+                "counter_signal_type": ce.get("counter_signal_type"),
+                "value_summary": ce.get("value_summary"),
+                "reason": ce.get("reason_it_weakens_claim"),
+            })
+        for me in (top.get("missing_evidence") or []):
+            if me and me not in missing_evidence_all:
+                missing_evidence_all.append(me)
+        bnd = top.get("allowed_claim_boundary")
+        if bnd and bnd not in allowed_boundaries:
+            allowed_boundaries.append(bnd)
+
+    # Layer 2: High coverage candidates (unknown/weak semantics -> weak_evidence ONLY)
+    for hcc in (high_coverage_candidates or []):
+        ev_label = hcc.get("candidate_feature_name") or "high_coverage_commonality"
+        # These NEVER go to medium_evidence regardless of support_ratio
+        if ev_label not in weak_evidence:
+            weak_evidence.append(ev_label)
+
+    # Unmaterialized: propagate missing_evidence
+    for q in unmaterialized_queue:
+        for me in (q.get("missing_evidence") or []):
+            if me and me not in missing_evidence_all:
+                missing_evidence_all.append(me)
+
+    # Build final_answer_boundary
+    has_top = len(top_candidates) > 0
+    has_hcc = len(high_coverage_candidates or []) > 0
+    if has_top and allowed_boundaries:
+        final_answer_boundary = "; ".join(allowed_boundaries[:3])
+    elif not has_top and has_hcc:
+        final_answer_boundary = (
+            "发现高覆盖共性，但未形成可主张的高置信风险核心特征；"
+            "高覆盖共性已列入 high_coverage_commonality_candidates；"
+            "candidate_only_not_final_conclusion=true"
+        )
+    else:
+        final_answer_boundary = "candidate_only_not_final_conclusion=true"
+
+    # Build candidate_evidence_summary
+    ces: list[dict] = []
+    for t in top_candidates:
+        ces.append({
+            "candidate": t.get("candidate_feature_name"),
+            "section": "top_explainable",
+            "claim_materialized": t.get("claim_materialized"),
+            "evidence_strength": t.get("evidence_strength"),
+            "risk_semantics_strength": t.get("risk_semantics_strength"),
+            "core_claim": t.get("core_claim"),
+            "support_ratio": (t.get("candidate_support_summary") or {}).get("support_ratio"),
+        })
+    for hcc in (high_coverage_candidates or []):
+        ces.append({
+            "candidate": hcc.get("candidate_feature_name"),
+            "section": "high_coverage_commonality",
+            "claim_materialized": hcc.get("claim_materialized"),
+            "evidence_strength": hcc.get("evidence_strength"),
+            "risk_semantics_strength": hcc.get("risk_semantics_strength"),
+            "support_ratio": hcc.get("support_ratio"),
+            "why_not_top": hcc.get("why_not_top"),
+        })
+
+    card = dict(existing_card)
+    card.update({
+        "medium_evidence": medium_evidence,
+        "weak_evidence": weak_evidence,
+        "counter_evidence": counter_evidence_all,
+        "missing_evidence": missing_evidence_all,
+        "candidate_evidence_summary": ces,
+        "candidate_evidence_summary_counts": {
+            "top_explainable_count": len(top_candidates),
+            "high_coverage_commonality_count": len(high_coverage_candidates or []),
+            "review_queue_count": len(unmaterialized_queue),
+        },
+        "unmaterialized_candidate_review_summary": [
+            {"candidate": q.get("candidate_feature_name"), "reason": q.get("claim_materialization_reason")}
+            for q in unmaterialized_queue[:5]
+        ],
+        "allowed_claim_boundaries": allowed_boundaries,
+        "final_answer_boundary": final_answer_boundary,
+        "evidence_card_source": "candidate_evidence_bridge",
+        "group_not_confirmed": True,
+    })
+    if discovery_summary:
+        card["discovery_summary"] = discovery_summary
+    return card
+
+
 
 def build_commonality_artifacts(
     *,
@@ -11994,6 +12755,40 @@ def build_commonality_artifacts(
             "DataAgent_Hive_not_called",
         ],
     }
+    # G-R6-fix: pre-compute all output sections
+    _top_exp_result = _build_top_explainable_candidates(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _top_exp = _top_exp_result["candidates"]
+    _top_exp_empty_reason = _top_exp_result["empty_reason"]
+    _unmat_queue = _unmaterialized_candidate_review_queue(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _high_cov = _build_high_coverage_commonality_candidates(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _sem_review = _build_semantics_review_queue(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _weak_mat = _build_weak_materialized_review_queue(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _fdr = _build_field_dictionary_review_queue(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _ctx = _build_context_commonality_section(
+        candidate_features, source_input_quality_table=source_input_quality_table
+    )
+    _deduped = _g_r6_dedup_candidates(candidate_features)
+    _discovery_summary = _build_l3_candidate_discovery_summary(
+        _top_exp, _high_cov, _fdr, _ctx, _sem_review, _weak_mat
+    )
+    _bridged_card = _build_final_evidence_card_bridge(
+        _top_exp, _unmat_queue, final_evidence_card,
+        high_coverage_candidates=_high_cov,
+        discovery_summary=_discovery_summary,
+    )
+
     return {
         "base_commonality": {
             "shared_signals": shared_signal_names,
@@ -12025,15 +12820,19 @@ def build_commonality_artifacts(
         # Currently source_input_quality_table is available in this scope; wiring it
         # into _build_top_explainable_candidates / _unmaterialized_candidate_review_queue
         # will fix source_status_summary=unknown and evidence_strength=weak (P1).
-        "top_explainable_risk_choke_point_candidates": _build_top_explainable_candidates(
-            candidate_features, source_input_quality_table=source_input_quality_table
-        ),
+        "top_explainable_risk_choke_point_candidates": _top_exp,
+        "top_explainable_empty_reason": _top_exp_empty_reason,
+        "high_coverage_commonality_candidates": _high_cov,
         "unknown_device_field_review_queue": _build_unknown_device_review_queue(candidate_features),
-        "unmaterialized_candidate_review_queue": _unmaterialized_candidate_review_queue(
-            candidate_features, source_input_quality_table=source_input_quality_table
-        ),
+        "unmaterialized_candidate_review_queue": _unmat_queue,
+        "field_dictionary_review_queue": _fdr,
+        "context_commonality_section": _ctx,
+        "semantics_review_queue": _sem_review,
+        "weak_materialized_candidate_review_queue": _weak_mat,
+        "candidate_features_deduped": _deduped,
+        "l3_candidate_discovery_summary": _discovery_summary,
         "validation_plan": validation_plan,
-        "final_evidence_card": final_evidence_card,
+        "final_evidence_card": _bridged_card,
         "missing_evidence": final_evidence_card["missing_evidence"],
     }
 
@@ -12220,6 +13019,18 @@ def build_round_orchestration_artifacts(
         "group_profile_candidate": commonality["group_profile_candidate"],
         "candidate_features": commonality["candidate_features"],
         "candidate_feature_top_samples": candidate_feature_top_samples,
+        "l3_candidate_quality_summary": commonality["l3_candidate_quality_summary"],
+        "top_explainable_risk_choke_point_candidates": commonality["top_explainable_risk_choke_point_candidates"],
+        "top_explainable_empty_reason": commonality.get("top_explainable_empty_reason"),
+        "high_coverage_commonality_candidates": commonality.get("high_coverage_commonality_candidates", []),
+        "unknown_device_field_review_queue": commonality["unknown_device_field_review_queue"],
+        "unmaterialized_candidate_review_queue": commonality["unmaterialized_candidate_review_queue"],
+        "field_dictionary_review_queue": commonality["field_dictionary_review_queue"],
+        "context_commonality_section": commonality["context_commonality_section"],
+        "semantics_review_queue": commonality.get("semantics_review_queue", []),
+        "weak_materialized_candidate_review_queue": commonality.get("weak_materialized_candidate_review_queue", []),
+        "candidate_features_deduped": commonality["candidate_features_deduped"],
+        "l3_candidate_discovery_summary": commonality.get("l3_candidate_discovery_summary", {}),
         "validation_plan": commonality["validation_plan"],
         "final_evidence_card": commonality["final_evidence_card"],
         "missing_evidence": commonality["missing_evidence"],
@@ -14676,10 +15487,13 @@ def build_cumulative_orchestration_artifacts(
         # TODO-G-R6-SOURCE-QUALITY-PROPAGATION: source_input_quality_table is not
         # aggregated to cumulative layer yet. Pass cumulative_source_quality_table
         # (built from round-level quality rows) to fix evidence_strength=weak.
+        # TODO-G-R6-SOURCE-QUALITY-PROPAGATION: pass cumulative_source_quality_table
         "top_explainable_risk_choke_point_candidates": _build_top_explainable_candidates(
             candidate_features[:10]
-            # TODO-G-R6: add source_input_quality_table=cumulative_source_quality_table
-        ),
+        )["candidates"],
+        "top_explainable_empty_reason": _build_top_explainable_candidates(
+            candidate_features[:10]
+        )["empty_reason"],
         "unknown_device_field_review_queue": _build_unknown_device_review_queue(candidate_features[:10]),
         "unmaterialized_candidate_review_queue": _unmaterialized_candidate_review_queue(
             candidate_features[:10]

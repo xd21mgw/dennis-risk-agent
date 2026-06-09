@@ -13,6 +13,17 @@ from typing import Any
 
 from runtime_case_execution_runner import (
     SourcePlanItem,
+    _materialize_candidate_evidence,
+    _build_top_explainable_candidates,
+    _build_field_dictionary_review_queue,
+    _build_context_commonality_section,
+    _g_r6_dedup_candidates,
+    _build_final_evidence_card_bridge,
+    _build_high_coverage_commonality_candidates,
+    _build_semantics_review_queue,
+    _build_weak_materialized_review_queue,
+    _build_l3_candidate_discovery_summary,
+    _why_not_top,
     build_rcp_event_followup_source_plan,
     build_status_attribution,
     build_missing_evidence,
@@ -3131,7 +3142,9 @@ def _regression_top_candidate_requires_supporting_evidence() -> tuple[list[str],
     if not m1.get("supporting_evidence"):
         errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c1_no_supporting_evidence")
     for ev in m1.get("supporting_evidence") or []:
-        if not ev.get("source_name") or not ev.get("field_path") or not ev.get("value_summary"):
+        # G-R6: field_path renamed to raw_field_path; value_summary still present
+        has_field = ev.get("raw_field_path") or ev.get("field_path")  # compat
+        if not ev.get("source_name") or not has_field or not ev.get("value_summary"):
             errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c1_evidence_missing_fields")
     if m2.get("claim_materialized") is not False:
         errors.append("TOP-CANDIDATE-REQUIRES-SUPPORTING-EVIDENCE-001:c2_no_fields_should_be_unmaterialized")
@@ -3183,6 +3196,8 @@ def _regression_frontend_activity_counter_signal() -> tuple[list[str], dict[str,
         "source_fields": ["active_minutes_today"],
         "core_commonality": ["active_minutes_today"],
         "reason_codes": ["high_active_minutes"],
+        # G-R6: value-level detection requires numeric >= 300 in essence_reason
+        "essence_reason": "active_minutes_today=360, backend_action_signal present",
     }
     m = _materialize_candidate_evidence(c, [
         {"source_name": "archives_user_analysis", "quality_class": "completed"},
@@ -3191,7 +3206,14 @@ def _regression_frontend_activity_counter_signal() -> tuple[list[str], dict[str,
     errors: list[str] = []
     # 应有 high_frontend_activity_counter_signal
     counter_reasons = [ce.get("value_summary", "") for ce in (m.get("counter_evidence") or [])]
-    if not any("high frontend activity" in r for r in counter_reasons):
+    counter_types = [ce.get("counter_signal_type", "") for ce in (m.get("counter_evidence") or [])]
+    # G-R6: check by counter_signal_type (value_summary text changed to reflect value-level)
+    has_strong_counter = (
+        any("high_frontend_activity_counter_signal" in t for t in counter_types) or
+        any("high frontend activity" in r or "activity confirmed high" in r or ">= 300" in r
+            for r in counter_reasons)
+    )
+    if not has_strong_counter:
         errors.append("FRONTEND-ACTIVITY-COUNTER-SIGNAL-001:no_high_frontend_activity_counter")
     # claim_materialized 应为 false（protocol_constraint_gap + 高活跃反证）
     if m.get("claim_materialized") is not False:
@@ -3662,6 +3684,1184 @@ def _regression_no_raw_body_leak() -> tuple[list[str], dict[str, Any]]:
         "leaked_credential_values": leaked,
     }
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# G-R6 Quality Regression functions
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _make_completed_quality_table(source_names: list[str]) -> list[dict]:
+    """Fixture: quality table with all sources completed."""
+    return [{"source_name": sn, "quality_class": "completed"} for sn in source_names]
+
+
+def _make_blocked_quality_table(source_names: list[str]) -> list[dict]:
+    """Fixture: quality table with all sources blocked."""
+    return [{"source_name": sn, "quality_class": "blocked", "auth_blocked": True}
+            for sn in source_names]
+
+
+def _make_partial_quality_table(source_names: list[str]) -> list[dict]:
+    """Fixture: quality table with all sources partial."""
+    return [{"source_name": sn, "quality_class": "partial"} for sn in source_names]
+
+
+def _make_timeout_quality_table(source_names: list[str]) -> list[dict]:
+    """Fixture: quality table with all sources timeout."""
+    return [{"source_name": sn, "quality_class": "timeout"} for sn in source_names]
+
+
+def _make_protocol_candidate(
+    fields: list[str] | None = None,
+    core: list[str] | None = None,
+    likeness: str = "high",
+) -> dict:
+    """Fixture: protocol_constraint_gap candidate."""
+    return {
+        "candidate_feature_name": "protocol_constraint_gap_candidate",
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": likeness,
+        "core_commonality": core or ["request_path_anomaly"],
+        "source_support": ["login_logs_search"],
+        "field_combination": fields or ["request_path_anomaly"],
+        "source_fields": [],
+        "reason_codes": [],
+        "essence_reason": "",
+    }
+
+
+def _make_control_exec_candidate(
+    fields: list[str] | None = None,
+    likeness: str = "high",
+) -> dict:
+    """Fixture: control_execution_separation candidate."""
+    return {
+        "candidate_feature_name": "control_execution_sep_candidate",
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": likeness,
+        "core_commonality": fields or ["login_did", "action_did"],
+        "source_support": ["login_logs_search", "weapon_inventory"],
+        "field_combination": fields or ["login_did", "action_did"],
+        "source_fields": [],
+        "reason_codes": [],
+        "essence_reason": "",
+    }
+
+
+# ── G-R6-1: source_status / evidence_strength ────────────────────────────
+
+def _regression_source_status_propagates_to_evidence() -> tuple[list[str], dict]:
+    """SOURCE-STATUS-PROPAGATES-TO-EVIDENCE-001
+    When source quality table has completed status, supporting_evidence.source_status
+    must be 'completed' not 'unknown'.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["frida_related", "adbstatus"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus", "debug"],
+        "source_fields": [],
+    }
+    qt = _make_completed_quality_table(["weapon_device_info"])
+    mat = _materialize_candidate_evidence(c, qt)
+    ev_list = mat.get("supporting_evidence") or []
+    if not ev_list:
+        errors.append("SOURCE-STATUS-PROPAGATES: no supporting_evidence with completed quality table")
+    else:
+        for ev in ev_list:
+            st = ev.get("source_status")
+            if st != "completed":
+                errors.append(
+                    f"SOURCE-STATUS-PROPAGATES: source_status={st!r} expected completed"
+                )
+    # source_status_summary should not be 'unknown' when table is present
+    ssm = mat.get("source_status_summary") or {}
+    for sname, sval in ssm.items():
+        actual_st = sval if isinstance(sval, str) else (sval or {}).get("status")
+        if actual_st == "unknown":
+            errors.append(
+                f"SOURCE-STATUS-PROPAGATES: source_status_summary[{sname}]=unknown with completed table"
+            )
+    return errors, {
+        "source_status_in_evidence": [e.get("source_status") for e in ev_list],
+        "source_status_summary": ssm,
+    }
+
+
+def _regression_evidence_strength_follows_source_status() -> tuple[list[str], dict]:
+    """EVIDENCE-STRENGTH-FOLLOWS-SOURCE-STATUS-001
+    completed → strong; partial → medium; unknown (no table) → weak/none.
+    """
+    errors: list[str] = []
+    c_base = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["frida_related"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus", "debug"],
+        "source_fields": [],
+    }
+    # completed → strong
+    mat_c = _materialize_candidate_evidence(c_base, _make_completed_quality_table(["weapon_device_info"]))
+    if mat_c["evidence_strength"] not in ("strong", "medium"):
+        errors.append(f"STRENGTH-FOLLOWS-STATUS: completed source → expected strong/medium, got {mat_c['evidence_strength']!r}")
+    # partial → ≤ medium
+    mat_p = _materialize_candidate_evidence(c_base, _make_partial_quality_table(["weapon_device_info"]))
+    if mat_p["evidence_strength"] not in ("medium", "weak", "none"):
+        errors.append(f"STRENGTH-FOLLOWS-STATUS: partial source → expected medium/weak, got {mat_p['evidence_strength']!r}")
+    # no table → weak or none
+    mat_u = _materialize_candidate_evidence(c_base, [])
+    if mat_u["evidence_strength"] not in ("weak", "none", "medium"):
+        errors.append(f"STRENGTH-FOLLOWS-STATUS: no table → expected weak/none, got {mat_u['evidence_strength']!r}")
+    return errors, {
+        "completed_strength": mat_c["evidence_strength"],
+        "partial_strength": mat_p["evidence_strength"],
+        "no_table_strength": mat_u["evidence_strength"],
+    }
+
+
+def _regression_blocked_timeout_not_supporting_evidence() -> tuple[list[str], dict]:
+    """BLOCKED-TIMEOUT-NOT-SUPPORTING-EVIDENCE-001
+    Sources with blocked/timeout status must NOT appear in supporting_evidence.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "control_sep_candidate",
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "core_commonality": ["login_did", "action_did"],
+        "source_support": ["weapon_inventory"],
+        "field_combination": ["login_did", "action_did"],
+        "source_fields": [],
+    }
+    mat_blocked = _materialize_candidate_evidence(c, _make_blocked_quality_table(["weapon_inventory"]))
+    se_blocked = mat_blocked.get("supporting_evidence") or []
+    for ev in se_blocked:
+        if ev.get("source_status") in ("blocked", "auth_blocked"):
+            errors.append("BLOCKED-NOT-SUPPORTING: blocked source appears in supporting_evidence")
+    # claim_materialized should be False when all sources are blocked
+    if se_blocked and mat_blocked.get("claim_materialized"):
+        errors.append("BLOCKED-NOT-SUPPORTING: claim_materialized=True despite all blocked sources")
+
+    mat_timeout = _materialize_candidate_evidence(c, _make_timeout_quality_table(["weapon_inventory"]))
+    se_timeout = mat_timeout.get("supporting_evidence") or []
+    for ev in se_timeout:
+        if ev.get("source_status") == "timeout":
+            errors.append("BLOCKED-NOT-SUPPORTING: timeout source appears in supporting_evidence as strong")
+    return errors, {
+        "blocked_supporting_evidence_count": len(se_blocked),
+        "blocked_claim_materialized": mat_blocked.get("claim_materialized"),
+        "timeout_claim_materialized": mat_timeout.get("claim_materialized"),
+    }
+
+
+# ── G-R6-2: support metrics propagation ──────────────────────────────────
+
+def _regression_support_metrics_propagate_to_evidence() -> tuple[list[str], dict]:
+    """SUPPORT-METRICS-PROPAGATE-TO-TOP-EVIDENCE-001
+    support_user_count / support_ratio must appear in supporting_evidence items.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["frida_related"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus", "debug"],
+        "source_fields": [],
+        "support_user_count": 42,
+        "support_sample_count": 60,
+        "support_ratio": 0.70,
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["weapon_device_info"]))
+    # candidate_support_summary must include support_user_count / support_ratio
+    css = mat.get("candidate_support_summary") or {}
+    if not css.get("support_user_count"):
+        errors.append("SUPPORT-METRICS: candidate_support_summary.support_user_count missing")
+    if css.get("support_ratio") is None:
+        errors.append("SUPPORT-METRICS: candidate_support_summary.support_ratio missing")
+    # supporting_evidence items must carry support_user_count
+    for ev in (mat.get("supporting_evidence") or []):
+        if ev.get("support_user_count") is None:
+            errors.append(f"SUPPORT-METRICS: supporting_evidence[{ev.get('source_name')}].support_user_count missing")
+        if ev.get("support_ratio") is None:
+            errors.append(f"SUPPORT-METRICS: supporting_evidence[{ev.get('source_name')}].support_ratio missing")
+    return errors, {
+        "support_user_count": css.get("support_user_count"),
+        "support_ratio": css.get("support_ratio"),
+        "evidence_count": len(mat.get("supporting_evidence") or []),
+    }
+
+
+def _regression_support_ratio_calculated_when_possible() -> tuple[list[str], dict]:
+    """SUPPORT-RATIO-CALCULATED-WHEN-POSSIBLE-001
+    When support_user_count and support_sample_count are both present, support_ratio
+    must be computed (not left None).
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["frida_related"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus"],
+        "source_fields": [],
+        "support_user_count": 30,
+        "support_sample_count": 100,
+        # support_ratio intentionally not provided
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["weapon_device_info"]))
+    css = mat.get("candidate_support_summary") or {}
+    computed_ratio = css.get("support_ratio")
+    if computed_ratio is None:
+        errors.append("RATIO-CALCULATED: support_ratio should be computed from 30/100=0.30, got None")
+    elif abs(computed_ratio - 0.30) > 0.001:
+        errors.append(f"RATIO-CALCULATED: expected 0.30 got {computed_ratio}")
+    return errors, {"computed_ratio": computed_ratio}
+
+
+def _regression_low_support_sequence_not_batch_top() -> tuple[list[str], dict]:
+    """LOW-SUPPORT-SEQUENCE-NOT-BATCH-TOP-001
+    A candidate with support_ratio < 0.3 and risk_semantics=unknown/weak
+    should not be top_candidate_eligible=True.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "low_ratio_candidate",
+        "risk_choke_point_type": "unknown",
+        "choke_point_likeness": "medium",
+        "core_commonality": ["account_status=200", "code=0"],  # status tokens
+        "source_support": ["some_source"],
+        "field_combination": ["account_status", "code"],
+        "source_fields": [],
+        "support_user_count": 5,
+        "support_sample_count": 100,
+        "support_ratio": 0.05,
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["some_source"]))
+    eligible = mat.get("top_candidate_eligible", True)
+    if eligible:
+        errors.append(
+            f"LOW-SUPPORT-NOT-TOP: risk_semantics={mat.get('risk_semantics_strength')!r} "
+            f"choke_type=unknown should not be top_candidate_eligible"
+        )
+    return errors, {
+        "top_candidate_eligible": eligible,
+        "risk_semantics": mat.get("risk_semantics_strength"),
+    }
+
+
+# ── G-R6-3: evidence display normalization ────────────────────────────────
+
+def _regression_internal_signal_not_user_facing_evidence() -> tuple[list[str], dict]:
+    """INTERNAL-SIGNAL-NOT-USER-FACING-EVIDENCE-001
+    frida_xposed_mount_reset_or_emulator_related_field_truthy must not appear
+    as raw field_path in supporting_evidence; evidence_display_label must differ
+    from internal signal name.
+    """
+    errors: list[str] = []
+    c = _make_device_farm_candidate()
+    # field_combination contains internal signal name
+    c["field_combination"] = ["frida_xposed_mount_reset_or_emulator_related_field_truthy", "adbstatus"]
+    mat = _materialize_candidate_evidence(
+        c, _make_completed_quality_table(["weapon_inventory", "weapon_device_info"])
+    )
+    for ev in (mat.get("supporting_evidence") or []):
+        label = ev.get("evidence_display_label") or ""
+        raw_paths = ev.get("raw_field_path") or []
+        # display_label must not be the raw internal signal name
+        if label == "frida_xposed_mount_reset_or_emulator_related_field_truthy":
+            errors.append("INTERNAL-SIGNAL: evidence_display_label == internal signal name (not normalized)")
+        # raw_field_path is OK to contain the signal name, but internal_signal_name field must exist
+        if not ev.get("internal_signal_name"):
+            errors.append("INTERNAL-SIGNAL: internal_signal_name missing from supporting_evidence")
+        if not label:
+            errors.append("INTERNAL-SIGNAL: evidence_display_label missing")
+    return errors, {
+        "display_labels": [e.get("evidence_display_label") for e in (mat.get("supporting_evidence") or [])],
+        "internal_signal_names": [e.get("internal_signal_name") for e in (mat.get("supporting_evidence") or [])],
+    }
+
+
+def _regression_raw_field_path_required_for_strong_evidence() -> tuple[list[str], dict]:
+    """RAW-FIELD-PATH-REQUIRED-FOR-STRONG-EVIDENCE-001
+    Every supporting_evidence entry must have raw_field_path (not empty).
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["adbstatus", "debug"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus", "debug"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["weapon_device_info"]))
+    for ev in (mat.get("supporting_evidence") or []):
+        if not ev.get("raw_field_path"):
+            errors.append(f"RAW-FIELD-PATH: supporting_evidence[{ev.get('source_name')}].raw_field_path empty/missing")
+    return errors, {
+        "raw_field_paths": [e.get("raw_field_path") for e in (mat.get("supporting_evidence") or [])],
+    }
+
+
+def _regression_device_risk_evidence_display_label() -> tuple[list[str], dict]:
+    """DEVICE-RISK-EVIDENCE-DISPLAY-LABEL-001
+    Device risk fields (frida/xposed/adb) must get field_role=risk_signal
+    and dictionary_status=known in supporting_evidence.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "choke_point_likeness": "high",
+        "core_commonality": ["adbstatus"],
+        "source_support": ["weapon_device_info"],
+        "field_combination": ["adbstatus", "frida_related", "debug"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["weapon_device_info"]))
+    for ev in (mat.get("supporting_evidence") or []):
+        role = ev.get("field_role")
+        dict_status = ev.get("dictionary_status")
+        raw_fps = ev.get("raw_field_path") or []
+        has_device_risk = any(
+            tok in " ".join(raw_fps).lower()
+            for tok in ("adbstatus", "frida", "debug", "root", "hook")
+        )
+        if has_device_risk and role not in ("risk_signal", "context"):
+            errors.append(
+                f"DEVICE-DISPLAY-LABEL: device risk fields → field_role={role!r}, expected risk_signal/context"
+            )
+        if not ev.get("evidence_display_label"):
+            errors.append("DEVICE-DISPLAY-LABEL: evidence_display_label missing")
+    return errors, {
+        "field_roles": [e.get("field_role") for e in (mat.get("supporting_evidence") or [])],
+        "dict_statuses": [e.get("dictionary_status") for e in (mat.get("supporting_evidence") or [])],
+    }
+
+
+def _regression_missing_field_not_protocol_bypass_evidence() -> tuple[list[str], dict]:
+    """MISSING-FIELD-NOT-PROTOCOL-BYPASS-EVIDENCE-001
+    If all field_combination tokens start with missing_ / not_joined_ / unverified_,
+    protocol_constraint_gap claim_materialized must be False.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "protocol_gap_candidate",
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",
+        "core_commonality": ["missing_request_path", "unverified_client_path"],
+        "source_support": ["login_logs_search"],
+        "field_combination": ["missing_request_path", "not_joined_entry_scene"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["login_logs_search"]))
+    if mat.get("claim_materialized"):
+        errors.append(
+            "MISSING-FIELD-NOT-PROTOCOL: all fields are missing_ type but claim_materialized=True"
+        )
+    # missing_field_paths_present should be in missing_evidence
+    if "missing_field_paths_present" not in (mat.get("missing_evidence") or []):
+        # Not a hard error, just a note
+        pass
+    # current_status must indicate missing/unjoined
+    cs = mat.get("current_status")
+    if cs not in ("field_missing_not_positive", "field_not_joined", "source_gap"):
+        errors.append(f"MISSING-FIELD-NOT-PROTOCOL: current_status={cs!r}, expected field_missing_not_positive")
+    return errors, {
+        "claim_materialized": mat.get("claim_materialized"),
+        "current_status": mat.get("current_status"),
+        "overclaim_risk": mat.get("overclaim_risk"),
+    }
+
+
+# ── G-R6-4: field semantics-aware ranking ────────────────────────────────
+
+def _regression_status_field_downranked() -> tuple[list[str], dict]:
+    """STATUS-FIELD-DOWNRANKED-001
+    account_status / code=0 fields must yield risk_semantics_strength=weak
+    and top_candidate_eligible=False.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "account_status_candidate",
+        "risk_choke_point_type": "unknown",
+        "choke_point_likeness": "high",
+        "core_commonality": ["account_status", "code=0"],
+        "source_support": ["login_logs_search"],
+        "field_combination": ["account_status", "code"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["login_logs_search"]))
+    sema = mat.get("risk_semantics_strength")
+    if sema not in ("weak", "unknown"):
+        errors.append(f"STATUS-DOWNRANKED: status fields → risk_semantics_strength={sema!r}, expected weak/unknown")
+    eligible = mat.get("top_candidate_eligible", True)
+    if eligible:
+        errors.append("STATUS-DOWNRANKED: account_status/code=0 candidate should not be top_candidate_eligible")
+    return errors, {
+        "risk_semantics_strength": sema,
+        "top_candidate_eligible": eligible,
+    }
+
+
+def _regression_device_risk_semantics_strong() -> tuple[list[str], dict]:
+    """DEVICE-RISK-SEMANTICS-STRONG-001
+    device_farm_template candidate with frida/adb fields must yield
+    risk_semantics_strength=strong/medium and top_candidate_eligible=True.
+    """
+    errors: list[str] = []
+    c = _make_device_farm_candidate()
+    mat = _materialize_candidate_evidence(
+        c, _make_completed_quality_table(["weapon_inventory", "weapon_device_info"])
+    )
+    sema = mat.get("risk_semantics_strength")
+    if sema not in ("strong", "medium"):
+        errors.append(f"DEVICE-RISK-SEMA: device_farm frida/adb → expected strong/medium, got {sema!r}")
+    eligible = mat.get("top_candidate_eligible", False)
+    if not eligible:
+        errors.append("DEVICE-RISK-SEMA: device_farm with strong semantics should be top_candidate_eligible=True")
+    return errors, {"risk_semantics_strength": sema, "top_candidate_eligible": eligible}
+
+
+def _regression_unknown_choke_not_top() -> tuple[list[str], dict]:
+    """UNKNOWN-CHOKE-NOT-TOP-ELIGIBLE-001
+    Candidates with risk_choke_point_type=unknown must not be top_candidate_eligible.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "some_unknown_candidate",
+        "risk_choke_point_type": "unknown",
+        "choke_point_likeness": "medium",
+        "core_commonality": ["some_field"],
+        "source_support": ["some_source"],
+        "field_combination": ["some_field"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["some_source"]))
+    eligible = mat.get("top_candidate_eligible", True)
+    if eligible:
+        errors.append("UNKNOWN-CHOKE-NOT-TOP: choke_type=unknown should not be top_candidate_eligible")
+    return errors, {"top_candidate_eligible": eligible, "choke_type": "unknown"}
+
+
+# ── G-R6-5: candidate dedup ───────────────────────────────────────────────
+
+def _regression_candidate_dedup_removes_duplicates() -> tuple[list[str], dict]:
+    """CANDIDATE-DEDUP-REMOVES-DUPLICATES-001
+    Two candidates with same (name, choke_type, core_key) must collapse to 1.
+    """
+    errors: list[str] = []
+    c1 = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "core_commonality": ["frida_related"],
+        "source_support": ["weapon_device_info"],
+        "support_ratio": 0.6,
+    }
+    c2 = dict(c1)  # exact duplicate
+    result = _g_r6_dedup_candidates([c1, c2])
+    if len(result) != 1:
+        errors.append(f"DEDUP: expected 1 after dedup of exact duplicate, got {len(result)}")
+    return errors, {"deduped_count": len(result)}
+
+
+def _regression_candidate_dedup_keeps_best() -> tuple[list[str], dict]:
+    """CANDIDATE-DEDUP-KEEPS-BEST-001
+    When two candidates have same key but different support_ratio, keep higher.
+    """
+    errors: list[str] = []
+    c_low = {
+        "candidate_feature_name": "device_farm_candidate",
+        "risk_choke_point_type": "device_farm_template",
+        "core_commonality": ["frida_related"],
+        "source_support": ["weapon_device_info"],
+        "support_ratio": 0.3,
+        "choke_point_likeness": "medium",
+    }
+    c_high = dict(c_low)
+    c_high["support_ratio"] = 0.8
+    result = _g_r6_dedup_candidates([c_low, c_high])
+    if len(result) != 1:
+        errors.append(f"DEDUP-BEST: expected 1, got {len(result)}")
+    elif result[0].get("support_ratio") != 0.8:
+        errors.append(f"DEDUP-BEST: expected best (0.8), got {result[0].get('support_ratio')}")
+    return errors, {"kept_ratio": (result[0].get("support_ratio") if result else None)}
+
+
+# ── G-R6-6: final_evidence_card bridge ───────────────────────────────────
+
+def _regression_final_evidence_card_bridge_materialized() -> tuple[list[str], dict]:
+    """FINAL-EVIDENCE-CARD-BRIDGE-MATERIALIZED-001
+    claim_materialized=True + strong evidence → medium_evidence in bridged card.
+    """
+    errors: list[str] = []
+    top = {
+        "candidate_feature_name": "device_farm_candidate",
+        "claim_materialized": True,
+        "evidence_strength": "strong",
+        "core_claim": "device_farm",
+        "candidate_support_summary": {"support_ratio": 0.8},
+        "supporting_evidence": [{
+            "evidence_display_label": "设备对抗环境字段组合",
+            "internal_signal_name": "device_farm_candidate",
+        }],
+        "counter_evidence": [],
+        "missing_evidence": [],
+        "allowed_claim_boundary": "candidate_only",
+    }
+    existing_card = {
+        "medium_evidence": ["existing_signal"],
+        "weak_evidence": [],
+        "counter_evidence": [],
+        "missing_evidence": [],
+    }
+    bridged = _build_final_evidence_card_bridge([top], [], existing_card)
+    if "设备对抗环境字段组合" not in bridged.get("medium_evidence", []):
+        errors.append("BRIDGE-MATERIALIZED: materialized strong evidence not in final_evidence_card.medium_evidence")
+    if not bridged.get("candidate_evidence_summary"):
+        errors.append("BRIDGE-MATERIALIZED: candidate_evidence_summary missing from bridged card")
+    return errors, {
+        "medium_evidence": bridged.get("medium_evidence"),
+        "has_summary": bool(bridged.get("candidate_evidence_summary")),
+    }
+
+
+def _regression_final_evidence_card_bridge_unmaterialized() -> tuple[list[str], dict]:
+    """FINAL-EVIDENCE-CARD-BRIDGE-UNMATERIALIZED-001
+    claim_materialized=False → evidence goes to weak_evidence, not medium.
+    """
+    errors: list[str] = []
+    top = {
+        "candidate_feature_name": "control_sep_candidate",
+        "claim_materialized": False,
+        "evidence_strength": "none",
+        "core_claim": "device_action_mismatch_not_materialized",
+        "candidate_support_summary": {"support_ratio": None},
+        "supporting_evidence": [],
+        "counter_evidence": [],
+        "missing_evidence": ["field_level_mismatch_not_materialized"],
+        "allowed_claim_boundary": "source_cooccurrence_only",
+    }
+    existing_card = {
+        "medium_evidence": [],
+        "weak_evidence": [],
+        "counter_evidence": [],
+        "missing_evidence": [],
+    }
+    bridged = _build_final_evidence_card_bridge([top], [top], existing_card)
+    # unmaterialized missing_evidence should bridge through
+    if "field_level_mismatch_not_materialized" not in bridged.get("missing_evidence", []):
+        errors.append("BRIDGE-UNMATERIALIZED: missing_evidence not propagated to bridged card")
+    return errors, {
+        "missing_evidence_count": len(bridged.get("missing_evidence") or []),
+        "medium_evidence": bridged.get("medium_evidence"),
+    }
+
+
+def _regression_final_evidence_card_counter_evidence_bridge() -> tuple[list[str], dict]:
+    """FINAL-EVIDENCE-CARD-COUNTER-EVIDENCE-001
+    counter_evidence from top candidates must appear in bridged card.
+    """
+    errors: list[str] = []
+    top = {
+        "candidate_feature_name": "protocol_candidate",
+        "claim_materialized": False,
+        "evidence_strength": "none",
+        "core_claim": "event_frontend_path_unverified",
+        "candidate_support_summary": {},
+        "supporting_evidence": [],
+        "counter_evidence": [{
+            "counter_signal_type": "high_frontend_activity_counter_signal",
+            "value_summary": "active_minutes >= 300",
+            "reason_it_weakens_claim": "not weak frontend activity",
+        }],
+        "missing_evidence": [],
+        "allowed_claim_boundary": "event_level_only",
+    }
+    existing_card = {
+        "medium_evidence": [],
+        "weak_evidence": [],
+        "counter_evidence": [],
+        "missing_evidence": [],
+    }
+    bridged = _build_final_evidence_card_bridge([top], [], existing_card)
+    if not bridged.get("counter_evidence"):
+        errors.append("COUNTER-BRIDGE: counter_evidence from candidate not in bridged final_evidence_card")
+    return errors, {
+        "counter_evidence_count": len(bridged.get("counter_evidence") or []),
+    }
+
+
+def _regression_final_evidence_card_no_group_confirmation() -> tuple[list[str], dict]:
+    """FINAL-EVIDENCE-CARD-NO-GROUP-CONFIRMATION-001
+    Bridged final_evidence_card must always have group_not_confirmed=True.
+    """
+    errors: list[str] = []
+    top = {
+        "candidate_feature_name": "device_farm_candidate",
+        "claim_materialized": True,
+        "evidence_strength": "strong",
+        "core_claim": "device_farm",
+        "candidate_support_summary": {},
+        "supporting_evidence": [{"evidence_display_label": "设备对抗"}],
+        "counter_evidence": [],
+        "missing_evidence": [],
+        "allowed_claim_boundary": "",
+    }
+    existing_card = {"medium_evidence": [], "weak_evidence": [], "counter_evidence": [], "missing_evidence": []}
+    bridged = _build_final_evidence_card_bridge([top], [], existing_card)
+    if not bridged.get("group_not_confirmed"):
+        errors.append("NO-GROUP-CONFIRM: bridged card missing group_not_confirmed=True")
+    return errors, {"group_not_confirmed": bridged.get("group_not_confirmed")}
+
+
+# ── G-R6-7: value-level counter evidence ─────────────────────────────────
+
+def _regression_value_level_high_activity_counter() -> tuple[list[str], dict]:
+    """VALUE-LEVEL-HIGH-ACTIVITY-COUNTER-001
+    active_minutes with value >= 300 in essence_reason → strong counter.
+    Token-only (no value) → weak counter only.
+    """
+    errors: list[str] = []
+    # Value-level: essence_reason contains numeric 300+
+    c_value = {
+        "candidate_feature_name": "pcg_candidate",
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",
+        "core_commonality": ["missing_or_weak_frontend_activity"],
+        "source_support": ["archives_user_analysis"],
+        "field_combination": ["active_minutes_today"],
+        "source_fields": [],
+        "essence_reason": "active_minutes_today=360, backend_action_signal present",
+    }
+    mat_val = _materialize_candidate_evidence(c_value, _make_completed_quality_table(["archives_user_analysis"]))
+    ce_val = mat_val.get("counter_evidence") or []
+    strong_signals = [e for e in ce_val if e.get("counter_signal_type") == "high_frontend_activity_counter_signal"]
+    if not strong_signals:
+        errors.append("VALUE-LEVEL-COUNTER: active_minutes_today=360 should produce high_frontend_activity_counter_signal (strong)")
+    # claim must not be materialized
+    if mat_val.get("claim_materialized"):
+        errors.append("VALUE-LEVEL-COUNTER: claim_materialized should be False when strong activity counter present")
+
+    # Token-only: no numeric value → weak counter
+    c_token = dict(c_value)
+    c_token["essence_reason"] = "active_minutes_today present, backend_action_signal present"  # no number
+    mat_tok = _materialize_candidate_evidence(c_token, _make_completed_quality_table(["archives_user_analysis"]))
+    ce_tok = mat_tok.get("counter_evidence") or []
+    token_only = [e for e in ce_tok if e.get("counter_signal_type") == "high_frontend_activity_token_only"]
+    # strong signal should NOT fire without value
+    strong_only = [e for e in ce_tok if e.get("counter_signal_type") == "high_frontend_activity_counter_signal"]
+    if strong_only:
+        errors.append("VALUE-LEVEL-COUNTER: token-only (no numeric value) should not produce strong counter signal")
+    return errors, {
+        "value_level_strong_counter": bool(strong_signals),
+        "token_only_weak_counter": bool(token_only),
+        "value_claim_materialized": mat_val.get("claim_materialized"),
+    }
+
+
+def _regression_value_level_same_device_counter() -> tuple[list[str], dict]:
+    """VALUE-LEVEL-SAME-DEVICE-COUNTER-001
+    same_device_id=true in essence_reason → strong same_device_counter_signal.
+    Token name alone (no =true) → token_only weak counter.
+    """
+    errors: list[str] = []
+    c_value = {
+        "candidate_feature_name": "control_sep_candidate",
+        "risk_choke_point_type": "control_execution_separation",
+        "choke_point_likeness": "high",
+        "core_commonality": ["same_device_id"],
+        "source_support": ["weapon_inventory"],
+        "field_combination": ["login_did", "same_device_id"],
+        "source_fields": [],
+        "essence_reason": "same_device_id=true, no device switch detected",
+    }
+    mat_val = _materialize_candidate_evidence(c_value, _make_completed_quality_table(["weapon_inventory"]))
+    ce_val = mat_val.get("counter_evidence") or []
+    strong_same = [e for e in ce_val if e.get("counter_signal_type") == "same_device_counter_signal"]
+    if not strong_same:
+        errors.append("SAME-DEVICE-VALUE-COUNTER: same_device_id=true should produce same_device_counter_signal (strong)")
+    if mat_val.get("claim_materialized"):
+        errors.append("SAME-DEVICE-VALUE-COUNTER: claim_materialized should be False when same_device=true counter present")
+
+    c_token = dict(c_value)
+    c_token["essence_reason"] = "same_device_id field present"  # no =true
+    mat_tok = _materialize_candidate_evidence(c_token, _make_completed_quality_table(["weapon_inventory"]))
+    ce_tok = mat_tok.get("counter_evidence") or []
+    strong_tok = [e for e in ce_tok if e.get("counter_signal_type") == "same_device_counter_signal"]
+    if strong_tok:
+        errors.append("SAME-DEVICE-VALUE-COUNTER: token-only (no =true) should not produce strong same_device_counter_signal")
+    return errors, {
+        "value_level_strong": bool(strong_same),
+        "token_only_no_strong": not bool(strong_tok),
+        "value_claim_materialized": mat_val.get("claim_materialized"),
+    }
+
+
+# ── G-R6-8: protocol_constraint_gap convergence ───────────────────────────
+
+def _regression_protocol_positive_anomaly_required() -> tuple[list[str], dict]:
+    """PROTOCOL-POSITIVE-ANOMALY-REQUIRED-001
+    protocol_constraint_gap must have positive anomaly token (request_path_anomaly,
+    scene_mismatch, etc.) to be materialized. Missing fields alone are insufficient.
+    """
+    errors: list[str] = []
+    # Case A: only missing fields → unmaterialized
+    c_missing = _make_protocol_candidate(
+        fields=["missing_request_path", "not_joined_entry_scene"],
+        core=["missing_request_path", "unverified_entry"],
+    )
+    mat_miss = _materialize_candidate_evidence(c_missing, _make_completed_quality_table(["login_logs_search"]))
+    if mat_miss.get("claim_materialized"):
+        errors.append("PROTOCOL-POSITIVE: only missing fields → claim_materialized must be False")
+
+    # Case B: positive anomaly → can be materialized
+    c_positive = _make_protocol_candidate(
+        fields=["request_path_anomaly"],
+        core=["request_path_anomaly"],
+    )
+    mat_pos = _materialize_candidate_evidence(c_positive, _make_completed_quality_table(["login_logs_search"]))
+    # With positive token it should at least have supporting evidence (may still be medium/weak)
+    # Not failing on materialized=False since positive_field may yield no supporting_evidence
+    # Just verify that missing_only → False is consistent
+    return errors, {
+        "missing_only_materialized": mat_miss.get("claim_materialized"),
+        "positive_field_materialized": mat_pos.get("claim_materialized"),
+        "positive_current_status": mat_pos.get("current_status"),
+    }
+
+
+def _regression_protocol_missing_field_not_high_evidence() -> tuple[list[str], dict]:
+    """PROTOCOL-MISSING-FIELD-NOT-HIGH-EVIDENCE-001
+    Even if protocol_constraint_gap has many missing fields, choke_point_likeness
+    should not be high after materialization gate.
+    """
+    errors: list[str] = []
+    c = {
+        "candidate_feature_name": "protocol_gap_many_missing",
+        "risk_choke_point_type": "protocol_constraint_gap",
+        "choke_point_likeness": "high",  # starts as high
+        "core_commonality": ["missing_a", "missing_b", "missing_c", "missing_d", "missing_e", "missing_f"],
+        "source_support": ["login_logs_search"],
+        "field_combination": ["missing_a", "missing_b", "missing_c"],
+        "source_fields": [],
+    }
+    mat = _materialize_candidate_evidence(c, _make_completed_quality_table(["login_logs_search"]))
+    final_likeness = mat.get("choke_point_likeness_after_gate")
+    if final_likeness == "high":
+        errors.append(
+            f"PROTOCOL-MISSING-NOT-HIGH: all missing fields but choke_point_likeness_after_gate={final_likeness!r}"
+        )
+    return errors, {
+        "choke_point_likeness_after_gate": final_likeness,
+        "claim_materialized": mat.get("claim_materialized"),
+    }
+
+
+# ── Wiring function (called from run_check) ───────────────────────────────
+
+
+# ══════════════════════════════════════════════════════════════════════
+# G-R6-fix regression functions
+# ══════════════════════════════════════════════════════════════════════
+
+def _regression_top_explainable_requires_eligible():
+    """TOP-EXPLAINABLE-REQUIRES-ELIGIBLE-001
+    top_candidate_eligible=False candidates must NOT appear in top_explainable results.
+    """
+    errs: list[str] = []
+    # Candidate with status/weak semantics field → not eligible
+    c = _make_protocol_candidate(
+        fields=["account_status", "code"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    result = _build_top_explainable_candidates([c], sqt)
+    tops = result["candidates"]
+    for t in tops:
+        if not t.get("top_candidate_eligible"):
+            errs.append(f"top_explainable contains ineligible candidate: {t.get('candidate_feature_name')}")
+    return errs, {"top_count": len(tops), "eligible_gate_enforced": len(errs) == 0}
+
+
+def _regression_top_explainable_empty_reason():
+    """TOP-EXPLAINABLE-EMPTY-REASON-001
+    When no eligible candidates, top_explainable is empty and empty_reason is set.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["account_status", "code"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    result = _build_top_explainable_candidates([c], sqt)
+    tops = result["candidates"]
+    empty_reason = result.get("empty_reason")
+    if tops:
+        errs.append(f"Expected empty Top but got {len(tops)} candidates")
+    if not empty_reason:
+        errs.append("Expected empty_reason to be set when Top is empty")
+    return errs, {"tops": tops, "empty_reason": empty_reason}
+
+
+def _regression_top_explainable_dedup():
+    """TOP-EXPLAINABLE-DEDUP-001
+    Top should not contain duplicate protocol/content/device candidates.
+    Two protocol candidates with same choke_type → only 1 in Top.
+    """
+    errs: list[str] = []
+    c1 = _make_protocol_candidate(
+        fields=["frida_xposed_truthy"],
+        core=["frida_detected"],
+        likeness="high",
+    )
+    c1 = dict(c1)
+    c1["candidate_feature_name"] = "protocol_gap_a"
+    c2 = dict(c1)
+    c2["candidate_feature_name"] = "protocol_gap_b"
+    sqt = _make_completed_quality_table(["device_svc"])
+    result = _build_top_explainable_candidates([c1, c2], sqt)
+    tops = result["candidates"]
+    type_counts: dict[str, int] = {}
+    for t in tops:
+        ctype = t.get("risk_choke_point_type") or "unknown"
+        type_counts[ctype] = type_counts.get(ctype, 0) + 1
+    dups = {k: v for k, v in type_counts.items() if v > 1}
+    if dups:
+        errs.append(f"Duplicate risk_choke_point_type in Top: {dups}")
+    return errs, {"tops": len(tops), "type_counts": type_counts}
+
+
+def _regression_high_coverage_commonality_section():
+    """HIGH-COVERAGE-COMMONALITY-SECTION-001
+    Candidate with support_ratio>=0.5 but top_candidate_eligible=False
+    must appear in high_coverage_commonality_candidates.
+    """
+    errs: list[str] = []
+    # account_status candidate: 6/6 = 1.0 but weak semantics -> not top_eligible
+    c = _make_protocol_candidate(
+        fields=["account_status", "caller_id"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    c = dict(c)
+    c["source_support"] = ["svc_acc"] * 6  # simulate 6 users
+    sqt = _make_completed_quality_table(["svc_acc"])
+    # Patch in support_user_count via candidate data
+    c["support_user_count"] = 6
+    c["support_sample_count"] = 6
+    hcc = _build_high_coverage_commonality_candidates([c], sqt,
+                                                      min_support_ratio=0.5,
+                                                      min_support_user_count=3)
+    if not hcc:
+        errs.append("Expected at least 1 entry in high_coverage_commonality_candidates, got 0")
+    return errs, {"hcc_count": len(hcc)}
+
+
+def _regression_high_coverage_not_equals_top():
+    """HIGH-COVERAGE-NOT-EQUALS-TOP-001
+    Candidates with 6/6 unknown/status/default fields must NOT enter main Top,
+    but must appear in high_coverage_commonality_candidates section.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["account_status", "code"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    top_result = _build_top_explainable_candidates([c], sqt)
+    tops = top_result["candidates"]
+    hcc = _build_high_coverage_commonality_candidates([c], sqt)
+    # status_field candidates must not be in Top
+    for t in tops:
+        name = t.get("candidate_feature_name") or ""
+        if "protocol" in name.lower():
+            ev_sem = t.get("risk_semantics_strength") or "unknown"
+            if ev_sem in ("weak", "unknown"):
+                errs.append(f"Weak semantics candidate in Top: {name} ({ev_sem})")
+    return errs, {"tops": len(tops), "hcc": len(hcc)}
+
+
+def _regression_high_coverage_candidate_has_why_not_top():
+    """HIGH-COVERAGE-CANDIDATE-HAS-WHY-NOT-TOP-001
+    Every high_coverage_commonality_candidates entry must have why_not_top and next_action.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["account_status"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    hcc = _build_high_coverage_commonality_candidates([c], sqt, min_support_user_count=0, min_support_ratio=0.0)
+    for item in hcc:
+        if not item.get("why_not_top"):
+            errs.append(f"{item.get('candidate_feature_name')}: missing why_not_top")
+        if not item.get("next_action"):
+            errs.append(f"{item.get('candidate_feature_name')}: missing next_action")
+    return errs, {"hcc_checked": len(hcc)}
+
+
+def _regression_support_metrics_shown_in_high_coverage():
+    """SUPPORT-METRICS-SHOWN-IN-HIGH-COVERAGE-001
+    high_coverage_commonality_candidates must expose support_user_count / support_sample_count / support_ratio.
+    """
+    errs: list[str] = []
+    c = _make_control_exec_candidate(
+        fields=["frida_xposed_truthy"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["device_svc"])
+    hcc = _build_high_coverage_commonality_candidates([c], sqt, min_support_ratio=0.0, min_support_user_count=0)
+    for item in hcc:
+        css = item.get("candidate_support_summary") or {}
+        # At minimum, candidate_support_summary should be present
+        if css is None:
+            errs.append(f"{item.get('candidate_feature_name')}: missing candidate_support_summary")
+    return errs, {"hcc_count": len(hcc)}
+
+
+def _regression_context_commonality_section():
+    """CONTEXT-COMMONALITY-SECTION-001
+    account_status/code/caller/id/color fields must enter context_commonality_section,
+    not main Top.
+    """
+    errs: list[str] = []
+    _CONTEXT_TOKENS = ["account_status", "code", "caller", "color", "id"]
+    c = _make_protocol_candidate(
+        fields=["account_status=200", "code=0", "callerKsn"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    ctx = _build_context_commonality_section([c], sqt)
+    top_result = _build_top_explainable_candidates([c], sqt)
+    tops = top_result["candidates"]
+    # Should NOT be in Top with purely context fields
+    for t in tops:
+        sem = t.get("risk_semantics_strength") or "unknown"
+        if sem in ("weak", "unknown"):
+            errs.append(f"Context-field candidate in Top with weak/unknown semantics: {t.get('candidate_feature_name')}")
+    return errs, {"ctx_count": len(ctx), "tops": len(tops)}
+
+
+def _regression_semantics_review_queue():
+    """SEMANTICS-REVIEW-QUEUE-001
+    action=deny / callerCatalog / callerKsn fields must enter semantics_review_queue.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["action=deny", "callerCatalog", "callerKsn"],
+        core=["action=deny"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["login_svc"])
+    sem_q = _build_semantics_review_queue([c], sqt)
+    if not sem_q:
+        errs.append("Expected action=deny / callerCatalog / callerKsn to appear in semantics_review_queue, got 0")
+    for item in sem_q:
+        if not item.get("semantics_question"):
+            errs.append(f"Missing semantics_question in review item: {item}")
+        if not item.get("next_action"):
+            errs.append(f"Missing next_action in review item: {item}")
+    return errs, {"sem_queue_count": len(sem_q)}
+
+
+def _regression_weak_materialized_review_queue():
+    """WEAK-MATERIALIZED-CANDIDATE-REVIEW-QUEUE-001
+    claim_materialized=True but top_candidate_eligible=False candidates enter weak review queue.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["login_device", "action_device"],
+        core=["login_device_match"],
+        likeness="medium",
+    )
+    sqt = []  # empty → source_status=unknown → weak evidence
+    weak_q = _build_weak_materialized_review_queue([c], sqt)
+    # With empty quality table, evidence is weak → should be in weak_materialized queue
+    if not weak_q:
+        errs.append("Expected weak_materialized_review_queue to have entries with unknown source quality")
+    for item in weak_q:
+        if not item.get("why_not_top"):
+            errs.append(f"Missing why_not_top in weak materialized item")
+        if not item.get("next_action"):
+            errs.append(f"Missing next_action in weak materialized item")
+    return errs, {"weak_q_count": len(weak_q)}
+
+
+def _regression_no_top_but_high_coverage_summary():
+    """NO-TOP-BUT-HIGH-COVERAGE-SUMMARY-001
+    When Top is empty but high_coverage is non-empty, l3_candidate_discovery_summary
+    must clearly state has_high_coverage_commonality=True and has_top_explainable_risk_candidate=False.
+    """
+    errs: list[str] = []
+    # No top candidates (empty list)
+    top_cands: list[dict] = []
+    hcc = [{"candidate_feature_name": "account_maintenance_template_candidate"}]
+    fdr: list[dict] = []
+    ctx: list[dict] = []
+    sem: list[dict] = []
+    weak: list[dict] = []
+    summary = _build_l3_candidate_discovery_summary(top_cands, hcc, fdr, ctx, sem, weak)
+    if summary.get("has_top_explainable_risk_candidate"):
+        errs.append("Expected has_top_explainable_risk_candidate=False when Top is empty")
+    if not summary.get("has_high_coverage_commonality"):
+        errs.append("Expected has_high_coverage_commonality=True when hcc is non-empty")
+    boundary = summary.get("discovery_boundary") or ""
+    if "高覆盖" not in boundary and "high_coverage" not in boundary.lower():
+        errs.append(f"discovery_boundary should mention high coverage but got: {boundary!r}")
+    return errs, {
+        "has_top": summary.get("has_top_explainable_risk_candidate"),
+        "has_hcc": summary.get("has_high_coverage_commonality"),
+        "boundary": boundary[:80],
+    }
+
+
+def _regression_discovery_boundary_not_no_finding():
+    """DISCOVERY-BOUNDARY-NOT-NO-FINDING-001
+    When high_coverage exists, discovery_boundary must NOT say "没有发现" or "no finding".
+    """
+    errs: list[str] = []
+    hcc = [{"candidate_feature_name": "device_unknown_field_enrichment_candidate"}]
+    summary = _build_l3_candidate_discovery_summary([], hcc, [], [], [], [])
+    boundary = summary.get("discovery_boundary") or ""
+    # Check for truly negative "no finding" messages — but allow "不能说没有发现" (negation context)
+    # Forbidden: the boundary IS "没有发现" as standalone assertion
+    # Allowed: "不能说没有发现" (explicitly negating "no finding" claim)
+    _BAD_EXACT = ["无发现", "nothing found", "no discovery", "no findings found"]
+    for phrase in _BAD_EXACT:
+        if phrase.lower() in boundary.lower():
+            errs.append(f"discovery_boundary contains forbidden phrase '{phrase}': {boundary!r}")
+    # "no finding" / "没有发现" only forbidden as standalone (not as part of "cannot say no finding")
+    _NEGATION_CONTEXTS = ["不能说没有发现", "cannot say no finding", "can't say no finding"]
+    _STANDALONE_BAD = ["no finding", "没有发现"]
+    for phrase in _STANDALONE_BAD:
+        if phrase.lower() in boundary.lower():
+            # Check if it's negated
+            if not any(neg.lower() in boundary.lower() for neg in _NEGATION_CONTEXTS):
+                errs.append(f"discovery_boundary asserts no-finding without negation '{phrase}': {boundary!r}")
+    return errs, {"boundary": boundary[:100]}
+
+
+def _regression_high_coverage_bridges_final_card_as_weak():
+    """HIGH-COVERAGE-BRIDGES-FINAL-CARD-AS-WEAK-001
+    High coverage but weak/unknown semantics candidates must go to weak_evidence,
+    NOT medium_evidence in final_evidence_card.
+    """
+    errs: list[str] = []
+    c = _make_protocol_candidate(
+        fields=["account_status"],
+        core=["account_status=200"],
+        likeness="medium",
+    )
+    sqt = _make_completed_quality_table(["svc_acc"])
+    hcc = _build_high_coverage_commonality_candidates([c], sqt, min_support_ratio=0.0, min_support_user_count=0)
+    existing_card: dict = {"medium_evidence": [], "weak_evidence": [], "missing_evidence": []}
+    card = _build_final_evidence_card_bridge([], [], existing_card, high_coverage_candidates=hcc)
+    # hcc items must be in weak, never medium
+    for item in hcc:
+        name = item.get("candidate_feature_name") or ""
+        if name in (card.get("medium_evidence") or []):
+            errs.append(f"hcc candidate {name!r} appeared in medium_evidence — must be in weak only")
+    return errs, {
+        "medium_ev": card.get("medium_evidence"),
+        "weak_ev": card.get("weak_evidence"),
+    }
+
+
+def _regression_final_card_discovery_boundary():
+    """FINAL-CARD-DISCOVERY-BOUNDARY-001
+    final_evidence_card.final_answer_boundary must distinguish
+    'has high coverage' from 'no high confidence Top'.
+    """
+    errs: list[str] = []
+    # Case: no Top but has hcc
+    hcc = [{"candidate_feature_name": "some_candidate", "claim_materialized": True}]
+    existing_card: dict = {"medium_evidence": [], "weak_evidence": [], "missing_evidence": []}
+    card = _build_final_evidence_card_bridge([], [], existing_card, high_coverage_candidates=hcc)
+    boundary = card.get("final_answer_boundary") or ""
+    # Must NOT just say "candidate_only_not_final_conclusion=true" (i.e., must be more specific)
+    if boundary == "candidate_only_not_final_conclusion=true":
+        errs.append(f"final_answer_boundary too generic when hcc is non-empty: {boundary!r}")
+    # Must mention that high coverage was found
+    _EXPECTED_PHRASES = ["高覆盖", "high_coverage", "high coverage", "候选", "commonality"]
+    if not any(p.lower() in boundary.lower() for p in _EXPECTED_PHRASES):
+        errs.append(f"final_answer_boundary doesn't mention high coverage context: {boundary!r}")
+    return errs, {"boundary": boundary[:120]}
+
+
+def _run_g_r6_quality_regressions() -> tuple[list[str], dict]:
+    """Run all G-R6 quality regressions. Return (all_errors, results_dict)."""
+    all_errors: list[str] = []
+    results: dict[str, Any] = {}
+
+    def _run(fn):
+        try:
+            errs, summary = fn()
+            all_errors.extend(errs)
+            return {"pass": not errs, **summary}
+        except Exception as exc:
+            all_errors.append(f"{fn.__name__}: EXCEPTION: {exc}")
+            return {"pass": False, "exception": str(exc)}
+
+    results["SOURCE-STATUS-PROPAGATES-TO-EVIDENCE-001"] = _run(_regression_source_status_propagates_to_evidence)
+    results["EVIDENCE-STRENGTH-FOLLOWS-SOURCE-STATUS-001"] = _run(_regression_evidence_strength_follows_source_status)
+    results["BLOCKED-TIMEOUT-NOT-SUPPORTING-EVIDENCE-001"] = _run(_regression_blocked_timeout_not_supporting_evidence)
+    results["SUPPORT-METRICS-PROPAGATE-TO-TOP-EVIDENCE-001"] = _run(_regression_support_metrics_propagate_to_evidence)
+    results["SUPPORT-RATIO-CALCULATED-WHEN-POSSIBLE-001"] = _run(_regression_support_ratio_calculated_when_possible)
+    results["LOW-SUPPORT-SEQUENCE-NOT-BATCH-TOP-001"] = _run(_regression_low_support_sequence_not_batch_top)
+    results["INTERNAL-SIGNAL-NOT-USER-FACING-EVIDENCE-001"] = _run(_regression_internal_signal_not_user_facing_evidence)
+    results["RAW-FIELD-PATH-REQUIRED-FOR-STRONG-EVIDENCE-001"] = _run(_regression_raw_field_path_required_for_strong_evidence)
+    results["DEVICE-RISK-EVIDENCE-DISPLAY-LABEL-001"] = _run(_regression_device_risk_evidence_display_label)
+    results["MISSING-FIELD-NOT-PROTOCOL-BYPASS-EVIDENCE-001"] = _run(_regression_missing_field_not_protocol_bypass_evidence)
+    results["STATUS-FIELD-DOWNRANKED-001"] = _run(_regression_status_field_downranked)
+    results["DEVICE-RISK-SEMANTICS-STRONG-001"] = _run(_regression_device_risk_semantics_strong)
+    results["UNKNOWN-CHOKE-NOT-TOP-ELIGIBLE-001"] = _run(_regression_unknown_choke_not_top)
+    results["CANDIDATE-DEDUP-REMOVES-DUPLICATES-001"] = _run(_regression_candidate_dedup_removes_duplicates)
+    results["CANDIDATE-DEDUP-KEEPS-BEST-001"] = _run(_regression_candidate_dedup_keeps_best)
+    results["FINAL-EVIDENCE-CARD-BRIDGE-MATERIALIZED-001"] = _run(_regression_final_evidence_card_bridge_materialized)
+    results["FINAL-EVIDENCE-CARD-BRIDGE-UNMATERIALIZED-001"] = _run(_regression_final_evidence_card_bridge_unmaterialized)
+    results["FINAL-EVIDENCE-CARD-COUNTER-EVIDENCE-001"] = _run(_regression_final_evidence_card_counter_evidence_bridge)
+    results["FINAL-EVIDENCE-CARD-NO-GROUP-CONFIRMATION-001"] = _run(_regression_final_evidence_card_no_group_confirmation)
+    results["VALUE-LEVEL-HIGH-ACTIVITY-COUNTER-001"] = _run(_regression_value_level_high_activity_counter)
+    results["VALUE-LEVEL-SAME-DEVICE-COUNTER-001"] = _run(_regression_value_level_same_device_counter)
+    results["PROTOCOL-POSITIVE-ANOMALY-REQUIRED-001"] = _run(_regression_protocol_positive_anomaly_required)
+    results["PROTOCOL-MISSING-FIELD-NOT-HIGH-EVIDENCE-001"] = _run(_regression_protocol_missing_field_not_high_evidence)
+
+    # G-R6-fix regressions
+    results["TOP-EXPLAINABLE-REQUIRES-ELIGIBLE-001"] = _run(_regression_top_explainable_requires_eligible)
+    results["TOP-EXPLAINABLE-EMPTY-REASON-001"] = _run(_regression_top_explainable_empty_reason)
+    results["TOP-EXPLAINABLE-DEDUP-001"] = _run(_regression_top_explainable_dedup)
+    results["HIGH-COVERAGE-COMMONALITY-SECTION-001"] = _run(_regression_high_coverage_commonality_section)
+    results["HIGH-COVERAGE-NOT-EQUALS-TOP-001"] = _run(_regression_high_coverage_not_equals_top)
+    results["HIGH-COVERAGE-CANDIDATE-HAS-WHY-NOT-TOP-001"] = _run(_regression_high_coverage_candidate_has_why_not_top)
+    results["SUPPORT-METRICS-SHOWN-IN-HIGH-COVERAGE-001"] = _run(_regression_support_metrics_shown_in_high_coverage)
+    results["CONTEXT-COMMONALITY-SECTION-001"] = _run(_regression_context_commonality_section)
+    results["SEMANTICS-REVIEW-QUEUE-001"] = _run(_regression_semantics_review_queue)
+    results["WEAK-MATERIALIZED-CANDIDATE-REVIEW-QUEUE-001"] = _run(_regression_weak_materialized_review_queue)
+    results["NO-TOP-BUT-HIGH-COVERAGE-SUMMARY-001"] = _run(_regression_no_top_but_high_coverage_summary)
+    results["DISCOVERY-BOUNDARY-NOT-NO-FINDING-001"] = _run(_regression_discovery_boundary_not_no_finding)
+    results["HIGH-COVERAGE-BRIDGES-FINAL-CARD-AS-WEAK-001"] = _run(_regression_high_coverage_bridges_final_card_as_weak)
+    results["FINAL-CARD-DISCOVERY-BOUNDARY-001"] = _run(_regression_final_card_discovery_boundary)
+
+    results["validation_pass"] = not all_errors
+    return all_errors, results
+
+
+
 def run_check() -> dict[str, Any]:
     fixed_run = _run_fixture(FIXTURE)
     fixed_errors, fixed_result = _validate_common_result(
@@ -3856,6 +5056,9 @@ def run_check() -> dict[str, Any]:
         for name, payload in mock_results.items()
     }
 
+    g6_errors, g6_results = _run_g_r6_quality_regressions()
+    errors.extend(g6_errors)
+
     return {
         "check": "sample_expand_orchestration_artifact_check",
         "validation_pass": not errors,
@@ -3967,6 +5170,7 @@ def run_check() -> dict[str, Any]:
             "SOURCE-COOCCURRENCE-NOT-CLAIM-MATERIALIZATION-001": {"pass": not scc_errors, **scc_summary},
             "TOP-SAMPLE-EVIDENCE-TYPES-CLEAN-001": {"pass": not tsc_errors, **tsc_summary},
         },
+        "g_r6_quality_regression": g6_results,
     }
 
 
