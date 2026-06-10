@@ -1,0 +1,113 @@
+# normal_population_batch_20260609_v0_1.yaml
+#
+# Population baseline 抽样批次定义。
+# 口径：population_baseline / 大盘背景 baseline
+# 不是 LOGIN_AUE 精准 normal baseline。
+#
+# DataAgent 边界：
+# - 只取数不分析
+# - 不计算 TOP-N / 低熵 / 缺失率
+# - 不解释字段语义
+# - 不扩 source / 不 join / 不改筛选条件
+# - 只返回样本记录
+
+batch:
+  batch_id: normal_population_batch_20260609_v0_1
+  created_at: "2026-06-10"
+  baseline_scope: population_baseline
+  baseline_scope_detail: population_login_or_source_baseline_from_available_offline_samples
+  not_login_aue_specific: true
+  login_aue_condition_status: not_mapped_in_current_infra_sample
+
+  sampling_method: deterministic_hash_sample
+  sampling_rule:
+    # HASH(userId) % 1000 BETWEEN range_start AND range_end
+    # 不使用裸 LIMIT
+    modulo: 1000
+    range_start: 0
+    range_end: 9
+    # 预估命中率 ~1%，在大盘量级下约 3000~5000 条
+    estimated_hit_ratio: 0.01
+    estimated_sample_per_source: "3000~5000"
+
+  target_entity_count: 3000  # 每个 source 目标最少 3000 条
+  min_entity_count_for_low_entropy: 3000  # low_entropy_rule v0.1 要求
+
+  does_not_represent:
+    - "不代表 LOGIN_AUE 精准 normal 用户"
+    - "不代表特定登录场景的正常用户画像"
+    - "不代表反作弊策略覆盖范围内的特定子集"
+    - "不排除作弊账号，大盘中可能包含少量作弊行为"
+    - "不代表全量用户，仅为 hash 抽样子集"
+
+  sampling_bias_declaration:
+    - hash_modulo_bias: "HASH(userId) % 1000 范围 0~9，仅覆盖约 1% 的用户 ID 空间"
+    - date_bias: "p_date = 20260609 单日样本，不代表多日分布"
+    - platform_bias: "infra/passport 样本以 APP 登录行为为主，不含 Web/H5/OTT"
+    - product_bias: "weapon 只取 KUAISHOU 和 NEBULA 产品线"
+    - content_bias: "不含作品发布/评论/私信等内容侧字段"
+
+  sources:
+    infra_user_action_log:
+      table: ks_raw_log_v3.infra_user_action_log
+      p_date: 20260609
+      entity_id_field: user_id
+      grain: population_login_behavior_sample
+      where_conditions:
+        - "p_date = '20260609'"
+      hash_sample:
+        - "HASH(userId) % 1000 BETWEEN 0 AND 9"
+      note: "当前不含 LOGIN_AUE 精准条件（loginType/_errorCode/userRegisterDays/userFanCnt）"
+
+    passport_action_log:
+      table: ks_raw_log_v3.passport_action_log
+      p_date: 20260609
+      entity_id_field: user_id
+      grain: app_related_passport_action_sample
+      where_conditions:
+        - "p_date = '20260609'"
+      hash_sample:
+        - "HASH(userId) % 1000 BETWEEN 0 AND 9"
+      app_filter_status: pending_confirmation
+      app_filter_note: "APP 过滤条件（uri + status + params.type）尚未完全确认，先保留全量口径"
+
+    weapon_android:
+      table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_android_di_v2
+      p_date: 20260609
+      entity_id_field: user_id
+      grain: population_weapon_android_sample
+      where_conditions:
+        - "p_date = '20260609'"
+        - "product IN ('KUAISHOU', 'NEBULA')"
+      hash_sample:
+        - "HASH(userId) % 1000 BETWEEN 0 AND 9"
+
+    weapon_ios:
+      table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_IOS_di_v2
+      p_date: 20260609
+      entity_id_field: user_id
+      grain: population_weapon_ios_sample
+      where_conditions:
+        - "p_date = '20260609'"
+        - "product IN ('KUAISHOU', 'NEBULA')"
+      hash_sample:
+        - "HASH(userId) % 1000 BETWEEN 0 AND 9"
+
+  output_format:
+    type: parquet_or_csv
+    preserve_raw_fields: true  # DataAgent 保留所有原始字段，不做聚合/删减
+    do_not_aggregate: true
+    do_not_compute_topn: true
+    do_not_compute_low_entropy: true
+
+  dataagent_boundary_hard_constraints:
+    - 只取数不分析: true
+    - 不输出风险判断: true
+    - 不自行扩展查询source: true
+    - 不自行join其他表: true
+    - 不改筛选条件: true
+    - 不聚合字段分布: true
+    - 不计算TOPN: true
+    - 不计算低熵: true
+    - 不计算缺失率: true
+    - 不解释字段语义: true

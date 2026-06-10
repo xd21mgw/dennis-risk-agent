@@ -1,0 +1,62 @@
+[
+  {
+    "candidate_id": "bridge_001",
+    "source_name": "infra_user_action_log",
+    "field_path": "infra_user_action_log.action_type",
+    "field_value": "REFRESH_TOKEN",
+    "risk_sample_count": 100,
+    "risk_covered_count": 95,
+    "risk_value_count": 60,
+    "risk_value_ratio": 0.6
+  },
+  {
+    "candidate_id": "bridge_002",
+    "source_name": "passport_action_log",
+    "field_path": "passport_action_log.status",
+    "field_value": "SUCCESS",
+    "risk_sample_count": 50,
+    "risk_covered_count": 50,
+    "risk_value_count": 48,
+    "risk_value_ratio": 0.96
+  },
+  {
+    "candidate_id": "bridge_003",
+    "source_name": "infra_user_action_log",
+    "field_path": "infra_user_action_log.server_ip",
+    "field_value": "10.106.242.219",
+    "risk_sample_count": 10,
+    "risk_covered_count": 10,
+    "risk_value_count": 8,
+    "risk_value_ratio": 0.8
+  },
+  {
+    "candidate_id": "bridge_004",
+    "source_name": "infra_user_action_log",
+    "field_path": "infra_user_action_log.extra.serviceToken.basicToken.did",
+    "field_value": "abc123",
+    "risk_sample_count": 5,
+    "risk_covered_count": 5,
+    "risk_value_count": 1,
+    "risk_value_ratio": 0.2
+  },
+  {
+    "candidate_id": "bridge_005",
+    "source_name": "weapon_android",
+    "field_path": "weapon_android.raw_data.weaponRisk",
+    "field_value": "0",
+    "risk_sample_count": 200,
+    "risk_covered_count": 200,
+    "risk_value_count": 140,
+    "risk_value_ratio": 0.7
+  },
+  {
+    "candidate_id": "bridge_006",
+    "source_name": "nonexistent_source",
+    "field_path": "nonexistent_source.nonexistent_field",
+    "field_value": "x",
+    "risk_sample_count": 1,
+    "risk_covered_count": 1,
+    "risk_value_count": 1,
+    "risk_value_ratio": 1.0
+  }
+]

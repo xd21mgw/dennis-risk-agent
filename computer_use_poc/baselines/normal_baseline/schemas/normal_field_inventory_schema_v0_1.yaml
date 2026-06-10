@@ -1,0 +1,96 @@
+# normal_field_inventory_schema v0.1
+
+# 字段清单 schema：所有发现字段的注册表
+
+normal_field_inventory:
+  version: v0_1
+
+  fields:
+    source_name:
+      type: string
+      required: true
+      description: "数据源名称，如 unified_login_log"
+
+    field_path:
+      type: string
+      required: true
+      description: "完整字段路径，格式 source_name.column_name 或 source_name.column_name.nested_key"
+      examples:
+        - "unified_login_log.loginType"
+        - "unified_login_log.deviceInfo.deviceModel"
+        - "unified_login_log.extParams.channel"
+
+    field_name:
+      type: string
+      required: true
+      description: "最末级字段名（不含 source_name 前缀）"
+      examples:
+        - "loginType"
+        - "deviceModel"
+        - "channel"
+
+    field_origin:
+      type: enum
+      required: true
+      description: "字段来源类型"
+      values:
+        - ordinary_column   # 普通列字段
+        - json_path         # JSON 字段递归展开的路径
+        - map_path          # map 字段递归展开的路径
+        - struct_path       # struct 字段递归展开的路径
+        - array_path        # array/list 字段归一化摘要的路径
+
+    seen_count:
+      type: int
+      required: true
+      description: "该字段在样本中出现的次数（非空非缺失）"
+
+    coverage_ratio:
+      type: float
+      required: true
+      description: "该字段在样本中的覆盖率（seen_count / total_entity_count）"
+      range: [0.0, 1.0]
+
+    example_values:
+      type: list
+      required: true
+      description: "3~5 个示例值，用于字段语义参考"
+      max_items: 5
+
+    guessed_type:
+      type: enum
+      required: true
+      description: "推断的字段类型"
+      values:
+        - int
+        - float
+        - string
+        - boolean
+        - enum          # 少量离散值
+        - timestamp
+        - json_object
+        - json_array
+        - mixed
+        - unknown
+
+    cardinality_bucket:
+      type: enum
+      required: true
+      description: "基数桶分类"
+      values:
+        - low           # distinct <= 20
+        - medium        # distinct 21 ~ 100
+        - high          # distinct 101 ~ 1000
+        - very_high     # distinct > 1000
+        - near_unique   # distinct ≈ entity_count，几乎每 entity 一个值
+
+    parse_status:
+      type: enum
+      required: true
+      description: "字段解析状态"
+      values:
+        - parsed_ok             # 解析成功
+        - parse_depth_exceeded  # 递归深度超过 5 层
+        - parse_error           # 解析失败
+        - raw_string_only       # 保留原始字符串，未展开
+        - high_cardinality_skipped  # 高基数字段，跳过全量展开

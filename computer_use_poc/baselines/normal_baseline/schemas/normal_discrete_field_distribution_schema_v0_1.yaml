@@ -1,0 +1,134 @@
+# normal_discrete_field_distribution_schema v0.1
+
+# 离散字段分布 schema：TOP-N + __OTHER__
+
+normal_discrete_field_distribution:
+  version: v0_1
+
+  fields:
+    source_name:
+      type: string
+      required: true
+      description: "数据源名称"
+
+    field_path:
+      type: string
+      required: true
+      description: "完整字段路径"
+
+    total_entity_count:
+      type: int
+      required: true
+      description: "样本总 entity 数"
+
+    covered_entity_count:
+      type: int
+      required: true
+      description: "该字段非空非缺失的 entity 数"
+
+    coverage_ratio:
+      type: float
+      required: true
+      description: "覆盖率（covered_entity_count / total_entity_count）"
+      range: [0.0, 1.0]
+
+    distinct_value_count:
+      type: int
+      required: true
+      description: "唯一值数量"
+
+    top_values:
+      type: list
+      required: true
+      description: "TOP-N 值分布列表，默认 TOP20"
+      max_items: 20
+      item_fields:
+        value:
+          type: string
+          required: true
+          description: "字段值"
+        count:
+          type: int
+          required: true
+          description: "出现次数"
+        ratio:
+          type: float
+          required: true
+          description: "占比"
+          range: [0.0, 1.0]
+        rank:
+          type: int
+          required: true
+          description: "排名（1 = TOP1）"
+
+    other_value_count:
+      type: int
+      required: true
+      description: "__OTHER__ 合计的值数量（不在 TOP-N 内的所有值合计次数）"
+
+    other_value_ratio:
+      type: float
+      required: true
+      description: "__OTHER__ 占总覆盖 entity 的比例"
+      range: [0.0, 1.0]
+
+    top1_ratio:
+      type: float
+      required: true
+      description: "TOP1 值占比"
+      range: [0.0, 1.0]
+
+    top3_ratio:
+      type: float
+      required: true
+      description: "TOP3 值合计占比"
+      range: [0.0, 1.0]
+
+    full_value_distribution_stored:
+      type: boolean
+      required: true
+      description: "是否存储了全量分布（默认 false，只存 TOP-N + __OTHER__）"
+      default: false
+
+  # ---- 高基数字段摘要（仅对 deviceId / xm1 / xm3 / androidId / oaid / ip / photoId / commentId / requestId） ----
+  high_cardinality_summary:
+    description: "高基数字段不展开全量 value，只做摘要"
+
+    distinct_value_count:
+      type: int
+      required: true
+      description: "唯一值总数"
+
+    unique_value_ratio:
+      type: float
+      required: true
+      description: "只出现一次的值比例"
+      range: [0.0, 1.0]
+
+    reuse_ratio:
+      type: float
+      required: true
+      description: "被多个 entity 共用的值比例"
+      range: [0.0, 1.0]
+
+    max_entities_per_value:
+      type: int
+      required: true
+      description: "单个 value 最多关联的 entity 数"
+
+    top_reused_values:
+      type: list
+      required: true
+      description: "被最多 entity 共用的 TOP-N value"
+      max_items: 20
+      item_fields:
+        value:
+          type: string
+          required: true
+        entity_count:
+          type: int
+          required: true
+          description: "共用的 entity 数"
+        reuse_rank:
+          type: int
+          required: true

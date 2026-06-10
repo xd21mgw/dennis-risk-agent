@@ -1,0 +1,95 @@
+# normal_low_entropy_profile_schema v0.1
+
+# 低熵 Profile schema：field_value 粒度的 normal 侧大众化 profile
+
+normal_low_entropy_profile:
+  version: v0_1
+
+  fields:
+    source_name:
+      type: string
+      required: true
+      description: "数据源名称"
+
+    field_path:
+      type: string
+      required: true
+      description: "完整字段路径"
+
+    field_value_norm:
+      type: string
+      required: true
+      description: "field_value 粒度的 normal 值归一化表示"
+      examples:
+        - "loginType=52"
+        - "deviceInfo.deviceModel=OPPO+A5"
+        - "_errorCode=1"
+        - "platform=android"
+
+    profile_grain:
+      type: enum
+      required: true
+      description: "profile 粒度，v0.1 默认为 field_value"
+      values:
+        - field_value    # 具体字段值粒度
+        - field          # 字段粒度（未来版本，v0.1 不使用）
+
+    normal_status:
+      type: enum
+      required: true
+      description: "normal 侧状态枚举，不做风险定性"
+      values:
+        - normal_popular                     # field_value 在 normal 样本中是大众值
+        - normal_low_entropy                 # field_value 在 normal 样本中低熵
+        - normal_not_popular_in_sample       # field_value 在 normal 样本中不是大众值，仅记录，不做风险判断
+        - normal_sparse_or_low_coverage      # field 覆盖率过低，统计不可靠
+        - normal_unknown_small_sample        # 样本量过小，统计不可靠
+        - normal_unknown_sampling_bias       # 抽样偏置过大，统计不可靠
+        - normal_unknown_semantics           # 字段语义未知，不做判断
+
+    top1_ratio:
+      type: float
+      required: true
+      description: "TOP1 值占比（该 field_value 的占比）"
+      range: [0.0, 1.0]
+
+    coverage_ratio:
+      type: float
+      required: true
+      description: "对应 field 的覆盖率"
+      range: [0.0, 1.0]
+
+    sample_entity_count:
+      type: int
+      required: true
+      description: "当前批次样本总 entity 数"
+
+    rule_source:
+      type: string
+      required: true
+      description: "低熵判定规则来源"
+      default: "sample_low_entropy_rule_v0_1"
+
+  # ---- 低熵规则引用 ----
+  rule_reference:
+    sample_low_entropy_rule_v0_1:
+      min_entity_count: 3000
+      min_coverage_ratio: 0.8
+      top1_ratio_threshold: 0.9
+      top3_ratio_threshold: 0.97
+      hit_condition: >
+        sample_entity_count >= 3000
+        AND coverage_ratio >= 0.8
+        AND (
+          top1_ratio >= 0.9
+          OR top3_ratio >= 0.97
+        )
+
+  # ---- 边界声明 ----
+  boundary_declaration:
+    - "如果 field_value 在 normal 样本里不大众，只记录 normal_not_popular_in_sample"
+    - "不判断它是不是风险候选"
+    - "后续交给 L4 / Dennis Agent"
+    - "normal_status 不等于风险定性"
+    - "normal_low_entropy 不等于白用户"
+    - "normal_not_popular_in_sample 不等于风险嫌疑"

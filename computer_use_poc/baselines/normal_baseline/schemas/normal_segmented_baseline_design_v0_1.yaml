@@ -1,0 +1,97 @@
+# normal_segmented_baseline_design_v0_1
+
+# 分层 baseline 设计（v0.1 仅保留设计，不做实现）
+
+normal_segmented_baseline:
+  version: v0_1
+  status: design_only  # 不做实现，只保留设计文档
+
+  # ---- 设计理念 ----
+  design_rationale:
+    description: >
+      normal_baseline 当前只有单一 batch 样本（LOGIN_AUE 运营商一键登录）。
+      分层 baseline 的目标是按不同 scene / loginType / account_age / social_asset 维度，
+      分别建立 normal 侧统计基线，使消费方可以在对应的分层内做参考对比，
+      而不是用一个全量 normal 混合基线做误判参考。
+
+    key_principle: >
+      分层 baseline 只提供 normal 侧客观统计，不做风险判断。
+      每一层都有自己的抽样偏置声明和不能代表声明。
+
+  # ---- 分层维度 ----
+  segmentation_dimensions:
+    - dimension: scene
+      description: "业务场景维度（LOGIN_AUE / LOGIN_PASSWORD / LOGIN_SMS / LOGIN_SCAN 等）"
+      values: ["LOGIN_AUE", "LOGIN_PASSWORD", "LOGIN_SMS", "LOGIN_SCAN", "LOGIN_TOKEN"]
+
+    - dimension: loginType
+      description: "登录方式维度（运营商一键登录 / 密码登录 / 短信验证码 / 扫码 / token 等）"
+      values: [52, 1, 2, 3, 4]  # 示例 loginType 编码
+
+    - dimension: account_age_bucket
+      description: "注册天数分层（新用户 / 成长用户 / 老用户）"
+      buckets:
+        - name: new_user
+          range: "0~30 days"
+        - name: growing_user
+          range: "31~200 days"
+        - name: mature_user
+          range: ">200 days"
+
+    - dimension: social_asset_bucket
+      description: "社交资产分层（无粉 / 低粉 / 中粉 / 高粉）"
+      buckets:
+        - name: no_follower
+          range: "0 followers"
+        - name: low_follower
+          range: "1~200 followers"
+        - name: medium_follower
+          range: "201~1000 followers"
+        - name: high_follower
+          range: ">1000 followers"
+
+    - dimension: success_failure
+      description: "登录成功 / 失败维度"
+      values: ["success", "failure"]
+
+  # ---- 分层 baseline 结构 ----
+  segmented_baseline_structure:
+    segment_key: "{scene}_{loginType}_{account_age_bucket}_{social_asset_bucket}_{success_failure}"
+    example_keys:
+      - "LOGIN_AUE_52_mature_user_medium_follower_success"
+      - "LOGIN_PASSWORD_1_growing_user_low_follower_failure"
+
+    per_segment_contents:
+      - field_inventory
+      - field_profile_sample
+      - discrete_field_distribution
+      - field_missingness_profile
+      - low_entropy_profile
+      - sampling_bias_declaration  # 每层独立的偏置声明
+      - does_not_represent         # 每层独立的不代表声明
+      - source_description         # 每层独立的 source 说明
+
+  # ---- 分层 baseline 生成流程 ----
+  generation_flow:
+    step_1: "按分层维度条件，使用 deterministic hash sample 抽取各层样本记录"
+    step_2: "对各层样本分别运行 local profiler"
+    step_3: "各层输出独立的 profiler result，带各自的偏置声明"
+    step_4: "合并为 segmented_baseline 资产包"
+    step_5: "消费方选择对应分层做参考对比"
+
+  # ---- v0.1 状态 ----
+  current_status:
+    - "v0.1 只有 1 个 batch（LOGIN_AUE 运营商一键登录成功，注册>200天，粉丝>200）"
+    - "不具备分层 baseline 的最小分层覆盖"
+    - "分层 baseline 的实际建设需要更多 batch 和更多分层维度"
+    - "当前只保留设计，不做实现"
+    - "不自动扩展 batch"
+    - "不自动生成分层 baseline"
+
+  # ---- 边界声明 ----
+  boundary_declaration:
+    - "分层 baseline 只提供 normal 侧客观统计，不做风险判断"
+    - "不做候选特征推荐"
+    - "不做跨层对比风险定性"
+    - "消费方跨层对比时，必须自行声明对比偏置"
+    - "不做 automatic entity expansion"

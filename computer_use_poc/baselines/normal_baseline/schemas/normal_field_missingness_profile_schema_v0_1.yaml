@@ -1,0 +1,77 @@
+# normal_field_missingness_profile_schema v0.1
+
+# 字段缺失率 Profile schema
+
+normal_field_missingness_profile:
+  version: v0_1
+
+  fields:
+    field_path:
+      type: string
+      required: true
+      description: "完整字段路径"
+
+    total_entity_count:
+      type: int
+      required: true
+      description: "样本总 entity 数"
+
+    covered_entity_count:
+      type: int
+      required: true
+      description: "该字段非空非缺失的 entity 数"
+
+    coverage_ratio:
+      type: float
+      required: true
+      description: "覆盖率"
+      range: [0.0, 1.0]
+
+    missing_count:
+      type: int
+      required: true
+      description: "缺失总数（null + empty_string + parse_error）"
+
+    missing_ratio:
+      type: float
+      required: true
+      description: "缺失率"
+      range: [0.0, 1.0]
+
+    null_ratio:
+      type: float
+      required: true
+      description: "null 值比例"
+      range: [0.0, 1.0]
+
+    empty_string_ratio:
+      type: float
+      required: true
+      description: "空字符串比例"
+      range: [0.0, 1.0]
+
+    parse_error_ratio:
+      type: float
+      required: true
+      description: "解析错误比例"
+      range: [0.0, 1.0]
+
+    missingness_type:
+      type: enum
+      required: true
+      description: "缺失类型分类"
+      values:
+        - normal_present           # 字段正常存在，缺失率低
+        - normal_sparse_field      # 字段本身稀疏，缺失率是 normal 侧的正常现象
+        - low_coverage_unreliable  # 覆盖率过低，统计不可靠
+        - parse_failed             # 解析失败导致缺失
+        - source_not_checked       # 该 source 未检查该字段
+        - unknown                  # 缺失原因未知
+
+  # ---- 边界声明 ----
+  boundary_declaration:
+    - "missing_ratio 只描述 normal 侧客观缺失情况"
+    - "不判断缺失是否意味着风险"
+    - "normal_sparse_field 不等于异常缺失"
+    - "low_coverage_unreliable 的字段不做低熵判断"
+    - "缺失率 profile 不做候选特征推荐"

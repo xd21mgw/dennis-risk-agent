@@ -1,0 +1,478 @@
+# profiler_input_contract v0.1 (2026-06-09)
+#
+# 本文件定义 normal_baseline profiler v0.1 的输入契约：
+# - 每个 source 的输入格式
+# - 字段分类
+# - profiler 处理策略
+# - 高基数摘要规则
+# - 凭证字段排除规则
+# - JSON 展开规则
+#
+# 不做风险判断，不做候选特征推荐。
+
+profiler_input_contract:
+  version: v0_1
+  created_at: "2026-06-10"
+  contract_scope: "normal_baseline profiler v0.1 输入格式和字段处理策略"
+
+  # ---- 通用规则 ----
+  universal_rules:
+    # DataAgent 只取数不分析
+    dataagent_boundary:
+      只取数不分析: true
+      do_not_analyze: true
+      不输出风险判断: true
+      不自行扩展查询source: true
+      不自行join其他表: true
+      不改筛选条件: true
+      不聚合字段分布: true
+      不计算TOPN: true
+      不计算低熵: true
+      不计算缺失率: true
+      不解释字段语义: true
+
+    # 高基数摘要规则
+    high_cardinality_summary_rules:
+      target_fields:
+        - user_id
+        - device_id
+        - did
+        - deviceId
+        - xm1
+        - xm3
+        - androidId
+        - oaid
+        - imei
+        - idfv
+        - idfa
+        - ip
+        - user_ip
+        - user_ip_v6
+        - photoId
+        - commentId
+        - requestId
+        - headerKsId
+        - vendorUniqueId
+        - sourceIp
+        - wifiIp
+        - clientIP
+        - clientIp
+        - account_identifier_md5
+        - ks_log_id
+      summary_fields:
+        - distinct_value_count
+        - unique_value_ratio
+        - reuse_ratio
+        - max_entities_per_value
+        - top_reused_values  # TOP-N，默认 TOP20
+      do_not_expand_full_values: true
+
+    # 凭证字段排除规则
+    credential_exclusion_rules:
+      exclude_from_profile:
+        - cookie / cookies
+        - token / tokenId
+        - session / session_id
+        - header / authorization
+        - password
+        - API_key
+        - secretKeyVersion
+        - signVersion
+        - headerKsId
+        - __NS_xfalcon
+        - __NStokensig
+        - __NS_sig3
+        - sig
+        - client_key
+        - ssecurity
+        - riskControlToken
+      action: skip_for_v0_1
+      reason: "凭证/签名/加密字段不做 TOP-N profile，只记录覆盖率"
+
+    # JSON 展开规则
+    json_expand_rules:
+      max_depth: 5
+      field_path_format: "source_name.json_column.nested_key"
+      array_expand_format: "source_name.json_column[].nested_key"
+      stop_conditions:
+        - depth_exceeded: mark parse_depth_exceeded
+        - value_is_credential: skip
+        - value_is_high_cardinality_id: apply high_cardinality_summary_rules
+        - value_is_nested_json: continue expanding
+        - value_is_array: normalize array
+
+    # TOP-N 默认规则
+    top_n_default: 20
+    other_bucket_name: __OTHER__
+
+    # 低熵规则引用
+    low_entropy_rule_ref: sample_low_entropy_rule_v0_1
+    low_entropy_rule:
+      min_entity_count: 3000
+      min_coverage_ratio: 0.8
+      top1_ratio_threshold: 0.9
+      top3_ratio_threshold: 0.97
+
+  # ---- Source 输入格式 ----
+  source_inputs:
+
+    infra_user_action_log:
+      source_id: infra_user_action_log
+      hive_table: ks_raw_log_v3.infra_user_action_log
+      entity_id_field: user_id
+      device_id_field: did
+      timestamp_field: timestamp
+      partition_fields: [p_date, p_hourmin]
+
+      field_contract:
+        ordinary_columns:
+          - {name: server_ip, action: direct_profile}
+          - {name: action_type, action: direct_profile}
+          - {name: app_type, action: direct_profile}
+          - {name: result, action: direct_profile}
+          - {name: user_agent, action: direct_profile}
+          - {name: uri, action: direct_profile}
+          - {name: reason, action: direct_profile}
+          - {name: app_ver, action: direct_profile}
+          - {name: sid, action: direct_profile}
+          - {name: token_id, action: direct_profile}
+          - {name: exception_detail, action: direct_profile}
+          - {name: sys, action: direct_profile}
+          - {name: mod, action: direct_profile}
+          - {name: channel, action: direct_profile}
+
+        json_string_fields:
+          - {name: extra, action: json_parse, expected_keys: [serviceToken, extra], nested_depth: 3}
+
+        high_cardinality_id_fields:
+          - {name: user_id, action: high_cardinality_summary}
+          - {name: user_ip, action: high_cardinality_summary}
+          - {name: did, action: high_cardinality_summary}
+          - {name: user_ip_v6, action: high_cardinality_summary}
+          - {name: account_identifier_md5, action: high_cardinality_summary}
+
+        timestamp_fields:
+          - {name: timestamp, action: keep_as_condition_field}
+          - {name: date_time, action: keep_as_condition_field}
+
+        partition_fields:
+          - {name: p_date, action: keep_as_condition_field}
+          - {name: p_hourmin, action: keep_as_condition_field}
+
+        skip_fields:
+          - {name: soft_did, action: skip_for_v0_1, reason: "0.3% coverage"}
+          - {name: antispam_result, action: skip_for_v0_1, reason: "1.3% coverage"}
+          - {name: operation, action: skip_for_v0_1, reason: "0.4% coverage"}
+          - {name: operation_type, action: skip_for_v0_1, reason: "0.2% coverage"}
+          - {name: gps_location, action: skip_for_v0_1, reason: "0% coverage"}
+          - {name: ip_location, action: skip_for_v0_1, reason: "0% coverage"}
+          - {name: country_code, action: skip_for_v0_1, reason: "0% coverage"}
+          - {name: gps_raw_data, action: skip_for_v0_1, reason: "0% coverage"}
+          - {name: original_sid, action: skip_for_v0_1, reason: "0.8% coverage"}
+          - {name: ks_request_source, action: skip_for_v0_1, reason: "0.7% coverage"}
+
+      login_aue_filter_gap:
+        loginType_52: "NOT_IN_SOURCE; need mapping from action_type"
+        errorCode_1: "NOT_IN_SOURCE; result=True is approximate"
+        userRegisterDays_gt_200: "NOT_IN_SOURCE; need passport_action_log or archive"
+        userFanCnt_gt_200: "NOT_IN_SOURCE; need archive user profile"
+
+    passport_action_log:
+      source_id: passport_action_log
+      hive_table: ks_raw_log_v3.passport_action_log
+      entity_id_field: user_id
+      device_id_field: device_id
+      timestamp_field: timestamp
+      partition_fields: [p_date, p_hourmin]
+      app_filter_required: true
+
+      field_contract:
+        ordinary_columns:
+          - {name: uri, action: direct_profile, app_filter_required: true}
+          - {name: status, action: direct_profile, app_filter_required: true}
+          - {name: sys_ver, action: direct_profile}
+          - {name: app_ver, action: direct_profile}
+          - {name: phone_mod, action: direct_profile}
+          - {name: server_ip, action: direct_profile}
+
+        json_string_fields:
+          - {name: params, action: json_parse, expected_key_count: "47~66", total_unique_keys: 110, value_format: "all values are arrays"}
+          - {name: extra, action: json_parse, expected_keys: [tokenId, clientPageCode, token]}
+
+        high_cardinality_id_fields:
+          - {name: user_id, action: high_cardinality_summary}
+          - {name: device_id, action: high_cardinality_summary}
+          - {name: user_ip, action: high_cardinality_summary}
+          - {name: user_ipv6, action: high_cardinality_summary}
+
+        timestamp_fields:
+          - {name: timestamp, action: keep_as_condition_field}
+
+        partition_fields:
+          - {name: p_date, action: keep_as_condition_field}
+          - {name: p_hourmin, action: keep_as_condition_field}
+
+        skip_fields:
+          - {name: ks_log_id, action: skip_for_v0_1, reason: "日志 ID"}
+          - {name: remote_port, action: skip_for_v0_1, reason: "端口无意义"}
+
+      # params 内部 key 分类（profiler 展开后按分类处理）
+      params_key_categories:
+        device_info_keys:
+          - oDid
+          - boardPlatform
+          - android_os
+          - androidApiLevel
+          - deviceBit
+          - device_abi
+          - abi
+          - socName
+          - ddpi
+          - sw
+          - sh
+          - max_memory
+          - totalMemory
+          - cold_launch_time_ms
+          - sbh
+          - deviceMode
+          - deviceName
+          - browseType
+          - grant_browse_type
+
+        network_info_keys:
+          - isp
+          - net
+          - language
+          - country_code
+          - countryCode
+
+        client_info_keys:
+          - app
+          - kpf
+          - kpn
+          - bottom_navigation
+          - is_background
+          - darkMode
+          - earphoneMode
+          - os
+
+        security_keys:
+          - egid
+          - __NS_xfalcon
+          - __NStokensig
+          - __NS_sig3
+          - sig
+          - client_key
+          - keyconfig_state
+          - cdid_tag
+          - did_tag
+          - did_gt
+
+        user_info_keys:
+          - user_name
+          - mobile
+          - mobileCountryCode
+          - passport_account_image
+
+        channel_keys:
+          - oc
+          - c
+          - newOc
+
+        login_keys:
+          - type
+          - needCheck
+          - requestSource
+          - forceLogout
+          - forceUnique
+
+        credential_keys_to_skip:
+          - __NS_xfalcon
+          - __NStokensig
+          - __NS_sig3
+          - sig
+          - client_key
+
+        high_cardinality_keys_to_summary:
+          - oDid
+          - egid
+          - did_gt
+          - mobile
+
+    weapon_android:
+      source_id: weapon_android
+      hive_table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_android_di_v2
+      entity_id_field: user_id
+      device_id_field: deviceid
+      timestamp_field: server_time
+      partition_fields: [p_date]
+      platform: android
+
+      field_contract:
+        ordinary_columns:
+          - {name: product, action: direct_profile}
+          - {name: sdk_version, action: direct_profile}
+          - {name: app_version, action: direct_profile}
+
+        json_string_fields:
+          - {name: raw_data, action: json_parse, expected_key_count: "159~160", total_unique_keys: 161}
+
+        array_fields:
+          - {name: weapon_one_risk, action: array_normalize, note: "risk labels array, 只做客观统计不做风险定性"}
+
+        high_cardinality_id_fields:
+          - {name: deviceid, action: high_cardinality_summary}
+          - {name: user_id, action: high_cardinality_summary}
+
+        timestamp_fields:
+          - {name: server_time, action: keep_as_condition_field}
+          - {name: client_time, action: keep_as_condition_field}
+
+        partition_fields:
+          - {name: p_date, action: keep_as_condition_field}
+
+        skip_fields:
+          - {name: async_status, action: skip_for_v0_1, reason: "全量 SUCCESS"}
+          - {name: one_data_version, action: skip_for_v0_1, reason: "全量 2"}
+
+      # raw_data 内部高基数 key
+      raw_data_high_cardinality_keys:
+        - xm1
+        - xm3
+        - androidId
+        - oaid
+        - imei
+        - deviceId
+        - headerKsId
+        - vendorUniqueId
+        - sourceIp
+        - wifiIp
+
+      raw_data_credential_keys:
+        - headerKsId
+        - signVersion
+        - secretKeyVersion
+
+      raw_data_nested_json_keys:
+        - vendorSecHw
+        - vendorIds
+        - trafficInfo
+        - cookies
+        - oneIpInfo
+        - query
+        - weaponRisk
+        - weaponDecodeHeader
+
+    weapon_ios:
+      source_id: weapon_ios
+      hive_table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_ios_di_v2
+      entity_id_field: user_id
+      device_id_field: deviceid
+      timestamp_field: server_time
+      partition_fields: [p_date]
+      platform: ios
+
+      field_contract:
+        ordinary_columns:
+          - {name: product, action: direct_profile}
+          - {name: sdk_version, action: direct_profile}
+          - {name: app_version, action: direct_profile}
+
+        json_string_fields:
+          - {name: raw_data, action: json_parse, expected_key_count: "164~165", total_unique_keys: 169}
+
+        array_fields:
+          - {name: weapon_one_risk, action: array_normalize}
+
+        high_cardinality_id_fields:
+          - {name: deviceid, action: high_cardinality_summary}
+          - {name: user_id, action: high_cardinality_summary}
+
+        timestamp_fields:
+          - {name: server_time, action: keep_as_condition_field}
+          - {name: client_time, action: keep_as_condition_field}
+
+        partition_fields:
+          - {name: p_date, action: keep_as_condition_field}
+
+        skip_fields:
+          - {name: async_status, action: skip_for_v0_1, reason: "全量 SUCCESS"}
+          - {name: one_data_version, action: skip_for_v0_1, reason: "全量 2"}
+
+      raw_data_high_cardinality_keys:
+        - xm1
+        - xm3
+        - idfv
+        - idfa
+        - deviceId
+        - clientIP
+        - clientIp
+        - sourceIp
+        - sourceIpv6
+
+      raw_data_credential_keys:
+        - headerKsId
+        - signVersion
+        - secretKeyVersion
+
+      raw_data_nested_json_keys:
+        - interfaceData
+        - cookies
+        - oneIpInfo
+        - query
+        - weaponRisk
+        - weaponDecodeHeader
+        - dns
+        - mac
+        - rootCertificates
+
+      raw_data_ios_specific_keys:
+        - idfv
+        - idfa
+        - hwNcpu
+        - hwMemsize
+        - hwLogicalcpu
+        - hwActivecpu
+        - kernOsproductversion
+        - kernSecureKernel
+        - kernSavedIds
+        - kernIpcMaxsockbuf
+        - kernMemorystatusLevel
+        - securityMacSandboxSentinel
+        - deviceModel
+        - deviceName
+        - deviceName2
+        - hardwareType
+        - bootHashId
+        - biometric
+        - developerId
+        - diskFree
+        - diskSpace
+        - diskType
+        - diskSpaceUsed
+        - backgroundCount
+        - appInstallTime
+        - appInstallTime2
+
+  # ---- profiler 处理策略汇总 ----
+  profiler_action_summary:
+    total_fields_across_sources: 75  # 4 个 source 合计
+    direct_profile: 30
+    json_parse: 4
+    array_normalize: 2
+    high_cardinality_summary: 10
+    keep_as_condition_field: 8
+    skip_for_v0_1: 14
+    unknown_need_review: 0
+
+  # ---- 不做的事 ----
+  boundary_declaration:
+    - "不做风险判断"
+    - "不输出 risk_judgement"
+    - "不输出 feature_candidate"
+    - "不输出 candidate_feature_decision"
+    - "不做人审结论"
+    - "weapon_one_risk 只做覆盖率/TOP-N 统计，不做风险定性"
+    - "不新增 compare / cognition / risk_candidate / feature_candidate / automatic entity expansion 目录"
+    - "不把 Excel 明细内容复制进 profiler 输入"
+    - "凭证字段只记录覆盖率，不做 TOP-N profile"

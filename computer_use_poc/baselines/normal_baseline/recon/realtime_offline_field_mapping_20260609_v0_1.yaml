@@ -1,0 +1,604 @@
+# realtime_offline_field_mapping v0.1 (2026-06-09)
+#
+# 本文件映射 4 个 source 的实时 online 字段名 → 离线 offline 字段名，
+# 用于 normal_baseline profiler 输入和后续消费方参考。
+# 不做风险判断，不做候选特征推荐。
+
+realtime_offline_field_mapping:
+  version: v0_1
+  created_at: "2026-06-10"
+
+  # ---- Source 1: infra_user_action_log ----
+  infra_user_action_log:
+    hive_table: ks_raw_log_v3.infra_user_action_log
+    realtime_source_hint: admin / user-center-workbench login event
+    offline_source_hint: infra_user_action_log 样例 Excel
+
+    field_mappings:
+      # 分区字段
+      - realtime: p_date
+        offline: p_date
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+
+      - realtime: p_hourmin
+        offline: p_hourmin
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+
+      # 普通列 - 核心业务字段
+      - realtime: action_type
+        offline: action_type
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "11 种：REFRESH_TOKEN / CREATE_SERVICE_TOKEN / VISITOR_LOGIN / PASSTOKEN_LOGIN 等"
+
+      - realtime: app_type
+        offline: app_type
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "8 种：KUAISHOU_APP / UNRECOGNIZED 等，96.9% coverage"
+
+      - realtime: result
+        offline: result
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "bool: True(成功)/False(失败)"
+
+      - realtime: reason
+        offline: reason
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "67.6% coverage，16 distinct，如 HOT_START / COLD_START"
+
+      - realtime: sid
+        offline: sid
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "96.4% coverage，37 distinct"
+
+      - realtime: uri
+        offline: uri
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "23 distinct"
+
+      - realtime: exception_detail
+        offline: exception_detail
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "20.8% coverage"
+
+      # 普通列 - 设备/版本字段
+      - realtime: user_agent
+        offline: user_agent
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "126 distinct"
+
+      - realtime: app_ver
+        offline: app_ver
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "80.8% coverage，139 distinct"
+
+      - realtime: sys
+        offline: sys
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "15.2% coverage，如 ANDROID_12"
+
+      - realtime: mod
+        offline: mod
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "70.8% coverage，403 distinct，如 vivo(V2241A)"
+
+      - realtime: channel
+        offline: channel
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "14.7% coverage，39 distinct"
+
+      # 普通列 - 服务端字段
+      - realtime: server_ip
+        offline: server_ip
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "100% coverage，109 distinct"
+
+      - realtime: token_id
+        offline: token_id
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "81.2% coverage，风控使用"
+
+      # JSON 字段
+      - realtime: extra
+        offline: extra
+        field_classification: json_string
+        profiler_action: json_parse
+        offline_note: "JSON：含 serviceToken / extra 顶层 key；22.5% 为 {}"
+        nested_keys:
+          - serviceToken
+          - extra
+        nested_depth: 3  # extra.extra.clientRequestInfo 约 50+ key
+
+      # 高基数 ID 字段
+      - realtime: user_id
+        offline: user_id
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "83.8% coverage，838 distinct"
+
+      - realtime: user_ip
+        offline: user_ip
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "44.2% coverage"
+
+      - realtime: did
+        offline: did
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "99.6% coverage，994 distinct"
+
+      - realtime: user_ip_v6
+        offline: user_ip_v6
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "37% coverage"
+
+      - realtime: account_identifier_md5
+        offline: account_identifier_md5
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "0.7% coverage"
+
+      # timestamp 字段
+      - realtime: timestamp
+        offline: timestamp
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      - realtime: date_time
+        offline: date_time
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      # skip_for_v0_1 字段
+      - realtime: soft_did
+        offline: soft_did
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "0.3% coverage"
+
+      - realtime: antispam_result
+        offline: antispam_result
+        field_classification: json_string
+        profiler_action: skip_for_v0_1
+        offline_note: "1.3% coverage"
+
+      - realtime: operation
+        offline: operation
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "0.4% coverage"
+
+      - realtime: operation_type
+        offline: operation_type
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "0.2% coverage"
+
+      - realtime: gps_location
+        offline: gps_location
+        field_classification: unknown
+        profiler_action: skip_for_v0_1
+        offline_note: "0% coverage，全 null"
+
+      - realtime: ip_location
+        offline: ip_location
+        field_classification: unknown
+        profiler_action: skip_for_v0_1
+        offline_note: "0% coverage，全 null"
+
+      - realtime: country_code
+        offline: country_code
+        field_classification: unknown
+        profiler_action: skip_for_v0_1
+        offline_note: "0% coverage，全 null"
+
+      - realtime: gps_raw_data
+        offline: gps_raw_data
+        field_classification: unknown
+        profiler_action: skip_for_v0_1
+        offline_note: "0% coverage，全 null"
+
+      - realtime: original_sid
+        offline: original_sid
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "0.8% coverage"
+
+      - realtime: ks_request_source
+        offline: ks_request_source
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "0.7% coverage"
+
+    # LOGIN_AUE 筛选条件映射缺失
+    login_aue_filter_gap:
+      loginType_52: "infra 中不存在 loginType 字段；需确认 action_type=PASSTOKEN_LOGIN 或 QUICK_LOGIN 是否等价"
+      errorCode_1: "infra 中 result=True 大致等价，但不是精确 _errorCode=1"
+      userRegisterDays_gt_200: "infra 中不存在；需从 passport_action_log params 或档案中心关联"
+      userFanCnt_gt_200: "infra 中不存在；需从档案中心用户画像关联"
+
+  # ---- Source 2: passport_action_log ----
+  passport_action_log:
+    hive_table: ks_raw_log_v3.passport_action_log
+    realtime_source_hint: 档案中心用户分析（仅 APP 相关）
+    offline_source_hint: 档案中心用户分析基线样例 Excel
+
+    field_mappings:
+      - realtime: p_date
+        offline: p_date
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+
+      - realtime: p_hourmin
+        offline: p_hourmin
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+        offline_note: "全是 0，小时分区不精确"
+
+      # 普通列
+      - realtime: uri
+        offline: uri
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "82 distinct，含大量非登录 URI"
+        app_filter_required: true
+        app_filter_hint: "只取 /rest/n/user/login/ 或 /rest/nebula/user/login/ 开头的 URI"
+
+      - realtime: status
+        offline: status
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "28 distinct，20107=成功，1=成功，大量非成功状态码"
+        app_filter_required: true
+        app_filter_hint: "只取 status=1 或 status=20107（登录成功）"
+
+      - realtime: sys_ver
+        offline: sys_ver
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: app_ver
+        offline: app_ver
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: phone_mod
+        offline: phone_mod
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "99.7% coverage，412 distinct"
+
+      - realtime: server_ip
+        offline: server_ip
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      # JSON 字段 - 核心
+      - realtime: params
+        offline: params
+        field_classification: json_string
+        profiler_action: json_parse
+        offline_note: "60~66 key JSON，所有 value 是 array 形式；110 种 key"
+        key_count_range: "47~66 per row"
+        total_unique_keys: 110
+        key_value_format: "all values are arrays like [\"2\"]"
+        major_key_categories:
+          - device_info: ["oDid", "boardPlatform", "android_os", "androidApiLevel", "deviceBit", "device_abi", "abi", "socName", "ddpi", "sw", "sh", "max_memory", "totalMemory"]
+          - network_info: ["isp", "net", "language", "country_code"]
+          - client_info: ["app", "kpf", "kpn", "bottom_navigation", "browseType", "grant_browse_type", "is_background", "darkMode", "earphoneMode"]
+          - security_info: ["egid", "__NS_xfalcon", "__NStokensig", "__NS_sig3", "sig", "client_key", "keyconfig_state", "cdid_tag", "did_tag", "did_gt"]
+          - user_info: ["user_name", "mobile", "mobileCountryCode", "passport_account_image"]
+          - channel_info: ["oc", "c", "newOc"]
+          - login_info: ["type", "needCheck", "requestSource"]
+          - version_info: ["hotfix_ver", "bundleVersionCode"]
+
+      - realtime: extra
+        offline: extra
+        field_classification: json_string
+        profiler_action: json_parse
+        offline_note: "较小 JSON，含 tokenId / clientPageCode / token 等"
+
+      # 高基数 ID
+      - realtime: user_id
+        offline: user_id
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+
+      - realtime: device_id
+        offline: device_id
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+
+      - realtime: user_ip
+        offline: user_ip
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "含 0.0.0.0 等无效值"
+
+      - realtime: ks_log_id
+        offline: ks_log_id
+        field_classification: high_cardinality_id
+        profiler_action: skip_for_v0_1
+        offline_note: "日志 ID，不做 profile"
+
+      - realtime: user_ipv6
+        offline: user_ipv6
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "43.4% coverage，含二进制乱码"
+
+      # timestamp
+      - realtime: timestamp
+        offline: timestamp
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      # skip
+      - realtime: remote_port
+        offline: remote_port
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+
+    app_filter_required: true
+    app_filter_hint: "uri + status + params.type 三重过滤限定 LOGIN_AUE 子集"
+
+  # ---- Source 3: weapon_android ----
+  weapon_android:
+    hive_table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_android_di_v2
+    realtime_source_hint: Weapon Android graphData/riskData
+    offline_source_hint: android weapon基线样例 Excel
+
+    field_mappings:
+      - realtime: p_date
+        offline: p_date
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+
+      # 普通列
+      - realtime: product
+        offline: product
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+        offline_note: "2 distinct：NEBULA / KUAISHOU"
+
+      - realtime: async_status
+        offline: async_status
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "全量 SUCCESS，常量字段"
+
+      - realtime: sdk_version
+        offline: sdk_version
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: app_version
+        offline: app_version
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: one_data_version
+        offline: one_data_version
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+        offline_note: "全量 2，常量字段"
+
+      # 核心 JSON 字段
+      - realtime: raw_data
+        offline: raw_data
+        field_classification: json_string
+        profiler_action: json_parse
+        offline_note: "159~160 key JSON，设备指纹核心"
+        key_count_range: "159~160 per row"
+        total_unique_keys: 161
+        nested_json_keys:
+          - vendorSecHw
+          - vendorIds
+          - trafficInfo
+          - cookies
+          - oneIpInfo
+          - query
+          - weaponRisk
+          - weaponDecodeHeader
+        high_cardinality_keys_inside:
+          - xm1
+          - xm3
+          - androidId
+          - oaid
+          - imei
+          - headerKsId
+          - deviceId
+          - vendorUniqueId
+          - sourceIp
+          - wifiIp
+        credential_keys_to_skip:
+          - headerKsId
+          - signVersion
+          - secretKeyVersion
+
+      # 风险标签
+      - realtime: weapon_one_risk
+        offline: weapon_one_risk
+        field_classification: array
+        profiler_action: array_normalize
+        offline_note: "JSON array of risk labels; 62.7% empty []; 只做覆盖率/TOP-N统计，不做风险定性"
+        label_count_android: 22
+        top_labels_android:
+          - oneRiskMeetingTool: 138
+          - oneRiskNoSim: 103
+          - oneRiskUserAppCntLess10: 55
+          - oneRiskOnlineLoan: 51
+          - oneRiskLaunchLess10: 41
+
+      # timestamp
+      - realtime: server_time
+        offline: server_time
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      - realtime: client_time
+        offline: client_time
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      # 高基数 ID
+      - realtime: deviceid
+        offline: deviceid
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "ANDROID_ 前缀格式"
+
+      - realtime: user_id
+        offline: user_id
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+
+    platform: android
+    cross_platform_overlap_with_ios: 40  # 共 40 个 raw_data key 重叠
+
+  # ---- Source 4: weapon_ios ----
+  weapon_ios:
+    hive_table: ks_rc_bs.weapon_data_report_device_log_kafka_2_hive_ios_di_v2
+    realtime_source_hint: Weapon iOS graphData/riskData
+    offline_source_hint: IOSweapon样例 Excel
+
+    field_mappings:
+      - realtime: p_date
+        offline: p_date
+        field_classification: partition
+        profiler_action: keep_as_condition_field
+
+      # 普通列
+      - realtime: product
+        offline: product
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: async_status
+        offline: async_status
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+
+      - realtime: sdk_version
+        offline: sdk_version
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: app_version
+        offline: app_version
+        field_classification: ordinary_column
+        profiler_action: direct_profile
+
+      - realtime: one_data_version
+        offline: one_data_version
+        field_classification: ordinary_column
+        profiler_action: skip_for_v0_1
+
+      # 核心 JSON 字段
+      - realtime: raw_data
+        offline: raw_data
+        field_classification: json_string
+        profiler_action: json_parse
+        offline_note: "164~165 key JSON，iOS 设备指纹"
+        key_count_range: "164~165 per row"
+        total_unique_keys: 169
+        nested_json_keys:
+          - interfaceData
+          - cookies
+          - oneIpInfo
+          - query
+          - weaponRisk
+          - weaponDecodeHeader
+          - dns
+          - mac
+          - rootCertificates
+        high_cardinality_keys_inside:
+          - xm1
+          - xm3
+          - idfv
+          - idfa
+          - deviceId
+          - clientIP
+          - clientIp
+          - sourceIp
+          - sourceIpv6
+        ios_specific_keys:
+          - idfv
+          - idfa
+          - hwNcpu
+          - hwMemsize
+          - hwLogicalcpu
+          - hwActivecpu
+          - kernOsproductversion
+          - kernSecureKernel
+          - kernSavedIds
+          - kernIpcMaxsockbuf
+          - kernMemorystatusLevel
+          - securityMacSandboxSentinel
+          - deviceModel
+          - deviceName
+          - deviceName2
+          - hardwareType
+          - bootHashId
+          - biometric
+          - developerId
+          - diskFree
+          - diskSpace
+          - diskType
+          - diskSpaceUsed
+
+      # 风险标签
+      - realtime: weapon_one_risk
+        offline: weapon_one_risk
+        field_classification: array
+        profiler_action: array_normalize
+        offline_note: "JSON array; 90.6% empty []; iOS 标签更少，只做覆盖率/TOP-N统计"
+        label_count_ios: 8
+        top_labels_ios:
+          - oneRiskNoPasswordIos: 41
+          - oneRiskNoSimCardIos: 25
+          - oneRiskLaunchLess10Ios: 16
+          - oneRiskFirstLaunchIos: 10
+
+      # timestamp
+      - realtime: server_time
+        offline: server_time
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      - realtime: client_time
+        offline: client_time
+        field_classification: timestamp
+        profiler_action: keep_as_condition_field
+
+      # 高基数 ID
+      - realtime: deviceid
+        offline: deviceid
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+        offline_note: "UUID 格式（无 ANDROID_ 前缀）"
+
+      - realtime: user_id
+        offline: user_id
+        field_classification: high_cardinality_id
+        profiler_action: high_cardinality_summary
+
+    platform: ios
+    cross_platform_overlap_with_android: 40

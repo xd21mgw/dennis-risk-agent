@@ -1,0 +1,94 @@
+# local_profiler_output_schema v0.1
+
+# 本文件定义 local profiler 的输出结构和格式。
+# profiler 输出是一个 YAML/JSON 文件，包含以下 sections。
+
+local_profiler_output:
+  version: v0_1
+  batch_id: "{batch_id}"
+  source_name: "{source_name}"
+  created_at: "{timestamp}"
+
+  # ---- Section 1: 字段清单 ----
+  field_inventory:
+    type: list
+    item_schema: normal_field_inventory  # 参见 schemas/normal_field_inventory_schema_v0_1.yaml
+    description: "所有发现字段的清单，包含 field_path、field_origin、coverage、cardinality 等"
+
+  # ---- Section 2: 字段 Profile ----
+  field_profile:
+    type: list
+    item_schema: normal_field_profile_sample  # 参见 schemas/normal_field_profile_sample_schema_v0_1.yaml
+    description: "每个字段的样本级 profile：coverage、missing、distinct、top ratio、cardinality、lifecycle"
+
+  # ---- Section 3: 离散分布 ----
+  discrete_distribution:
+    type: list
+    item_schema: normal_discrete_field_distribution  # 参见 schemas/normal_discrete_field_distribution_schema_v0_1.yaml
+    description: "离散字段的 TOP-N 分布，高基数字段只做摘要"
+
+  # ---- Section 4: 缺失率 ----
+  missingness_profile:
+    type: list
+    item_schema: normal_field_missingness_profile  # 参见 schemas/normal_field_missingness_profile_schema_v0_1.yaml
+    description: "字段缺失率 profile：null、empty、parse error 等"
+
+  # ---- Section 5: 低熵 Profile ----
+  low_entropy_profile:
+    type: list
+    item_schema: normal_low_entropy_profile  # 参见 schemas/normal_low_entropy_profile_schema_v0_1.yaml
+    description: "field_value 粒度低熵 profile：normal_status、top1/top3 ratio、sample size"
+
+  # ---- Section 6: 抽样偏置 ----
+  sampling_bias_declaration:
+    type: object
+    description: "从 normal_batch yaml 照搬的抽样偏置声明"
+    fields:
+      scene_bias: string
+      login_type_bias: string
+      account_age_bias: string
+      social_asset_bias: string
+      success_event_bias: string
+      time_window_bias: string
+      manual_selection_bias: string
+
+  # ---- Section 7: 不代表声明 ----
+  does_not_represent:
+    type: list
+    description: "本批次样本不能代表的群体"
+    items: string
+
+  # ---- Section 8: 源说明 ----
+  source_description:
+    type: object
+    description: "数据源和取样方法说明"
+    fields:
+      source_name: string
+      sampling_method: string
+      hash_field: string
+      hash_modulo: int
+      hash_range_start: int
+      hash_range_end: int
+      expected_sample_size: string
+      actual_sample_size: int
+      time_window_start: string
+      time_window_end: string
+
+  # ---- Section 9: Profiler 元信息 ----
+  profiler_metadata:
+    type: object
+    fields:
+      profiler_version: string
+      profiler_tool: string
+      profiler_config_hash: string
+      profiled_at: string
+      total_fields_discovered: int
+      total_fields_profiled: int
+      total_discrete_fields: int
+      total_high_cardinality_fields: int
+      total_low_entropy_fields: int
+      total_not_popular_fields: int
+      total_sparse_fields: int
+      parse_errors: int
+      max_json_expand_depth: int
+      top_n_default: int

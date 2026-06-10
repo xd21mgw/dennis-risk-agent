@@ -1,0 +1,117 @@
+# normal_batch: 20260609 LOGIN_AUE v0.1
+
+batch_id: normal_batch_20260609_login_aue_v0_1
+version: v0_1
+created_at: "2026-06-10"
+status: design_only  # 尚未实际取数，仅为批次描述资产
+
+## 场景定义
+
+scene: LOGIN_AUE  # 登录验证成功后
+scene_description: "运营商一键登录成功后，注册天数>200、粉丝数>200 的用户群体"
+
+## 时间窗口
+
+time_window:
+  start: "2026-06-09 20:30:01"
+  end: "2026-06-09 23:59:59"
+  timezone: "Asia/Shanghai"
+
+## 筛选条件
+
+sampling_conditions:
+  - field: userRegisterDays
+    operator: ">"
+    value: 200
+    semantic: "注册 200 天以上"
+  - field: loginType
+    operator: "="
+    value: 52
+    semantic: "运营商一键登录"
+  - field: _errorCode
+    operator: "="
+    value: 1
+    semantic: "登录成功"
+  - field: userFanCnt
+    operator: ">"
+    value: 200
+    semantic: "粉丝数大于 200"
+
+## 取样方法
+
+sampling_method: deterministic_hash_sample
+hash_field: userId  # 使用 userId 做 hash
+hash_modulo: 1000   # hash(userId) % 1000
+hash_range_start: 0
+hash_range_end: 4    # 取 5/1000 ≈ 3000~5000 条
+expected_sample_size: 3000~5000
+no_bare_limit: true  # 禁止裸 LIMIT
+
+## 抽样偏置声明
+
+sampling_bias:
+  scene_bias: "仅来自 LOGIN_AUE 登录验证成功后"
+  login_type_bias: "仅运营商一键登录，loginType=52"
+  account_age_bias: "注册 200 天以上"
+  social_asset_bias: "粉丝数大于 200"
+  success_event_bias: "仅登录成功样本"
+  time_window_bias: "仅 2026-06-09 晚间窗口"
+  manual_selection_bias: "人工筛选条件定义，不是随机正常样本"
+
+## 不能代表
+
+does_not_represent:
+  - "全量正常用户"
+  - "新注册用户"
+  - "低粉用户"
+  - "登录失败用户"
+  - "密码/短信/扫码/token 等其他登录方式用户"
+  - "沉默用户"
+  - "无社交资产用户"
+
+## 数据源
+
+source_name: unified_login_log  # 统一登录日志
+source_table_hint: admin / user-center-workbench login event table
+
+## 字段期望
+
+expected_fields:
+  ordinary_columns:
+    - userId
+    - dt
+    - loginType
+    - _errorCode
+    - userRegisterDays
+    - userFanCnt
+  json_columns:
+    - deviceInfo  # 设备信息 JSON
+    - networkInfo  # 网络信息 JSON
+    - appVersionInfo  # App 版本信息 JSON
+  map_struct_columns:
+    - extParams  # 扩展参数 map
+    - loginContext  # 登录上下文 struct
+  array_columns:
+    - tagList  # 标签列表
+  high_cardinality_fields:
+    - deviceId
+    - xm1
+    - xm3
+    - androidId
+    - oaid
+    - ip
+
+## DataAgent 边界提醒
+
+dataagent_boundary:
+  只取数不分析: true
+  do_not_analyze: true
+  不输出风险判断: true
+  不自行扩展查询source: true
+  不自行join其他表: true
+  不改筛选条件: true
+  不聚合字段分布: true
+  不计算TOPN: true
+  不计算低熵: true
+  不计算缺失率: true
+  不解释字段语义: true

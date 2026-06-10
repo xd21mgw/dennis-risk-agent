@@ -1,0 +1,217 @@
+# normal_baseline Consumer Contract v0.1
+
+# 消费方 contract：定义谁可以消费 normal_baseline，以及消费边界。
+
+normal_baseline_consumer_contract:
+  version: v0_1
+  created_at: "2026-06-10"
+  updated_at: "2026-06-10"
+
+  # ---- 消费方定义 ----
+  consumers:
+    - consumer_id: dennis_risk_agent_l4
+      consumer_type: agent_module
+      description: "Dennis Agent L4 模块，用于风险研判时参考 normal 侧统计"
+      access_level: readonly_lookup
+      access_grain: field_value
+      access_scopes:
+        - normal_low_entropy_profile
+        - normal_field_missingness_profile
+        - normal_discrete_field_distribution
+      constraints:
+        - "只做参考查找，不做风险判断替代"
+        - "normal_status 不等于风险定性"
+        - "必须声明使用偏置"
+        - "必须自行判断是否适用对应分层"
+        - "baseline 缺失或过时时，必须标记 baseline_gap"
+        - "不自动扩展 batch"
+        - "normal_popular / normal_low_entropy 只代表大盘常见，不代表安全"
+        - "normal_not_popular_in_sample 更适合进入后续候选验证，不等于风险候选"
+        - "normal_observable / normal_referenceable 只能作为参考，不做强判断"
+        - "normal_sparse_or_low_coverage 不代表字段无意义，只代表当前样本不足观察"
+
+    - consumer_id: feature_analysis_module
+      consumer_type: analysis_module
+      description: "候选特征分析模块，用于字段级对比参考"
+      access_level: readonly_lookup
+      access_grain: field_path
+      access_scopes:
+        - normal_field_inventory
+        - normal_field_profile_sample
+        - normal_discrete_field_distribution
+        - normal_low_entropy_profile
+        - normal_field_missingness_profile
+      constraints:
+        - "只做客观统计参考"
+        - "不做候选特征自动推荐"
+        - "不做 risk_judgement"
+        - "必须声明对比偏置"
+        - "normal_not_popular_in_sample 不等于风险候选"
+
+    - consumer_id: manual_reviewer
+      consumer_type: human
+      description: "人工审核 / 研判人员，用于查参考统计"
+      access_level: readonly_full
+      access_grain: full_batch
+      access_scopes:
+        - all_profiler_output
+      constraints:
+        - "必须阅读抽样偏置声明"
+        - "必须阅读不能代表声明"
+        - "不把 normal_baseline 当白用户库"
+
+  # ---- L4 / Dennis 查询协议 ----
+  l4_lookup_protocol:
+    description: "Dennis L4 消费 normal_baseline 的标准查询协议"
+    input:
+      - field: source_name
+        type: string
+        required: true
+        example: "infra_user_action_log"
+      - field: field_path
+        type: string
+        required: true
+        example: "infra_user_action_log.action_type"
+      - field: field_value
+        type: string
+        required: false
+        description: "可选：查询特定值的排名和频率"
+        example: "LOGIN"
+
+    lookup_sources:
+      - source: normal_low_entropy_profile
+        description: "查询字段的 normal_status、covered_count、top1_ratio、top3_ratio、coverage_ratio"
+        query_key: [source_name, field_path]
+        return_fields:
+          - normal_status
+          - covered_count
+          - top1_ratio
+          - top3_ratio
+          - coverage_ratio
+          - rule_source
+        example_return:
+          field_path: "passport_action_log.status"
+          normal_status: "normal_low_entropy"
+          covered_count: 1000
+          top1_ratio: 0.934
+          top3_ratio: 0.954
+          coverage_ratio: 1.0
+          rule_source: "sample_frequency_rule_v0_1"
+
+      - source: normal_discrete_field_distribution
+        description: "查询字段的 TOP-N 值分布，以及特定值在分布中的排名"
+        query_key: [source_name, field_path]
+        optional_query_key: field_value
+        return_fields:
+          - top_reused_values
+          - distinct_count
+          - coverage_ratio
+          - value_rank
+          - value_entity_count
+        example_return:
+          field_path: "infra_user_action_log.action_type"
+          field_value: "LOGIN"
+          value_rank: 1
+          value_entity_count: 556
+          distinct_count: 5
+          coverage_ratio: 1.0
+
+    output_caveat:
+      - field: caveat
+        type: string
+        required: true
+        description: "每次查询必须附带注意事项"
+        value_template: "normal_status={normal_status}, covered_count={covered_count}, sample_size_level={sample_size_level}. normal_status 只代表大盘常见程度，不等于风险定性。"
+
+  # ---- normal_status 消费语义 ----
+  normal_status_consumption_semantics:
+    normal_low_entropy:
+      meaning: "大盘极高频字段值，covered_count >= 1000 且 top1 >= 0.9 或 top3 >= 0.97"
+      safe_use: "作为'大盘常见'参考，可降低对该字段值异常性的先验预期"
+      unsafe_use: "作为无风险判断依据；作为安全定性；替代具体 case 证据链"
+      downstream_action: "标记为大盘常见，不自动降低风险关注度"
+
+    normal_popular:
+      meaning: "大盘较高频字段值，covered_count >= 1000 且 top1 >= 0.5"
+      safe_use: "作为'大盘较常见'参考"
+      unsafe_use: "作为安全定性；忽略 case 中的异常组合"
+      downstream_action: "标记为大盘较常见，仍需 case 证据闭合"
+
+    normal_not_popular_in_sample:
+      meaning: "大盘中不常见但有足够样本的字段值，covered_count >= 1000 但 top1 < 0.5"
+      safe_use: "更适合进入后续候选验证流程，作为候选差异特征的方向参考"
+      unsafe_use: "直接作为风险候选；直接作为异常判定依据"
+      downstream_action: "标记为候选验证方向，需要 case 证据补齐后才能进入强判断"
+
+    normal_referenceable:
+      meaning: "样本覆盖 300-999，频率可引用但不足强低熵判断"
+      safe_use: "作为频率参考，不能做强判断"
+      unsafe_use: "作为低熵判断依据；作为安全/风险定性"
+      downstream_action: "标记为参考级，需更大样本或补证才能提升可信度"
+
+    normal_observable:
+      meaning: "样本覆盖 200-299，可观察频率趋势"
+      safe_use: "作为频率趋势参考"
+      unsafe_use: "作为任何判断依据"
+      downstream_action: "标记为观察级，不进入强/弱判断"
+
+    normal_sparse_or_low_coverage:
+      meaning: "样本覆盖 < 200，不足以观察频率"
+      safe_use: "标记为样本不足，不做任何频率判断"
+      unsafe_use: "解释为字段不重要或字段无意义"
+      downstream_action: "标记为 baseline_gap，建议增大样本后重新观察"
+
+  # ---- 消费边界 ----
+  consumer_boundary:
+    what_consumer_can_do:
+      - "查找 normal 侧统计（coverage、missing、TOP-N、低熵）"
+      - "作为风险研判的参考信息之一"
+      - "作为字段对比的 denominator"
+      - "作为新字段发现的参考来源"
+      - "将 normal_not_popular_in_sample 作为后续候选验证的方向参考"
+
+    what_consumer_cannot_do:
+      - "把 normal_baseline 当白用户库"
+      - "把 normal_popular 当无风险判断"
+      - "把 normal_not_popular_in_sample 当风险候选"
+      - "把 normal_low_entropy 当安全定性"
+      - "把 normal_observable / normal_referenceable 当强判断依据"
+      - "忽略抽样偏置声明"
+      - "忽略不能代表声明"
+      - "自动扩展 batch"
+      - "自动扩展分层维度"
+      - "自动触发 DataAgent"
+      - "直接修改 baseline 资产"
+
+  # ---- baseline 缺失处理 ----
+  baseline_gap_handling:
+    when_baseline_missing:
+      - "标记 baseline_gap"
+      - "不把 baseline 缺失当风险判断依据"
+      - "不把 baseline 缺失当无风险反证"
+      - "建议后续补建对应分层 baseline"
+
+    when_baseline_outdated:
+      - "标记 baseline_outdated"
+      - "记录 baseline 最后更新时间"
+      - "不把过时 baseline 当当前参考"
+      - "建议刷新对应 baseline"
+
+    when_sample_size_insufficient:
+      - "标记 normal_sparse_or_low_coverage"
+      - "不把样本不足当字段无意义"
+      - "不把样本不足当安全/风险反证"
+      - "建议增大样本后重新观察"
+
+  # ---- 输出格式 ----
+  output_format:
+    format: YAML / JSON
+    delivery: file_based  # 文件交付，不创建 API 服务
+    location: "computer_use_poc/baselines/normal_baseline/"
+
+  # ---- 版本管理 ----
+  version_management:
+    current_version: v0_1
+    version_format: "v{major}_{minor}"
+    backward_compatibility: "v0.1 输出 schema 在 v0.x 内向后兼容"
+    major_version_change: "v1.0 可能调整 schema 结构，需消费方确认"

@@ -1,0 +1,2 @@
+# Ignore input Excel files (contain sensitive data samples)
+input_excels/

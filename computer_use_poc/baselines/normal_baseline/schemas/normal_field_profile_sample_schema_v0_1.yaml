@@ -1,0 +1,99 @@
+# normal_field_profile_sample_schema v0.1
+
+# 字段样本 profile schema：每个字段的样本级统计
+
+normal_field_profile_sample:
+  version: v0_1
+
+  fields:
+    field_path:
+      type: string
+      required: true
+      description: "完整字段路径"
+
+    guessed_type:
+      type: enum
+      required: true
+      description: "推断的字段类型"
+      values:
+        - int
+        - float
+        - string
+        - boolean
+        - enum
+        - timestamp
+        - json_object
+        - json_array
+        - mixed
+        - unknown
+
+    coverage_ratio:
+      type: float
+      required: true
+      description: "非空非缺失覆盖率"
+      range: [0.0, 1.0]
+
+    missing_ratio:
+      type: float
+      required: true
+      description: "缺失率（1 - coverage_ratio）"
+      range: [0.0, 1.0]
+
+    distinct_value_count:
+      type: int
+      required: true
+      description: "唯一值数量"
+
+    top1_ratio:
+      type: float
+      required: true
+      description: "TOP1 值占比"
+      range: [0.0, 1.0]
+
+    top3_ratio:
+      type: float
+      required: true
+      description: "TOP3 值合计占比"
+      range: [0.0, 1.0]
+
+    cardinality_bucket:
+      type: enum
+      required: true
+      description: "基数桶"
+      values:
+        - low
+        - medium
+        - high
+        - very_high
+        - near_unique
+
+    value_shape:
+      type: enum
+      required: true
+      description: "值形状：scalar 单值、enum 离散枚举、range 连续范围、json 嵌套、array 数组、mixed 混合"
+      values:
+        - scalar     # 单一值，几乎无变化
+        - enum       # 少量离散枚举值
+        - range      # 连续数值范围
+        - json       # 嵌套 JSON 结构
+        - array      # 数组/列表结构
+        - mixed      # 混合类型
+
+    sample_examples:
+      type: list
+      required: true
+      description: "3~5 个示例值"
+      max_items: 5
+
+    field_lifecycle_status:
+      type: enum
+      required: true
+      description: "字段生命周期状态"
+      values:
+        - discovered              # 已发现，尚未 profiled
+        - sample_profiled         # 已完成样本级 profile
+        - aggregation_scheduled   # 已安排聚合
+        - aggregated              # 已完成聚合
+        - deferred_due_to_cost    # 因成本推迟
+        - parse_failed            # 解析失败
+        - unknown_semantics       # 语义未知
