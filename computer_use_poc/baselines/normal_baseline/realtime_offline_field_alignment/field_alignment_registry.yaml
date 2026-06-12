@@ -1,0 +1,521 @@
+version: v0_1
+purpose: realtime source observation to offline Hive / normal baseline field alignment
+scope: seed registry for G-R9 / L3 / normal baseline v0.1.4; not a full Weapon mapping
+registry_contract:
+  seed_mapping_only: true
+  unique_source_field_canonical_role_entry: true
+  model_assisted_alignment_status: design_only_review_required
+  passport_action_log_table_level_equivalence: false
+  passport_action_log_field_level_mapping_required: true
+
+source_aliases:
+  login_logs_search:
+    canonical_source: infra_user_action_log
+    match_type: confirmed_source_alias
+    confidence: high
+    notes: user-confirmed login log source after field unpacking; field-level mapping still required
+  login_logs:
+    canonical_source: infra_user_action_log
+    match_type: confirmed_source_alias
+    confidence: high
+    notes: shorthand business login log namespace
+  infra_user_action_log:
+    canonical_source: infra_user_action_log
+    match_type: exact_path_match
+    confidence: high
+    notes: offline login log source currently present in normal baseline inventory
+  passport_action_log:
+    canonical_source: passport_action_log
+    match_type: exact_path_match
+    confidence: medium
+    notes: may contain login/auth/user-analysis related fields; no table-level equivalence
+  weapon_android:
+    canonical_source: weapon_android
+    match_type: exact_path_match
+    confidence: high
+    notes: Android Weapon device profile namespace
+  weapon_ios:
+    canonical_source: weapon_ios
+    match_type: exact_path_match
+    confidence: high
+    notes: iOS Weapon device profile namespace
+
+alignment_records:
+  - realtime_source: weapon_android
+    realtime_field_path: arch
+    realtime_leaf_key: arch
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.cpuInfo.arch
+    offline_leaf_key: arch
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.cpuInfo.arch
+    field_family: device_environment
+    field_role: factual_environment_label
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data cpuInfo nested path
+  - realtime_source: weapon_android
+    realtime_field_path: asn
+    realtime_leaf_key: asn
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.oneIpInfo.asn
+    offline_leaf_key: asn
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.oneIpInfo.asn
+    field_family: network_environment
+    field_role: factual_environment_label
+    cardinality_hint: medium
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data oneIpInfo nested path
+  - realtime_source: weapon_android
+    realtime_field_path: district
+    realtime_leaf_key: district
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.oneIpInfo.district
+    offline_leaf_key: district
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.oneIpInfo.district
+    field_family: network_environment
+    field_role: factual_environment_label
+    cardinality_hint: high
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; region granularity may be high-cardinality
+  - realtime_source: weapon_android
+    realtime_field_path: hw
+    realtime_leaf_key: hw
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.cpuInfo.hw
+    offline_leaf_key: hw
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.cpuInfo.hw
+    field_family: device_environment
+    field_role: factual_environment_label
+    cardinality_hint: high
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data cpuInfo nested path
+  - realtime_source: weapon_android
+    realtime_field_path: qualcomm
+    realtime_leaf_key: qualcomm
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.sensorList.qualcomm
+    offline_leaf_key: qualcomm
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.sensorList.qualcomm
+    field_family: device_environment
+    field_role: factual_environment_label
+    cardinality_hint: medium
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data sensorList nested path
+  - realtime_source: weapon_android
+    realtime_field_path: scenes
+    realtime_leaf_key: scenes
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.oneIpInfo.scenes
+    offline_leaf_key: scenes
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.oneIpInfo.scenes
+    field_family: network_environment
+    field_role: factual_environment_label
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data oneIpInfo nested path
+  - realtime_source: weapon_android
+    realtime_field_path: xiaomi
+    realtime_leaf_key: xiaomi
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.sensorList.xiaomi
+    offline_leaf_key: xiaomi
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.sensorList.xiaomi
+    field_family: device_environment
+    field_role: factual_environment_label
+    cardinality_hint: medium
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data sensorList nested path
+  - realtime_source: weapon_android
+    realtime_field_path: xiaomi_tz
+    realtime_leaf_key: xiaomi_tz
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.vendorSecHw.xiaomi_tz
+    offline_leaf_key: xiaomi_tz
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.vendorSecHw.xiaomi_tz
+    field_family: device_environment
+    field_role: factual_environment_label
+    cardinality_hint: medium
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data vendorSecHw nested path
+  - realtime_source: weapon_android
+    realtime_field_path: xm4
+    realtime_leaf_key: xm4
+    offline_source: weapon_android
+    offline_field_path: weapon_android.raw_data.vendorIds.xm4
+    offline_leaf_key: xm4
+    canonical_source: weapon_android
+    canonical_field_path: weapon_android.raw_data.vendorIds.xm4
+    field_family: device_identifier
+    field_role: identifier_anchor
+    cardinality_hint: medium
+    can_use_for_l4_baseline: true
+    match_type: seed_mapping_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: raw_data
+    platform: android
+    notes: G-R9 seed mapping; raw_data vendorIds nested path
+  - realtime_source: login_logs
+    realtime_field_path: login_logs.action
+    realtime_leaf_key: action
+    offline_source: infra_user_action_log
+    offline_field_path: infra_user_action_log.action_type
+    offline_leaf_key: action_type
+    canonical_source: infra_user_action_log
+    canonical_field_path: infra_user_action_log.action_type
+    field_family: login_behavior
+    field_role: behavior_fact
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    match_type: source_alias_field_match
+    confidence: high
+    sample_realtime_values: []
+    sample_offline_values: [REFRESH_TOKEN, CREATE_SERVICE_TOKEN, VISITOR_LOGIN]
+    value_distribution_hint: normal_baseline_observed
+    unresolved_reason: null
+    need_human_review: false
+    weapon_action: unknown
+    platform: unknown
+    notes: confirmed login log field alias; not a result signal
+  - realtime_source: login_logs_search
+    realtime_field_path: serviceKess
+    realtime_leaf_key: serviceKess
+    offline_source: ""
+    offline_field_path: ""
+    offline_leaf_key: ""
+    canonical_source: login_logs_search
+    canonical_field_path: login_logs_search.serviceKess
+    field_family: unknown
+    field_role: unknown_need_review
+    cardinality_hint: unknown
+    can_use_for_l4_baseline: false
+    match_type: unresolved
+    confidence: low
+    sample_realtime_values: []
+    sample_offline_values: []
+    value_distribution_hint: no_local_inventory_match
+    unresolved_reason: baseline_inventory_missing
+    need_human_review: true
+    weapon_action: unknown
+    platform: unknown
+    notes: explicitly unresolved when local inventory lacks a corresponding field
+
+additional_field_aliases:
+  weapon_android:
+    weapon_android.raw_data.arch: weapon_android.raw_data.cpuInfo.arch
+    weapon_android.raw_data.asn: weapon_android.raw_data.oneIpInfo.asn
+    weapon_android.raw_data.district: weapon_android.raw_data.oneIpInfo.district
+    weapon_android.raw_data.hw: weapon_android.raw_data.cpuInfo.hw
+    weapon_android.raw_data.qualcomm: weapon_android.raw_data.sensorList.qualcomm
+    weapon_android.raw_data.scenes: weapon_android.raw_data.oneIpInfo.scenes
+    weapon_android.raw_data.xiaomi: weapon_android.raw_data.sensorList.xiaomi
+    weapon_android.raw_data.xiaomi_tz: weapon_android.raw_data.vendorSecHw.xiaomi_tz
+    weapon_android.raw_data.xm4: weapon_android.raw_data.vendorIds.xm4
+    xm1: weapon_android.raw_data.vendorIds.xm1
+    weapon_android.raw_data.xm1: weapon_android.raw_data.vendorIds.xm1
+    xm3: weapon_android.raw_data.vendorIds.xm3
+    weapon_android.raw_data.xm3: weapon_android.raw_data.vendorIds.xm3
+    accessibilitySvc: weapon_android.raw_data.accessibilitySvc
+    chargingStatus: weapon_android.raw_data.chargingStatus
+    cpuKernel: weapon_android.raw_data.cpuKernel
+    cpuModel: weapon_android.raw_data.cpuModel
+    enabledAccessibilityServiceList: weapon_android.raw_data.enabledAccessibilityServiceList
+    roUtcTime2: weapon_android.raw_data.roUtcTime2
+    weaponRisk: weapon_android.raw_data.weaponRisk
+    deviceRegisterCntCnt30d: weapon_android.raw_data.deviceRegisterCntCnt30d
+    ams AG: weapon_android.raw_data.ams AG
+  infra_user_action_log:
+    action: infra_user_action_log.action_type
+    login_logs.action: infra_user_action_log.action_type
+  login_logs_search:
+    action: infra_user_action_log.action_type
+    login_logs.action: infra_user_action_log.action_type
+    serviceKess: login_logs_search.serviceKess
+    login_logs.serviceKess: login_logs_search.serviceKess
+  login_logs:
+    action: infra_user_action_log.action_type
+    login_logs.action: infra_user_action_log.action_type
+    serviceKess: login_logs_search.serviceKess
+
+path_metadata:
+  weapon_android.raw_data.deviceRegisterCntCnt30d:
+    field_role: unknown_need_review
+    cardinality_hint: unknown
+    can_use_for_l4_baseline: false
+    field_family: unknown
+    weapon_action: raw_data
+    platform: android
+    unresolved_reason: baseline_inventory_missing
+    notes: G-R9 exposed field; no confirmed canonical nested path or local baseline inventory match, do not hard-map as feature
+  weapon_android.raw_data.ams AG:
+    field_role: unknown_need_review
+    cardinality_hint: unknown
+    can_use_for_l4_baseline: false
+    field_family: unknown
+    weapon_action: raw_data
+    platform: android
+    unresolved_reason: baseline_inventory_missing
+    notes: G-R9 exposed field; ambiguous field name and no confirmed local inventory match, human review required
+  weapon_android.raw_data.vendorIds.xm1:
+    field_role: identifier_anchor
+    cardinality_hint: high
+    can_use_for_l4_baseline: false
+    field_family: device_identifier
+    weapon_action: raw_data
+    platform: android
+    notes: high-cardinality identifier anchor
+  weapon_android.raw_data.vendorIds.xm3:
+    field_role: identifier_anchor
+    cardinality_hint: high
+    can_use_for_l4_baseline: false
+    field_family: device_identifier
+    weapon_action: raw_data
+    platform: android
+    notes: high-cardinality identifier anchor
+  weapon_android.raw_data.weaponRisk:
+    field_role: source_context_field
+    cardinality_hint: unknown
+    can_use_for_l4_baseline: false
+    field_family: device_risk_container
+    weapon_action: oneRisk
+    platform: android
+    notes: container itself is not a candidate feature; classify child labels
+  weapon_android.raw_data.weaponRisk.riskScore:
+    field_role: result_signal
+    cardinality_hint: medium
+    can_use_for_l4_baseline: false
+    field_family: weapon_result_signal
+    weapon_action: oneRisk
+    platform: android
+    notes: conclusion score, not upstream feature
+  weapon_android.raw_data.weaponRisk.riskDecision:
+    field_role: result_signal
+    cardinality_hint: low
+    can_use_for_l4_baseline: false
+    field_family: weapon_result_signal
+    weapon_action: oneRisk
+    platform: android
+    notes: conclusion decision, not upstream feature
+  weapon_android.raw_data.weaponRisk.modelDecision:
+    field_role: result_signal
+    cardinality_hint: low
+    can_use_for_l4_baseline: false
+    field_family: weapon_result_signal
+    weapon_action: oneRisk
+    platform: android
+    notes: conclusion decision, not upstream feature
+  weapon_android.raw_data.weaponRisk.noSim:
+    field_role: factual_device_label
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    field_family: device_state_label
+    weapon_action: oneRisk
+    platform: android
+    notes: factual oneRisk label, not a result signal
+  weapon_android.raw_data.weaponRisk.oneRiskNoSim:
+    field_role: factual_device_label
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    field_family: device_state_label
+    weapon_action: oneRisk
+    platform: android
+    notes: factual oneRisk label, not a result signal
+  weapon_android.raw_data.weaponRisk.oneRiskLaunchLess10:
+    field_role: factual_device_label
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    field_family: device_usage_label
+    weapon_action: oneRisk
+    platform: android
+    notes: factual low-launch oneRisk label, not a result signal
+  infra_user_action_log.action_type:
+    field_role: behavior_fact
+    cardinality_hint: low
+    can_use_for_l4_baseline: true
+    field_family: login_behavior
+    weapon_action: unknown
+    platform: unknown
+    notes: login operation/action type, not enforcement result
+  login_logs_search.serviceKess:
+    field_role: unknown_need_review
+    cardinality_hint: unknown
+    can_use_for_l4_baseline: false
+    field_family: unknown
+    weapon_action: unknown
+    platform: unknown
+    unresolved_reason: baseline_inventory_missing
+    notes: no local inventory match
+
+role_rules:
+  result_signal:
+    exact_last_parts:
+      - risk_decision
+      - riskDecision
+      - risk_score
+      - riskScore
+      - riskLevel
+      - risk_label
+      - riskLabel
+      - policyHit
+      - policy_hit
+      - policyCode
+      - policy_code
+      - riskDecision
+      - modelDecision
+      - model_decision
+      - machineAccount
+      - highRisk
+      - hitStrategy
+      - weaponRiskScore
+    source_aware_last_parts:
+      action:
+        allowed_prefixes: [tianshi_rcp., rcp_event., rcp_, strategy., enforcement., punish.]
+      result:
+        allowed_prefixes: [tianshi_rcp., rcp_event., enforcement.]
+      decision:
+        allowed_prefixes: [tianshi_rcp., rcp_event., risk., model.]
+  identifier_anchor:
+    exact_last_parts:
+      - did
+      - device_id
+      - deviceId
+      - device_id_str
+      - deviceIdStr
+      - xm1
+      - xm3
+      - xm
+      - trace_id
+      - traceId
+      - session_id
+      - sessionId
+      - token
+      - access_token
+      - accessToken
+      - refresh_token
+      - refreshToken
+      - idfa
+      - idfv
+      - imei
+      - oaid
+      - android_id
+      - androidId
+      - uuid
+      - guid
+      - user_id
+      - userId
+      - photo_id
+      - photoId
+      - event_id
+      - eventId
+      - request_id
+      - requestId
+      - source_id
+      - sourceId
+    substrings: [_id, _token, Token]
+  one_risk_factual_labels:
+    - noSim
+    - oneRiskNoSim
+    - oneRiskNoSimCardIos
+    - oneRiskNoPasswordIos
+    - factoryReset
+    - root
+    - isRoot
+    - emulator
+    - isEmulator
+    - hook
+    - frida
+    - xposed
+    - oneRiskLaunchLess10
+    - launchLess10
+    - oneRiskBatteryZero
+    - batteryZero
+    - oneRiskAutoScript
+    - oneRiskClickPlugin
+    - oneRiskOnlineLoan
+    - oneRiskIpIDC
+    - oneRiskAccSvcAbilityCnt
+    - oneRiskMeetingTool

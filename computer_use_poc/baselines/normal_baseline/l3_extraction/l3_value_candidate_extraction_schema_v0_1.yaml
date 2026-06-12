@@ -1,0 +1,116 @@
+schema_version: l3_value_candidate_extraction_schema_v0_1
+description: Structured L3 value-level candidate output schema.
+type: array
+items:
+  type: object
+  required:
+    - candidate_id
+    - source_name
+    - platform
+    - action_or_layer
+    - field_path
+    - field_value_or_pattern
+    - candidate_grain
+    - field_role_hint
+    - risk_observed_count
+    - risk_hit_count
+    - risk_hit_rate
+    - supporting_user_ids
+    - supporting_device_ids
+    - sample_values
+    - extraction_source
+    - extraction_confidence
+    - need_raw_confirm
+    - notes
+  properties:
+    candidate_id:
+      type: string
+      description: Stable L3 candidate identifier.
+    source_name:
+      type: string
+      description: Canonical source name when resolver can resolve it.
+    platform:
+      type: string
+      enum: [android, ios, unknown]
+    action_or_layer:
+      type: string
+      description: Source action or layer such as raw_data, oneRisk, login, passport, user_analysis.
+    source_action:
+      type: string
+      description: Compatibility alias for action_or_layer.
+    layer:
+      type: string
+      description: Compatibility alias for action_or_layer.
+    field_path:
+      type: string
+      description: Canonical or full child path.
+    field_value_or_pattern:
+      type: string
+      description: Value, enum, label, element, anchor marker, or parser-needed marker.
+    field_value:
+      type: string
+      description: Compatibility alias for field_value_or_pattern.
+    candidate_grain:
+      type: string
+      enum:
+        - field_presence
+        - scalar_value
+        - enum_value
+        - array_element
+        - label_value
+        - object_child_value
+        - value_pattern
+        - high_cardinality_anchor
+        - unsupported_complex_value
+    field_role_hint:
+      type: string
+      enum:
+        - result_signal
+        - identifier_anchor
+        - factual_device_label
+        - factual_environment_label
+        - behavior_fact
+        - profile_fact
+        - source_context_field
+        - high_cardinality_anchor
+        - unknown_need_review
+    risk_observed_count:
+      type: integer
+      minimum: 0
+    risk_sample_count:
+      type: integer
+      minimum: 0
+      description: Compatibility alias for risk_observed_count.
+    risk_hit_count:
+      type: integer
+      minimum: 0
+    risk_hit_rate:
+      type: number
+      minimum: 0
+      maximum: 1
+    supporting_user_ids:
+      type: array
+      items:
+        type: string
+    supporting_device_ids:
+      type: array
+      items:
+        type: string
+    sample_values:
+      type: array
+      items:
+        type: string
+    extraction_source:
+      type: string
+      description: raw_observation, projected_rows, report_reconstructed, or manual_summary provenance.
+    extraction_confidence:
+      type: string
+      enum: [high, partial, low]
+    need_raw_confirm:
+      type: boolean
+    parser_needed:
+      type: boolean
+      description: True for unsupported complex values requiring a dedicated parser.
+    notes:
+      type: string
+  additionalProperties: true

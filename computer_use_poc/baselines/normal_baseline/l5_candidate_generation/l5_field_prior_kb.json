@@ -1,0 +1,119 @@
+{
+  "field_family_map": [
+    {
+      "scope": "field",
+      "field_path": "weapon_android.raw_data.accessibilityServiceList",
+      "judgement": "accessibility_environment_signal",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "Accessibility service list is an environment and automation-related field family.",
+      "need_human_review": true
+    },
+    {
+      "scope": "field",
+      "field_path": "weapon_android.weapon_one_risk",
+      "judgement": "weak_risk_signal",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "oneRisk labels are factual/risk-adjacent labels and should be treated as confirming signals before external validation.",
+      "need_human_review": true
+    }
+  ],
+  "field_role_map": [
+    {
+      "scope": "field",
+      "field_path": "weapon_android.weapon_one_risk",
+      "judgement": "confirming_candidate",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "oneRisk labels are not primary anchors by default but can confirm device/environment patterns.",
+      "need_human_review": true
+    }
+  ],
+  "field_pair_prior": [
+    {
+      "scope": "field_pair",
+      "anchor_field": "ip24",
+      "target_field": "device_model",
+      "prior": "normally_weak_related",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "同一 IP 段下正常不应高度绑定同一具体机型。",
+      "need_human_review": false
+    },
+    {
+      "scope": "field_pair",
+      "anchor_field": "device_model",
+      "target_field": "brand",
+      "prior": "naturally_related",
+      "confidence": "high",
+      "judgement_source": "static_seed",
+      "reason": "机型天然决定品牌。",
+      "need_human_review": false
+    }
+  ],
+  "natural_relation_map": [
+    {
+      "scope": "field_pair",
+      "from_field": "device_model",
+      "to_field": "brand",
+      "relation": "determines",
+      "action": "skip_as_trivial",
+      "confidence": "high",
+      "judgement_source": "static_seed",
+      "reason": "机型天然决定品牌。",
+      "need_human_review": false
+    }
+  ],
+  "leakage_field_map": [
+    {
+      "scope": "field",
+      "field_key": "decision",
+      "judgement": "leakage_field",
+      "confidence": "high",
+      "judgement_source": "static_seed",
+      "reason": "Decision/result-like fields are downstream outcome signals.",
+      "need_human_review": false
+    }
+  ],
+  "over_general_field_map": [
+    {
+      "scope": "field",
+      "field_path": "weapon_android.raw_data.resolution",
+      "judgement": "over_general_field",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "Resolution is a broad device profile context field.",
+      "need_human_review": true
+    },
+    {
+      "scope": "field",
+      "field_path": "weapon_android.raw_data.battery",
+      "judgement": "over_general_field",
+      "confidence": "medium",
+      "judgement_source": "static_seed",
+      "reason": "Battery is a broad device state/context field.",
+      "need_human_review": true
+    }
+  ],
+  "unique_id_field_map": [
+    {
+      "scope": "field",
+      "field_key": "device_id",
+      "judgement": "unique_id",
+      "confidence": "high",
+      "judgement_source": "static_seed",
+      "reason": "Device ID is an anchor/reference, not a direct candidate feature.",
+      "need_human_review": false
+    },
+    {
+      "scope": "field",
+      "field_key": "user_id",
+      "judgement": "unique_id",
+      "confidence": "high",
+      "judgement_source": "static_seed",
+      "reason": "User ID is an entity key, not a direct candidate feature.",
+      "need_human_review": false
+    }
+  ]
+}

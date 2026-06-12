@@ -33,3 +33,25 @@ computer_use_poc/run_logs/
 .DS_Store
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Dennis normal-baseline local dry-run artifacts
+computer_use_poc/baselines/normal_baseline/e2e_runs/
+computer_use_poc/baselines/normal_baseline/e2e_contracts/
+computer_use_poc/baselines/normal_baseline/l3_extraction/run_logs/
+computer_use_poc/baselines/normal_baseline/l3_extraction/*run_log*.md
+computer_use_poc/baselines/normal_baseline/l3_extraction/structured_l3_candidates_from_gr9_value_level*.json
+computer_use_poc/baselines/normal_baseline/l3_extraction/structured_l3_candidates_summary_v0_1.md
+computer_use_poc/baselines/normal_baseline/l4_validation/l3_to_l4_coverage_diff_v0_1.md
+computer_use_poc/baselines/normal_baseline/l4_validation/l4_*cards*.json
+computer_use_poc/baselines/normal_baseline/l4_validation/l4_*cards*.md
+computer_use_poc/baselines/normal_baseline/l4_validation/l4_*run_log*.md
+computer_use_poc/baselines/normal_baseline/l4_validation/l4_validation_summary.md
+computer_use_poc/baselines/normal_baseline/l4_validation/l4_sample_enriched_candidates_v0_1.json
+computer_use_poc/baselines/normal_baseline/l4_validation/real_l4_validation_cards_from_gr9*.json
+computer_use_poc/baselines/normal_baseline/l4_validation/real_l4_validation_cards_from_gr9*.md
+computer_use_poc/baselines/normal_baseline/realtime_offline_field_alignment/run_logs/
+computer_use_poc/baselines/normal_baseline/offline_field_alignment/
+computer_use_poc/test_fixtures/register_attack_f5_r3_small_b_rounds_v1.json
+computer_use_poc/test_fixtures/register_attack_f5_r3_small_c_rounds_v1.json
+nonexistent-placeholder

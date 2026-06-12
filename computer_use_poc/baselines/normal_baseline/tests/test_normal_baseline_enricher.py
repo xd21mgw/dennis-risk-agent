@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from normal_baseline_enricher import (
     batch_enrich,
+    canonical_value_key,
     debug_lookup,
     enrich_one_candidate,
     build_low_entropy_index,
@@ -24,6 +25,9 @@ from normal_baseline_enricher import (
     FORBIDDEN_OUTPUT_KEYS,
     _compute_baseline_caveat,
     _compute_recommended_l4_use,
+    normalize_field_path,
+    infer_source_name,
+    is_low_cardinality_value_candidate,
 )
 
 # ---- Fixtures ----
@@ -219,6 +223,272 @@ def synthetic_baseline(tmp_path):
 # ---- Unit tests (synthetic baseline) ----
 
 class TestBatchEnrichSynthetic:
+    def test_canonical_value_key_normalizes_boolean_like_values(self):
+        assert canonical_value_key(0) == "0"
+        assert canonical_value_key("0") == "0"
+        assert canonical_value_key(False) == "0"
+        assert canonical_value_key("false") == "0"
+        assert canonical_value_key(1) == "1"
+        assert canonical_value_key("1") == "1"
+        assert canonical_value_key(True) == "1"
+        assert canonical_value_key("true") == "1"
+
+    def test_low_cardinality_lookup_miss_is_marked_unreliable(self, synthetic_baseline):
+        dd_path = os.path.join(synthetic_baseline, "normal_discrete_field_distribution.json")
+        le_path = os.path.join(synthetic_baseline, "normal_low_entropy_profile.json")
+        with open(dd_path, "r", encoding="utf-8") as f:
+            dd = json.load(f)
+        with open(le_path, "r", encoding="utf-8") as f:
+            le = json.load(f)
+        dd.append({
+            "source_name": "src_a",
+            "field_path": "src_a.binary_flag",
+            "covered_entity_count": 900,
+            "coverage_ratio": 0.9,
+            "distinct_value_count": 2,
+            "top_values": [{"value": "yes", "count": 900, "ratio": 1.0, "rank": 1}],
+            "top1_ratio": 1.0,
+            "top3_ratio": 1.0,
+        })
+        le.append({
+            "source_name": "src_a",
+            "field_path": "src_a.binary_flag",
+            "normal_status": "normal_referenceable",
+            "top1_ratio": 1.0,
+            "top3_ratio": 1.0,
+            "coverage_ratio": 0.9,
+            "covered_count": 900,
+        })
+        with open(dd_path, "w", encoding="utf-8") as f:
+            json.dump(dd, f)
+        with open(le_path, "w", encoding="utf-8") as f:
+            json.dump(le, f)
+
+        enriched = batch_enrich([{
+            "candidate_id": "binary0",
+            "source_name": "src_a",
+            "field_path": "src_a.binary_flag",
+            "field_value": "0",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }], synthetic_baseline)["enriched_candidates"][0]
+
+        assert enriched["normal_value_lookup_status"] == "normal_value_distribution_incomplete"
+        assert enriched["normal_value_distribution_reliable"] is False
+        assert enriched["normal_value_ratio"] is None
+        assert enriched["normalized_value_key"] == "0"
+
+    def test_canonical_value_lookup_matches_equivalent_boolean_string(self, synthetic_baseline):
+        dd_path = os.path.join(synthetic_baseline, "normal_discrete_field_distribution.json")
+        le_path = os.path.join(synthetic_baseline, "normal_low_entropy_profile.json")
+        with open(dd_path, "r", encoding="utf-8") as f:
+            dd = json.load(f)
+        with open(le_path, "r", encoding="utf-8") as f:
+            le = json.load(f)
+        dd.append({
+            "source_name": "src_a",
+            "field_path": "src_a.bool_flag",
+            "covered_entity_count": 1000,
+            "coverage_ratio": 1.0,
+            "distinct_value_count": 2,
+            "top_values": [{"value": "false", "count": 700, "ratio": 0.7, "rank": 1}],
+            "top1_ratio": 0.7,
+            "top3_ratio": 0.7,
+        })
+        le.append({
+            "source_name": "src_a",
+            "field_path": "src_a.bool_flag",
+            "normal_status": "normal_referenceable",
+            "top1_ratio": 0.7,
+            "top3_ratio": 0.7,
+            "coverage_ratio": 1.0,
+            "covered_count": 1000,
+        })
+        with open(dd_path, "w", encoding="utf-8") as f:
+            json.dump(dd, f)
+        with open(le_path, "w", encoding="utf-8") as f:
+            json.dump(le, f)
+
+        enriched = batch_enrich([{
+            "candidate_id": "bool0",
+            "source_name": "src_a",
+            "field_path": "src_a.bool_flag",
+            "field_value": "0",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }], synthetic_baseline)["enriched_candidates"][0]
+
+        assert enriched["normal_value_lookup_status"] == "value_matched"
+        assert enriched["normal_value_distribution_reliable"] is True
+        assert enriched["normal_value_ratio"] == 0.7
+
+    def test_pre_enrichment_canonical_lookup_weapon_nested_alias(self, synthetic_baseline):
+        # Extend synthetic baseline with a nested canonical field that only alias mapping can hit.
+        le_path = os.path.join(synthetic_baseline, "normal_low_entropy_profile.json")
+        dd_path = os.path.join(synthetic_baseline, "normal_discrete_field_distribution.json")
+        with open(le_path, "r", encoding="utf-8") as f:
+            le = json.load(f)
+        with open(dd_path, "r", encoding="utf-8") as f:
+            dd = json.load(f)
+        le.append({
+            "source_name": "weapon_android",
+            "field_path": "weapon_android.raw_data.cpuInfo.arch",
+            "normal_status": "normal_referenceable",
+            "top1_ratio": 0.8,
+            "top3_ratio": 0.9,
+            "coverage_ratio": 0.95,
+            "covered_count": 950,
+        })
+        dd.append({
+            "source_name": "weapon_android",
+            "field_path": "weapon_android.raw_data.cpuInfo.arch",
+            "covered_entity_count": 950,
+            "coverage_ratio": 0.95,
+            "top_values": [{"value": "AArch64 Processor", "count": 760, "ratio": 0.8, "rank": 1}],
+            "top1_ratio": 0.8,
+            "top3_ratio": 0.9,
+        })
+        with open(le_path, "w", encoding="utf-8") as f:
+            json.dump(le, f)
+        with open(dd_path, "w", encoding="utf-8") as f:
+            json.dump(dd, f)
+
+        candidates = [{
+            "candidate_id": "arch1",
+            "source_name": "weapon_android",
+            "field_path": "arch",
+            "field_value": "AArch64 Processor",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }]
+        result = batch_enrich(candidates, synthetic_baseline)
+        e = result["enriched_candidates"][0]
+        assert e["baseline_hit"] is True
+        assert e["field_path"] == "weapon_android.raw_data.cpuInfo.arch"
+        assert e["original_field_path"] == "arch"
+        assert e["canonical_lookup_applied"] is True
+        assert e["normal_value_ratio"] == 0.8
+
+    def test_pre_enrichment_dotted_g_r9_alias_is_remapped(self, synthetic_baseline):
+        le_path = os.path.join(synthetic_baseline, "normal_low_entropy_profile.json")
+        dd_path = os.path.join(synthetic_baseline, "normal_discrete_field_distribution.json")
+        with open(le_path, "r", encoding="utf-8") as f:
+            le = json.load(f)
+        with open(dd_path, "r", encoding="utf-8") as f:
+            dd = json.load(f)
+        le.append({
+            "source_name": "weapon_android",
+            "field_path": "weapon_android.raw_data.oneIpInfo.asn",
+            "normal_status": "normal_referenceable",
+            "top1_ratio": 0.5,
+            "top3_ratio": 0.7,
+            "coverage_ratio": 0.75,
+            "covered_count": 750,
+        })
+        dd.append({
+            "source_name": "weapon_android",
+            "field_path": "weapon_android.raw_data.oneIpInfo.asn",
+            "covered_entity_count": 750,
+            "coverage_ratio": 0.75,
+            "top_values": [{"value": "AS4134", "count": 300, "ratio": 0.4, "rank": 1}],
+            "top1_ratio": 0.4,
+            "top3_ratio": 0.7,
+        })
+        with open(le_path, "w", encoding="utf-8") as f:
+            json.dump(le, f)
+        with open(dd_path, "w", encoding="utf-8") as f:
+            json.dump(dd, f)
+
+        candidates = [{
+            "candidate_id": "asn1",
+            "source_name": "weapon_android",
+            "field_path": "weapon_android.raw_data.asn",
+            "field_value": "AS4134",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }]
+        result = batch_enrich(candidates, synthetic_baseline)
+        e = result["enriched_candidates"][0]
+        assert e["baseline_hit"] is True
+        assert e["field_path"] == "weapon_android.raw_data.oneIpInfo.asn"
+        assert e["original_field_path"] == "weapon_android.raw_data.asn"
+        assert e["canonical_lookup_applied"] is True
+
+    def test_pre_enrichment_canonical_lookup_confirmed_login_source_alias(self, synthetic_baseline):
+        le_path = os.path.join(synthetic_baseline, "normal_low_entropy_profile.json")
+        dd_path = os.path.join(synthetic_baseline, "normal_discrete_field_distribution.json")
+        with open(le_path, "r", encoding="utf-8") as f:
+            le = json.load(f)
+        with open(dd_path, "r", encoding="utf-8") as f:
+            dd = json.load(f)
+        le.append({
+            "source_name": "infra_user_action_log",
+            "field_path": "infra_user_action_log.action_type",
+            "normal_status": "normal_referenceable",
+            "top1_ratio": 0.55,
+            "top3_ratio": 0.88,
+            "coverage_ratio": 1.0,
+            "covered_count": 1000,
+        })
+        dd.append({
+            "source_name": "infra_user_action_log",
+            "field_path": "infra_user_action_log.action_type",
+            "covered_entity_count": 1000,
+            "coverage_ratio": 1.0,
+            "top_values": [{"value": "REFRESH_TOKEN", "count": 556, "ratio": 0.556, "rank": 1}],
+            "top1_ratio": 0.556,
+            "top3_ratio": 0.885,
+        })
+        with open(le_path, "w", encoding="utf-8") as f:
+            json.dump(le, f)
+        with open(dd_path, "w", encoding="utf-8") as f:
+            json.dump(dd, f)
+
+        candidates = [{
+            "candidate_id": "login1",
+            "source_name": "login_logs_search",
+            "field_path": "action",
+            "field_value": "REFRESH_TOKEN",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }]
+        result = batch_enrich(candidates, synthetic_baseline)
+        e = result["enriched_candidates"][0]
+        assert e["baseline_hit"] is True
+        assert e["source_name"] == "infra_user_action_log"
+        assert e["field_path"] == "infra_user_action_log.action_type"
+        assert e["original_source_name"] == "login_logs_search"
+        assert e["original_field_path"] == "action"
+        assert e["normal_value_ratio"] == 0.556
+
+    def test_pre_enrichment_servicekess_remains_unresolved(self, synthetic_baseline):
+        candidates = [{
+            "candidate_id": "login2",
+            "source_name": "login_logs_search",
+            "field_path": "serviceKess",
+            "field_value": "k1",
+            "risk_sample_count": 6,
+            "risk_covered_count": 6,
+            "risk_value_count": 6,
+            "risk_value_ratio": 1.0,
+        }]
+        result = batch_enrich(candidates, synthetic_baseline)
+        e = result["enriched_candidates"][0]
+        assert e["baseline_hit"] is False
+        assert e["source_name"] == "infra_user_action_log"
+        assert e["field_path"] == "login_logs_search.serviceKess"
+        assert e["canonical_lookup_applied"] is True
+
     def test_batch_enrich_preserves_original_fields(self, synthetic_baseline):
         candidates = [
             {
@@ -277,6 +547,7 @@ class TestBatchEnrichSynthetic:
         assert e["normal_value_rank"] == 1
         assert e["normal_value_count"] == 950
         assert e["normal_value_ratio"] == 0.95
+        assert e["normal_value_lookup_status"] == "value_matched"
 
     def test_batch_enrich_value_rank_not_in_top(self, synthetic_baseline):
         candidates = [
@@ -286,8 +557,10 @@ class TestBatchEnrichSynthetic:
         ]
         result = batch_enrich(candidates, synthetic_baseline)
         e = result["enriched_candidates"][0]
-        assert e["normal_value_count"] == 0
-        assert e["normal_value_ratio"] == 0.0
+        assert e["normal_value_count"] is None
+        assert e["normal_value_ratio"] is None
+        assert e["normal_value_lookup_status"] == "normal_value_distribution_incomplete"
+        assert e["normal_value_distribution_reliable"] is False
 
     def test_baseline_miss_returns_gap(self, synthetic_baseline):
         candidates = [
@@ -299,6 +572,7 @@ class TestBatchEnrichSynthetic:
         e = result["enriched_candidates"][0]
         assert e["baseline_hit"] is False
         assert e["normal_status"] is None
+        assert e["normal_value_lookup_status"] == "field_unobserved"
         assert "baseline_gap" in e["baseline_caveat"]
         assert e["recommended_l4_use"] == "baseline_gap_no_judgement"
 
@@ -313,6 +587,7 @@ class TestBatchEnrichSynthetic:
         assert e["baseline_hit"] is True
         assert e["high_cardinality"] is True
         assert e["normal_status"] == "high_cardinality_field"
+        assert e["normal_value_lookup_status"] == "high_cardinality_skipped"
         assert "high_cardinality" in e["baseline_caveat"]
         assert e.get("hc_distinct_value_count") == 800
 

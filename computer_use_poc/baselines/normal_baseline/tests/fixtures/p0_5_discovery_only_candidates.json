@@ -1,0 +1,127 @@
+{
+  "l3_candidates": [
+    {
+      "candidate_id": "no_base_numeric",
+      "source_name": "new_behavior_source",
+      "action_or_layer": "new_action",
+      "field_path": "new_behavior_source.durationMs",
+      "field_value_or_pattern": ">=10",
+      "candidate_grain": "value_pattern",
+      "field_role_hint": "behavior_fact",
+      "risk_hit_count": 4,
+      "risk_observed_count": 6,
+      "risk_hit_rate": 0.6667,
+      "risk_hit_sample_ids": ["u1", "u2", "u3", "u4"],
+      "supporting_user_ids": ["u1", "u2", "u3", "u4"],
+      "supporting_device_ids": [],
+      "feature_type": "numeric_bucket",
+      "value_type": "duration",
+      "feature_name": "new_behavior_source.durationMs#>=10",
+      "source_fields": ["new_behavior_source.durationMs"],
+      "source_events": [],
+      "feature_definition": {
+        "source_field": "new_behavior_source.durationMs",
+        "bucket_method": "fixed_threshold",
+        "bucket_label": ">=10",
+        "bucket_range": {"gte": 10.0, "lte": null}
+      },
+      "bucket_label": ">=10",
+      "bucket_range": {"gte": 10.0, "lte": null},
+      "candidate_value": ">=10",
+      "commonality_family": "numeric_bucket_commonality",
+      "commonality_evidence": [
+        {
+          "evidence_type": "numeric_bucket_commonality",
+          "field_path": "new_behavior_source.durationMs",
+          "candidate_value": ">=10",
+          "risk_hit_count": 4,
+          "risk_denominator": 6,
+          "risk_hit_rate": 0.6667
+        }
+      ]
+    },
+    {
+      "candidate_id": "valid_derived",
+      "source_name": "new_behavior_source",
+      "action_or_layer": "new_action",
+      "field_path": "new_behavior_source.derived.short_window_profile_change",
+      "field_value_or_pattern": "short_window_profile_change",
+      "candidate_grain": "value_pattern",
+      "field_role_hint": "behavior_fact",
+      "risk_hit_count": 3,
+      "risk_observed_count": 6,
+      "risk_hit_rate": 0.5,
+      "risk_hit_sample_ids": ["u1", "u2", "u3"],
+      "supporting_user_ids": ["u1", "u2", "u3"],
+      "supporting_device_ids": [],
+      "feature_type": "derived_feature",
+      "value_type": "sequence",
+      "feature_name": "short_window_profile_change",
+      "source_fields": ["new_behavior_source.event_type", "new_behavior_source.event_ts"],
+      "source_events": ["profile_change"],
+      "feature_definition": {
+        "rule": "count profile_change events inside risk sample window",
+        "window": "risk_sample_window"
+      },
+      "feature_definition_status": "present",
+      "commonality_family": "behavior_pattern_commonality",
+      "commonality_evidence": [
+        {
+          "evidence_type": "behavior_pattern_commonality",
+          "description": "3 risk samples share short-window profile change events",
+          "risk_hit_count": 3,
+          "risk_denominator": 6,
+          "risk_hit_rate": 0.5
+        }
+      ]
+    },
+    {
+      "candidate_id": "missing_derived",
+      "source_name": "new_behavior_source",
+      "action_or_layer": "new_action",
+      "field_path": "new_behavior_source.derived.unknown_pattern",
+      "field_value_or_pattern": "unknown_pattern",
+      "candidate_grain": "value_pattern",
+      "field_role_hint": "unknown_need_review",
+      "risk_hit_count": 3,
+      "risk_observed_count": 6,
+      "risk_hit_rate": 0.5,
+      "risk_hit_sample_ids": ["u1", "u2", "u3"],
+      "supporting_user_ids": ["u1", "u2", "u3"],
+      "supporting_device_ids": [],
+      "feature_type": "derived_feature",
+      "value_type": "unknown",
+      "feature_name": "unknown_pattern",
+      "source_fields": ["new_behavior_source.raw_blob"],
+      "source_events": [],
+      "feature_definition": {},
+      "feature_definition_status": "missing",
+      "commonality_family": "expanded_feature_commonality",
+      "commonality_evidence": []
+    },
+    {
+      "candidate_id": "unsupported_complex",
+      "source_name": "new_behavior_source",
+      "action_or_layer": "new_action",
+      "field_path": "new_behavior_source.complex_list",
+      "field_value_or_pattern": "need_pattern_extractor:list_of_objects",
+      "candidate_grain": "unsupported_complex_value",
+      "field_role_hint": "unknown_need_review",
+      "risk_hit_count": 3,
+      "risk_observed_count": 6,
+      "risk_hit_rate": 0.5,
+      "risk_hit_sample_ids": ["u1", "u2", "u3"],
+      "supporting_user_ids": ["u1", "u2", "u3"],
+      "supporting_device_ids": [],
+      "feature_type": "derived_feature",
+      "value_type": "unknown",
+      "feature_name": "complex_list_parser_needed",
+      "source_fields": ["new_behavior_source.complex_list"],
+      "source_events": [],
+      "feature_definition": {},
+      "feature_definition_status": "missing",
+      "commonality_family": "expanded_feature_commonality",
+      "commonality_evidence": []
+    }
+  ]
+}

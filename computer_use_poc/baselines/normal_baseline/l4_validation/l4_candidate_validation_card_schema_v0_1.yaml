@@ -1,0 +1,245 @@
+# L4 Candidate Validation Card Schema v0.1
+
+# L4 = L3 单点候选 + normal baseline 的验证层
+# 输入：enriched L3 candidates (risk commonality + normal baseline context)
+# 输出：candidate validation cards，每张 card 包含统计区分性、语义清晰度、泄露风险、ID 风险和 L4 决策
+
+l4_candidate_validation_card:
+  version: v0_1
+  created_at: "2026-06-11"
+
+  # ---- 输入来源 ----
+  input_sources:
+    - enriched_l3_candidates: "normal_baseline enricher 的输出，每条已含 risk 侧和 normal 侧统计"
+    - normal_baseline_asset: "population_baseline / future segmented_baseline"
+
+  # ---- Card 字段定义 ----
+  card_schema:
+    # 唯一标识
+    candidate_id:
+      type: string
+      required: true
+      description: "与 L3 candidate_id 对齐，确保可追溯"
+
+    # 字段信息
+    field_name:
+      type: string
+      required: true
+      description: "候选字段名，来自 L3 candidate 的 field_path"
+
+    source_name:
+      type: string
+      required: true
+      description: "来源 source 名"
+
+    field_value_or_pattern:
+      type: string
+      required: false
+      description: "候选字段值或值模式；字段级共性时可为 null"
+
+    # Risk 侧统计
+    risk_observed_count:
+      type: integer
+      required: true
+      description: "risk 样本中该字段可观测到的实体数（denominator）"
+
+    risk_hit_count:
+      type: integer
+      required: true
+      description: "risk 样本中命中该值/模式的实体数（numerator）"
+
+    risk_hit_rate:
+      type: float
+      required: true
+      description: "risk_hit_count / risk_observed_count，[0.0, 1.0]"
+
+    # Normal 侧统计
+    normal_observed_count:
+      type: integer
+      required: true
+      description: "normal 样本中该字段可观测到的实体数；0 表示 baseline 未观测到此字段"
+
+    normal_hit_count:
+      type: integer
+      required: true
+      description: "normal 样本中命中该值/模式的实体数；0 且 normal_observed_count=0 表示未观测"
+
+    normal_hit_rate:
+      type: float
+      required: true
+      description: "normal_hit_count / normal_observed_count（normal_observed_count>0 时）；null 当 normal_observed_count=0"
+
+    # Normal baseline 状态
+    normal_baseline_status:
+      type: enum
+      required: true
+      description: "normal 侧观测结果的分类"
+      values:
+        observed_negative:
+          meaning: "normal 侧已观测且命中，区分性弱或无"
+          condition: "normal_observed_count > 0 AND normal_hit_rate >= risk_hit_rate * 0.5"
+
+        observed_positive:
+          meaning: "normal 侧已观测但命中低，区分性可能强"
+          condition: "normal_observed_count > 0 AND normal_hit_rate < risk_hit_rate * 0.5"
+
+        unobserved_missing:
+          meaning: "normal 侧未观测到此字段/值，无法对比"
+          condition: "normal_observed_count = 0"
+
+        insufficient_sample:
+          meaning: "normal 侧样本量不足做可靠判断"
+          condition: "0 < normal_observed_count < 200"
+
+    # L4 评估维度
+    statistical_strength:
+      type: enum
+      required: true
+      description: "risk-normal 统计区分性强度"
+      values: [high, medium, low, unevaluable]
+      rules:
+        high: "risk_hit_rate >= 0.5 AND normal_baseline_status=observed_positive AND (risk_hit_rate - normal_hit_rate) >= 0.3"
+        medium: "risk_hit_rate >= 0.3 AND normal_baseline_status=observed_positive AND (risk_hit_rate - normal_hit_rate) >= 0.1"
+        low: "risk_hit_rate < 0.3 OR normal_baseline_status=observed_negative"
+        unevaluable: "normal_baseline_status in [unobserved_missing, insufficient_sample]"
+
+    semantic_clarity:
+      type: enum
+      required: true
+      description: "字段语义清晰度：能否解释该字段值的业务含义"
+      values: [high, medium, low, unknown]
+      rules:
+        high: "字段名和值均可映射到已知业务概念"
+        medium: "字段名可映射但值含义不明确"
+        low: "字段名无法映射到已知业务概念"
+        unknown: "is_unknown_field=true 或 needs_field_dictionary_review=true"
+
+    leakage_risk:
+      type: enum
+      required: true
+      description: "该候选是否属于结果泄露字段（risk decision / policy hit / enforcement label）"
+      values: [none, possible, confirmed]
+      rules:
+        confirmed: "field 属于 risk_decision / policy_code / event_type / enforcement_result / action_result 等"
+        possible: "field 可能受前置处置或策略影响"
+        none: "field 属于客观观测字段（设备、网络、行为、内容、时间等）"
+
+    identifier_risk:
+      type: enum
+      required: true
+      description: "该候选是否属于 ID/锚点字段（UUID-like, device token, trace id, xm1/xm3 等）"
+      values: [none, possible, confirmed]
+      rules:
+        confirmed: "field 属于 did / device_id / xm1 / xm3 / trace_id / session_id / token 类"
+        possible: "field 可能是唯一标识或准唯一标识"
+        none: "field 属于可复用属性字段（机型、版本、地区、枚举等）"
+
+    # L4 决策
+    l4_decision:
+      type: enum
+      required: true
+      description: "L4 验证后的候选分层决策"
+      values:
+        strong_single_candidate:
+          meaning: "强单点候选：统计区分性强、语义清晰、非泄露非 ID"
+          preconditions:
+            - "statistical_strength = high"
+            - "semantic_clarity in [high, medium]"
+            - "leakage_risk = none"
+            - "identifier_risk = none"
+            - "normal_baseline_status in [observed_positive]"
+          output_note: "可进入 L5 评估；标注 normal 对比强度和推荐验证方式"
+
+        weak_single_candidate:
+          meaning: "弱候选：有一定区分性但强度或语义不足"
+          preconditions:
+            - "statistical_strength = medium"
+            - "leakage_risk = none"
+            - "identifier_risk = none"
+          output_note: "可进入 L5 但需要组合或补证才能提升"
+
+        semantic_unknown_but_strong_statistical_candidate:
+          meaning: "语义不清但统计强候选：字段含义不懂但 risk-normal 区分明显"
+          preconditions:
+            - "statistical_strength in [high, medium]"
+            - "semantic_clarity in [low, unknown]"
+            - "leakage_risk = none"
+            - "identifier_risk = none"
+          output_note: "必须标注 semantic_clarity=low/unknown，不允许硬编字段含义；优先做字段字典补查"
+
+        normal_unobserved_need_baseline:
+          meaning: "normal 未观测待补证：risk 侧有命中但 normal 侧无 baseline"
+          preconditions:
+            - "normal_baseline_status in [unobserved_missing, insufficient_sample]"
+          output_note: "不输出 high confidence；标注 baseline_gap；建议补建 normal baseline 后重验证"
+
+        result_signal_not_feature:
+          meaning: "结果信号非特征：区分性强但属于处置/策略/标签结果"
+          preconditions:
+            - "leakage_risk in [possible, confirmed]"
+          output_note: "action=deny / policy_hit / risk_label 即使区分性强也只能标 result_signal，不成为 primary feature"
+
+        identifier_anchor_not_feature:
+          meaning: "ID/锚点非特征：值不重叠但因为是唯一标识"
+          preconditions:
+            - "identifier_risk in [possible, confirmed]"
+          output_note: "UUID-like / xm1 / xm3 / device_token 不得仅因值不重叠成为强风险特征；除非有额外证据证明生成模式异常"
+
+        reject_or_hold:
+          meaning: "剔除或观察：区分性弱、normal 侧已观测且常见、或 baseline 完全缺失且 risk 侧样本不足"
+          preconditions:
+            - "statistical_strength = low AND normal_baseline_status = observed_negative"
+            - "OR risk_observed_count < 3"
+          output_note: "不建议进入 L5；可保留为观察项但不占用候选池"
+
+    # 补证与下一步
+    missing_evidence:
+      type: list[string]
+      required: true
+      description: "当前 card 仍缺的证据或数据"
+
+    recommended_next_action:
+      type: string
+      required: true
+      description: "推荐的下一步动作"
+
+    # 元信息
+    confidence:
+      type: enum
+      required: true
+      values: [high, medium, low]
+      description: "当前 card 结论的可信度；normal_observed_count=0 时必须标 low"
+
+    not_final_conclusion:
+      type: boolean
+      required: true
+      description: "始终为 true；L4 不是最终风险结论"
+
+    candidate_type_hint:
+      type: string
+      required: false
+      description: "预留字段，后续 L5 使用；本轮不填写。未来填写 exact_value 或 structure"
+
+    baseline_scope:
+      type: string
+      required: true
+      description: "当前 baseline 的 scope，如 population_baseline"
+
+    baseline_caveat:
+      type: string
+      required: true
+      description: "baseline 使用注意事项，来自 normal_baseline consumer contract"
+
+  # ---- L4 边界规则 ----
+  l4_boundary_rules:
+    - "L4 不做组合策略：只输出单点候选验证，不输出 structure candidate"
+    - "L4 不做 unpredictability-anom：不可预测性组合属于 L5"
+    - "L4 不做历史回扫：回扫属于 L6"
+    - "L4 不做举一反三：举一反三属于 L6-A"
+    - "L4 不做策略推荐：策略推荐属于 L6-B"
+    - "normal_observed_count=0 的候选不得输出 high confidence"
+    - "action=deny / policy_hit / risk_label 不得成为 primary feature"
+    - "UUID-like / xm1 / xm3 不得仅因值不重叠成为强风险特征"
+    - "语义不清但统计强的候选必须标 semantic_clarity=low/unknown，不允许硬编字段含义"
+    - "normal baseline 是 L4 的外部资产，不是 L5 主线"
+    - "L4 输出的候选进入 L5 评估层，L5 才做 exact-value / structure 分型"

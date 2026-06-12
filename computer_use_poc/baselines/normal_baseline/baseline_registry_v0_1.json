@@ -1,0 +1,39 @@
+{
+  "registry_version": "baseline_registry_v0_1",
+  "notes": "P0 action-level registry for routing L3/L4 candidates into baseline_supported or discovery_only. This is static local config, not runtime baseline update.",
+  "baseline_actions": [
+    {
+      "action_name": "raw_data",
+      "baseline_available": true,
+      "baseline_type": "offline_static_reference",
+      "field_source": "weapon_android",
+      "field_path_prefixes": ["weapon_android.raw_data.", "weapon_android.weapon_one_risk"],
+      "normal_count": 1000,
+      "supports_value_distribution": true,
+      "supports_numeric_bucket": true,
+      "baseline_version": "v1"
+    },
+    {
+      "action_name": "login",
+      "baseline_available": true,
+      "baseline_type": "offline_static_reference",
+      "field_source": "infra_user_action_log",
+      "field_path_prefixes": ["infra_user_action_log."],
+      "normal_count": 1000,
+      "supports_value_distribution": true,
+      "supports_numeric_bucket": true,
+      "baseline_version": "v1"
+    },
+    {
+      "action_name": "passport",
+      "baseline_available": true,
+      "baseline_type": "offline_static_reference",
+      "field_source": "passport_action_log",
+      "field_path_prefixes": ["passport_action_log."],
+      "normal_count": 1000,
+      "supports_value_distribution": true,
+      "supports_numeric_bucket": true,
+      "baseline_version": "v1"
+    }
+  ]
+}

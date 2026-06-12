@@ -5,6 +5,9 @@ Primary mode: batch enrich (L3 candidates → enriched candidates)
 Debug mode: single-point lookup (one source_name + field_path + field_value)
 
 Output never contains: risk_judgement, feature_candidate, candidate_feature_decision
+
+v0.1.4: canonical field_path normalization moved BEFORE baseline lookup.
+This lets the enricher use canonical profiler paths instead of G-R9 flat paths.
 """
 
 import argparse
@@ -13,7 +16,31 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
+ALIGNMENT_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "realtime_offline_field_alignment")
+)
+if ALIGNMENT_DIR not in sys.path:
+    sys.path.insert(0, ALIGNMENT_DIR)
+
+from field_alignment_resolver import resolve_field, resolve_source  # noqa: E402
+
 FORBIDDEN_OUTPUT_KEYS = {"risk_judgement", "feature_candidate", "candidate_feature_decision"}
+
+# ---- Canonical field/source normalization (v0.1.4) ----
+# Normalization now delegates to realtime_offline_field_alignment.
+# Do not add local FIELD_ALIAS_MAP / SOURCE_ALIAS_MAP here.
+
+
+def normalize_field_path(field_path: str, source_name: str = "") -> str:
+    """Normalize field_path to canonical profiler path before baseline lookup."""
+    return resolve_field(source_name, field_path).get("canonical_field_path", field_path)
+
+
+def infer_source_name(field_path: str, provided_source: str = "") -> str:
+    """Infer canonical source_name from canonical field_path or preserve provided source."""
+    if provided_source:
+        return resolve_source(provided_source).get("canonical_source", provided_source)
+    return resolve_field("", field_path).get("canonical_source", "")
 
 # ---- Index builders ----
 
@@ -34,11 +61,31 @@ def build_discrete_distribution_index(discrete: List[dict]) -> dict:
         key = (e.get("source_name", ""), e.get("field_path", ""))
         # Build value index from top_values
         value_idx = {}
+        normalized_value_idx = {}
         for tv in e.get("top_values", []):
             v = str(tv.get("value", ""))
             value_idx[v] = tv
+            normalized = canonical_value_key(tv.get("value", ""))
+            if normalized:
+                existing = normalized_value_idx.get(normalized)
+                if existing is None:
+                    normalized_value_idx[normalized] = dict(tv)
+                else:
+                    # Multiple raw values can be equivalent after canonicalization
+                    # (for example 0 and "0"). Aggregate conservatively.
+                    merged = dict(existing)
+                    merged["count"] = (merged.get("count") or 0) + (tv.get("count") or 0)
+                    merged["ratio"] = (merged.get("ratio") or 0.0) + (tv.get("ratio") or 0.0)
+                    ranks = [r for r in (merged.get("rank"), tv.get("rank")) if r is not None]
+                    merged["rank"] = min(ranks) if ranks else None
+                    merged.setdefault("raw_values", [])
+                    if "raw_values" not in merged:
+                        merged["raw_values"] = [existing.get("value")]
+                    merged["raw_values"].append(tv.get("value"))
+                    normalized_value_idx[normalized] = merged
         entry = dict(e)
         entry["_value_index"] = value_idx
+        entry["_normalized_value_index"] = normalized_value_idx
         idx[key] = entry
     return idx
 
@@ -84,6 +131,79 @@ def _compute_recommended_l4_use(normal_status: str, high_cardinality: bool) -> s
     return recs.get(normal_status, "no_recommendation")
 
 
+def canonical_value_key(value: Any) -> str:
+    """Return a comparable key for normal/risk value lookup.
+
+    This only normalizes representation differences such as 0 vs "0" and
+    false vs "false". It does not encode detector semantics.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    raw = str(value).strip()
+    lower = raw.lower()
+    if lower in {"false", "f"}:
+        return "0"
+    if lower in {"true", "t"}:
+        return "1"
+    if lower in {"0", "0.0"}:
+        return "0"
+    if lower in {"1", "1.0"}:
+        return "1"
+    return raw
+
+
+def _is_boolish_value(value: Any) -> bool:
+    return canonical_value_key(value) in {"0", "1"} and str(value).strip().lower() in {
+        "0", "1", "0.0", "1.0", "true", "false", "t", "f"
+    }
+
+
+def is_low_cardinality_value_candidate(candidate: dict, dd_entry: Optional[dict]) -> bool:
+    """Return whether this candidate should be treated as low-cardinality.
+
+    This is a distribution-shape check, not a business semantic judgement.
+    """
+    value = candidate.get("field_value")
+    if value in (None, ""):
+        value = candidate.get("field_value_or_pattern")
+
+    distinct = None
+    if dd_entry is not None:
+        distinct = dd_entry.get("distinct_value_count")
+        if distinct is None:
+            distinct = len(dd_entry.get("top_values", []))
+        try:
+            distinct = int(distinct)
+        except (TypeError, ValueError):
+            distinct = None
+
+    if _is_boolish_value(value):
+        # Avoid treating every numeric "1" as binary if the normal field has
+        # a broad numeric distribution.
+        return distinct is None or distinct <= 5
+
+    if distinct is not None and distinct <= 5:
+        return True
+
+    return False
+
+
+def _mark_value_distribution_incomplete(result: dict, candidate: dict, dd_entry: dict, normalized_value_key: str) -> None:
+    result["normal_value_rank"] = None
+    result["normal_value_count"] = None
+    result["normal_value_ratio"] = None
+    result["normal_value_lookup_status"] = "normal_value_distribution_incomplete"
+    result["normal_value_distribution_reliable"] = False
+    result["normal_value_lookup_note"] = (
+        "high_coverage_low_cardinality_field_value_missing_from_top_distribution; "
+        "do_not_treat_missing_lookup_as_normal_hit_rate_zero"
+    )
+    result["normalized_value_key"] = normalized_value_key
+    result["raw_value"] = candidate.get("field_value", candidate.get("field_value_or_pattern"))
+
+
 def enrich_one_candidate(
     candidate: dict,
     le_index: dict,
@@ -94,14 +214,31 @@ def enrich_one_candidate(
     """Enrich a single L3 candidate with normal baseline context.
 
     Preserves all original candidate fields and appends baseline fields.
+
+    v0.1.4: canonical field_path normalization happens HERE, before baseline lookup.
     """
     result = dict(candidate)  # copy original fields
 
-    source_name = candidate.get("source_name", "")
-    field_path = candidate.get("field_path", "")
-    field_value = str(candidate.get("field_value", ""))
+    raw_source_name = candidate.get("source_name", "")
+    raw_field_path = candidate.get("field_path", "")
+    raw_candidate_value = candidate.get("field_value")
+    if raw_candidate_value in (None, ""):
+        raw_candidate_value = candidate.get("field_value_or_pattern", "")
+    field_value = str(raw_candidate_value)
+    normalized_value_key = canonical_value_key(raw_candidate_value)
 
-    key = (source_name, field_path)
+    # v0.1.4: normalize BEFORE baseline lookup
+    field_path = normalize_field_path(raw_field_path, raw_source_name)
+    source_name = infer_source_name(field_path, raw_source_name)
+
+    # Preserve original for audit/debug and expose canonical for downstream consumers.
+    result["original_source_name"] = raw_source_name if raw_source_name != source_name else None
+    result["original_field_path"] = raw_field_path if raw_field_path != field_path else None
+    result["source_name"] = source_name or raw_source_name
+    result["field_path"] = field_path
+    result["canonical_lookup_applied"] = (raw_field_path != field_path) or (raw_source_name != (source_name or raw_source_name))
+
+    key = (result["source_name"], result["field_path"])
 
     # Check high cardinality first
     hc_entry = hc_index.get(key)
@@ -122,6 +259,11 @@ def enrich_one_candidate(
         result["normal_value_rank"] = None
         result["normal_value_count"] = None
         result["normal_value_ratio"] = None
+        result["normal_value_lookup_status"] = "field_unobserved"
+        result["normal_value_distribution_reliable"] = False
+        result["normal_value_lookup_note"] = "field not observed in normal baseline"
+        result["raw_value"] = raw_candidate_value
+        result["normalized_value_key"] = normalized_value_key
         result["normal_top1_ratio"] = None
         result["normal_top3_ratio"] = None
         result["high_cardinality"] = False
@@ -148,6 +290,11 @@ def enrich_one_candidate(
         result["normal_value_rank"] = None
         result["normal_value_count"] = None
         result["normal_value_ratio"] = None
+        result["normal_value_lookup_status"] = "high_cardinality_skipped"
+        result["normal_value_distribution_reliable"] = False
+        result["normal_value_lookup_note"] = "high cardinality field; value distribution skipped"
+        result["raw_value"] = raw_candidate_value
+        result["normalized_value_key"] = normalized_value_key
         result["normal_top1_ratio"] = None
         result["normal_top3_ratio"] = None
         # Add HC-specific fields
@@ -174,18 +321,44 @@ def enrich_one_candidate(
         result["normal_top3_ratio"] = None
 
     # Value-level lookup from discrete_field_distribution
+    result["raw_value"] = raw_candidate_value
+    result["normalized_value_key"] = normalized_value_key
+    result["normal_value_distribution_reliable"] = False
+    result["normal_value_lookup_note"] = ""
+
     if dd_entry is not None and field_value:
         value_idx = dd_entry.get("_value_index", {})
+        normalized_value_idx = dd_entry.get("_normalized_value_index", {})
         value_hit = value_idx.get(field_value)
+        if value_hit is None and normalized_value_key:
+            value_hit = normalized_value_idx.get(normalized_value_key)
         if value_hit is not None:
             result["normal_value_rank"] = value_hit.get("rank")
             result["normal_value_count"] = value_hit.get("count")
             result["normal_value_ratio"] = value_hit.get("ratio")
+            result["normal_value_lookup_status"] = "value_matched"
+            result["normal_value_distribution_reliable"] = True
+            result["normal_value_lookup_note"] = "matched by canonical value key" if value_idx.get(field_value) is None else "matched by raw value"
         else:
             # Value not in top_values
-            result["normal_value_rank"] = None
-            result["normal_value_count"] = 0
-            result["normal_value_ratio"] = 0.0
+            coverage = dd_entry.get("coverage_ratio")
+            try:
+                coverage = float(coverage)
+            except (TypeError, ValueError):
+                coverage = None
+            if (
+                coverage is not None
+                and coverage >= 0.8
+                and is_low_cardinality_value_candidate(candidate, dd_entry)
+            ):
+                _mark_value_distribution_incomplete(result, candidate, dd_entry, normalized_value_key)
+            else:
+                result["normal_value_rank"] = None
+                result["normal_value_count"] = 0
+                result["normal_value_ratio"] = 0.0
+                result["normal_value_lookup_status"] = "value_not_found_in_top"
+                result["normal_value_distribution_reliable"] = False
+                result["normal_value_lookup_note"] = "value not found in top distribution; top distribution may be incomplete"
         # Fill covered_count from dd if le didn't have it
         if result["normal_covered_count"] is None:
             result["normal_covered_count"] = dd_entry.get("covered_entity_count")
@@ -199,6 +372,9 @@ def enrich_one_candidate(
         result["normal_value_rank"] = None
         result["normal_value_count"] = None
         result["normal_value_ratio"] = None
+        result["normal_value_lookup_status"] = "field_matched_but_value_not_evaluated"
+        result["normal_value_distribution_reliable"] = False
+        result["normal_value_lookup_note"] = "field matched but candidate value was not evaluated"
 
     result["baseline_caveat"] = _compute_baseline_caveat(
         result.get("normal_status", ""), False)
@@ -262,6 +438,8 @@ def batch_enrich(
         "sample_size_level": meta.get("sample_size_level"),
         "not_login_aue_specific": meta.get("not_login_aue_specific"),
         "rule_source": meta.get("rule_source"),
+        "canonical_lookup_enabled": True,
+        "canonical_lookup_applied_count": sum(1 for e in enriched if e.get("canonical_lookup_applied")),
         "forbidden_keys_checked": sorted(list(FORBIDDEN_OUTPUT_KEYS)),
     }
 

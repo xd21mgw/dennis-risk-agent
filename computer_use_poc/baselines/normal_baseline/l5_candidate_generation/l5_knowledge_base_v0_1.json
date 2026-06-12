@@ -1,0 +1,93 @@
+{
+  "field_pair_prior_config": [
+    {
+      "anchor_field": "ip24",
+      "target_field": "device_model",
+      "prior": "normally_weak_related",
+      "reason": "同一 IP 段下正常不应高度绑定同一具体机型"
+    },
+    {
+      "anchor_field": "ip24",
+      "target_field": "brand",
+      "prior": "normally_weak_related",
+      "reason": "同一 IP 段下正常不应高度绑定单一品牌"
+    },
+    {
+      "anchor_field": "device_model",
+      "target_field": "brand",
+      "prior": "naturally_related",
+      "reason": "机型天然决定品牌"
+    }
+  ],
+  "natural_determination_map": [
+    {
+      "from_field": "device_model",
+      "to_field": "brand",
+      "relation": "determines",
+      "action": "skip_as_trivial"
+    },
+    {
+      "from_field": "device_model",
+      "to_field": "manufacturer",
+      "relation": "determines",
+      "action": "skip_as_trivial"
+    },
+    {
+      "from_field": "os_version",
+      "to_field": "sdk_level",
+      "relation": "partially_determines",
+      "action": "guard_uncertain"
+    },
+    {
+      "from_field": "cpu_arch",
+      "to_field": "abi",
+      "relation": "strongly_related",
+      "action": "guard_uncertain"
+    }
+  ],
+  "value_granularity_rules": {
+    "coarse_values": ["*", "any", "all", "unknown", "null", "none", ""],
+    "too_fine_field_tokens": ["ip", "device_id", "did", "uuid", "token"],
+    "too_fine_min_support": 3
+  },
+  "global_thresholds": {
+    "min_support_samples": 3,
+    "min_pair_conversion_rate": 0.7,
+    "min_path_conversion_rate": 0.6,
+    "max_path_length": 4
+  },
+  "top_k_selection": {
+    "max_l6_tasks": 100,
+    "per_anchor_max_tasks": 10,
+    "per_field_pair_max_tasks": 20,
+    "include_uncertain_prior_limit": 20,
+    "near_duplicate_jaccard_threshold": 0.85,
+    "min_pair_score": 35.0,
+    "max_path_tasks": 20
+  },
+  "threshold_overrides": {
+    "ip24": {
+      "min_pair_conversion_rate": 0.65,
+      "min_path_conversion_rate": 0.55
+    },
+    "device_model": {
+      "min_pair_conversion_rate": 0.85,
+      "min_path_conversion_rate": 0.75
+    },
+    "brand": {
+      "min_pair_conversion_rate": 0.9,
+      "min_path_conversion_rate": 0.8
+    }
+  },
+  "llm_judgement_prompt_contract": {
+    "enabled": false,
+    "output_schema": {
+      "anchor_field": "string",
+      "target_field": "string",
+      "prior": "naturally_related|normally_strong_related|normally_weak_related|normally_unrelated|uncertain",
+      "confidence": "low|medium|high",
+      "reason": "string",
+      "judgement_source": "llm"
+    }
+  }
+}
