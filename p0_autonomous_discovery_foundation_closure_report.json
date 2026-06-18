@@ -1,0 +1,394 @@
+{
+  "schema_version": "p0_autonomous_discovery_foundation_closure_report_v1",
+  "report_scope": {
+    "platform_access": false,
+    "hive_or_dataagent": false,
+    "git_commit": false,
+    "release_dist_full_runtime_refresh": false,
+    "new_candidate_discovery_run": false,
+    "baseline_l6_hive_replay": false,
+    "verified_strategy_claim": false
+  },
+  "current_final_status": {
+    "p0_foundation_closed": true,
+    "candidate_replay_reproducible": true,
+    "rule_semantics_aligned": true,
+    "provenance_traceable": true,
+    "wave4_wave5_autonomous_rerun_pass": true,
+    "leakage_audit_pass": true,
+    "holdout_wave1_3_no_false_positive_after_miner_refactor": true,
+    "broader_holdout_protocol_ready": true,
+    "full_autonomous_not_proven": true
+  },
+  "closed_capabilities": [
+    {
+      "capability": "raw diff / parsed inventory / container coverage / schema guard",
+      "status": "closed",
+      "evidence": "P0-1..P0-4 artifacts generated with raw diff, recursive parsed inventory, container parser coverage matrix, and schema/noise guard report."
+    },
+    {
+      "capability": "Weapon deep fields inventory coverage",
+      "status": "closed",
+      "evidence": "must_inventory_missing=0, weapon_originalLog_missing=0, weaponDecodeHeader_missing=0, user_behavior_missing=0 on closure smoke."
+    },
+    {
+      "capability": "enabledAccessibilityServices parsing",
+      "status": "closed",
+      "evidence": "String service-list parsing supports enabledAccessibilityServices; holdout smoke shows parse_success > 0 across available waves."
+    },
+    {
+      "capability": "appList handling",
+      "status": "closed_as_data_gap",
+      "evidence": "appList aliases checked; current raw bundles show raw_absent, so appList is DATA_GAP rather than parser failure."
+    },
+    {
+      "capability": "candidate replay provenance",
+      "status": "closed",
+      "evidence": "P0-5b has 14 candidates, replay_pass=13, replay_partial=1, replay_failed=0."
+    },
+    {
+      "capability": "candidate taxonomy cleanup",
+      "status": "closed",
+      "evidence": "P0-5b split/renamed account mutation, network cluster, and profile-visit buckets; rule semantics pass for all 14 candidates."
+    },
+    {
+      "capability": "discovery provenance",
+      "status": "closed",
+      "evidence": "P0-6 labels original/current source; autonomous_count=0 for pre-P0-7 cleaned set, preventing targeted/taxonomy candidates from being counted as autonomous."
+    },
+    {
+      "capability": "network miner semantic role guard",
+      "status": "closed",
+      "evidence": "P0-7c removed wave1 false network candidate; false_or_noisy 1 -> 0; wave4/wave5 network candidates still replay."
+    }
+  ],
+  "not_yet_proven": [
+    "full autonomous generalization",
+    "new positive holdout recall",
+    "strict device_id join",
+    "baseline / L6 / Hive replay",
+    "verified strategy readiness"
+  ],
+  "key_metrics": {
+    "p0_foundation_smoke": {
+      "wave_4": {
+        "raw_total_fields": 192276,
+        "normalized_inventory_seen_fields": 172302,
+        "normalized_missing_fields": 19974,
+        "true_missing_fields": 127,
+        "must_inventory_missing_count": 0,
+        "weapon_originalLog_missing_count": 0,
+        "weaponDecodeHeader_missing_count": 0,
+        "user_behavior_missing_count": 0,
+        "parsed_success_rate": 0.999,
+        "container_success_rate": 0.9926,
+        "guarded_noise_count": 4402,
+        "report_only_count": 5475
+      },
+      "wave_5": {
+        "raw_total_fields": 163408,
+        "normalized_inventory_seen_fields": 148921,
+        "normalized_missing_fields": 14487,
+        "true_missing_fields": 180,
+        "must_inventory_missing_count": 0,
+        "weapon_originalLog_missing_count": 0,
+        "weaponDecodeHeader_missing_count": 0,
+        "user_behavior_missing_count": 0,
+        "parsed_success_rate": 0.9988,
+        "container_success_rate": 0.9953,
+        "guarded_noise_count": 3656,
+        "report_only_count": 4548
+      }
+    },
+    "p0_5b_candidate_replay": {
+      "candidate_count": 14,
+      "replay_pass_count": 13,
+      "replay_partial_count": 1,
+      "replay_failed_count": 0,
+      "rule_semantics_pass_count": 14,
+      "candidates": [
+        {
+          "wave_id": "wave_4",
+          "candidate_name": "account_mutation_chain",
+          "candidate_level": "high_value",
+          "support": 17,
+          "miss": 0,
+          "coverage": 17,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_4",
+          "candidate_name": "reset_password_chain",
+          "candidate_level": "high_value",
+          "support": 16,
+          "miss": 1,
+          "coverage": 17,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_4",
+          "candidate_name": "mobile_rebind_chain",
+          "candidate_level": "high_value",
+          "support": 12,
+          "miss": 5,
+          "coverage": 17,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_4",
+          "candidate_name": "reset_and_rebind_chain",
+          "candidate_level": "high_value",
+          "support": 12,
+          "miss": 5,
+          "coverage": 17,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_4",
+          "candidate_name": "profile_set_modify_mutation_chain",
+          "candidate_level": "high_value",
+          "support": 17,
+          "miss": 0,
+          "coverage": 17,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "weapon_decode_header_runtime_template",
+          "candidate_level": "high_value",
+          "support": 14,
+          "miss": 0,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "profile_visit_low_content_behavior",
+          "candidate_level": "supporting",
+          "support": 12,
+          "miss": 2,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "high_profile_visit_low_content_behavior",
+          "candidate_level": "high_value",
+          "support": 11,
+          "miss": 3,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "extreme_profile_visit_low_content_behavior",
+          "candidate_level": "supporting",
+          "support": 10,
+          "miss": 4,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "low_bootcount_with_track_high_duration",
+          "candidate_level": "supporting",
+          "support": 13,
+          "miss": 1,
+          "coverage": 14,
+          "replay_status": "replay_partial",
+          "lineage_status": "partial_lineage",
+          "readiness": "needs_more_source"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "zenlayer_asn_cluster",
+          "candidate_level": "high_value",
+          "support": 14,
+          "miss": 0,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "hk_location_supporting",
+          "candidate_level": "supporting",
+          "support": 13,
+          "miss": 1,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "idc_network_supporting",
+          "candidate_level": "supporting",
+          "support": 11,
+          "miss": 3,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        },
+        {
+          "wave_id": "wave_5",
+          "candidate_name": "network_environment_cluster",
+          "candidate_level": "high_value",
+          "support": 13,
+          "miss": 1,
+          "coverage": 14,
+          "replay_status": "replay_pass",
+          "lineage_status": "user_level",
+          "readiness": "needs_baseline"
+        }
+      ]
+    },
+    "p0_6_provenance_counts": {
+      "candidate_count": 14,
+      "autonomous_count": 0,
+      "targeted_count": 3,
+      "taxonomy_cleanup_derived_count": 11,
+      "unknown_count": 0,
+      "current_candidate_source_counts": {
+        "gap_focused_targeted": 1,
+        "taxonomy_cleanup_derived": 11,
+        "user_challenge_regression": 2
+      },
+      "original_discovery_source_counts": {
+        "cold_start_autonomous": 12,
+        "gap_focused_targeted": 1,
+        "user_challenge_regression": 1
+      }
+    },
+    "p0_7_wave4_wave5_autonomous_rerun": {
+      "autonomous_candidate_count": 14,
+      "autonomous_recall_against_cleaned_candidates": 1.0,
+      "matched_to_cleaned_candidate_count": 14,
+      "missed_cleaned_candidate_count": 0,
+      "new_candidate_count": 0,
+      "replay_pass_count": 13,
+      "replay_partial_count": 1,
+      "replay_failed_count": 0,
+      "schema_noise_violation_count": 0,
+      "targeted_leakage_detected": false,
+      "can_claim_full_autonomous": false
+    },
+    "p0_7b_holdout_wave1_3_after_p0_7c": {
+      "p0_7b_holdout_pass": false,
+      "holdout_candidate_count": 0,
+      "replay_pass_count": 0,
+      "false_or_noisy_candidate_count": 0,
+      "schema_noise_violation_count": 0,
+      "wave4_wave5_pattern_overfit_count": 0,
+      "overfit_risk_level": "low",
+      "foundation_gap_waves": [
+        "wave_1"
+      ],
+      "next_recommended_step": "broader_new_wave_holdout"
+    },
+    "p0_7c_network_miner_refactor": {
+      "p0_7c_network_miner_refactor_pass": true,
+      "wave1_false_network_candidate_removed": true,
+      "false_or_noisy_candidate_count_before": 1,
+      "false_or_noisy_candidate_count_after": 0,
+      "overfit_risk_level_before": "high",
+      "overfit_risk_level_after": "low",
+      "wave4_wave5_network_candidates_still_replay": true,
+      "schema_noise_violation_count": 0
+    },
+    "broader_holdout_protocol": {
+      "can_run_broader_holdout_now": false,
+      "expected_oracle_needed": true,
+      "risk_if_only_using_wave1_3": "Only restraint/noise suppression can be evaluated; positive autonomous recall cannot be measured.",
+      "next_action": "wait_for_new_positive_holdout"
+    }
+  },
+  "why_full_autonomous_cannot_continue_now": [
+    "new positive_holdout raw bundle is missing",
+    "hidden oracle / expected pattern is missing",
+    "wave1~wave3 can only validate restraint/noise suppression, not positive recall",
+    "baseline / L6 / Hive replay is not run",
+    "low_bootcount_with_track_high_duration remains partial_lineage because strict device_id join is not implemented"
+  ],
+  "next_positive_holdout_execution_entry": [
+    "generate P0 foundation artifacts",
+    "run autonomous cold-start discovery with only raw/parsed/schema facts",
+    "run replay provenance",
+    "run discovery provenance",
+    "run hidden oracle final eval",
+    "cleaned candidate set may be used only in final eval, never as discovery input"
+  ],
+  "file_inventory_recommendations": {
+    "retain_as_foundation_code": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_foundation_inventory.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_foundation_quality_gate.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/candidate_replay_provenance.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/candidate_discovery_provenance.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_7_autonomous_cold_start_rerun.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_foundation_inventory.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_foundation_quality_gate.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_candidate_replay_provenance.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_candidate_discovery_provenance.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_7_autonomous_cold_start_rerun.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_network_miner_generalization.py"
+    ],
+    "retain_as_validation_or_audit_tools": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_7a_leakage_overfit_audit.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_7b_holdout_wave_rerun.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/p0_7c_miner_generalization_refactor_report.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_7a_leakage_overfit_audit.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_7b_holdout_wave_rerun.py"
+    ],
+    "report_or_output_only": [
+      "challenge_registry.md",
+      "challenge_regression_coverage_audit.md",
+      "broader_new_wave_holdout_protocol.md",
+      "broader_new_wave_holdout_protocol.json",
+      "p0_autonomous_discovery_foundation_closure_report.md",
+      "p0_autonomous_discovery_foundation_closure_report.json",
+      "/private/tmp/dennis_p1_1_p0_foundation_closure/**"
+    ],
+    "future_merge_candidates": [
+      "merge P0-7a leakage audit and P0-7b holdout audit into one reusable autonomous_eval_audit module",
+      "merge P0-7c report builder into holdout eval reporting once positive holdout protocol is exercised",
+      "factor shared markdown/json report writers out of P0 utilities after the protocol stabilizes"
+    ],
+    "should_not_enter_release_dist_full_runtime_now": [
+      "challenge_registry.md",
+      "challenge_regression_coverage_audit.md",
+      "broader_new_wave_holdout_protocol.md",
+      "broader_new_wave_holdout_protocol.json",
+      "p0_autonomous_discovery_foundation_closure_report.md",
+      "p0_autonomous_discovery_foundation_closure_report.json",
+      "P0-7b/P0-7c holdout report outputs",
+      "/private/tmp run artifacts"
+    ]
+  },
+  "final_decision": {
+    "can_stop_current_round": true,
+    "can_claim_wave4_wave5_autonomous_capability": true,
+    "can_claim_full_autonomous": false,
+    "full_autonomous_not_proven": true,
+    "next_trigger": "new_positive_holdout_raw_bundle + hidden_oracle"
+  }
+}

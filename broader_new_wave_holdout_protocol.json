@@ -1,0 +1,283 @@
+{
+  "schema_version": "broader_new_wave_holdout_protocol_v1",
+  "boundary": {
+    "platform_access": false,
+    "hive_or_dataagent": false,
+    "git_commit": false,
+    "release_dist_full_runtime_refresh": false,
+    "baseline_l6_hive_replay": false,
+    "verified_strategy_claim": false,
+    "cleaned_candidates_as_discovery_input": false,
+    "force_candidate_generation": false,
+    "can_claim_full_autonomous_after_protocol_only": false
+  },
+  "purpose": "Validate whether P1.1 has cross-wave autonomous discovery capability with separated positive, weak/ambiguous, and negative/noise holdouts. This protocol designs the validation only; it does not execute a holdout.",
+  "holdout_layers": [
+    {
+      "holdout_type": "positive_holdout",
+      "purpose": "Measure recall on waves that should contain real high-value discovery candidates.",
+      "expected_output_behavior": "Autonomous miner should propose high-value or strong supporting candidates that replay from raw/parsed facts and match hidden oracle patterns in final eval only.",
+      "example_patterns": [
+        "new account mutation chain samples",
+        "new device toolchain/runtime template samples",
+        "new profile/history lure samples",
+        "new social funnel samples",
+        "new network environment cluster samples"
+      ],
+      "required_inputs": {
+        "wave_id_or_batch_id": "required",
+        "sample_count": "recommended >= 10; minimum 6 if source coverage is rich",
+        "source_coverage": "must include the core sources relevant to the hidden pattern plus at least one independent supporting source",
+        "raw_bundle": "required",
+        "p0_foundation_artifacts": "must be generated before discovery",
+        "human_oracle_or_hidden_expected_pattern": "required",
+        "cleaned_candidate_set_allowed": false,
+        "oracle_allowed_stage": "final_eval_only"
+      },
+      "pass_intent": "Recall and replay quality, not strategy verification."
+    },
+    {
+      "holdout_type": "weak_or_ambiguous_holdout",
+      "purpose": "Measure whether the miner can avoid overclaiming when evidence is partial, sparse, or source-gapped.",
+      "expected_output_behavior": "Candidates, if any, should be supporting, data_gap, scanner_gap, report_only, or replay_partial. High-value output must require strong fact support.",
+      "example_patterns": [
+        "partial source coverage",
+        "single-source weak behavior bucket",
+        "incomplete profile/history lure evidence",
+        "container parse gaps",
+        "user-level lineage without strict device join"
+      ],
+      "required_inputs": {
+        "wave_id_or_batch_id": "required",
+        "sample_count": "recommended >= 8",
+        "source_coverage": "may be incomplete but source gaps must be explicit",
+        "raw_bundle": "required",
+        "p0_foundation_artifacts": "must be generated before discovery",
+        "human_oracle_or_hidden_expected_pattern": "recommended but may be partial",
+        "cleaned_candidate_set_allowed": false,
+        "oracle_allowed_stage": "final_eval_only"
+      },
+      "pass_intent": "Layering and restraint, not recall maximization."
+    },
+    {
+      "holdout_type": "negative_or_noise_holdout",
+      "purpose": "Measure false-positive control against schema, config, pagination, default value, and internal-platform noise.",
+      "expected_output_behavior": "No high-value candidate should be emitted. Noise should be guarded, downgraded to report-only, or suppressed.",
+      "example_patterns": [
+        "schema/top value fixed fields",
+        "sdkConfig/kconf/config keys",
+        "internal serverIp/clientIp/serverInfo/kwaidc.com",
+        "pagination near-full-page",
+        "default avatar/background URL",
+        "fixed logTags color",
+        "response wrapper/http status/body_present/requestId/traceId"
+      ],
+      "required_inputs": {
+        "wave_id_or_batch_id": "required",
+        "sample_count": "recommended >= 8",
+        "source_coverage": "must include representative noisy sources and schema guard artifacts",
+        "raw_bundle": "required",
+        "p0_foundation_artifacts": "must be generated before discovery",
+        "human_oracle_or_hidden_expected_pattern": "required for expected-no-candidate/noise labels",
+        "cleaned_candidate_set_allowed": false,
+        "oracle_allowed_stage": "final_eval_only"
+      },
+      "pass_intent": "False-positive and overfit prevention."
+    }
+  ],
+  "execution_flow": [
+    {
+      "step": 1,
+      "name": "generate_p0_foundation_artifacts",
+      "inputs": [
+        "raw_bundle",
+        "current P0-1..P0-4 scanner"
+      ],
+      "outputs": [
+        "full_action_inventory_raw_diff.json",
+        "parsed_field_inventory.json",
+        "container_parser_coverage_matrix.json",
+        "schema_noise_guard_report.json"
+      ],
+      "quality_gate": [
+        "raw diff true_missing and must_inventory_missing reported",
+        "parsed success rate reported",
+        "container success/data_gap/scanner_gap reported",
+        "schema/noise/report-only guard counts reported"
+      ]
+    },
+    {
+      "step": 2,
+      "name": "autonomous_cold_start_discovery",
+      "allowed_inputs": [
+        "raw diff",
+        "parsed inventory",
+        "container coverage",
+        "schema guard"
+      ],
+      "forbidden_inputs": [
+        "challenge_registry",
+        "challenge_regression_coverage_audit",
+        "gap-focused review output",
+        "cleaned candidates",
+        "user historical challenge checklist",
+        "oracle/expected pattern"
+      ],
+      "outputs": [
+        "candidate proposals",
+        "raw_paths",
+        "parsed_paths",
+        "proposed replay rules",
+        "why_not_schema_commonality",
+        "candidate_level",
+        "confidence"
+      ]
+    },
+    {
+      "step": 3,
+      "name": "replay_provenance",
+      "outputs": [
+        "support_user_count",
+        "miss_user_count",
+        "coverage_user_count",
+        "sample_hits",
+        "sample_misses",
+        "missing_reason_by_user",
+        "source_gap_by_user",
+        "schema_guard_applied",
+        "raw_path",
+        "parsed_path"
+      ]
+    },
+    {
+      "step": 4,
+      "name": "discovery_provenance",
+      "outputs": [
+        "original_discovery_source",
+        "current_candidate_source",
+        "was_user_prompted",
+        "can_count_as_autonomous_discovery",
+        "why_or_why_not_autonomous"
+      ]
+    },
+    {
+      "step": 5,
+      "name": "final_eval_only",
+      "allowed_inputs": [
+        "oracle",
+        "hidden expected pattern",
+        "cleaned candidate set if explicitly designated as eval-only"
+      ],
+      "rules": [
+        "oracle cannot be read before discovery/replay",
+        "cleaned candidate set cannot be used for naming/rules/mining",
+        "final eval cannot rewrite candidate provenance"
+      ]
+    }
+  ],
+  "metrics": {
+    "autonomous_candidate_count": "count of candidates produced before oracle eval",
+    "replay_pass_count": "candidates with replay_pass",
+    "replay_partial_count": "candidates with replay_partial",
+    "replay_failed_count": "candidates with replay_failed",
+    "high_value_count": "candidate_level=high_value",
+    "supporting_count": "candidate_level=supporting",
+    "data_gap_count": "candidate_level=data_gap or explicit data_gap candidates",
+    "report_only_count": "candidate_level=report_only",
+    "false_or_noisy_candidate_count": "candidates flagged false/noisy by audit or oracle",
+    "schema_noise_violation_count": "candidates using schema/noise/report-only fields as high-value evidence",
+    "overfit_pattern_count": "candidates matching known prior pattern names/rules without valid holdout evidence",
+    "oracle_recall": "oracle patterns matched by autonomous candidates / total oracle patterns",
+    "oracle_precision": "true oracle-matched candidates / all autonomous candidates",
+    "negative_holdout_false_positive_rate": "negative holdout high-value false positives / negative holdout samples or batches",
+    "weak_holdout_overclaim_count": "weak/ambiguous candidates incorrectly escalated to high-value",
+    "full_autonomous_confidence_level": "none | low | medium | high"
+  },
+  "pass_criteria": {
+    "positive_holdout_pass": {
+      "oracle_recall_min": 0.6,
+      "core_oracle_pattern_must_hit": true,
+      "replay_failed_count": 0,
+      "schema_noise_violation_count": 0,
+      "forbidden_input_used": false,
+      "note": "Threshold is intentionally below 1.0; multiple positive waves should be used before raising confidence."
+    },
+    "weak_holdout_pass": {
+      "weak_holdout_overclaim_count": 0,
+      "high_value_allowed_only_with_strong_multi_field_support": true,
+      "supporting_data_gap_report_only_layering_required": true,
+      "source_gap_not_treated_as_no_risk": true
+    },
+    "negative_holdout_pass": {
+      "high_value_false_positive_count": 0,
+      "schema_config_internal_noise_candidate_count": 0,
+      "schema_noise_violation_count": 0,
+      "report_only_guard_respected": true
+    },
+    "broader_generalization_pass": {
+      "positive_holdout_pass": true,
+      "weak_holdout_pass": true,
+      "negative_holdout_pass": true,
+      "forbidden_input_leakage": false,
+      "hardcoded_answer_risk_max": "medium",
+      "minimum_distinct_holdout_batches": 3,
+      "minimum_positive_holdout_batches": 1,
+      "minimum_negative_holdout_batches": 1
+    },
+    "confidence_level_rules": {
+      "none": "No positive holdout, or leakage/false-positive blocker exists.",
+      "low": "Negative/weak holdout passes, but no positive holdout recall.",
+      "medium": "At least one positive, one weak, and one negative holdout pass without leakage; no baseline/L6 verification claimed.",
+      "high": "Multiple positive holdouts across method families pass, weak/negative holdouts pass, leakage risk low, and miner hardcoding risk no higher than medium. Still not a verified strategy without baseline/L6."
+    }
+  },
+  "current_material_assessment": {
+    "wave1_to_wave3": {
+      "recommended_holdout_role": [
+        "weak_or_ambiguous_holdout",
+        "negative_or_noise_holdout"
+      ],
+      "reason": "After P0-7c, wave1-wave3 do not produce positive autonomous candidates; they are useful for no-overclaim and noise-suppression checks, not positive recall.",
+      "known_foundation_gap": "wave1 P0-3 container coverage gap remains; must be marked foundation_gap.",
+      "positive_holdout_suitability": "not sufficient"
+    },
+    "need_new_wave_for_positive_holdout": true,
+    "if_no_new_wave": "full_autonomous_not_proven must remain true; only negative/weak restraint can be evaluated."
+  },
+  "recommended_holdout_batches": [
+    {
+      "batch_id": "holdout_negative_noise_wave1_3",
+      "source": "existing wave1-wave3 raw bundles",
+      "holdout_type": "negative_or_noise_holdout",
+      "goal": "Verify P0-7c network miner and schema guards do not emit high-value noise candidates.",
+      "can_run_now": true
+    },
+    {
+      "batch_id": "holdout_weak_ambiguous_wave1_3",
+      "source": "existing wave1-wave3 raw bundles",
+      "holdout_type": "weak_or_ambiguous_holdout",
+      "goal": "Verify no overclaim when no strong autonomous candidate exists and wave1 foundation_gap is present.",
+      "can_run_now": true
+    },
+    {
+      "batch_id": "holdout_positive_new_wave",
+      "source": "new raw bundle with hidden oracle",
+      "holdout_type": "positive_holdout",
+      "goal": "Measure positive recall on a new wave not used for miner cleanup.",
+      "can_run_now": false
+    }
+  ],
+  "final_decision": {
+    "can_run_broader_holdout_now": false,
+    "required_holdout_data": [
+      "at least one new positive_holdout raw bundle",
+      "hidden oracle/expected pattern for positive holdout",
+      "P0 foundation artifacts generated from that bundle",
+      "eval-only oracle file kept inaccessible to discovery/replay"
+    ],
+    "expected_oracle_needed": true,
+    "risk_if_only_using_wave1_3": "Can only prove restraint/noise suppression on weak or negative holdouts; cannot measure positive autonomous recall, so full_autonomous_not_proven remains true.",
+    "can_claim_full_autonomous_after_protocol_only": false,
+    "next_action": "wait_for_new_positive_holdout"
+  }
+}
