@@ -1,0 +1,233 @@
+{
+  "schema_version": "proposer_dependency_closure_plan_v1",
+  "scope": {
+    "mode": "plan_only",
+    "code_changed": false,
+    "files_deleted": false,
+    "git_add": false,
+    "git_commit": false,
+    "platform_accessed": false,
+    "dataagent_called": false,
+    "hive_called": false,
+    "release_dist_full_runtime_refreshed": false,
+    "tracked_l4_l5_runtime_handled": false,
+    "new_risk_discovery_capability_added": false
+  },
+  "goal": "Make llm_commonality_proposer.py a clean proposal-layer module that can later be committed independently from validator/replay/debug/L4/L5 assets.",
+  "current_dependency_audit": [
+    {
+      "helper_name": "load_json",
+      "current_defined_in": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "used_by_proposer_for_what": "Load raw observation input and fixture proposal payloads.",
+      "truly_needed_for_proposal": true,
+      "contains_validator_replay_filter_semantics": false,
+      "suggested_handling": "move_to_lightweight_utils"
+    },
+    {
+      "helper_name": "_coerce_records",
+      "current_defined_in": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "used_by_proposer_for_what": "Normalize input JSON into record list before source grouping.",
+      "truly_needed_for_proposal": true,
+      "contains_validator_replay_filter_semantics": false,
+      "suggested_handling": "move_to_lightweight_utils"
+    },
+    {
+      "helper_name": "_records_from_e2e_contract",
+      "current_defined_in": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "used_by_proposer_for_what": "Indirect helper used by _coerce_records for e2e_risk_observation_input_contract_v0_1.",
+      "truly_needed_for_proposal": true,
+      "contains_validator_replay_filter_semantics": false,
+      "suggested_handling": "move_to_lightweight_utils"
+    },
+    {
+      "helper_name": "_payload_for_record",
+      "current_defined_in": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "used_by_proposer_for_what": "Select record payload body from payload/raw_data/data/snapshot/observation/source_observation.",
+      "truly_needed_for_proposal": true,
+      "contains_validator_replay_filter_semantics": false,
+      "suggested_handling": "move_to_lightweight_utils"
+    },
+    {
+      "helper_name": "_flatten",
+      "current_defined_in": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "used_by_proposer_for_what": "Flatten payload leaves for field path stats and sample values.",
+      "truly_needed_for_proposal": true,
+      "contains_validator_replay_filter_semantics": false,
+      "suggested_handling": "move_to_lightweight_utils"
+    }
+  ],
+  "recommended_boundary": {
+    "proposal_layer_allowed_dependencies": [
+      "raw observation lightweight structural helper",
+      "prompt builder",
+      "semantic lens",
+      "action catalog",
+      "simple value shape helper",
+      "safe preview / redaction helper",
+      "standard library JSON/path/text utilities"
+    ],
+    "proposal_layer_forbidden_dependencies": [
+      "candidate replay",
+      "candidate provenance",
+      "rule semantics cleanup",
+      "source baseline / normal baseline",
+      "L4/L5 ranking or task generation",
+      "challenge regression",
+      "P0-7 autonomous rerun",
+      "validator filtering conclusions",
+      "production/verified strategy logic"
+    ]
+  },
+  "suggested_file_structure": {
+    "new_helper_file": "computer_use_poc/baselines/normal_baseline/l3_extraction/proposal_record_utils.py",
+    "allowed_contents": [
+      "load_json(path)",
+      "coerce_observation_records(data)",
+      "records_from_e2e_contract(data)",
+      "payload_for_record(record)",
+      "flatten_payload(value, prefix='')",
+      "source_key(record) if desired",
+      "value_shape(value) for prompt preview only",
+      "safe_preview(value, max_len=...) with credential-token redaction"
+    ],
+    "forbidden_contents": [
+      "candidate replay",
+      "support/miss recomputation",
+      "high-value judgement",
+      "rule semantics cleanup",
+      "baseline / lift / precision",
+      "verified strategy readiness",
+      "L4/L5 ranking",
+      "challenge regression",
+      "P0-7 rerun logic"
+    ]
+  },
+  "recommended_file_changes": [
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/proposal_record_utils.py",
+      "change_type": "add",
+      "purpose": "Move raw observation helper functions out of commonality_proposal_validator.py."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "change_type": "update_imports_only_plus_helper_renames",
+      "purpose": "Replace commonality_proposal_validator imports with proposal_record_utils imports; preserve proposal-only behavior."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer_minimal.py",
+      "change_type": "add",
+      "purpose": "Add a narrow proposer-only test that avoids debug runner, validator, shadow, code-assisted, L4/L5, platform, Hive, and DataAgent dependencies."
+    }
+  ],
+  "proposer_only_test_plan": {
+    "test_file": "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer_minimal.py",
+    "allowed_imports": [
+      "llm_commonality_proposer.py",
+      "dynamic_prompt_builder.py",
+      "proposal_record_utils.py",
+      "standard library"
+    ],
+    "forbidden_imports": [
+      "dynamic_llm_semantic_discovery_runner.py",
+      "code_assisted_commonality_runner.py",
+      "llm_commonality_shadow_run.py",
+      "commonality_proposal_validator.py",
+      "semantic_feature_schema.py",
+      "candidate_protocol.py",
+      "L4/L5 modules",
+      "runtime runner",
+      "platform clients",
+      "Hive/DataAgent clients"
+    ],
+    "test_cases": [
+      "proposal_record_utils normalizes list/dict/records input into raw records",
+      "proposal_record_utils supports e2e_risk_observation_input_contract_v0_1 without validator import",
+      "build_source_observation_groups groups by source/action, records user IDs, counts field paths, and keeps sample values",
+      "CommonalityProposer(mode='off') returns source groups and no proposal payloads",
+      "CommonalityProposer(mode='fixture') loads fixture proposals, caps payloads, and does not call real LLM",
+      "real_llm_preflight(enable_real_llm=False) returns no-call mock/fixture mode",
+      "dynamic_prompt_builder reads canonical dennis_risk_semantic_lens.md and remaining prompts",
+      "per-action/cross-source prompts do not include oracle-only terms; oracle prompt remains final-eval-only",
+      "static dependency guard verifies minimal proposer path does not import validator/debug/L4/L5 modules"
+    ],
+    "expected_pytest_command": "python3 -m pytest computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer_minimal.py",
+    "optional_py_compile_modules": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/proposal_record_utils.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py"
+    ]
+  },
+  "files_to_keep_out": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py except as source material for moved helpers",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py unless later merged into candidate protocol",
+    "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py",
+    "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py",
+    "tracked modified L4/L5/runtime files"
+  ],
+  "acceptance_criteria": [
+    "llm_commonality_proposer.py no longer imports commonality_proposal_validator.py",
+    "test_llm_commonality_proposer_minimal.py passes independently",
+    "dynamic_prompt_builder.py uses canonical dennis_risk_semantic_lens.md",
+    "remaining prompt dependencies are explicit",
+    "proposer does not import replay/validator/debug/L4/L5 modules",
+    "no platform/Hive/DataAgent/release/dist/full_runtime actions are required",
+    "a narrow dynamic LLM proposer commit preview can be prepared"
+  ],
+  "remaining_prompt_dependencies": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md"
+  ],
+  "risks": [
+    {
+      "risk": "helper_behavior_drift",
+      "detail": "Duplicating helper logic can drift from validator behavior.",
+      "mitigation": "Move helpers to shared proposal_record_utils.py instead of duplicating privately."
+    },
+    {
+      "risk": "contract_support_regression",
+      "detail": "e2e_risk_observation_input_contract_v0_1 support may be accidentally dropped.",
+      "mitigation": "Add fixture test for the contract."
+    },
+    {
+      "risk": "oracle_prompt_leakage",
+      "detail": "oracle_posthoc_evaluation_prompt.md can leak into discovery if misused.",
+      "mitigation": "Test and document final-eval-only boundary."
+    },
+    {
+      "risk": "broad_tests_still_dirty",
+      "detail": "Existing broad tests remain experimental and should not block minimal proposer commit.",
+      "mitigation": "Keep them out of the narrow commit."
+    },
+    {
+      "risk": "real_llm_overclaim",
+      "detail": "Real LLM path remains implemented_not_verified.",
+      "mitigation": "Do not claim real LLM capability until an adapter/client path is executed and evidenced."
+    }
+  ],
+  "final_output": {
+    "can_execute_closure": true,
+    "recommended_file_changes": [
+      "add proposal_record_utils.py",
+      "update llm_commonality_proposer.py imports/usages",
+      "add test_llm_commonality_proposer_minimal.py"
+    ],
+    "files_to_keep_out": [
+      "broad runner",
+      "shadow runner",
+      "code-assisted runner",
+      "broad validator",
+      "semantic schema",
+      "old broad tests",
+      "tracked L4/L5/runtime modifications"
+    ],
+    "tests_to_add_or_update": [
+      "add proposer-only minimal test"
+    ],
+    "next_action": "Implement closure patch in a separate execution turn, then run proposer-only pytest and py_compile, then prepare a narrow commit preview."
+  }
+}

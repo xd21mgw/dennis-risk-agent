@@ -1,0 +1,491 @@
+{
+  "schema_version": "cleanup_dedupe_plan_v1",
+  "generated_at": "2026-06-24T14:25:56",
+  "scope": {
+    "mode": "plan_only",
+    "code_changed": false,
+    "files_deleted": false,
+    "git_add": false,
+    "git_commit": false,
+    "platform_accessed": false,
+    "dataagent_called": false,
+    "hive_called": false,
+    "release_dist_full_runtime_refreshed": false
+  },
+  "overall_judgement": {
+    "dynamic_llm_route_worth_retaining": "yes_as_experimental_proposal_layer_only",
+    "route_boundary": "Keep proposal generation separate from P0 foundation, replay, provenance, rule semantics, parser drift, and profile lure registry. Do not claim runtime real LLM.",
+    "modules_overlapping_committed_P0": [
+      "code_assisted_commonality_runner.py",
+      "commonality_proposal_validator.py",
+      "dynamic_llm_semantic_discovery_runner.py",
+      "llm_commonality_shadow_run.py",
+      "semantic_feature_schema.py"
+    ],
+    "future_L3_agent_brain_assets": [
+      "llm_commonality_proposer.py",
+      "dynamic_prompt_builder.py",
+      "action_catalog_builder.py after catalog consolidation",
+      "dennis_risk_semantic_lens.md as canonical lens",
+      "selected prompt files after leakage review"
+    ],
+    "debug_or_historical_runners": [
+      "dynamic_llm_semantic_discovery_runner.py",
+      "llm_commonality_shadow_run.py",
+      "code_assisted_commonality_runner.py"
+    ]
+  },
+  "file_plan": [
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+      "apparent_purpose": "In-code action catalog, family prompts, and action semantic cards used by dynamic prompt/discovery assembly.",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": "medium: overlaps source/action coverage semantics but not raw inventory implementation",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "merge_into_existing",
+      "reason": "Worth preserving as source/action semantic catalog, but it duplicates prompts/action_family_prompts.yaml and prompts/action_semantic_cards.yaml. Prefer one canonical catalog before commit.",
+      "risk_if_kept": "Medium: parallel source/action catalogs will drift and create contradictory family guidance.",
+      "risk_if_deleted": "Medium: dynamic_prompt_builder and dynamic_llm_semantic_discovery_runner depend on it; deleting requires deleting/refactoring those too.",
+      "next_step": "Keep as canonical candidate only if dynamic LLM route continues; delete duplicate YAML after user confirms canonical location."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+      "apparent_purpose": "Controlled local subprocess runner plus embedded generated discovery script for code-assisted commonality proposal generation.",
+      "depends_on": [
+        "Python subprocess",
+        "local raw observation artifact",
+        "workspace/private tmp path checks"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium: consumes raw/foundation-like artifacts",
+        "candidate replay": "high: produces/recomputes support-like proposal outputs already covered by P0 replay",
+        "candidate provenance": "medium: proposal source attribution partially overlaps provenance",
+        "rule semantics": "high: proposal logic overlaps rule semantics sanity/cleanup",
+        "parser drift": "low",
+        "profile lure registry": "medium: could rediscover lure but not registry-specific"
+      },
+      "suggested_action": "keep_debug_only",
+      "reason": "Do not commit as core. P0 replay/provenance is the authoritative recomputation path; this is only useful as an experimental proposal generator if later pruned.",
+      "risk_if_kept": "High: embedded generated-script runner adds a second discovery/replay path and increases audit burden.",
+      "risk_if_deleted": "Low to medium: loses experimental code-assisted proposal path; no committed P0 capability depends on it.",
+      "next_step": "If dynamic LLM route continues, split reusable safe path validation from generated discovery script; otherwise delete after user confirmation."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "apparent_purpose": "Deterministically validates LLM/commonality proposals, rejects schema/noise, recalculates in-sample support, and emits derived_feature candidates.",
+      "depends_on": [
+        "candidate_protocol.apply_candidate_protocol",
+        "candidate_protocol.commonality_level_for"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium: consumes raw observation records",
+        "candidate replay": "high: support/miss recomputation overlaps P0-5 replay provenance",
+        "candidate provenance": "medium: emits proposal source metadata but not full P0-6 provenance",
+        "rule semantics": "high: proposal type/rule validation overlaps P0-5a/5b semantics cleanup",
+        "parser drift": "low",
+        "profile lure registry": "medium: could validate lure proposals but lacks registry-specific drift gate"
+      },
+      "suggested_action": "merge_into_existing",
+      "reason": "Keep only as LLM proposal pre-validator. Support/miss/rule-semantics should delegate to or align with candidate_replay_provenance rather than creating a parallel replay engine.",
+      "risk_if_kept": "High unless narrowed: duplicate replay/rule validation paths can disagree with P0 candidate replay.",
+      "risk_if_deleted": "Medium: llm_commonality_proposer tests and l3_value_level_candidate_extractor LLM mode depend on it.",
+      "next_step": "Refactor into a thin proposal-shape/noise validator or merge semantics into existing replay/rule modules before commit."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "apparent_purpose": "Detailed Dennis risk semantic lens for P1.1 commonality discovery.",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "medium: semantic boundaries inform rule naming/level but do not implement logic",
+        "parser drift": "low",
+        "profile lure registry": "medium: contains profile/content lure semantics compatible with registry"
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "This is the more complete semantic lens and is likely the canonical long-term doc if dynamic LLM/L3 Agent brain continues.",
+      "risk_if_kept": "Low if canonicalized; medium if duplicate prompt lens remains.",
+      "risk_if_deleted": "Medium: loses detailed semantic boundaries for future L3 Agent brain and prompt route.",
+      "next_step": "Keep this as canonical lens; delete or replace prompts/dennis_risk_semantic_lens.md after confirmation."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+      "apparent_purpose": "Large offline prompt-only semantic discovery runner over raw bundles; builds per-action/family/cross-source outputs and markdown artifacts.",
+      "depends_on": [
+        "action_catalog_builder.py",
+        "dynamic_prompt_builder.py",
+        "semantic_feature_schema.py",
+        "prompts/*.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "high: walks raw bundles and builds discovery facts outside committed P0 foundation",
+        "candidate replay": "medium: creates candidate-like features but not P0 replay provenance",
+        "candidate provenance": "medium: proposal_source exists but not P0-6 provenance standard",
+        "rule semantics": "medium: includes feature validation and oracle eval logic",
+        "parser drift": "medium: has internal parsing/walking but not P1 parser drift report semantics",
+        "profile lure registry": "medium: has profile lure heuristics but does not use committed registry"
+      },
+      "suggested_action": "keep_debug_only",
+      "reason": "Downgrade to debug/historical. P0-7 autonomous rerun is now the trusted foundation-instrumented path; this runner has historical defaults and should not be committed as active capability.",
+      "risk_if_kept": "High: creates a second autonomous discovery pipeline and may be confused with validated P0 foundation rerun.",
+      "risk_if_deleted": "Medium: loses earlier experimental runner and tests; safer after extracting any reusable generic helpers.",
+      "next_step": "Do not commit now. Either delete after user confirmation or refactor into small reusable utilities with no hardcoded default bundles/users."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+      "apparent_purpose": "Builds per-action, family, cross-source, and oracle-eval prompts from prompt templates and action catalog.",
+      "depends_on": [
+        "action_catalog_builder.py",
+        "prompts/base_blind_discovery_prompt.md",
+        "prompts/dennis_risk_semantic_lens.md",
+        "prompts/cross_source_discovery_prompt.md",
+        "prompts/oracle_posthoc_evaluation_prompt.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "medium: prompts mention equivalent path merging but not registry artifact"
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "Useful if dynamic LLM proposer is retained. It is small and can be kept after prompt/lens canonicalization.",
+      "risk_if_kept": "Medium: prompt assets can leak oracle or old-wave specifics unless guarded.",
+      "risk_if_deleted": "Medium: dynamic prompt tests and future prompt route lose assembly helper.",
+      "next_step": "Keep only with a minimal dynamic LLM commit after replacing duplicate prompt lens and confirming oracle prompt is final-eval-only."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "apparent_purpose": "Future proposal layer that prepares source observation groups, supports fixture/summary/deep modes, and has guarded real-LLM preflight.",
+      "depends_on": [
+        "commonality_proposal_validator._coerce_records",
+        "commonality_proposal_validator._flatten",
+        "llm_commonality_proposer_prompt.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium: consumes raw observation groups built from source artifacts",
+        "candidate replay": "medium: proposal generation must not perform authoritative replay",
+        "candidate provenance": "medium: should emit proposal_source but not replace P0-6 provenance",
+        "rule semantics": "medium: proposal types need downstream rule cleanup",
+        "parser drift": "low",
+        "profile lure registry": "low to medium: future proposer can reference registry, but does not now"
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "This is the most defensible future L3 Agent brain component: proposal preparation, not validation/replay. Keep if dynamic LLM route continues, with strict no-real-call boundary by default.",
+      "risk_if_kept": "Medium: real LLM preflight/import urllib increases perception of runtime LLM readiness; must clearly mark implemented_not_verified unless adapter is real and tested.",
+      "risk_if_deleted": "Medium to high: deletes the cleanest proposal-layer entrypoint for future L3 brain work.",
+      "next_step": "Retain for a minimal dynamic LLM proposer commit only after narrowing validator and prompts."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+      "apparent_purpose": "Standalone prompt for LLM-guided commonality proposer.",
+      "depends_on": [
+        "llm_commonality_proposer.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "medium if prompt mentions profile/history lure semantics"
+      },
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Prompt assets should not enter repo until dynamic LLM route, leakage policy, and prompt canonicalization are accepted.",
+      "risk_if_kept": "Medium: prompt drift and leakage risk; can be mistaken for production LLM behavior.",
+      "risk_if_deleted": "Low to medium: proposer can still build source groups; prompt can be recreated after route confirmation.",
+      "next_step": "Keep untracked for now or move into a future prompt package after review; do not commit immediately."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+      "apparent_purpose": "Large offline shadow runner for LLM-guided proposal quality, dedup, retained candidates, L4/L5 visibility, and many markdown reports.",
+      "depends_on": [
+        "code_assisted_commonality_runner.py",
+        "commonality_proposal_validator.py",
+        "l3_l4_candidate_pooling.py",
+        "l3_value_level_candidate_extractor.py",
+        "llm_commonality_proposer.py",
+        "l5 generator indirectly via tests"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium",
+        "candidate replay": "high",
+        "candidate provenance": "high",
+        "rule semantics": "high",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "keep_debug_only",
+      "reason": "Too broad for repo as-is. It duplicates P0 replay/provenance/rule cleanup and mixes proposal generation, quality review, dedup, report writing, and L4/L5 visibility.",
+      "risk_if_kept": "High: becomes a parallel orchestration path and increases maintenance cost significantly.",
+      "risk_if_deleted": "Medium: current test_llm_commonality_proposer imports a few helper/report functions; tests need split before deletion.",
+      "next_step": "Do not commit. If needed, extract only small reusable audit/dedup helpers; otherwise delete after test split/user confirmation."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+      "apparent_purpose": "Schema helpers and hard filters for dynamic semantic discovery features.",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": "medium: shares schema/noise guard intent",
+        "candidate replay": "medium: fields overlap replay readiness/recompute_rule",
+        "candidate provenance": "medium: proposal_source and source fields overlap provenance",
+        "rule semantics": "medium: risk_semantic_type/quality overlaps candidate_level/rule semantics",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "merge_into_existing",
+      "reason": "Potential long-term schema asset, but as a separate schema it duplicates candidate_protocol and committed P0 candidate fields. Merge into existing candidate schema if retained.",
+      "risk_if_kept": "High if separate: two candidate schemas will diverge.",
+      "risk_if_deleted": "Medium: dynamic_llm_semantic_discovery_runner tests depend on it; schema concepts may be useful.",
+      "next_step": "Do not commit standalone. Fold useful fields into candidate_protocol or P0 replay schema."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_family_prompts.yaml",
+      "apparent_purpose": "YAML family guidance for prompt route.",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "medium: contains profile/history lure guidance"
+      },
+      "suggested_action": "delete_now",
+      "reason": "Currently unreferenced by dynamic_prompt_builder and duplicates in-code FAMILY_PROMPTS in action_catalog_builder.py.",
+      "risk_if_kept": "High: duplicate guidance will drift from action_catalog_builder.",
+      "risk_if_deleted": "Low: not currently read by code; can be recreated if external YAML catalog is preferred later.",
+      "next_step": "Delete after user confirms action_catalog_builder.py is canonical."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_semantic_cards.yaml",
+      "apparent_purpose": "YAML action semantic card registry for prompt route.",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": "medium: action/source semantics overlap coverage matrix source_action semantics",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "delete_now",
+      "reason": "Currently unreferenced and duplicates ACTION_CARDS in action_catalog_builder.py.",
+      "risk_if_kept": "High: duplicate action catalog source creates drift.",
+      "risk_if_deleted": "Low: not read by current code; future external catalog can be generated from canonical action catalog if needed.",
+      "next_step": "Delete after user confirms action_catalog_builder.py or another source catalog is canonical."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+      "apparent_purpose": "Base prompt for blind commonality discovery.",
+      "depends_on": [
+        "dynamic_prompt_builder.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium: mentions field inventory/deep parsing already implemented in P0 foundation",
+        "candidate replay": "medium: asks for recalculable candidates but does not implement replay",
+        "candidate provenance": "low",
+        "rule semantics": "medium: contains candidate level/risk family instructions",
+        "parser drift": "medium: mentions containers but not drift report semantics",
+        "profile lure registry": "medium: includes profile-history path merging guidance"
+      },
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Useful prompt asset but should be reviewed for leakage/overfit and updated to reference committed P0 foundation/registry instead of duplicating it.",
+      "risk_if_kept": "Medium: prompt can go stale or reintroduce old-wave hints.",
+      "risk_if_deleted": "Medium: dynamic_prompt_builder tests and future prompt route depend on it.",
+      "next_step": "Keep untracked until dynamic LLM route is explicitly accepted."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+      "apparent_purpose": "Short prompt add-on for cross-source chain proposal.",
+      "depends_on": [
+        "dynamic_prompt_builder.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "medium: chains must later be replayed",
+        "candidate provenance": "medium: source chain provenance overlaps P0-6",
+        "rule semantics": "medium",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Small and potentially useful, but should wait for prompt route and cross-source chain ownership decision.",
+      "risk_if_kept": "Medium: may duplicate P0 cross-source risk chain reporting.",
+      "risk_if_deleted": "Low: easy to recreate.",
+      "next_step": "Defer until dynamic prompt package is accepted."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/dennis_risk_semantic_lens.md",
+      "apparent_purpose": "Short prompt-local Dennis semantic lens.",
+      "depends_on": [
+        "dynamic_prompt_builder.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "medium"
+      },
+      "suggested_action": "delete_now",
+      "reason": "Duplicate of the more complete l3_extraction/dennis_risk_semantic_lens.md. Keep one canonical lens and have dynamic_prompt_builder read it.",
+      "risk_if_kept": "High: two semantic lenses will diverge and confuse prompt behavior.",
+      "risk_if_deleted": "Low: replace prompt builder reference with canonical lens if dynamic route continues.",
+      "next_step": "Delete after user confirms canonical lens path and prompt builder update."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+      "apparent_purpose": "Post-hoc oracle evaluation prompt to be used only after blind discovery.",
+      "depends_on": [
+        "dynamic_prompt_builder.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "low",
+        "candidate replay": "low",
+        "candidate provenance": "medium: final eval should not become discovery provenance",
+        "rule semantics": "low",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Oracle prompt is leakage-sensitive. It should not be committed until final-eval-only guard is formalized.",
+      "risk_if_kept": "High: if accidentally fed into discovery, it contaminates autonomous proof.",
+      "risk_if_deleted": "Low: final eval can use non-prompt oracle protocols already documented.",
+      "next_step": "Defer; if retained, add explicit forbidden-input/leakage guard tests."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py",
+      "apparent_purpose": "Tests action catalog, prompt assembly, semantic schema, and dynamic semantic discovery runner smoke behavior.",
+      "depends_on": [
+        "action_catalog_builder.py",
+        "dynamic_llm_semantic_discovery_runner.py",
+        "dynamic_prompt_builder.py",
+        "semantic_feature_schema.py",
+        "prompts/*.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium: tests older runner behavior, not committed P0-7 path",
+        "candidate replay": "low",
+        "candidate provenance": "low",
+        "rule semantics": "medium",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "keep_debug_only",
+      "reason": "It passes, but validates the historical dynamic runner. Keep only while deciding whether to refactor/delete that runner.",
+      "risk_if_kept": "Medium: can create false confidence in an obsolete runner.",
+      "risk_if_deleted": "Medium: loses coverage for action catalog/prompt helpers unless split into smaller tests.",
+      "next_step": "If deleting dynamic_llm_semantic_discovery_runner.py, split reusable catalog/prompt tests first or delete test with runner."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py",
+      "apparent_purpose": "Broad tests for proposer, validator, code-assisted runner, shadow run, and L3/L4/L5 propagation.",
+      "depends_on": [
+        "llm_commonality_proposer.py",
+        "commonality_proposal_validator.py",
+        "code_assisted_commonality_runner.py",
+        "llm_commonality_shadow_run.py",
+        "tracked candidate_protocol/L4/L5 modifications"
+      ],
+      "overlaps_with": {
+        "P0 foundation": "medium",
+        "candidate replay": "high: validator tests support recomputation outside P0 replay",
+        "candidate provenance": "medium",
+        "rule semantics": "high",
+        "parser drift": "low",
+        "profile lure registry": "low"
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "It currently passes but is too broad. Keep only if dynamic LLM proposer stack is retained; split tests by retained module before commit.",
+      "risk_if_kept": "High if committed as-is: it locks in broad overlapping responsibilities and debug runner dependencies.",
+      "risk_if_deleted": "Medium: loses useful validator/proposer regression coverage.",
+      "next_step": "Split into proposer/validator minimal tests and drop shadow/code-assisted portions if those are not retained."
+    }
+  ],
+  "next_step_options": {
+    "A_delete_now_cleanup_list": {
+      "goal": "Remove unreferenced duplicate prompt/catalog files after user confirms canonical source.",
+      "delete_candidates": [
+        "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_family_prompts.yaml",
+        "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_semantic_cards.yaml",
+        "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/dennis_risk_semantic_lens.md"
+      ],
+      "not_included": [
+        "llm_commonality_proposer.py",
+        "commonality_proposal_validator.py",
+        "dynamic_prompt_builder.py",
+        "tracked runtime/L4/L5 files"
+      ],
+      "risk": "Low to medium if canonical lens/catalog decision is made first; otherwise medium due accidental loss of prompt context.",
+      "recommended_immediate": false
+    },
+    "B_dynamic_llm_proposer_minimal_commit": {
+      "goal": "Prepare a minimal experimental proposal-layer commit without replay/provenance duplication.",
+      "include_candidates": [
+        "llm_commonality_proposer.py",
+        "dynamic_prompt_builder.py",
+        "dennis_risk_semantic_lens.md",
+        "action_catalog_builder.py after catalog dedupe",
+        "commonality_proposal_validator.py only after narrowing to pre-validation",
+        "minimal proposer/validator tests split from current broad tests"
+      ],
+      "exclude_candidates": [
+        "dynamic_llm_semantic_discovery_runner.py",
+        "llm_commonality_shadow_run.py",
+        "code_assisted_commonality_runner.py generated script path",
+        "oracle_posthoc_evaluation_prompt.md unless final-eval-only guard exists",
+        "prompts/action_family_prompts.yaml",
+        "prompts/action_semantic_cards.yaml"
+      ],
+      "risk": "Medium-high until validator/replay responsibility is narrowed and prompt leakage guard exists.",
+      "recommended_immediate": false
+    },
+    "C_pause_dynamic_llm_handle_tracked_runtime_l4_l5": {
+      "goal": "Stop dynamic LLM cleanup work and separately address tracked runtime raw contract and L4/L5 protocol changes.",
+      "include_candidates": [
+        "runtime_case_execution_runner.py raw observation contract group",
+        "candidate_protocol.py/l3_l4/l5/test fixture group after schema consolidation",
+        "normal_baseline_enricher.py small hygiene group"
+      ],
+      "exclude_candidates": [
+        "all untracked dynamic LLM modules/prompts/tests"
+      ],
+      "risk": "Medium; dynamic LLM files remain noisy but tracked production-adjacent changes get isolated.",
+      "recommended_immediate": true
+    }
+  },
+  "final_recommendation": {
+    "can_delete_now": false,
+    "delete_candidates": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_family_prompts.yaml",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_semantic_cards.yaml",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/dennis_risk_semantic_lens.md"
+    ],
+    "keep_for_next_commit": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py"
+    ],
+    "user_review_required": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+      "Before deleting duplicate prompts/lens, confirm canonical catalog/lens location.",
+      "Before committing llm_commonality_proposer.py, confirm dynamic LLM route remains desired.",
+      "Before deleting debug runners, confirm historical experiment context is not needed."
+    ],
+    "recommended_next_action": "First confirm canonical lens/catalog choice, then delete only duplicate unreferenced prompt YAML/lens files; keep dynamic LLM proposer route paused until proposal-vs-replay responsibilities are narrowed."
+  }
+}

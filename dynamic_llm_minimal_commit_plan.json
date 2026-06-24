@@ -1,0 +1,325 @@
+{
+  "schema_version": "dynamic_llm_minimal_commit_plan_v2",
+  "generated_at": "2026-06-24T14:40:25",
+  "scope": {
+    "mode": "plan_only",
+    "code_changed": false,
+    "files_deleted": false,
+    "git_add": false,
+    "git_commit": false,
+    "platform_accessed": false,
+    "dataagent_called": false,
+    "hive_called": false,
+    "release_dist_full_runtime_refreshed": false,
+    "tracked_l4_l5_runtime_handled": false
+  },
+  "overall_judgement": {
+    "dynamic_llm_route_worth_keeping": true,
+    "minimal_active_proposer_possible": true,
+    "can_prepare_minimal_commit": false,
+    "reason": "The proposer is close to a clean proposal layer, but current imports and tests still pull in broader validator/debug/L4/L5 assets. A clean minimal commit needs a helper split or a deliberate narrowed validator dependency plus smaller tests.",
+    "llm_commonality_proposer_boundary": {
+      "responsible_for": [
+        "source observation grouping",
+        "prompt/proposal input assembly",
+        "fixture/mock proposal path",
+        "opt-in real LLM preflight",
+        "raw proposal payload shaping"
+      ],
+      "not_responsible_for": [
+        "support/miss replay",
+        "candidate provenance",
+        "rule semantics cleanup",
+        "baseline/L6/Hive replay",
+        "verified strategy",
+        "full autonomous proof",
+        "replacement for P0 candidate_replay_provenance"
+      ],
+      "runtime_real_llm_status": "implemented_not_verified"
+    }
+  },
+  "minimal_commit_files": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md"
+  ],
+  "minimal_commit_files_status": "logical_minimal_set_only_not_commit_ready_as_is",
+  "as_is_blocking_dependency": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py"
+  ],
+  "exclude_files": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+    "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py",
+    "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py",
+    "tracked modified L4/L5/runtime files"
+  ],
+  "debug_only_files": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+    "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py"
+  ],
+  "merge_later_files": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/candidate_protocol.py",
+    "candidate_replay_provenance.py / rule semantics modules after responsibility split"
+  ],
+  "files_need_user_review": [
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+    "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py as canonical action catalog",
+    "Whether to split proposer raw-record helpers or include a narrowed validator dependency"
+  ],
+  "prompt_builder_dependencies": {
+    "dynamic_prompt_builder.py": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md"
+    ],
+    "dependency_judgement": "Remaining prompts are required by current builder. Oracle posthoc prompt is final-eval only and must not be fed into discovery."
+  },
+  "proposer_dependencies": {
+    "llm_commonality_proposer.py": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md"
+    ],
+    "dependency_judgement": "The proposer default runtime prompt depends on llm_commonality_proposer_prompt.md. Current raw-record helpers are imported from the broad validator, so a minimal commit is blocked until helpers are split or the validator dependency is explicitly accepted."
+  },
+  "test_commitability": {
+    "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py": {
+      "can_use_as_minimal_commit_test": false,
+      "reason": "Imports code_assisted_commonality_runner.py, commonality_proposal_validator.py, llm_commonality_shadow_run.py, tracked L3/L4/L5 modules, and L5 generator."
+    },
+    "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py": {
+      "can_use_as_minimal_commit_test": false,
+      "reason": "Imports dynamic_llm_semantic_discovery_runner.py and semantic_feature_schema.py, both outside the minimal proposer scope."
+    },
+    "needed_later": [
+      "small test for build_source_observation_groups",
+      "no-call real_llm_preflight test",
+      "dynamic_prompt_builder canonical lens assembly test",
+      "oracle prompt final-eval-only guard"
+    ]
+  },
+  "file_assessments": [
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "apparent_purpose": "proposal layer/source grouping/fixture and opt-in real adapter boundary",
+      "depends_on": [
+        "commonality_proposal_validator.py",
+        "llm_commonality_proposer_prompt.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": false,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit_after_dependency_split",
+      "reason": "Correct future L3 Agent brain proposal layer, but cannot be committed alone because it imports broad validator helpers.",
+      "risk_if_kept": "Medium: dependency on broad validator can blur proposer vs replay/validator responsibilities.",
+      "risk_if_deleted": "High: loses the only proposal-layer adapter boundary."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+      "apparent_purpose": "runtime proposer prompt used by load_runtime_prompt/http adapter path",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": false,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit_after_review",
+      "reason": "Needed by proposer default runtime prompt path; should be included if proposer is committed.",
+      "risk_if_kept": "Medium: must not imply verified strategy or real LLM execution.",
+      "risk_if_deleted": "Medium-high: load_runtime_prompt default path breaks."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+      "apparent_purpose": "prompt assembly using canonical lens, action catalog, and prompt templates",
+      "depends_on": [
+        "action_catalog_builder.py",
+        "dennis_risk_semantic_lens.md",
+        "prompts/base_blind_discovery_prompt.md",
+        "prompts/cross_source_discovery_prompt.md",
+        "prompts/oracle_posthoc_evaluation_prompt.md"
+      ],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": false,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "Prompt assembly only; no runtime LLM call and now reads canonical root lens.",
+      "risk_if_kept": "Medium: oracle posthoc prompt must remain final-eval only.",
+      "risk_if_deleted": "Medium: proposer loses structured prompt assembly path."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "apparent_purpose": "canonical semantic lens",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": false,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit",
+      "reason": "Long-term semantic guide asset.",
+      "risk_if_kept": "Low",
+      "risk_if_deleted": "Medium: prompt builder loses canonical lens."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+      "apparent_purpose": "action family/card catalog for prompt assembly",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": false,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_for_dynamic_llm_commit_after_user_accepts_canonical_catalog",
+      "reason": "Current prompt builder depends on FAMILY_PROMPTS/card_for_action; this replaces deleted prompt YAML fragments.",
+      "risk_if_kept": "Medium: could become another catalog surface unless accepted as canonical.",
+      "risk_if_deleted": "High: dynamic_prompt_builder import breaks."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "apparent_purpose": "broad proposal validator and helper source for proposer",
+      "depends_on": [
+        "candidate_protocol.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": true,
+        "candidate provenance": false,
+        "rule semantics": true,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "merge_into_existing",
+      "reason": "Useful validation logic, but too broad for minimal proposer and overlaps with replay/rule semantics.",
+      "risk_if_kept": "High in minimal commit: blurs proposer and replay/validator responsibilities.",
+      "risk_if_deleted": "High before refactor: proposer and tests currently import it."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+      "apparent_purpose": "broad dynamic discovery runner",
+      "depends_on": [
+        "action_catalog_builder.py",
+        "dynamic_prompt_builder.py",
+        "semantic_feature_schema.py"
+      ],
+      "overlaps_with": {
+        "P0 foundation": true,
+        "candidate replay": true,
+        "candidate provenance": true,
+        "rule semantics": true,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "keep_debug_only",
+      "reason": "Too broad for minimal proposer; overlaps with committed P0 autonomous rerun/replay/provenance.",
+      "risk_if_kept": "High if committed now: expands surface and duplicate responsibilities.",
+      "risk_if_deleted": "Medium: loses historical experimental runner."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+      "apparent_purpose": "code-assisted commonality executor",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": true,
+        "candidate replay": true,
+        "candidate provenance": false,
+        "rule semantics": true,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "merge_later",
+      "reason": "Potentially useful, but current role overlaps with deterministic replay/provenance.",
+      "risk_if_kept": "Medium-high: duplicate replay-like surface.",
+      "risk_if_deleted": "Medium: may lose future code-assisted executor experiments."
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+      "apparent_purpose": "semantic feature schema",
+      "depends_on": [],
+      "overlaps_with": {
+        "P0 foundation": false,
+        "candidate replay": false,
+        "candidate provenance": false,
+        "rule semantics": true,
+        "parser drift": false,
+        "profile lure registry": false
+      },
+      "suggested_action": "merge_later",
+      "reason": "Potential long-term schema asset, but overlaps with candidate_protocol and needs separate schema decision.",
+      "risk_if_kept": "Medium: schema duplication.",
+      "risk_if_deleted": "Medium: loses schema experiment."
+    }
+  ],
+  "options": {
+    "A": {
+      "name": "prepare_minimal_proposer_commit_after_narrowing",
+      "recommended": true,
+      "target": "Make proposer independently committable as proposal-only layer.",
+      "includes": [
+        "proposer",
+        "proposer prompt",
+        "prompt builder",
+        "canonical lens",
+        "action catalog",
+        "three prompt templates",
+        "new proposer-only tests",
+        "small shared observation helper or local proposer helpers"
+      ],
+      "excludes": [
+        "dynamic runner",
+        "shadow runner",
+        "code-assisted runner",
+        "broad validator",
+        "semantic schema",
+        "tracked L4/L5/runtime modifications"
+      ],
+      "risk": "Small refactor required before commit."
+    },
+    "B": {
+      "name": "commit_broader_dynamic_llm_stack",
+      "recommended": false,
+      "target": "Commit current experimental stack as-is.",
+      "risk": "High duplicate surface across proposal, validation, shadow, debug runner, and schema responsibilities."
+    },
+    "C": {
+      "name": "pause_dynamic_llm_handle_tracked_old_changes",
+      "recommended": "acceptable_if_priority_is_dirty_tracked_files",
+      "target": "Avoid expanding dynamic LLM surface until helper split/test narrowing is done.",
+      "risk": "Dynamic LLM assets remain untracked and can drift."
+    }
+  },
+  "recommended_next_action": "Do not commit dynamic LLM yet. First split proposer raw-record helpers or accept a narrowed validator dependency, then add proposer-only tests. Avoid committing the broad dynamic LLM stack as-is.",
+  "can_prepare_minimal_commit": false
+}

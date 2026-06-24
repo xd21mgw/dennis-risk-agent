@@ -1,0 +1,540 @@
+{
+  "schema_version": "remaining_worktree_audit_v1",
+  "generated_at": "2026-06-24T14:07:54",
+  "scope": {
+    "mode": "read_only_audit_plus_requested_report_files",
+    "code_changed": false,
+    "new_capability_developed": false,
+    "git_add": false,
+    "git_commit": false,
+    "platform_accessed": false,
+    "dataagent_called": false,
+    "hive_called": false,
+    "release_dist_full_runtime_refreshed": false
+  },
+  "git_status_summary": {
+    "tracked_modified_count": 11,
+    "untracked_count": 18,
+    "tracked_modified_files": [
+      "AGENTS.md",
+      "computer_use_poc/runtime_case_execution_runner.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/README.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/candidate_protocol.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/l3_l4_candidate_pooling.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/l3_value_level_candidate_extractor.py",
+      "computer_use_poc/baselines/normal_baseline/l5_candidate_generation/l5_value_path_candidate_generator.py",
+      "computer_use_poc/baselines/normal_baseline/src/normal_baseline_enricher.py",
+      "computer_use_poc/baselines/normal_baseline/tests/fixtures/p0_5_discovery_only_candidates.json",
+      "computer_use_poc/baselines/normal_baseline/tests/test_l5_value_path_candidate_generator.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_p0_5_discovery_only_regression.py"
+    ],
+    "untracked_files": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_family_prompts.yaml",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_semantic_cards.yaml",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/dennis_risk_semantic_lens.md",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+      "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py",
+      "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py"
+    ]
+  },
+  "test_check": {
+    "command": "python3 -m pytest computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py",
+    "result": "passed",
+    "summary": "41 passed in 0.61s",
+    "boundary": "Tests pass only with current untracked dynamic modules plus tracked protocol/runtime-adjacent worktree; this does not prove commit readiness for the mixed set."
+  },
+  "overall_conclusion": {
+    "can_commit_anything_now": false,
+    "recommended_next_commit_group": "none_immediate; choose cleanup/dynamic_LLM/runtime_track before staging",
+    "files_recommended_for_delete": [
+      "one of the duplicate Dennis semantic lens docs after choosing canonical location"
+    ],
+    "files_recommended_for_separate_commit": [
+      "computer_use_poc/runtime_case_execution_runner.py",
+      "AGENTS.md",
+      "computer_use_poc/baselines/normal_baseline/src/normal_baseline_enricher.py",
+      "dynamic LLM proposer stack only after pruning/consolidation"
+    ],
+    "files_need_user_review": [
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/l3_value_level_candidate_extractor.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+      "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/**"
+    ],
+    "files_should_not_commit": [
+      "/private/tmp/**",
+      "release/dist/full_runtime outputs",
+      "debug/historical dynamic LLM runners before pruning",
+      "duplicate prompt/lens docs before canonicalization"
+    ]
+  },
+  "file_matrix": [
+    {
+      "file_path": "AGENTS.md",
+      "status": "modified",
+      "category": "A.tracked_modified_files / C.docs_runtime_policy",
+      "apparent_purpose": "Adds a no-fake-completion policy requiring mock/stub/placeholder/blocked/implemented_not_verified boundaries.",
+      "related_capability": "runtime / docs",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "low",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Broad agent policy change is valuable but affects all future behavior; it should not be bundled with dynamic LLM or L4/L5 changes.",
+      "recommended_commit_group": "runtime_policy_guard_separate_review"
+    },
+    {
+      "file_path": "computer_use_poc/runtime_case_execution_runner.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files / runtime",
+      "apparent_purpose": "Adds L1 raw observation contract export, raw body retention/sanitization, field count hints, and --raw-observation-contract-json output.",
+      "related_capability": "runtime / P0 foundation input contract",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "separate_commit",
+      "reason": "Useful for future raw-bundle quality and D1/D2-style contracts, but it touches core execution runner and needs dedicated review/tests. Do not mix with dynamic LLM modules.",
+      "recommended_commit_group": "runtime_raw_observation_contract"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/README.md",
+      "status": "modified",
+      "category": "A.tracked_modified_files / C.docs_notes_prompts",
+      "apparent_purpose": "Documents P1.1 L3 integration and discovery-only boundaries for Codex/code-assisted/LLM-derived candidates.",
+      "related_capability": "docs / L3 autonomous discovery / dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "low",
+      "dependency_risk": "low",
+      "suggested_action": "separate_commit",
+      "reason": "Documentation aligns with dynamic LLM/L3 integration, not the already-committed P0 foundation. Commit with the dynamic LLM protocol work if retained.",
+      "recommended_commit_group": "dynamic_llm_l3_integration_docs"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/candidate_protocol.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files",
+      "apparent_purpose": "Extends candidate protocol with commonality_level, baseline_status, next_step_suggestion, lineage, quality_bucket, proposal_source, and derived-feature routing metadata.",
+      "related_capability": "L3 autonomous discovery / dynamic LLM proposer / L4/L5",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "merge_into_existing",
+      "reason": "It is a real protocol expansion, but overlaps with P0 candidate replay/provenance fields. Needs schema consolidation before commit.",
+      "recommended_commit_group": "dynamic_llm_l3_l4_protocol_refactor"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/l3_l4_candidate_pooling.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files",
+      "apparent_purpose": "Propagates new candidate metadata into L4 review output and restricts derived features to high commonality before L5.",
+      "related_capability": "L4/L5 / dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "separate_commit",
+      "reason": "Depends on candidate_protocol changes and untracked dynamic proposal fields; cannot be committed alone.",
+      "recommended_commit_group": "dynamic_llm_l3_l4_protocol_refactor"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/l3_value_level_candidate_extractor.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files",
+      "apparent_purpose": "Adds optional --llm-commonality-mode and imports untracked CommonalityProposer/validate_proposals to materialize derived candidates from raw observations.",
+      "related_capability": "L3 autonomous discovery / dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "high",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Tracked file now depends on untracked modules. It may be valid if dynamic LLM route continues, but it should not be committed until proposer/validator responsibilities are clarified against P0 replay/provenance.",
+      "recommended_commit_group": "dynamic_llm_l3_integration_requires_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l5_candidate_generation/l5_value_path_candidate_generator.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files",
+      "apparent_purpose": "Carries candidate_source/proposal_source/lineage/commonality_level into L5 nodes, pairs, and paths; blocks non-high derived features.",
+      "related_capability": "L4/L5",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "separate_commit",
+      "reason": "Reasonable downstream propagation, but tied to candidate_protocol and dynamic LLM semantics. Commit with L3/L4 protocol changes only after review.",
+      "recommended_commit_group": "dynamic_llm_l4_l5_integration"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/src/normal_baseline_enricher.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files",
+      "apparent_purpose": "Adds defensive guard when profiler metadata is not a dict.",
+      "related_capability": "L4/L5 / normal baseline",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "low",
+      "dependency_risk": "low",
+      "suggested_action": "separate_commit",
+      "reason": "Small hygiene fix unrelated to dynamic LLM and P0 foundation. Can be a tiny standalone commit after targeted test review.",
+      "recommended_commit_group": "normal_baseline_enricher_hygiene"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/fixtures/p0_5_discovery_only_candidates.json",
+      "status": "modified",
+      "category": "A.tracked_modified_files / D.tests_fixtures",
+      "apparent_purpose": "Updates discovery-only fixture derived feature from 3/6 to 4/6 and adds commonality_level=high.",
+      "related_capability": "L4/L5 / P0-5 legacy tests",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "separate_commit",
+      "reason": "Fixture now encodes the high-commonality threshold used by modified L4/L5 logic. Commit with the protocol/test group, not alone.",
+      "recommended_commit_group": "dynamic_llm_l4_l5_regression_tests"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_l5_value_path_candidate_generator.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files / D.tests_fixtures",
+      "apparent_purpose": "Updates L5 derived-feature test to include commonality_level=high.",
+      "related_capability": "L4/L5",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "low",
+      "dependency_risk": "medium",
+      "suggested_action": "separate_commit",
+      "reason": "Test aligns with modified L5 gate and should travel with L5/protocol changes.",
+      "recommended_commit_group": "dynamic_llm_l4_l5_regression_tests"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_p0_5_discovery_only_regression.py",
+      "status": "modified",
+      "category": "A.tracked_modified_files / D.tests_fixtures",
+      "apparent_purpose": "Updates P0-5 legacy regression expectations for commonality_level=high and 0.6667 risk hit rate.",
+      "related_capability": "L4/L5 / P0-5 legacy tests",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "separate_commit",
+      "reason": "Regression follows the protocol changes. Keep with protocol/L5 group after deciding dynamic LLM path.",
+      "recommended_commit_group": "dynamic_llm_l4_l5_regression_tests"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/action_catalog_builder.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Static action-to-family catalog and semantic cards for prompt/discovery grouping.",
+      "related_capability": "dynamic LLM proposer / prompt system",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "merge_into_existing",
+      "reason": "Useful semantic catalog, but overlaps with P0 source/action coverage concepts. Prefer merging into a single source/action catalog rather than parallel metadata.",
+      "recommended_commit_group": "dynamic_llm_prompt_catalog_after_consolidation"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/code_assisted_commonality_runner.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Controlled local subprocess runner plus generated code-assisted discovery script for offline commonality proposals.",
+      "related_capability": "dynamic LLM proposer / L3 autonomous discovery",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "high",
+      "suggested_action": "keep_debug_only",
+      "reason": "P0 replay/provenance already owns support/miss reproducibility. This may remain useful as an experimental proposal generator, but generated script/subprocess logic should not enter repo until pruned and bounded.",
+      "recommended_commit_group": "none_now_debug_only"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/commonality_proposal_validator.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Deterministic validator for LLM/commonality proposals; recalculates support, rejects schema/noise, emits derived_feature candidates.",
+      "related_capability": "dynamic LLM proposer / candidate replay",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "high",
+      "suggested_action": "merge_into_existing",
+      "reason": "It overlaps strongly with candidate_replay_provenance and rule semantics. If retained, narrow it to proposal pre-validation and reuse P0 replay for support/miss.",
+      "recommended_commit_group": "dynamic_llm_validator_refactor"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dennis_risk_semantic_lens.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Top-level semantic lens note for dynamic discovery.",
+      "related_capability": "prompt system / docs",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "high",
+      "dependency_risk": "low",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "There is also prompts/dennis_risk_semantic_lens.md. Pick one canonical location before committing.",
+      "recommended_commit_group": "prompt_docs_dedup_review"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_llm_semantic_discovery_runner.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Offline prompt-only semantic discovery runner over raw bundles; builds per-action/family/cross-source outputs and object facts.",
+      "related_capability": "dynamic LLM proposer / L3 autonomous discovery",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "high",
+      "suggested_action": "keep_historical_only",
+      "reason": "P0-7 autonomous rerun now owns foundation-instrumented cold-start validation. This runner has hardcoded historical users/default paths and should not be committed as current capability without refactor.",
+      "recommended_commit_group": "none_now_historical_or_experimental"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/dynamic_prompt_builder.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules / C.docs_notes_prompts",
+      "apparent_purpose": "Assembles per-action, family, cross-source, and oracle-eval prompts from prompt templates.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Prompt assembly is useful only if dynamic LLM route is accepted. It depends on untracked prompts and action catalog.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Builds source observation groups and supports fixture/summary/deep/real preflight proposal modes. Does not call real LLM unless future config enables it.",
+      "related_capability": "dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "It is a proposal preparation layer, not replay. Keep only if dynamic LLM proposal route continues; enforce no-real-call boundaries before commit.",
+      "recommended_commit_group": "dynamic_llm_proposer_experimental"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_proposer_prompt.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Prompt text for LLM-guided commonality proposer.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "medium",
+      "dependency_risk": "low",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Do not commit prompts until dynamic LLM route and leakage policy are confirmed.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/llm_commonality_shadow_run.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Large offline shadow runner for proposal quality, dedup, retained candidates, L4/L5 visibility, and report generation.",
+      "related_capability": "dynamic LLM proposer / L4/L5 / docs",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "high",
+      "suggested_action": "keep_debug_only",
+      "reason": "It duplicates P0 replay/provenance, rule semantics, audit/dedup, and report generation. Keep as debug/historical until split into smaller modules or deleted after confirmation.",
+      "recommended_commit_group": "none_now_debug_only"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/semantic_feature_schema.py",
+      "status": "untracked",
+      "category": "B.dynamic_LLM_broader_P1_1_untracked_modules",
+      "apparent_purpose": "Schema helpers and hard filters for dynamic semantic features.",
+      "related_capability": "dynamic LLM proposer / L3 autonomous discovery",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "high",
+      "dependency_risk": "medium",
+      "suggested_action": "merge_into_existing",
+      "reason": "Potentially useful long-term schema asset, but overlaps with candidate_protocol. Prefer merging into existing candidate schema/validation.",
+      "recommended_commit_group": "schema_consolidation_before_dynamic_commit"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_family_prompts.yaml",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Prompt-side action family guidance.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Overlaps with action_catalog_builder FAMILY_PROMPTS. Commit only after choosing canonical prompt/catalog representation.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/action_semantic_cards.yaml",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Prompt-side action semantic cards.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Likely duplicates action_catalog_builder cards and P0 source/action coverage concepts. Needs consolidation.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/base_blind_discovery_prompt.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Base blind discovery prompt template.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Prompt assets should wait until leakage/overfit and dynamic LLM route are explicitly accepted.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/cross_source_discovery_prompt.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Cross-source discovery prompt add-on.",
+      "related_capability": "prompt system / dynamic LLM proposer",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Cross-source chain logic overlaps with P0 replay/provenance chain reports. Keep out until prompt route is selected.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/dennis_risk_semantic_lens.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Prompt-local Dennis semantic lens.",
+      "related_capability": "prompt system / docs",
+      "overlaps_with_committed_P0": false,
+      "duplicate_risk": "high",
+      "dependency_risk": "low",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Duplicate semantic lens exists at l3_extraction/dennis_risk_semantic_lens.md. Choose one canonical copy.",
+      "recommended_commit_group": "prompt_docs_dedup_review"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/l3_extraction/prompts/oracle_posthoc_evaluation_prompt.md",
+      "status": "untracked",
+      "category": "C.docs_notes_prompts",
+      "apparent_purpose": "Prompt for posthoc oracle evaluation.",
+      "related_capability": "prompt system / holdout eval",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "medium",
+      "suggested_action": "uncertain_need_user_review",
+      "reason": "Oracle must be final-eval-only; prompt asset should wait for dynamic route and leakage guard decision.",
+      "recommended_commit_group": "dynamic_llm_prompt_system_after_route_decision"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_dynamic_llm_semantic_discovery.py",
+      "status": "untracked",
+      "category": "D.tests_fixtures",
+      "apparent_purpose": "Tests action catalog, prompt assembly, semantic feature schema, and dynamic runner smoke on synthetic bundles.",
+      "related_capability": "dynamic LLM proposer / L3 autonomous discovery",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "keep_for_next_commit",
+      "reason": "It currently passes but depends on untracked dynamic modules and prompt files. Commit only with that module group.",
+      "recommended_commit_group": "dynamic_llm_proposer_experimental_tests"
+    },
+    {
+      "file_path": "computer_use_poc/baselines/normal_baseline/tests/test_llm_commonality_proposer.py",
+      "status": "untracked",
+      "category": "D.tests_fixtures",
+      "apparent_purpose": "Tests proposer, validator, code-assisted runner, shadow report, and L3/L4/L5 propagation.",
+      "related_capability": "dynamic LLM proposer / L4/L5",
+      "overlaps_with_committed_P0": true,
+      "duplicate_risk": "medium",
+      "dependency_risk": "high",
+      "suggested_action": "keep_for_next_commit",
+      "reason": "It passes but spans many responsibilities. Keep only if dynamic LLM proposal stack is accepted; otherwise split tests by retained modules.",
+      "recommended_commit_group": "dynamic_llm_proposer_experimental_tests"
+    }
+  ],
+  "dynamic_llm_judgement": {
+    "dynamic_llm_semantic_discovery_runner.py": "Not needed for current P0 foundation. It overlaps with committed P0-7 autonomous rerun and contains historical defaults/hardcoded users. Keep only as historical/experimental unless refactored into a generic evaluator.",
+    "llm_commonality_proposer.py": "Overlaps partly with P0-7/P0-5 by building source groups and proposals, but does not replace replay/provenance. It should be a separate proposal layer if dynamic LLM route continues; enforce no-real-call boundaries.",
+    "code_assisted_commonality_runner.py": "P0 replay/provenance replaces support/miss validation. This file can be a debug/offline proposal generator, but should not be committed as core until the generated-script path is pruned or bounded.",
+    "commonality_proposal_validator.py": "Should be merged with or narrowed against candidate_replay_provenance/rule semantics. Keep only as LLM proposal pre-validator, not as a parallel replay engine.",
+    "semantic_feature_schema.py": "Potential long-term schema asset, but currently overlaps candidate_protocol. Merge into candidate_protocol/schema validation before committing.",
+    "prompts/**": "Do not commit now. Prompt assets need route confirmation, canonical lens location, and leakage/overfit policy before entering repo.",
+    "dynamic_tests": "test_dynamic_llm_semantic_discovery.py and test_llm_commonality_proposer.py pass together, but depend on untracked modules and modified tracked protocol files. They are not standalone."
+  },
+  "tracked_modified_judgement": {
+    "AGENTS.md": "Valuable runtime policy guard, but broad. Separate review/commit; do not roll into P0 or dynamic LLM.",
+    "runtime_case_execution_runner.py": "Related to raw contract export and future foundation input quality. Separate runtime commit after targeted tests and user confirmation.",
+    "README.md": "Dynamic LLM/L3 integration doc; commit with dynamic route only.",
+    "candidate_protocol.py": "Protocol expansion should merge with existing candidate schema and P0 provenance fields before commit.",
+    "l3_l4_candidate_pooling.py": "Depends on protocol changes; commit only with L3/L4 integration group.",
+    "l3_value_level_candidate_extractor.py": "Tracked file imports untracked dynamic modules; high dependency risk; needs route decision.",
+    "l5_value_path_candidate_generator.py": "L5 propagation and derived-feature high-gate; commit with L4/L5 protocol/test group only.",
+    "normal_baseline_enricher.py": "Small standalone defensive fix; can be separate hygiene commit after confirmation.",
+    "p0_5_discovery_only_candidates.json": "Fixture update tied to commonality_level/high threshold. Commit only with L4/L5 tests.",
+    "old_L5_P0_5_tests": "Align with protocol changes. Do not commit independently."
+  },
+  "recommended_options": [
+    {
+      "option": "A",
+      "name": "Cleanup/delete obvious duplicate or debug-only files",
+      "goal": "Reduce worktree noise before deciding dynamic LLM route.",
+      "includes_files": [
+        "duplicate Dennis semantic lens doc after canonical location chosen",
+        "debug-only large shadow/code-assisted runners if user decides not to pursue dynamic LLM route"
+      ],
+      "excludes_files": [
+        "tracked runtime/L4/L5 changes",
+        "P0 committed files",
+        "profile lure committed docs"
+      ],
+      "risk": "Medium: deletion requires user confirmation because these may preserve historical experiment context.",
+      "recommend_immediate": false
+    },
+    {
+      "option": "B",
+      "name": "Prepare dynamic LLM proposer as a separate P1.1 experimental commit",
+      "goal": "If dynamic LLM route continues, consolidate proposer, validator, prompts, schema, tests into a coherent experimental lane.",
+      "includes_files": [
+        "llm_commonality_proposer.py",
+        "commonality_proposal_validator.py after narrowing",
+        "dynamic_prompt_builder.py",
+        "action_catalog_builder.py after source catalog merge",
+        "selected prompts/**",
+        "test_dynamic_llm_semantic_discovery.py",
+        "test_llm_commonality_proposer.py"
+      ],
+      "excludes_files": [
+        "runtime_case_execution_runner.py",
+        "AGENTS.md",
+        "release/dist/full_runtime",
+        "debug-only shadow runner unless pruned"
+      ],
+      "risk": "High: current modules overlap P0 replay/provenance and include prompt/leakage concerns, though tests pass.",
+      "recommend_immediate": false
+    },
+    {
+      "option": "C",
+      "name": "Handle tracked L4/L5/runtime old modifications separately",
+      "goal": "Split broad tracked changes into runtime raw-contract, protocol/L4/L5, and small baseline hygiene commits.",
+      "includes_files": [
+        "runtime_case_execution_runner.py as one commit after tests",
+        "candidate_protocol.py/l3_l4/l5/tests/fixture as one protocol commit after consolidation",
+        "normal_baseline_enricher.py as small hygiene commit"
+      ],
+      "excludes_files": [
+        "dynamic LLM prompts/runners until route is decided",
+        "AGENTS.md unless runtime policy review is explicitly desired"
+      ],
+      "risk": "Medium to high depending on file group. runtime_case_execution_runner.py is high blast radius.",
+      "recommend_immediate": false
+    }
+  ]
+}
