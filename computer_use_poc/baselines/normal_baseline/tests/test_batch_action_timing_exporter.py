@@ -67,6 +67,41 @@ def _write_checkpoint(path: Path) -> None:
                     "wait_ms": None,
                     "per_source_elapsed_ms": None,
                 },
+                {
+                    "chunk_id": "round_1_rcp_event_followup_3_short_circuit_circuit_open_timeout",
+                    "source_group": "rcp_event_detail",
+                    "actions": ["rcp_event_detail"],
+                    "action_count": 2,
+                    "completed_count": 0,
+                    "timeout_count": 2,
+                    "blocked_count": 0,
+                    "partial_count": 0,
+                    "pending_count": 0,
+                    "auth_failed_count": 0,
+                    "source_gap_count": 2,
+                    "short_circuit_count": 2,
+                    "circuit_open_count": 1,
+                    "affected_user_count": 2,
+                    "gap_reason_counts": {"circuit_open_timeout": 2},
+                    "short_circuit_events": [
+                        {
+                            "source_action": "rcp_event_detail",
+                            "gap_reason": "circuit_open_timeout",
+                            "short_circuit_type": "timeout_circuit_breaker",
+                            "affected_user_count": 2,
+                        }
+                    ],
+                    "circuit_open_events": [
+                        {
+                            "source_action": "rcp_event_detail",
+                            "gap_reason": "circuit_open_timeout",
+                            "affected_user_count": 2,
+                        }
+                    ],
+                    "wait_ms": 0,
+                    "batch_elapsed_ms": 0,
+                    "per_source_elapsed_ms": None,
+                },
             ],
         }
     }
@@ -140,7 +175,29 @@ def test_source_group_summary_and_gap_summary_are_present(tmp_path: Path):
 
     assert summary["total_elapsed_ms"] == 10000
     assert summary["browser_wait_ms"] == 6800
-    assert summary["timeout_summary"]["total_timeout_count"] == 1
-    assert summary["source_gap_summary"]["total_source_gap_count"] == 1
+    assert summary["timeout_summary"]["total_timeout_count"] == 3
+    assert summary["source_gap_summary"]["total_source_gap_count"] == 3
+    assert summary["source_gap_summary"]["by_gap_reason"]["circuit_open_timeout"] == 2
     assert summary["instrumentation_gap_summary"]["instrumentation_gap"] is True
     assert summary["instrumentation_gap_summary"]["mixed_primary_chunk_gap_count"] == 1
+
+
+def test_short_circuit_and_circuit_breaker_fields_are_exported(tmp_path: Path):
+    checkpoint = tmp_path / "checkpoints" / "dennis_sample_expand_validate_batch" / "round_01_batch_01_done.json"
+    _write_checkpoint(checkpoint)
+
+    summary = build_timing_summary([checkpoint], batch_run_id="fixture_batch")
+
+    row = next(item for item in summary["action_timing_summary"] if item["chunk_id"].endswith("circuit_open_timeout"))
+    assert row["source_action"] == "rcp_event_detail"
+    assert row["short_circuit_count"] == 2
+    assert row["circuit_open_count"] == 1
+    assert row["affected_user_count"] == 2
+    assert row["gap_reason_counts"] == {"circuit_open_timeout": 2}
+    assert row["wait_ms"] == 0
+
+    short = summary["short_circuit_summary"]
+    assert short["total_short_circuit_count"] == 2
+    assert short["total_circuit_open_count"] == 1
+    assert short["by_gap_reason"] == {"circuit_open_timeout": 2}
+    assert short["circuit_open_by_source_action"] == {"rcp_event_detail": 1}

@@ -131,8 +131,19 @@ def _row_from_chunk(chunk: dict[str, Any], *, file_path: Path, batch_run_id: str
     partial_count = _as_int(chunk.get("partial_count"))
     pending_count = _as_int(chunk.get("pending_count"))
     auth_failed_count = _as_int(chunk.get("auth_failed_count"))
+    short_circuit_count = _as_int(chunk.get("short_circuit_count"))
+    circuit_open_count = _as_int(chunk.get("circuit_open_count"))
+    affected_user_count = _as_optional_int(chunk.get("affected_user_count"))
+    raw_gap_reason_counts = chunk.get("gap_reason_counts")
+    gap_reason_counts = {
+        _safe_string(key): _as_int(value)
+        for key, value in raw_gap_reason_counts.items()
+    } if isinstance(raw_gap_reason_counts, dict) else {}
     status_count = completed_count + timeout_count + blocked_count + partial_count + pending_count + auth_failed_count
-    source_gap_count = timeout_count + blocked_count + partial_count + pending_count + auth_failed_count
+    source_gap_count = _as_int(
+        chunk.get("source_gap_count"),
+        default=timeout_count + blocked_count + partial_count + pending_count + auth_failed_count,
+    )
 
     missing_fields: list[str] = []
     timing_precision = "unknown"
@@ -186,6 +197,12 @@ def _row_from_chunk(chunk: dict[str, Any], *, file_path: Path, batch_run_id: str
         "partial_count": partial_count,
         "pending_count": pending_count,
         "source_gap_count": source_gap_count,
+        "short_circuit_count": short_circuit_count,
+        "circuit_open_count": circuit_open_count,
+        "affected_user_count": affected_user_count,
+        "gap_reason_counts": gap_reason_counts,
+        "short_circuit_events": chunk.get("short_circuit_events") if isinstance(chunk.get("short_circuit_events"), list) else [],
+        "circuit_open_events": chunk.get("circuit_open_events") if isinstance(chunk.get("circuit_open_events"), list) else [],
         "wait_ms": wait_ms,
         "batch_elapsed_ms": _as_optional_int(chunk.get("batch_elapsed_ms")),
         "start_time": _safe_string(chunk.get("service_wait_started_at") or chunk.get("submit_started_at") or ""),
@@ -198,6 +215,7 @@ def _row_from_chunk(chunk: dict[str, Any], *, file_path: Path, batch_run_id: str
             "json_path": "timing_trace.chunks[]",
             "wait_ms_source": "timing_trace.chunks[].wait_ms",
             "status_count_source": "timing_trace.chunks[] aggregate status counts",
+            "short_circuit_source": "timing_trace.chunks[] scheduler gap fields",
             "note": (
                 "single-action chunk wait_ms is treated as action-level timing"
                 if timing_precision == "action_level"
@@ -241,9 +259,12 @@ def _summarize_source_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             "timeout_count": 0,
             "auth_failed_count": 0,
             "source_gap_count": 0,
+            "short_circuit_count": 0,
+            "circuit_open_count": 0,
             "wait_ms": 0,
             "instrumentation_gap_count": 0,
             "timing_precision": Counter(),
+            "gap_reason_counts": Counter(),
         })
         item["chunk_count"] += 1
         item["action_count"] += row["action_count"]
@@ -251,13 +272,18 @@ def _summarize_source_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
         item["timeout_count"] += row["timeout_count"]
         item["auth_failed_count"] += row["auth_failed_count"]
         item["source_gap_count"] += row["source_gap_count"]
+        item["short_circuit_count"] += row["short_circuit_count"]
+        item["circuit_open_count"] += row["circuit_open_count"]
         item["wait_ms"] += row["wait_ms"] or 0
         item["instrumentation_gap_count"] += 1 if row["instrumentation_gap"] else 0
         item["timing_precision"][row["timing_precision"]] += 1
+        item["gap_reason_counts"].update(row.get("gap_reason_counts") or {})
     output = []
     for item in grouped.values():
         precision_counter = item.pop("timing_precision")
+        gap_reason_counter = item.pop("gap_reason_counts")
         item["timing_precision_counts"] = dict(precision_counter)
+        item["gap_reason_counts"] = dict(gap_reason_counter)
         output.append(item)
     return sorted(output, key=lambda item: (-item["wait_ms"], item["source_group"]))
 
@@ -320,13 +346,43 @@ def _timeout_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def _source_gap_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     by_group = defaultdict(int)
     by_action = defaultdict(int)
+    by_reason: Counter[str] = Counter()
     for row in rows:
         by_group[row["source_group"]] += row["source_gap_count"]
         by_action[row["source_action"]] += row["source_gap_count"]
+        by_reason.update(row.get("gap_reason_counts") or {})
     return {
         "total_source_gap_count": sum(row["source_gap_count"] for row in rows),
         "by_source_group": dict(sorted(by_group.items(), key=lambda item: (-item[1], item[0]))),
         "by_source_action": dict(sorted(by_action.items(), key=lambda item: (-item[1], item[0]))),
+        "by_gap_reason": dict(sorted(by_reason.items(), key=lambda item: (-item[1], item[0]))),
+    }
+
+
+def _short_circuit_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_group = defaultdict(int)
+    by_action = defaultdict(int)
+    by_reason: Counter[str] = Counter()
+    circuit_open_by_action = defaultdict(int)
+    affected_user_count = 0
+    for row in rows:
+        short_count = row.get("short_circuit_count") or 0
+        circuit_count = row.get("circuit_open_count") or 0
+        if short_count:
+            by_group[row["source_group"]] += short_count
+            by_action[row["source_action"]] += short_count
+            by_reason.update(row.get("gap_reason_counts") or {})
+            affected_user_count += row.get("affected_user_count") or 0
+        if circuit_count:
+            circuit_open_by_action[row["source_action"]] += circuit_count
+    return {
+        "total_short_circuit_count": sum(row.get("short_circuit_count") or 0 for row in rows),
+        "total_circuit_open_count": sum(row.get("circuit_open_count") or 0 for row in rows),
+        "affected_user_count": affected_user_count,
+        "by_source_group": dict(sorted(by_group.items(), key=lambda item: (-item[1], item[0]))),
+        "by_source_action": dict(sorted(by_action.items(), key=lambda item: (-item[1], item[0]))),
+        "by_gap_reason": dict(sorted(by_reason.items(), key=lambda item: (-item[1], item[0]))),
+        "circuit_open_by_source_action": dict(sorted(circuit_open_by_action.items(), key=lambda item: (-item[1], item[0]))),
     }
 
 
@@ -362,6 +418,7 @@ def build_timing_summary(
         ),
         "timeout_summary": _timeout_summary(rows),
         "source_gap_summary": _source_gap_summary(rows),
+        "short_circuit_summary": _short_circuit_summary(rows),
         "instrumentation_gap_summary": _instrumentation_gap_summary(rows, primary),
     }
     return summary
@@ -383,8 +440,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "## Source group timing summary",
         "",
-        _table_row(["source_group", "chunks", "actions", "completed", "timeout", "gap", "wait_ms", "gap_rows"]),
-        _table_row(["---", "---:", "---:", "---:", "---:", "---:", "---:", "---:"]),
+        _table_row(["source_group", "chunks", "actions", "completed", "timeout", "gap", "short_circuit", "circuit_open", "wait_ms", "gap_rows"]),
+        _table_row(["---", "---:", "---:", "---:", "---:", "---:", "---:", "---:", "---:", "---:"]),
     ]
     for row in summary.get("source_group_timing_summary", []):
         lines.append(_table_row([
@@ -394,6 +451,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
             row["completed_count"],
             row["timeout_count"],
             row["source_gap_count"],
+            row["short_circuit_count"],
+            row["circuit_open_count"],
             row["wait_ms"],
             row["instrumentation_gap_count"],
         ]))
@@ -402,8 +461,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
         "",
         "## Action timing summary",
         "",
-        _table_row(["source_group", "source_action", "chunk_id", "precision", "completed", "timeout", "gap", "wait_ms", "instrumentation_gap"]),
-        _table_row(["---", "---", "---", "---", "---:", "---:", "---:", "---:", "---"]),
+        _table_row(["source_group", "source_action", "chunk_id", "precision", "completed", "timeout", "gap", "short_circuit", "circuit_open", "wait_ms", "instrumentation_gap"]),
+        _table_row(["---", "---", "---", "---", "---:", "---:", "---:", "---:", "---:", "---:", "---"]),
     ])
     for row in summary.get("action_timing_summary", []):
         lines.append(_table_row([
@@ -414,9 +473,26 @@ def render_markdown(summary: dict[str, Any]) -> str:
             row["completed_count"],
             row["timeout_count"],
             row["source_gap_count"],
+            row["short_circuit_count"],
+            row["circuit_open_count"],
             row["wait_ms"],
             str(row["instrumentation_gap"]).lower(),
         ]))
+
+    short = summary.get("short_circuit_summary", {})
+    lines.extend([
+        "",
+        "## Short-circuit and circuit breaker summary",
+        "",
+        f"- total_short_circuit_count: `{short.get('total_short_circuit_count')}`",
+        f"- total_circuit_open_count: `{short.get('total_circuit_open_count')}`",
+        f"- affected_user_count: `{short.get('affected_user_count')}`",
+        "",
+        "### Gap reason counts",
+        "",
+    ])
+    for key, value in sorted((short.get("by_gap_reason") or {}).items()):
+        lines.append(f"- `{key}`: `{value}`")
 
     gap = summary.get("instrumentation_gap_summary", {})
     lines.extend([

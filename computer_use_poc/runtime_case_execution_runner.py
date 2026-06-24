@@ -43,6 +43,13 @@ SOURCE_ACTION_CHUNK_LIMITS = {
     "archives_photo_profile": 10,
     "archives_photo_meta": 10,
 }
+TIMEOUT_CIRCUIT_BREAKER_ACTIONS = {"rcp_event_detail", "rcp_event_feature_list"}
+TIMEOUT_CIRCUIT_CONSECUTIVE_CHUNKS = 2
+TIMEOUT_CIRCUIT_RATIO_THRESHOLD = 0.5
+AUTH_FAILED_SHORT_CIRCUIT_THRESHOLD = 2
+TRACK_BUSINESS_GAP_MARKERS = {"NEED_DATA_SYNC", "HIVE_UNFINISHED"}
+TRACK_READINESS_ACTION = "track_analysis_check_data_ready"
+WEAPON_INVENTORY_ACTION = "weapon_inventory"
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 CREDENTIAL_SECRET_KEYS = {
@@ -884,6 +891,261 @@ def build_dry_run_batch_result(source_plan: list[SourcePlanItem]) -> dict[str, A
     }
 
 
+def build_short_circuit_batch_result(
+    source_plan: list[SourcePlanItem],
+    *,
+    gap_state: str,
+    gap_reason: str,
+    short_circuit_type: str,
+    circuit_open: bool = False,
+) -> dict[str, Any]:
+    """Build a synthetic source-gap result for sources intentionally not called.
+
+    This preserves source coverage accounting without treating skipped tail work
+    as no-risk evidence. It is used only after local scheduler decisions such as
+    timeout circuit-open, repeated auth failure, or missing required anchors.
+    """
+    transport_rows: dict[str, dict[str, Any]] = {}
+    source_results: dict[str, dict[str, Any]] = {}
+    missing_or_failed_sources: list[dict[str, Any]] = []
+    for item in source_plan:
+        row = {
+            "source_id": item.source_id,
+            "action": item.action,
+            "category": "blocked",
+            "source_status": gap_state,
+            "error_type": gap_reason,
+            "gap_state": gap_state,
+            "gap_reason": gap_reason,
+            "short_circuit": True,
+            "short_circuit_type": short_circuit_type,
+            "circuit_open": circuit_open,
+            "http_status": None,
+            "content_type": None,
+            "body_present": False,
+            "body_truncated": False,
+            "observed_bytes": 0,
+            "elapsed_ms": 0,
+            "timeout_ms": item.timeout_ms,
+            "transport_error": None,
+            "platform_error": None,
+            "invalid_params": False,
+            "timed_out": gap_reason == "circuit_open_timeout",
+            "raw_body_handling": "not_requested_short_circuit",
+            "is_low_risk_counter_evidence": False,
+            "no_data_not_risk_exclusion": True,
+        }
+        transport_rows[item.source_id] = row
+        source_results[item.source_id] = {
+            "source_id": item.source_id,
+            "action": item.action,
+            "category": "blocked",
+            "source_status": gap_state,
+            "transport": row,
+        }
+        missing_or_failed_sources.append(row)
+    return {
+        "ok": True,
+        "response_mode": "controlled_batch_passthrough",
+        "batch_status": "short_circuit_source_gap",
+        "scheduler": "controlled_parallel",
+        "source_results": source_results,
+        "transport_status_matrix": transport_rows,
+        "classifications": build_classifications(transport_rows),
+        "missing_or_failed_sources": missing_or_failed_sources,
+        "short_circuit_summary": {
+            "short_circuit_type": short_circuit_type,
+            "gap_state": gap_state,
+            "gap_reason": gap_reason,
+            "source_count": len(source_plan),
+            "source_actions": unique_strings([item.action for item in source_plan]),
+            "affected_user_count": _source_plan_user_count(source_plan),
+            "circuit_open": circuit_open,
+            "no_risk_counter_evidence": False,
+        },
+        "safety": {
+            "raw_body_returned": False,
+            "legacy_runner_fallback_attempted": False,
+            "single_action_freeform_attempted": False,
+        },
+    }
+
+
+def _source_plan_user_count(items: list[SourcePlanItem]) -> int:
+    users = {
+        str(item.params.get("user_id") or item.params.get("source_id") or item.params.get("device_id") or item.source_id)
+        for item in items
+    }
+    return len({value for value in users if value})
+
+
+def _gap_reason_counts_from_quality(chunk_quality: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in chunk_quality.get("per_source", []) or []:
+        if not isinstance(row, dict):
+            continue
+        reason = str(row.get("gap_reason") or row.get("error_type") or "")
+        if not reason:
+            continue
+        counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
+def _track_business_gap_reason(row: dict[str, Any]) -> str | None:
+    action = str(row.get("action") or "")
+    if action != TRACK_READINESS_ACTION:
+        return None
+    text = json.dumps(row, ensure_ascii=False, sort_keys=True)
+    if any(marker in text for marker in TRACK_BUSINESS_GAP_MARKERS):
+        return "NEED_DATA_SYNC_or_HIVE_UNFINISHED"
+    status = str(row.get("source_status") or row.get("category") or "").lower()
+    if "completed" not in status:
+        return None
+    business_field_keys = {
+        "track_data_ready",
+        "dataReady",
+        "ready",
+        "event_day_frontend_activity",
+        "frontend_backend_activity_alignment",
+        "duration",
+        "active_days",
+        "lineage",
+    }
+    if not any(key in row for key in business_field_keys):
+        return "track_business_fields_missing"
+    return None
+
+
+def _weapon_riskdata_gap_reason(row: dict[str, Any]) -> str | None:
+    if str(row.get("action") or "") != WEAPON_INVENTORY_ACTION:
+        return None
+    text = json.dumps(row, ensure_ascii=False, sort_keys=True)
+    if "not_executed_missing_device_id" in text:
+        return "missing_raw_device_id"
+    return None
+
+
+def _quality_counts_by_action(chunk_quality: dict[str, Any]) -> dict[str, dict[str, int]]:
+    counts: dict[str, dict[str, int]] = {}
+    for row in chunk_quality.get("per_source", []) or []:
+        if not isinstance(row, dict):
+            continue
+        action = str(row.get("action") or "unknown_action")
+        action_counts = counts.setdefault(
+            action,
+            {"total": 0, "completed": 0, "timeout": 0, "auth_failed": 0, "blocked": 0, "partial": 0, "parse_error": 0},
+        )
+        action_counts["total"] += 1
+        quality = str(row.get("quality_class") or "")
+        if quality in action_counts:
+            action_counts[quality] += 1
+        elif quality == "no_data":
+            action_counts["completed"] += 1
+    return counts
+
+
+def _new_scheduler_state() -> dict[str, Any]:
+    return {
+        "action_stats": {},
+        "open_circuits": {},
+        "events": [],
+    }
+
+
+def _open_scheduler_circuit(
+    scheduler_state: dict[str, Any],
+    *,
+    source_action: str,
+    gap_reason: str,
+    short_circuit_type: str,
+) -> None:
+    if source_action in scheduler_state["open_circuits"]:
+        return
+    event = {
+        "source_action": source_action,
+        "gap_reason": gap_reason,
+        "short_circuit_type": short_circuit_type,
+        "circuit_open": True,
+        "opened_at": _iso_now(),
+    }
+    scheduler_state["open_circuits"][source_action] = event
+    scheduler_state["events"].append(event)
+
+
+def _update_scheduler_state_from_chunk(
+    scheduler_state: dict[str, Any],
+    *,
+    chunk_quality: dict[str, Any],
+) -> list[dict[str, Any]]:
+    opened_before = set(scheduler_state["open_circuits"])
+    for action, counts in _quality_counts_by_action(chunk_quality).items():
+        stats = scheduler_state["action_stats"].setdefault(
+            action,
+            {
+                "chunks_seen": 0,
+                "sources_seen": 0,
+                "timeout_count": 0,
+                "auth_failed_count": 0,
+                "consecutive_timeout_chunks": 0,
+                "consecutive_auth_failed_chunks": 0,
+            },
+        )
+        stats["chunks_seen"] += 1
+        stats["sources_seen"] += counts["total"]
+        stats["timeout_count"] += counts["timeout"]
+        stats["auth_failed_count"] += counts["auth_failed"]
+        stats["consecutive_timeout_chunks"] = (
+            stats["consecutive_timeout_chunks"] + 1
+            if counts["timeout"] > 0
+            else 0
+        )
+        stats["consecutive_auth_failed_chunks"] = (
+            stats["consecutive_auth_failed_chunks"] + 1
+            if counts["auth_failed"] > 0
+            else 0
+        )
+        timeout_ratio = stats["timeout_count"] / stats["sources_seen"] if stats["sources_seen"] else 0.0
+        if action in TIMEOUT_CIRCUIT_BREAKER_ACTIONS and (
+            stats["consecutive_timeout_chunks"] >= TIMEOUT_CIRCUIT_CONSECUTIVE_CHUNKS
+            or timeout_ratio > TIMEOUT_CIRCUIT_RATIO_THRESHOLD
+        ):
+            _open_scheduler_circuit(
+                scheduler_state,
+                source_action=action,
+                gap_reason="circuit_open_timeout",
+                short_circuit_type="timeout_circuit_breaker",
+            )
+        if stats["auth_failed_count"] >= AUTH_FAILED_SHORT_CIRCUIT_THRESHOLD or stats["consecutive_auth_failed_chunks"] >= 2:
+            _open_scheduler_circuit(
+                scheduler_state,
+                source_action=action,
+                gap_reason="auth_session_issue",
+                short_circuit_type="auth_failed_short_circuit",
+            )
+    return [
+        event
+        for action, event in scheduler_state["open_circuits"].items()
+        if action not in opened_before
+    ]
+
+
+def _split_by_scheduler_circuit(
+    scheduler_state: dict[str, Any],
+    items: list[SourcePlanItem],
+) -> tuple[list[SourcePlanItem], list[SourcePlanItem], dict[str, list[SourcePlanItem]]]:
+    active: list[SourcePlanItem] = []
+    skipped: list[SourcePlanItem] = []
+    by_reason: dict[str, list[SourcePlanItem]] = {}
+    for item in items:
+        circuit = scheduler_state["open_circuits"].get(item.action)
+        if not circuit:
+            active.append(item)
+            continue
+        skipped.append(item)
+        by_reason.setdefault(str(circuit.get("gap_reason") or "source_gap"), []).append(item)
+    return active, skipped, by_reason
+
+
 def build_classifications(transport_rows: dict[str, dict[str, Any]] | list[dict[str, Any]]) -> dict[str, list[str]]:
     rows = list(transport_rows.values()) if isinstance(transport_rows, dict) else transport_rows
     classifications: dict[str, list[str]] = {
@@ -1507,8 +1769,25 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
         row = _merge_row_cap_metadata(row, raw_rows_by_id.get(source_id, {}))
         seen.add(source_id)
         item = plan_by_id.get(source_id)
+        row.setdefault("action", item.action if item else row.get("action"))
+        track_gap_reason = _track_business_gap_reason(row)
+        weapon_gap_reason = _weapon_riskdata_gap_reason(row)
+        if track_gap_reason:
+            row["gap_state"] = "track_business_field_gap"
+            row["gap_reason"] = track_gap_reason
+            row["source_status"] = "track_business_field_gap"
+            row["error_type"] = track_gap_reason
+        elif weapon_gap_reason:
+            row["gap_state"] = "not_executed_missing_device_id"
+            row["gap_reason"] = weapon_gap_reason
+            row["source_status"] = "partial"
+            row["error_type"] = weapon_gap_reason
         transport_interpretation = derive_transport_interpretation(row)
         classification = classify_source(row)
+        if track_gap_reason:
+            classification = "blocked"
+        elif weapon_gap_reason:
+            classification = "partial"
         buckets.setdefault(classification, []).append(source_id)
 
         notes: list[str] = []
@@ -1540,6 +1819,10 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
             notes.append("no_data_not_risk_exclusion")
         if classification in {"blocked", "timeout", "parse_error", "auth_failed"}:
             notes.append("missing_evidence_not_counter_evidence")
+        if track_gap_reason:
+            notes.extend(["track_business_field_gap", "missing_evidence_not_counter_evidence"])
+        if weapon_gap_reason:
+            notes.extend(["not_executed_missing_device_id", "missing_evidence_not_counter_evidence"])
         if classification == "planned":
             notes.append("dry_run_not_platform_evidence")
         normalized_status = _normalized_source_status(row, classification)
@@ -1590,6 +1873,9 @@ def merge_source_quality(source_plan: list[SourcePlanItem], batch_result: dict[s
                 "transport_interpretation": transport_interpretation,
                 "failure_policy": item.failure_policy if item else "non_blocking_partial",
                 "boundary_notes": unique_strings(notes),
+                "gap_state": row.get("gap_state"),
+                "gap_reason": row.get("gap_reason"),
+                "is_low_risk_counter_evidence": False if row.get("gap_state") else None,
                 "legacy_runner_fallback_attempted": False,
                 "manual_batch_curl_fallback_attempted": False,
             }
@@ -1636,6 +1922,9 @@ def build_missing_evidence(source_quality_matrix: dict[str, Any]) -> list[dict[s
             "blocks_final_conclusion": quality != "planned",
             "is_low_risk_counter_evidence": False,
         }
+        if row.get("gap_state") or row.get("gap_reason"):
+            item["gap_state"] = row.get("gap_state")
+            item["gap_reason"] = row.get("gap_reason")
         if row.get("response_limited"):
             item.update(
                 {
@@ -14601,6 +14890,7 @@ def execute_sample_round(
     batch_payload = _summarize_chunked_batch_payloads(payloads)
     contract_validation = _validate_chunked_batch_payloads(payloads)
     batch_started = time.monotonic()
+    scheduler_state = _new_scheduler_state()
 
     def execute_chunk_group(
         *,
@@ -14609,7 +14899,141 @@ def execute_sample_round(
     ) -> list[dict[str, Any]]:
         nonlocal batch_index_counter
         results: list[dict[str, Any]] = []
+
+        def append_short_circuit_chunk(
+            *,
+            chunk_offset: int,
+            reason: str,
+            reason_items: list[SourcePlanItem],
+        ) -> None:
+            nonlocal batch_index_counter
+            if not reason_items:
+                return
+            batch_index_counter += 1
+            short_circuit_type = "auth_failed_short_circuit" if reason == "auth_session_issue" else "timeout_circuit_breaker"
+            gap_state = "auth_failed" if reason == "auth_session_issue" else "source_gap"
+            circuit_open = reason == "circuit_open_timeout"
+            chunk_id = f"round_{round_id}_{stage_name}_{chunk_offset}_short_circuit_{reason}"
+            current_running_sources = [item.source_id for item in reason_items]
+            source_actions = unique_strings([item.action for item in reason_items])
+            current_source_group = "+".join(source_actions) if source_actions else "short_circuit_source_gap"
+            checkpoint_source_plan_so_far.extend(reason_items)
+            short_circuit_result = build_short_circuit_batch_result(
+                reason_items,
+                gap_state=gap_state,
+                gap_reason=reason,
+                short_circuit_type=short_circuit_type,
+                circuit_open=circuit_open,
+            )
+            checkpoint_results_so_far.append(short_circuit_result)
+            results.append(short_circuit_result)
+            chunk_quality = merge_source_quality(reason_items, short_circuit_result)
+            buckets = chunk_quality.get("buckets", {})
+            timing_row = {
+                "chunk_id": chunk_id,
+                "round_index": round_id,
+                "batch_index": batch_index_counter,
+                "source_group": current_source_group,
+                "actions": source_actions,
+                "action_count": len(reason_items),
+                "submit_started_at": _iso_now(),
+                "submit_finished_at": _iso_now(),
+                "service_wait_started_at": None,
+                "service_returned_at": _iso_now(),
+                "submit_ms": 0,
+                "wait_ms": 0,
+                "artifact_ms": 0,
+                "checkpoint_ms": 0,
+                "batch_elapsed_ms": 0,
+                "per_source_elapsed_ms": None,
+                "completed_count": len(buckets.get("completed", [])),
+                "partial_count": len(buckets.get("partial", [])),
+                "blocked_count": len(buckets.get("blocked", [])) + len(buckets.get("auth_failed", [])) + len(buckets.get("parse_error", [])),
+                "timeout_count": len(buckets.get("timeout", [])),
+                "auth_failed_count": len(buckets.get("auth_failed", [])),
+                "source_gap_count": len(reason_items),
+                "pending_count": 0,
+                "short_circuit_count": len(reason_items),
+                "circuit_open_count": 1 if circuit_open else 0,
+                "affected_user_count": _source_plan_user_count(reason_items),
+                "gap_reason_counts": {reason: len(reason_items)},
+                "short_circuit_events": [
+                    {
+                        "source_action": action,
+                        "gap_reason": reason,
+                        "short_circuit_type": short_circuit_type,
+                        "affected_user_count": _source_plan_user_count([item for item in reason_items if item.action == action]),
+                    }
+                    for action in source_actions
+                ],
+                "circuit_open_events": [
+                    {
+                        "source_action": action,
+                        "gap_reason": reason,
+                        "affected_user_count": _source_plan_user_count([item for item in reason_items if item.action == action]),
+                    }
+                    for action in source_actions
+                ] if circuit_open else [],
+            }
+            timing_trace["chunks"].append(timing_row)
+            timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
+            checkpoint_started = time.monotonic()
+            if checkpoint_enabled:
+                checkpoint_path, progress_row = _write_sample_batch_checkpoint(
+                    checkpoint_dir=checkpoint_dir,
+                    case_id=case_id,
+                    round_index=round_id,
+                    batch_index=batch_index_counter,
+                    chunk_id=chunk_id,
+                    current_source_group=current_source_group,
+                    current_running_sources=current_running_sources,
+                    current_source_plan=checkpoint_source_plan_so_far,
+                    current_results=[*checkpoint_results_so_far, *([build_dry_run_batch_result(skipped)] if skipped else [])],
+                    sampled_entities=sampled_entities,
+                    mode=args.mode,
+                    disabled_actions=disabled_actions,
+                    waiting_reason=reason,
+                    timing_trace=timing_trace,
+                    checkpoint_phase="done",
+                )
+                timing_row["checkpoint_ms"] = _elapsed_ms(checkpoint_started)
+                checkpoint_files.append(checkpoint_path)
+                progress_trace.append(progress_row)
+                if args.mode == "live":
+                    _emit_sample_batch_progress(progress_row)
+            else:
+                progress_trace.append(
+                    {
+                        "current_chunk_id": chunk_id,
+                        "current_round_index": round_id,
+                        "current_batch_index": batch_index_counter,
+                        "current_source_group": current_source_group,
+                        "current_running_sources": current_running_sources,
+                        "elapsed_seconds": round((timing_trace.get("global", {}).get("total_elapsed_ms") or 0) / 1000, 2),
+                        "last_checkpoint_file": None,
+                        "completed_source_count": timing_row["completed_count"],
+                        "partial_source_count": timing_row["partial_count"],
+                        "blocked_source_count": timing_row["blocked_count"],
+                        "pending_source_count": 0,
+                    }
+                )
+
         for chunk_offset, (payload, chunk_items) in enumerate(chunk_group, start=1):
+            active_chunk_items, _circuit_skipped_items, circuit_items_by_reason = _split_by_scheduler_circuit(
+                scheduler_state,
+                chunk_items,
+            )
+            for reason, reason_items in sorted(circuit_items_by_reason.items()):
+                append_short_circuit_chunk(chunk_offset=chunk_offset, reason=reason, reason_items=reason_items)
+            if not active_chunk_items:
+                continue
+            if len(active_chunk_items) != len(chunk_items):
+                payload = build_batch_payload(
+                    str(payload.get("request_id") or f"{case_id}:round_{round_id}:{stage_name}:{chunk_offset}"),
+                    active_chunk_items,
+                    dry_run=args.mode == "dry_run",
+                )
+                chunk_items = active_chunk_items
             batch_index_counter += 1
             chunk_id = f"round_{round_id}_{stage_name}_{chunk_offset}"
             current_running_sources = [item.source_id for item in chunk_items]
@@ -14636,7 +15060,15 @@ def execute_sample_round(
                 "partial_count": 0,
                 "blocked_count": 0,
                 "timeout_count": 0,
+                "auth_failed_count": 0,
+                "source_gap_count": 0,
                 "pending_count": len(chunk_items),
+                "short_circuit_count": 0,
+                "circuit_open_count": 0,
+                "affected_user_count": _source_plan_user_count(chunk_items),
+                "gap_reason_counts": {},
+                "short_circuit_events": [],
+                "circuit_open_events": [],
             }
             timing_trace["chunks"].append(timing_row)
             timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
@@ -14691,6 +15123,18 @@ def execute_sample_round(
             timing_row["partial_count"] = len(buckets.get("partial", []))
             timing_row["blocked_count"] = len(buckets.get("blocked", [])) + len(buckets.get("auth_failed", [])) + len(buckets.get("parse_error", []))
             timing_row["timeout_count"] = len(buckets.get("timeout", []))
+            timing_row["auth_failed_count"] = len(buckets.get("auth_failed", []))
+            timing_row["source_gap_count"] = (
+                timing_row["timeout_count"]
+                + len(buckets.get("blocked", []))
+                + len(buckets.get("auth_failed", []))
+                + len(buckets.get("parse_error", []))
+                + len(buckets.get("partial", []))
+            )
+            timing_row["gap_reason_counts"] = _gap_reason_counts_from_quality(chunk_quality)
+            opened_events = _update_scheduler_state_from_chunk(scheduler_state, chunk_quality=chunk_quality)
+            timing_row["circuit_open_count"] = len(opened_events)
+            timing_row["circuit_open_events"] = opened_events
             timing_trace["global"]["total_elapsed_ms"] = _elapsed_ms(round_started)
             checkpoint_started = time.monotonic()
             if checkpoint_enabled:
@@ -15086,10 +15530,22 @@ def execute_sample_round(
             "completed": item.get("completed_count"),
             "blocked": item.get("blocked_count"),
             "timeout": item.get("timeout_count"),
+            "auth_failed": item.get("auth_failed_count"),
+            "source_gap": item.get("source_gap_count"),
+            "short_circuit": item.get("short_circuit_count"),
+            "circuit_open": item.get("circuit_open_count"),
+            "gap_reason_counts": item.get("gap_reason_counts"),
+            "affected_user_count": item.get("affected_user_count"),
             "pending": item.get("pending_count"),
         }
         for item in timing_trace.get("chunks", [])
     ]
+    round_result["scheduler_short_circuit_summary"] = {
+        "event_count": len(scheduler_state.get("events", []) or []),
+        "open_circuit_actions": sorted((scheduler_state.get("open_circuits") or {}).keys()),
+        "events": scheduler_state.get("events", []),
+        "no_risk_counter_evidence": False,
+    }
     return round_result
 
 
