@@ -37,6 +37,7 @@ from candidate_protocol import (  # noqa: E402
     infer_value_type,
     is_numeric_bucketable,
 )
+from llm_commonality_proposer import CommonalityProposer, write_proposer_input  # noqa: E402
 
 
 HIGH_CARDINALITY_LEAVES = {
@@ -116,6 +117,7 @@ REQUIRED_CANDIDATE_FIELDS = {
     "commonality_family",
     "feature_definition_status",
     "commonality_evidence",
+    "commonality_level",
 }
 
 REGISTERED_ACTIONS = {
@@ -137,6 +139,14 @@ REGISTERED_ACTIONS = {
     "rcp_policy_tree_lookup",
     "rcp_node_policy_attribution",
     "rcp_node_bind_policy_attribution",
+}
+
+PROPOSAL_COMMONALITY_FAMILIES = {
+    "field_value_commonality",
+    "numeric_bucket_commonality",
+    "behavior_pattern_commonality",
+    "structure_relation_commonality",
+    "expanded_feature_commonality",
 }
 
 ACTION_SOURCE_DEFAULTS = {
@@ -521,6 +531,173 @@ def _skip_original_realtime_field(source_name: str, rel_path: str) -> bool:
 def _candidate_id(source_name: str, field_path: str, value: str, grain: str, prefix: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9]+", "_", f"{source_name}_{field_path}_{value or grain}").strip("_")
     return f"{prefix}_{safe[:96]}"
+
+
+def _proposal_slug(value: Any, fallback: str = "dynamic_proposal") -> str:
+    safe = re.sub(r"[^A-Za-z0-9]+", "_", str(value or fallback)).strip("_")
+    return safe[:96] or fallback
+
+
+def _proposal_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if value in (None, ""):
+        return []
+    return [str(value)]
+
+
+def _proposal_name(proposal: dict[str, Any]) -> str:
+    return str(
+        proposal.get("derived_feature_name")
+        or proposal.get("proposal_name")
+        or proposal.get("discovery_name")
+        or proposal.get("proposal_id")
+        or "dynamic_proposal"
+    )
+
+
+def _proposal_source_parts(action_or_source: str) -> tuple[str, str]:
+    if "." not in action_or_source:
+        return action_or_source or "llm_proposal", action_or_source or "llm_proposal"
+    source_name, source_action = action_or_source.split(".", 1)
+    return source_name or "llm_proposal", source_action or action_or_source
+
+
+def candidates_from_llm_proposal_payload(
+    proposals_payload: dict[str, Any],
+    *,
+    extraction_source: str,
+    proposer_mode: str,
+    raw_observation_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """Convert proposal payloads into protocol-compatible discovery candidates.
+
+    This bridge intentionally does not recompute support/miss, run schema/noise
+    filters, rank proposals, or mark candidates verified. Those steps belong to
+    replay / validator layers.
+    """
+    action_or_source = str(proposals_payload.get("action_or_source") or "llm_proposal")
+    source_name, source_action = _proposal_source_parts(action_or_source)
+    output: list[dict[str, Any]] = []
+    for proposal in proposals_payload.get("proposals", []) or []:
+        if not isinstance(proposal, dict):
+            continue
+        name = _proposal_name(proposal)
+        proposal_id = str(proposal.get("proposal_id") or _proposal_slug(name))
+        slug = _proposal_slug(f"{proposal_id}_{name}")
+        source_fields = _proposal_list(proposal.get("source_fields") or proposal.get("required_fields"))
+        required_fields = _proposal_list(proposal.get("required_fields") or proposal.get("source_fields"))
+        value_type = str(proposal.get("value_type") or "compatibility")
+        if value_type not in {"category", "boolean", "count", "duration", "score", "ratio", "sequence", "set", "compatibility", "unknown"}:
+            value_type = "unknown"
+        commonality_family = str(proposal.get("commonality_family") or "expanded_feature_commonality")
+        if commonality_family not in PROPOSAL_COMMONALITY_FAMILIES:
+            commonality_family = "expanded_feature_commonality"
+        suggested_value = str(proposal.get("suggested_bucket_or_value") or proposal.get("value_summary") or "dynamic_proposal")
+        claimed_denominator = proposal.get("estimated_risk_denominator", proposal.get("claimed_denominator"))
+        claimed_hit_count = proposal.get("estimated_risk_hit_count", proposal.get("claimed_hit_count"))
+        claimed_hit_rate = proposal.get("estimated_risk_hit_rate", proposal.get("claimed_hit_rate"))
+        candidate = {
+            "candidate_id": f"llm_proposal_{slug}",
+            "source": "llm_proposal",
+            "source_name": source_name,
+            "platform": "unknown",
+            "action_or_layer": source_action,
+            "source_action": source_action,
+            "layer": source_action,
+            "field_path": f"{action_or_source}.{slug}",
+            "field_value_or_pattern": suggested_value,
+            "field_value": suggested_value,
+            "candidate_grain": "value_pattern",
+            "field_role_hint": "unknown_need_review",
+            "risk_observed_count": 0,
+            "risk_sample_count": 0,
+            "risk_covered_count": 0,
+            "risk_hit_count": 0,
+            "risk_value_count": 0,
+            "risk_hit_rate": 0.0,
+            "risk_value_ratio": 0.0,
+            "supporting_user_ids": [],
+            "supporting_device_ids": [],
+            "sample_values": [suggested_value] if suggested_value else [],
+            "extraction_source": extraction_source,
+            "extraction_confidence": "low",
+            "need_raw_confirm": True,
+            "alignment_match_type": "llm_proposal_bridge_not_replayed",
+            "alignment_confidence": "low",
+            "unresolved_reason": "support_miss_schema_noise_not_recomputed_in_l3_bridge",
+            "notes": "LLM proposal bridge candidate; support/miss and schema/noise decisions require replay or validator layer.",
+            "feature_type": "derived_feature",
+            "value_type": value_type,
+            "feature_name": name,
+            "proposal_id": proposal_id,
+            "proposal_source": "llm_proposal",
+            "proposal_type": proposal.get("proposal_type"),
+            "commonality_claim": proposal.get("commonality_claim") or proposal.get("description"),
+            "logic_reason": proposal.get("logic_reason"),
+            "value_summary": proposal.get("value_summary"),
+            "why_not_plain_field_value": proposal.get("why_not_plain_field_value"),
+            "risk_semantic_type": proposal.get("risk_semantic_type"),
+            "risk_semantic_reason": proposal.get("risk_semantic_reason"),
+            "dennis_lens_tags": proposal.get("dennis_lens_tags") or [],
+            "source_fields": source_fields,
+            "source_events": _proposal_list(proposal.get("source_events")),
+            "feature_definition": {
+                "proposal_name": name,
+                "description": proposal.get("description"),
+                "calculation_logic": proposal.get("calculation_logic") or proposal.get("recompute_rule"),
+                "recompute_rule": proposal.get("recompute_rule") or proposal.get("calculation_logic"),
+                "required_fields": required_fields,
+                "source_fields": source_fields,
+                "proposal_type": proposal.get("proposal_type"),
+                "risk_semantic_type": proposal.get("risk_semantic_type"),
+                "risk_semantic_reason": proposal.get("risk_semantic_reason"),
+                "suggested_bucket_or_value": proposal.get("suggested_bucket_or_value"),
+                "support_estimate_status": "proposal_claim_not_recomputed",
+            },
+            "bucket_label": suggested_value,
+            "bucket_range": None,
+            "candidate_value": suggested_value,
+            "normal_hit_rate": None,
+            "lift": None,
+            "evidence_examples": [],
+            "eval_required_fields": required_fields,
+            "commonality_family": commonality_family,
+            "commonality_level": "low",
+            "feature_definition_status": "present",
+            "commonality_evidence": [{
+                "evidence_type": "llm_proposal_claim_not_recomputed",
+                "description": proposal.get("commonality_evidence") or proposal.get("commonality_claim"),
+                "required_fields": required_fields,
+                "source_fields": source_fields,
+                "claimed_hit_count": claimed_hit_count,
+                "claimed_denominator": claimed_denominator,
+                "claimed_hit_rate": claimed_hit_rate,
+            }],
+            "discovery_status": "discovery_only",
+            "proposal_provenance": {
+                "proposal_id": proposal_id,
+                "proposal_name": name,
+                "proposal_source": "llm_proposal",
+                "proposer_mode": proposer_mode,
+                "raw_observation_path": str(raw_observation_path or ""),
+                "support_estimate_status": "proposal_claim_not_recomputed",
+            },
+            "support_estimate": {
+                "status": "proposal_claim_not_recomputed",
+                "claimed_hit_count": claimed_hit_count,
+                "claimed_denominator": claimed_denominator,
+                "claimed_hit_rate": claimed_hit_rate,
+            },
+            "candidate_source": "llm_proposal",
+            "readiness": "needs_replay",
+            "next_step_suggestion": "baseline_and_replay_needed",
+            "replay_required": True,
+            "requires_l6_replay": True,
+            "l6_replay_required_reason": "proposal_bridge_candidate_requires_support_miss_replay_and_false_positive_validation",
+        }
+        output.append(apply_candidate_protocol(candidate))
+    return output
 
 
 def make_candidate(
@@ -1080,12 +1257,26 @@ def main() -> None:
     parser.add_argument("--input-l4-cards", help="Existing L4 cards used for field-level fallback")
     parser.add_argument("--include-gr9-label-summary", action="store_true",
                         help="Materialize reviewed G-R9 oneRisk label summary from this task context")
+    parser.add_argument("--llm-commonality-mode", choices=("off", "fixture", "summary", "deep", "code_assisted"), default="off",
+                        help="Optional LLM-guided commonality proposal mode. No real LLM is called by this script.")
+    parser.add_argument("--llm-proposal-fixture", help="Fixture proposal JSON used when --llm-commonality-mode=fixture")
+    parser.add_argument("--llm-proposer-input-output", help="Optional output path for prepared source-group proposer input")
+    parser.add_argument("--llm-proposals-output", help="Optional output path for accepted/rejected proposal audit JSON")
     parser.add_argument("--output", required=True, help="Output structured L3 candidate JSON")
     parser.add_argument("--summary-md", required=True, help="Output Markdown summary")
     args = parser.parse_args()
 
     candidates: list[dict[str, Any]] = []
     notes: list[str] = []
+    proposal_audit = {
+        "mode": args.llm_commonality_mode,
+        "proposal_payload_count": 0,
+        "proposal_candidate_count": 0,
+        "proposal_bridge_status": "discovery_only_not_replayed",
+        "replay_required": True,
+        "validator_used": False,
+        "notes": [],
+    }
 
     if args.input_l4_cards:
         candidates.extend(candidates_from_l4_cards(args.input_l4_cards))
@@ -1103,6 +1294,33 @@ def main() -> None:
         for path in args.input_raw_json:
             candidates.extend(candidates_from_raw_observations(path))
             notes.append(f"raw/snapshot candidates extracted from {path}")
+            proposer = CommonalityProposer(
+                mode=args.llm_commonality_mode,
+                fixture_path=args.llm_proposal_fixture,
+            )
+            proposal_result = proposer.propose(path)
+            proposal_audit["notes"].extend(proposal_result.get("notes", []))
+            if args.llm_proposer_input_output:
+                write_proposer_input(args.llm_proposer_input_output, proposal_result.get("source_groups", {}))
+            payloads = proposal_result.get("proposal_payloads", [])
+            proposal_audit["proposal_payload_count"] += len(payloads)
+            for payload in payloads:
+                proposal_candidates = candidates_from_llm_proposal_payload(
+                    payload,
+                    extraction_source=f"llm_proposal_bridge:{args.llm_commonality_mode}:{path}",
+                    proposer_mode=args.llm_commonality_mode,
+                    raw_observation_path=path,
+                )
+                candidates.extend(proposal_candidates)
+                proposal_audit["proposal_candidate_count"] += len(proposal_candidates)
+            if args.llm_commonality_mode == "off":
+                notes.append("LLM-guided commonality proposer disabled")
+            else:
+                notes.append(
+                    f"LLM-guided commonality proposer mode={args.llm_commonality_mode}; "
+                    f"proposal_bridge_candidates={proposal_audit['proposal_candidate_count']}; "
+                    "support/miss replay and schema/noise validation are not performed by this extractor"
+                )
     else:
         notes.append("no local raw/snapshot JSON found or provided; no fabricated raw-only values")
 
@@ -1121,6 +1339,11 @@ def main() -> None:
     summary = Path(args.summary_md)
     summary.parent.mkdir(parents=True, exist_ok=True)
     summary.write_text(build_summary(candidates, notes), encoding="utf-8")
+
+    if args.llm_proposals_output:
+        proposal_out = Path(args.llm_proposals_output)
+        proposal_out.parent.mkdir(parents=True, exist_ok=True)
+        proposal_out.write_text(json.dumps(proposal_audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"wrote {len(candidates)} candidates -> {output}")
     print(f"wrote summary -> {summary}")
