@@ -69,6 +69,14 @@ BODY_KEYS_TO_SUPPRESS = {
     "html",
     "raw_payload",
 }
+RAW_CONTRACT_BODY_KEYS = (
+    "raw_body",
+    "body",
+    "response_body",
+    "upstream_body",
+    "capped_body",
+    "payload",
+)
 STDOUT_SECRET_KEY_FRAGMENTS = (
     "cookie",
     "token",
@@ -571,6 +579,38 @@ def sanitize_for_output(value: Any) -> Any:
         return clean
     if isinstance(value, list):
         return [sanitize_for_output(item) for item in value]
+    return value
+
+
+def sanitize_for_raw_observation_contract(value: Any) -> Any:
+    """Retain non-secret nested bodies for local L1 contract artifacts."""
+    if isinstance(value, dict):
+        clean: dict[str, Any] = {}
+        for key, item in value.items():
+            if _is_credential_secret_key(str(key)):
+                continue
+            clean[str(key)] = sanitize_for_raw_observation_contract(item)
+        return clean
+    if isinstance(value, list):
+        return [sanitize_for_raw_observation_contract(item) for item in value]
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return "<binary_body_omitted>"
+    if isinstance(value, str):
+        credential_field = r"(?i:cookie|cookies|token|accessToken|refreshToken|session|authorization|password)"
+        value = re.sub(
+            rf'("{credential_field}"\s*:\s*")[^"]*(")',
+            r"\1<credential_secret_removed>\2",
+            value,
+        )
+        value = re.sub(
+            rf'(\\\"{credential_field}\\\"\s*:\s*\\\")[^\\"]*(\\\")',
+            r"\1<credential_secret_removed>\2",
+            value,
+        )
+        return value
     return value
 
 
@@ -2306,6 +2346,186 @@ def _rows_by_source_id_from_batch(batch_result: dict[str, Any]) -> dict[str, dic
     return rows
 
 
+def _source_contract_identity(item: SourcePlanItem) -> tuple[str, str, str]:
+    action = str(item.action or "")
+    if action == "weapon_inventory":
+        return "weapon_android", "raw_data", "android"
+    if action == "login_logs_search":
+        return "infra_user_action_log", "login", "unknown"
+    if action == "archives_user_analysis":
+        return "archives_user_analysis", "user_analysis", "unknown"
+    if action == "archives_user_profile":
+        return "archives_user_profile", "profile", "unknown"
+    if action == "rcp_event_feature_list":
+        return "rcp_event_feature_list", "feature_list", "unknown"
+    if action == "rcp_event_detail":
+        return "rcp_event_detail", "event_detail", "unknown"
+    if action == "rcp_fast_query_hbase":
+        return "rcp_fast_query_hbase", "strategy", "unknown"
+    return action or "unknown_source", action or "unknown", "unknown"
+
+
+def _contract_body_candidate(value: Any) -> Any:
+    if not isinstance(value, dict):
+        return None
+    for key in RAW_CONTRACT_BODY_KEYS:
+        if key in value and value.get(key) not in (None, ""):
+            return value.get(key)
+    upstream = value.get("upstream")
+    if isinstance(upstream, dict):
+        body = _contract_body_candidate(upstream)
+        if body is not None:
+            return body
+    source_result = value.get("source_result")
+    if isinstance(source_result, dict):
+        body = _contract_body_candidate(source_result)
+        if body is not None:
+            return body
+    result = value.get("result")
+    if isinstance(result, (dict, list)):
+        return result
+    data = value.get("data")
+    if isinstance(data, (dict, list)):
+        return data
+    return None
+
+
+def _raw_body_status(row: dict[str, Any], raw_body: Any) -> str:
+    status = str(row.get("source_status") or row.get("category") or "").lower()
+    if status in {"timeout"} or row.get("timed_out") is True or row.get("timeout") is True:
+        return "timeout"
+    if status in {"blocked", "auth_failed", "parse_error", "missing_required_fields", "failed"}:
+        return "blocked"
+    if raw_body is None:
+        return "projected_only"
+    if row.get("body_truncated") is True or str(row.get("raw_body_handling") or "").lower() in {"capped", "json_array_capped"}:
+        return "partial_nested_raw"
+    if isinstance(raw_body, (dict, list)):
+        return "full_nested_raw"
+    return "partial_nested_raw"
+
+
+def _raw_body_format(raw_body: Any) -> str:
+    if isinstance(raw_body, dict):
+        return "json_object"
+    if isinstance(raw_body, list):
+        return "json_array"
+    if raw_body is None:
+        return "not_available"
+    return "scalar_or_text"
+
+
+def _field_count(value: Any) -> int:
+    if isinstance(value, dict):
+        return sum(_field_count(child) for child in value.values()) or len(value)
+    if isinstance(value, list):
+        return sum(_field_count(child) for child in value)
+    return 1 if value not in (None, "") else 0
+
+
+def build_l1_raw_observation_contract(
+    *,
+    case_id: str,
+    source_plan: list[SourcePlanItem],
+    batch_result: dict[str, Any],
+    sampled_entities: list[str],
+) -> dict[str, Any]:
+    plan_by_id = {item.source_id: item for item in source_plan}
+    rows_by_id = _rows_by_source_id_from_batch(batch_result)
+    users: dict[str, dict[str, Any]] = {
+        str(user_id): {
+            "user_id": str(user_id),
+            "sample_role": "risk",
+            "sources": {},
+        }
+        for user_id in sampled_entities
+    }
+    gap_rows: list[dict[str, Any]] = []
+
+    for source_id, row in sorted(rows_by_id.items()):
+        item = plan_by_id.get(source_id)
+        params = item.params if item else {}
+        user_id = str(params.get("user_id") or row.get("user_id") or "")
+        if not user_id:
+            match = re.search(r"entity_(\d+)", source_id)
+            if match:
+                index = int(match.group(1)) - 1
+                if 0 <= index < len(sampled_entities):
+                    user_id = str(sampled_entities[index])
+        if not user_id:
+            user_id = "unknown_user"
+            users.setdefault(user_id, {"user_id": user_id, "sample_role": "unknown", "sources": {}})
+
+        source_name, layer, platform = _source_contract_identity(item) if item else (str(row.get("action") or "unknown_source"), str(row.get("action") or "unknown"), "unknown")
+        raw_body = _contract_body_candidate(row)
+        sanitized_body = sanitize_for_raw_observation_contract(raw_body) if raw_body is not None else None
+        raw_status = _raw_body_status(row, sanitized_body)
+        action_payload = {
+            "source_name": source_name,
+            "canonical_source_hint": source_name,
+            "platform": platform,
+            "action": item.action if item else row.get("action"),
+            "layer": layer,
+            "source_status": row.get("source_status") or row.get("category") or raw_status,
+            "raw_body_status": raw_status,
+            "observed_at": _iso_now(),
+            "raw_body_format": _raw_body_format(sanitized_body),
+            "raw_body": sanitized_body,
+            "redaction": {
+                "credential_secrets_removed": True,
+                "risk_entity_identifiers_retained_for_internal_review": True,
+            },
+            "field_count_hint": {
+                "raw_input_field_count": _field_count(sanitized_body),
+                "commonality_eligible_field_count": None,
+            },
+            "source_quality": {
+                "body_present": bool(row.get("body_present")),
+                "body_truncated": bool(row.get("body_truncated")),
+                "raw_body_handling": row.get("raw_body_handling"),
+                "http_status": row.get("http_status"),
+                "limitations": [] if raw_status == "full_nested_raw" else [raw_status],
+            },
+        }
+        users.setdefault(user_id, {"user_id": user_id, "sample_role": "risk", "sources": {}})
+        source_bucket = users[user_id]["sources"].setdefault(source_name, {})
+        unique_layer = layer
+        suffix = 2
+        while unique_layer in source_bucket:
+            unique_layer = f"{layer}_{suffix}"
+            suffix += 1
+        source_bucket[unique_layer] = action_payload
+        if raw_status != "full_nested_raw":
+            gap_rows.append({
+                "user_id": user_id,
+                "source_id": source_id,
+                "source": source_name,
+                "layer": unique_layer,
+                "raw_body_status": raw_status,
+                "source_status": action_payload["source_status"],
+                "reason": "raw body unavailable or partial in browser-backed passthrough envelope",
+            })
+
+    return {
+        "schema_version": "e2e_risk_observation_input_contract_v0_1",
+        "case_id": case_id,
+        "generated_at": _iso_now(),
+        "export_mode": "source_observation_snapshot",
+        "credential_secret_policy": {
+            "cookie": "removed",
+            "token": "removed",
+            "session": "removed",
+            "authorization": "removed",
+            "password": "removed",
+            "headers": "credential_headers_removed",
+        },
+        "source_registry_version": "registered_actions_current",
+        "field_alignment_registry_version": "realtime_offline_field_alignment_v0_1",
+        "users": [users[key] for key in sorted(users)],
+        "raw_body_gap_report": gap_rows,
+    }
+
+
 def _key_matches_business_field(key: str, business_field: str) -> bool:
     aliases = BUSINESS_FIELD_ALIASES.get(business_field, {business_field})
     lowered = key.lower()
@@ -3064,9 +3284,19 @@ def merge_batch_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         for row in normalize_mapping_or_list(result.get("transport_status_matrix")):
             source_id = str(row.get("source_id") or f"unknown_{len(merged_transport) + 1}")
             merged_transport[source_id] = row
-        for row in rows_from_source_results(result.get("source_results")):
-            source_id = str(row.get("source_id") or f"unknown_{len(merged_source_results) + 1}")
-            merged_source_results[source_id] = {"source_id": source_id, "transport": row}
+        for item in normalize_mapping_or_list(result.get("source_results")):
+            if not isinstance(item, dict):
+                continue
+            transport = item.get("transport") if isinstance(item.get("transport"), dict) else {}
+            row = dict(transport or item)
+            source_id = str(item.get("source_id") or row.get("source_id") or f"unknown_{len(merged_source_results) + 1}")
+            row.setdefault("source_id", source_id)
+            merged_source_results[source_id] = {
+                "source_id": source_id,
+                "action": item.get("action") or row.get("action"),
+                "transport": row,
+                "source_result": item,
+            }
         merged_missing.extend(normalize_mapping_or_list(result.get("missing_or_failed_sources")))
         if isinstance(result.get("harness_error"), dict):
             harness_errors.append(result["harness_error"])
@@ -14776,6 +15006,12 @@ def execute_sample_round(
         if isinstance(round_item.get("mock_current_observations"), list)
         else None,
     )
+    round_result["l1_raw_observation_contract"] = build_l1_raw_observation_contract(
+        case_id=case_id,
+        source_plan=combined_source_plan,
+        batch_result=batch_result_raw,
+        sampled_entities=sampled_entities,
+    )
     round_result["batch_contract_validation"] = contract_validation
     round_result["executable_source_count"] = len(executable)
     round_result["skipped_source_count"] = len(skipped)
@@ -16074,6 +16310,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--max-rounds", type=int)
     parser.add_argument("--max-deep-checked", type=int)
     parser.add_argument("--output-json")
+    parser.add_argument("--raw-observation-contract-json")
     parser.add_argument("--checkpoint-dir")
     parser.add_argument("--include-abnormal-publish", action="store_true")
     parser.add_argument("--include-same-device", action="store_true")
@@ -16081,9 +16318,72 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def collect_l1_raw_observation_contract(result: dict[str, Any]) -> dict[str, Any]:
+    contracts = [
+        item.get("l1_raw_observation_contract")
+        for item in result.get("round_results", [])
+        if isinstance(item, dict) and isinstance(item.get("l1_raw_observation_contract"), dict)
+    ]
+    if not contracts:
+        return {
+            "schema_version": "e2e_risk_observation_input_contract_v0_1",
+            "case_id": str(result.get("task") or "unknown_case"),
+            "generated_at": _iso_now(),
+            "export_mode": "source_observation_snapshot",
+            "users": [],
+            "raw_body_gap_report": [
+                {
+                    "raw_body_status": "projected_only",
+                    "reason": "no l1_raw_observation_contract present in result",
+                }
+            ],
+        }
+    users_by_id: dict[str, dict[str, Any]] = {}
+    gaps: list[dict[str, Any]] = []
+    for contract in contracts:
+        gaps.extend(contract.get("raw_body_gap_report") or [])
+        for user in contract.get("users", []):
+            if not isinstance(user, dict):
+                continue
+            user_id = str(user.get("user_id") or "unknown_user")
+            target = users_by_id.setdefault(user_id, {
+                "user_id": user_id,
+                "sample_role": user.get("sample_role") or "risk",
+                "sources": {},
+            })
+            for source_name, source_payload in (user.get("sources") or {}).items():
+                if not isinstance(source_payload, dict):
+                    continue
+                target_source = target["sources"].setdefault(source_name, {})
+                for layer, layer_payload in source_payload.items():
+                    unique_layer = layer
+                    suffix = 2
+                    while unique_layer in target_source:
+                        unique_layer = f"{layer}_{suffix}"
+                        suffix += 1
+                    target_source[unique_layer] = layer_payload
+    first = contracts[0]
+    return {
+        "schema_version": "e2e_risk_observation_input_contract_v0_1",
+        "case_id": first.get("case_id") or str(result.get("task") or "unknown_case"),
+        "generated_at": _iso_now(),
+        "export_mode": "source_observation_snapshot",
+        "credential_secret_policy": first.get("credential_secret_policy", {}),
+        "source_registry_version": first.get("source_registry_version"),
+        "field_alignment_registry_version": first.get("field_alignment_registry_version"),
+        "users": [users_by_id[key] for key in sorted(users_by_id)],
+        "raw_body_gap_report": gaps,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     result = build_result(args)
+    if args.raw_observation_contract_json:
+        raw_contract_path = Path(args.raw_observation_contract_json)
+        raw_contract_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_contract = collect_l1_raw_observation_contract(result)
+        raw_contract_path.write_text(json.dumps(raw_contract, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
     output_result = build_safe_stdout_result(result)
     if args.output_json:
         output_path = Path(args.output_json)
