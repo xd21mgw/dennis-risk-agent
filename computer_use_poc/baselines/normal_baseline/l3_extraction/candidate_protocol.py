@@ -17,8 +17,21 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE_REGISTRY_PATH = ROOT / "baseline_registry_v0_1.json"
 
 FEATURE_TYPES = {"raw_field", "numeric_bucket", "derived_feature"}
-VALUE_TYPES = {"category", "boolean", "count", "duration", "score", "ratio", "sequence", "unknown"}
+VALUE_TYPES = {"category", "boolean", "count", "duration", "score", "ratio", "sequence", "set", "compatibility", "unknown"}
 BASELINE_MODES = {"baseline_supported", "discovery_only"}
+BASELINE_STATUSES = {
+    "normal_baseline_available",
+    "baseline_missing",
+    "lookup_unreliable",
+    "not_applicable",
+}
+NEXT_STEP_SUGGESTIONS = {
+    "baseline_build_needed",
+    "replay_needed",
+    "baseline_and_replay_needed",
+    "report_only",
+    "drop_low_value",
+}
 COMMONALITY_FAMILIES = {
     "field_value_commonality",
     "numeric_bucket_commonality",
@@ -26,6 +39,7 @@ COMMONALITY_FAMILIES = {
     "structure_relation_commonality",
     "expanded_feature_commonality",
 }
+COMMONALITY_LEVELS = {"high", "medium", "low"}
 NUMERIC_BUCKETS = [
     ("<=1", None, 1.0),
     ("<=3", None, 3.0),
@@ -169,6 +183,27 @@ def feature_definition_status(feature_definition: Any) -> str:
     return "present" if bool(feature_definition) else "missing"
 
 
+def commonality_level_for(item: dict[str, Any]) -> str:
+    try:
+        hit_count = int(item.get("risk_hit_count") or 0)
+    except (TypeError, ValueError):
+        hit_count = 0
+    try:
+        hit_rate = float(item.get("risk_hit_rate") or 0.0)
+    except (TypeError, ValueError):
+        hit_rate = 0.0
+    try:
+        denominator = int(item.get("risk_denominator") or item.get("risk_observed_count") or item.get("risk_sample_count") or 0)
+    except (TypeError, ValueError):
+        denominator = 0
+    exact_rate = (hit_count / denominator) if denominator else hit_rate
+    if (hit_rate >= 0.67 or exact_rate >= (2 / 3)) and hit_count >= 3:
+        return "high"
+    if hit_rate >= 0.5 and hit_count >= 3:
+        return "medium"
+    return "low"
+
+
 def default_commonality_evidence(item: dict[str, Any]) -> list[dict[str, Any]]:
     if item.get("feature_type") == "derived_feature":
         return []
@@ -207,6 +242,39 @@ def apply_candidate_protocol(candidate: dict[str, Any], registry: dict[str, Any]
         item["commonality_family"] = "numeric_bucket_commonality"
     item.setdefault("feature_definition_status", feature_definition_status(item.get("feature_definition")))
     item.setdefault("commonality_evidence", default_commonality_evidence(item))
+    item.setdefault("commonality_level", commonality_level_for(item))
+    item.setdefault("candidate_family", item.get("commonality_family"))
+    if item.get("feature_type") == "numeric_bucket":
+        item.setdefault("candidate_source", "numeric_bucket")
+    elif item.get("feature_type") == "derived_feature":
+        item.setdefault("candidate_source", item.get("proposal_source") or "llm_derived")
+    else:
+        item.setdefault("candidate_source", "deterministic_field_value")
+    item.setdefault("proposal_source", None)
+    item.setdefault("proposal_type", None)
+    item.setdefault("derived_feature_name", item.get("feature_name") if item.get("feature_type") == "derived_feature" else None)
+    item.setdefault("derived_feature_definition", item.get("feature_definition") if item.get("feature_type") == "derived_feature" else None)
+    item.setdefault("recompute_rule", (item.get("feature_definition") or {}).get("recompute_rule"))
+    item.setdefault("evidence_summary", item.get("commonality_evidence"))
+    item.setdefault("risk_hit_users", item.get("supporting_user_ids") or item.get("risk_hit_sample_ids") or [])
+    item.setdefault("signal_type", item.get("value_type") or item.get("feature_type"))
+    item.setdefault("semantic_strength", "unknown")
+    item.setdefault("candidate_role", "feature_candidate")
+    item.setdefault("quality_bucket", "medium_value_discovery" if item.get("feature_type") == "derived_feature" else None)
+    item.setdefault("merge_group_id", None)
+    item.setdefault("representative_feature_id", item.get("candidate_id"))
+    item.setdefault("merged_from_feature_ids", [])
+    item.setdefault("dropped_reason", None)
+    item.setdefault("audit_reason", None)
+    item.setdefault("ranking_reason", item.get("pool_reason"))
+    item.setdefault("lineage", {
+        "candidate_id": item.get("candidate_id"),
+        "candidate_source": item.get("candidate_source"),
+        "proposal_source": item.get("proposal_source"),
+        "source_action": item.get("source_action") or item.get("action_or_layer"),
+        "source_fields": item.get("source_fields") or [],
+    })
+    item.setdefault("audit_tags", [])
     if item.get("feature_type") == "derived_feature" and item.get("feature_definition_status") == "missing":
         item["l5_usage"] = "audit_only"
         item["l5_exclusion_reason"] = "derived_feature_missing_feature_definition"
@@ -215,4 +283,18 @@ def apply_candidate_protocol(candidate: dict[str, Any], registry: dict[str, Any]
     if mode == "discovery_only":
         item["normal_hit_rate"] = None
         item["lift"] = None
+        item.setdefault("baseline_status", "baseline_missing" if item.get("feature_type") != "derived_feature" else "not_applicable")
+        if item.get("candidate_role") in {"coverage_signal", "report_only"} or item.get("quality_bucket") in {"coverage_signal", "duplicate_or_low_value"}:
+            item.setdefault("next_step_suggestion", "report_only")
+        else:
+            item.setdefault("next_step_suggestion", "baseline_and_replay_needed")
+        item.setdefault("requires_l6_replay", True)
+        item.setdefault("l6_replay_required_reason", "impact_and_false_positive_validation_required")
+        item.setdefault("readiness", "needs_baseline_and_replay")
+    else:
+        item.setdefault("baseline_status", "normal_baseline_available")
+        item.setdefault("next_step_suggestion", "replay_needed")
+        item.setdefault("requires_l6_replay", True)
+        item.setdefault("l6_replay_required_reason", "impact_and_false_positive_validation_required")
+        item.setdefault("readiness", "needs_replay")
     return item

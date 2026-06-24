@@ -151,3 +151,21 @@ computer_use_poc/baselines/normal_baseline/tests/test_l3_value_level_candidate_e
 They cover oneRisk labels, nested raw_data objects, accessibility parsing,
 login enum extraction, high-cardinality anchors, result-signal hints, partial
 mode, schema validation, and L3/L4 compatibility fields.
+
+## L3/L4 Candidate Protocol Core
+
+This protocol layer standardizes the metadata that L3 candidates carry into L4.
+It does not wire a new discovery runtime, validator, L5 generator, baseline
+builder, or real LLM adapter in this commit.
+
+Protocol-normalized candidates may carry `candidate_source`, `proposal_source`,
+`proposal_type`, `signal_type`, `readiness`, `baseline_status`,
+`next_step_suggestion`, `quality_bucket`, `lineage`, and `audit_tags`. Derived
+features remain `discovery_only` unless a later stage proves baseline support.
+Discovery-only candidates keep `normal_hit_rate` and `lift` unset and require
+later replay/baseline validation.
+
+Future dynamic LLM, code-assisted, validator, and L5 experimental flows are
+planned users of this protocol, but they are not wired in this protocol-only
+commit. Runtime real LLM remains `implemented_not_verified` unless a concrete
+adapter/client path is explicitly configured and actually executed.

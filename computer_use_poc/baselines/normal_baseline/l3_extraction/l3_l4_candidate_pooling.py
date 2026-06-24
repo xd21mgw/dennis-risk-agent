@@ -387,6 +387,8 @@ def l5_input_decision(card: dict[str, Any], candidate: dict[str, Any], pool_item
         if pool_item.get("requires_l6_replay") is not True:
             return False, "missing_requires_l6_replay"
     if pool_item.get("feature_type") == "derived_feature":
+        if pool_item.get("commonality_level") != "high":
+            return False, f"derived_feature_commonality_not_high:{pool_item.get('commonality_level')}"
         if pool_item.get("feature_definition_status") != "present" or not pool_item.get("feature_definition"):
             return False, "derived_feature_missing_feature_definition"
         if not (pool_item.get("source_fields") or pool_item.get("source_events")):
@@ -463,6 +465,7 @@ def build_l4_review_outputs(cards: list[dict[str, Any]], retained_candidates: li
             "feature_definition": candidate.get("feature_definition"),
             "feature_definition_status": candidate.get("feature_definition_status"),
             "commonality_family": candidate.get("commonality_family"),
+            "commonality_level": candidate.get("commonality_level"),
             "commonality_evidence": candidate.get("commonality_evidence"),
             "bucket_label": candidate.get("bucket_label"),
             "bucket_range": candidate.get("bucket_range"),
@@ -551,11 +554,36 @@ def _validated_candidate_card(card: dict[str, Any], candidate: dict[str, Any], m
         "feature_type": candidate.get("feature_type"),
         "value_type": candidate.get("value_type"),
         "feature_name": candidate.get("feature_name") or card.get("field_name"),
+        "candidate_family": candidate.get("candidate_family"),
+        "candidate_source": candidate.get("candidate_source"),
+        "proposal_source": candidate.get("proposal_source"),
+        "proposal_type": candidate.get("proposal_type"),
+        "derived_feature_name": candidate.get("derived_feature_name"),
+        "derived_feature_definition": candidate.get("derived_feature_definition"),
+        "recompute_rule": candidate.get("recompute_rule"),
+        "evidence_summary": candidate.get("evidence_summary"),
+        "risk_hit_users": candidate.get("risk_hit_users") or candidate.get("supporting_user_ids") or [],
+        "signal_type": candidate.get("signal_type"),
+        "readiness": candidate.get("readiness"),
+        "quality_bucket": candidate.get("quality_bucket"),
+        "semantic_strength": candidate.get("semantic_strength"),
+        "candidate_role": candidate.get("candidate_role"),
+        "baseline_status": candidate.get("baseline_status"),
+        "next_step_suggestion": candidate.get("next_step_suggestion"),
+        "lineage": candidate.get("lineage"),
+        "audit_tags": candidate.get("audit_tags") or [],
+        "merge_group_id": candidate.get("merge_group_id"),
+        "representative_feature_id": candidate.get("representative_feature_id"),
+        "merged_from_feature_ids": candidate.get("merged_from_feature_ids") or [],
+        "dropped_reason": candidate.get("dropped_reason"),
+        "audit_reason": candidate.get("audit_reason"),
+        "ranking_reason": candidate.get("ranking_reason"),
         "source_fields": candidate.get("source_fields") or [card.get("field_name")],
         "source_events": candidate.get("source_events") or [],
         "feature_definition": candidate.get("feature_definition") or {},
         "feature_definition_status": candidate.get("feature_definition_status"),
         "commonality_family": candidate.get("commonality_family"),
+        "commonality_level": candidate.get("commonality_level"),
         "commonality_evidence": candidate.get("commonality_evidence"),
         "bucket_label": candidate.get("bucket_label"),
         "bucket_range": candidate.get("bucket_range"),
@@ -572,6 +600,7 @@ def _validated_candidate_card(card: dict[str, Any], candidate: dict[str, Any], m
         "risk_denominator": card.get("risk_observed_count"),
         "risk_hit_rate": risk_rate,
         "baseline_mode": mode,
+        "baseline_status": candidate.get("baseline_status") or ("normal_baseline_available" if mode == "baseline_supported" else "baseline_missing"),
         "normal_hit_rate": normal_hit_rate,
         "lift": _safe_lift(risk_rate, normal_hit_rate) if mode == "baseline_supported" else None,
         "evidence_examples": candidate.get("evidence_examples") or [],
