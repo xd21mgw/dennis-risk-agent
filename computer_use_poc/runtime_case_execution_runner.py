@@ -19,6 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,8 @@ AUTH_FAILED_SHORT_CIRCUIT_THRESHOLD = 2
 TRACK_BUSINESS_GAP_MARKERS = {"NEED_DATA_SYNC", "HIVE_UNFINISHED"}
 TRACK_READINESS_ACTION = "track_analysis_check_data_ready"
 WEAPON_INVENTORY_ACTION = "weapon_inventory"
+RCP_SNAPSHOT_TIMEZONE = timezone(timedelta(hours=8), "Asia/Shanghai")
+RCP_SNAPSHOT_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 CREDENTIAL_SECRET_KEYS = {
@@ -229,6 +232,48 @@ def _default_scene_window() -> tuple[int, int]:
 
 def _bounded_source_window(scene_start_ms: int, scene_end_ms: int, days: int) -> tuple[int, int]:
     return max(scene_start_ms, scene_end_ms - days * MILLIS_PER_DAY), scene_end_ms
+
+
+def _format_rcp_snapshot_time(value: Any) -> str:
+    """Format rcp_snapshot time in the RCP UI/API business timezone.
+
+    browser-backed rcp_snapshot expects a naive "YYYY-MM-DD HH:mm:ss" string.
+    Dennis scene windows are epoch milliseconds, while some callers may pass
+    epoch seconds. Keep this conversion scoped to rcp_snapshot; other RCP
+    actions such as rcp_fast_query_hbase still require epoch timestamps.
+    """
+    if isinstance(value, str):
+        text = value.strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", text):
+            return text
+        if re.fullmatch(r"\d+(\.\d+)?", text):
+            value = float(text) if "." in text else int(text)
+        else:
+            raise ValueError("rcp_snapshot time must be epoch ms/seconds or YYYY-MM-DD HH:mm:ss")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("rcp_snapshot time must be epoch ms/seconds or YYYY-MM-DD HH:mm:ss")
+    if value <= 0:
+        raise ValueError("rcp_snapshot time must be positive")
+    seconds = float(value) / 1000 if abs(float(value)) >= 100_000_000_000 else float(value)
+    return datetime.fromtimestamp(seconds, RCP_SNAPSHOT_TIMEZONE).strftime(RCP_SNAPSHOT_TIME_FORMAT)
+
+
+def _rcp_snapshot_time_params(
+    rcp_snapshot_override: dict[str, Any],
+    window_start_ms: int,
+    window_end_ms: int,
+) -> dict[str, str]:
+    raw_window = (
+        rcp_snapshot_override.get("time_window")
+        if isinstance(rcp_snapshot_override.get("time_window"), dict)
+        else {}
+    )
+    start_value = rcp_snapshot_override.get("startTime", raw_window.get("startTime", window_start_ms))
+    end_value = rcp_snapshot_override.get("endTime", raw_window.get("endTime", window_end_ms))
+    return {
+        "startTime": _format_rcp_snapshot_time(start_value),
+        "endTime": _format_rcp_snapshot_time(end_value),
+    }
 
 
 def _compact_case_id(task: str, user_id: str) -> str:
@@ -5102,15 +5147,24 @@ def build_sample_round_source_plan(
             else {}
         )
         if rcp_snapshot_override.get("enabled") is True:
+            snapshot_time_params = _rcp_snapshot_time_params(
+                rcp_snapshot_override,
+                window_start_ms,
+                window_end_ms,
+            )
+            snapshot_override_passthrough = {
+                key: value
+                for key, value in rcp_snapshot_override.items()
+                if key not in {"enabled", "startTime", "endTime", "time_window"}
+            }
             snapshot_params = {
                 "source_id": entity,
-                "startTime": window_start_ms,
-                "endTime": window_end_ms,
                 "eventType": str(rcp_snapshot_override.get("eventType") or "REGISTER_NEW"),
                 "eventTypeCodes": str(rcp_snapshot_override.get("eventTypeCodes") or rcp_snapshot_override.get("eventType") or "REGISTER_NEW"),
                 "pageIndex": int(rcp_snapshot_override.get("pageIndex") or 1),
                 "pageSize": int(rcp_snapshot_override.get("pageSize") or 20),
-                **{key: value for key, value in rcp_snapshot_override.items() if key != "enabled"},
+                **snapshot_override_passthrough,
+                **snapshot_time_params,
             }
             items.append(
                 SourcePlanItem(

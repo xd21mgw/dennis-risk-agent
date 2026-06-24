@@ -13,6 +13,7 @@ from typing import Any
 
 from runtime_case_execution_runner import (
     SourcePlanItem,
+    _format_rcp_snapshot_time,
     _materialize_candidate_evidence,
     _build_top_explainable_candidates,
     _build_field_dictionary_review_queue,
@@ -27,6 +28,8 @@ from runtime_case_execution_runner import (
     build_rcp_event_followup_source_plan,
     build_status_attribution,
     build_missing_evidence,
+    build_batch_payload,
+    build_sample_round_source_plan,
     build_safe_batch_summary,
     build_safe_stdout_result,
     score_candidate_anchors,
@@ -468,6 +471,90 @@ def _run_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "runner_returncode": completed.returncode,
         "runner_stderr": completed.stderr,
         "result": json.loads(completed.stdout),
+    }
+
+
+def _regression_rcp_snapshot_time_format() -> tuple[list[str], dict[str, Any]]:
+    """RCP snapshot keeps browser-backed's YYYY-MM-DD HH:mm:ss contract."""
+    errors: list[str] = []
+    start_ms = 1_780_020_000_000
+    end_sec = 1_780_021_800
+    expected_start = "2026-05-29 10:00:00"
+    expected_end = "2026-05-29 10:30:00"
+
+    if _format_rcp_snapshot_time(start_ms) != expected_start:
+        errors.append("RCP-SNAPSHOT-TIME-FORMAT-001:epoch_ms_conversion_failed")
+    if _format_rcp_snapshot_time(end_sec) != expected_end:
+        errors.append("RCP-SNAPSHOT-TIME-FORMAT-001:epoch_seconds_conversion_failed")
+
+    plan = build_sample_round_source_plan(
+        1,
+        ["403082302"],
+        window_start_ms=start_ms,
+        window_end_ms=end_sec * 1000,
+        source_overrides={
+            "rcp_snapshot": {
+                "enabled": True,
+                "endTime": end_sec,
+                "eventType": "REGISTER_NEW",
+                "eventTypeCodes": "REGISTER_NEW",
+                "pageIndex": 1,
+                "pageSize": 5,
+            }
+        },
+    )
+    payload = build_batch_payload("rcp_snapshot_time_format_regression", plan, dry_run=True)
+    sources = [
+        source
+        for group in payload.get("execution_groups", []) or []
+        for source in group.get("sources", []) or []
+        if isinstance(source, dict)
+    ]
+    snapshot_sources = [source for source in sources if source.get("action") == "rcp_snapshot"]
+    fast_query_sources = [source for source in sources if source.get("action") == "rcp_fast_query_hbase"]
+    if len(snapshot_sources) != 1:
+        errors.append(f"RCP-SNAPSHOT-NO-EPOCH-MS-PAYLOAD-001:expected_one_snapshot_source_got_{len(snapshot_sources)}")
+        snapshot_params: dict[str, Any] = {}
+    else:
+        snapshot_params = snapshot_sources[0].get("params") or {}
+        if snapshot_params.get("startTime") != expected_start or snapshot_params.get("endTime") != expected_end:
+            errors.append("RCP-SNAPSHOT-NO-EPOCH-MS-PAYLOAD-001:snapshot_payload_time_not_formatted")
+        for field in ("startTime", "endTime"):
+            value = snapshot_params.get(field)
+            if isinstance(value, (int, float)) or re.fullmatch(r"\d{10,13}", str(value or "")):
+                errors.append(f"RCP-SNAPSHOT-NO-EPOCH-MS-PAYLOAD-001:{field}_still_epoch")
+
+    if len(fast_query_sources) != 1:
+        errors.append(f"RCP-SNAPSHOT-DOES-NOT-AFFECT-OTHER-RCP-ACTIONS-001:expected_one_fast_query_source_got_{len(fast_query_sources)}")
+        fast_query_params: dict[str, Any] = {}
+    else:
+        fast_query_params = fast_query_sources[0].get("params") or {}
+        if fast_query_params.get("startTime") != start_ms or fast_query_params.get("endTime") != end_sec * 1000:
+            errors.append("RCP-SNAPSHOT-DOES-NOT-AFFECT-OTHER-RCP-ACTIONS-001:fast_query_time_was_changed")
+
+    return errors, {
+        "RCP-SNAPSHOT-TIME-FORMAT-001": {
+            "start_ms": start_ms,
+            "formatted_start": _format_rcp_snapshot_time(start_ms),
+            "end_seconds": end_sec,
+            "formatted_end": _format_rcp_snapshot_time(end_sec),
+        },
+        "RCP-SNAPSHOT-NO-EPOCH-MS-PAYLOAD-001": {
+            "snapshot_startTime": snapshot_params.get("startTime"),
+            "snapshot_endTime": snapshot_params.get("endTime"),
+            "snapshot_time_value_types": {
+                "startTime": type(snapshot_params.get("startTime")).__name__,
+                "endTime": type(snapshot_params.get("endTime")).__name__,
+            },
+        },
+        "RCP-SNAPSHOT-DOES-NOT-AFFECT-OTHER-RCP-ACTIONS-001": {
+            "fast_query_startTime": fast_query_params.get("startTime"),
+            "fast_query_endTime": fast_query_params.get("endTime"),
+            "fast_query_time_value_types": {
+                "startTime": type(fast_query_params.get("startTime")).__name__,
+                "endTime": type(fast_query_params.get("endTime")).__name__,
+            },
+        },
     }
 
 
@@ -4910,6 +4997,8 @@ def run_check() -> dict[str, Any]:
         for name, fixture_errors in mock_errors_by_name.items()
         for error in fixture_errors
     ]
+    rcp_snapshot_time_errors, rcp_snapshot_time_summary = _regression_rcp_snapshot_time_format()
+    errors.extend(f"rcp_snapshot_time_format:{error}" for error in rcp_snapshot_time_errors)
     rolling_run = _run_fixture(ROLLING_FIXTURE)
     rolling_errors, rolling_result = _validate_common_result(
         run=rolling_run,
@@ -5088,6 +5177,10 @@ def run_check() -> dict[str, Any]:
             "reason": live_safe_summary.get("source_results", {}).get("login_logs_search", {}).get("reason"),
             "source_quality_partial": live_safe_summary.get("source_quality", {}).get("partial"),
             "raw_passthrough_omitted": live_safe_summary.get("safe_projection", {}).get("raw_passthrough_omitted"),
+        },
+        "rcp_snapshot_time_format_regression": {
+            "validation_pass": not rcp_snapshot_time_errors,
+            **rcp_snapshot_time_summary,
         },
         "primary_followup_status_attribution": {
             "validation_pass": not status_attribution_errors,
