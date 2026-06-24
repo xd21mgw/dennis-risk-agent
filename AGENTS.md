@@ -12,6 +12,10 @@
 4. 边界与防过拟合
 5. Codex 可执行性
 
+## 禁止假完成
+
+禁止把 mock、fixture、stub、placeholder、TODO、pass、配置字段、参数开关、接口壳子汇报为真实能力完成。真实能力必须有 concrete 执行路径和执行证据；只有 mock 标 `mock_only`，只有占位标 `placeholder_only`，缺 endpoint / SDK / auth / provider contract 标 `blocked`，已实现但未真实验证标 `implemented_not_verified`。report 里的 `real_called=true` 只能在真实 adapter/client 路径实际执行后出现；配置完整但仍静默 fallback 到 mock 必须算失败。验收输出必须说明：真实实现了什么、mock 了什么、占位了什么、哪些路径被测试实际执行、哪些能力未验证。
+
 ## Runtime 必读文件
 
 半开放 release runtime 不包含完整核心 Skill 原文目录。启动时不得依赖未随
