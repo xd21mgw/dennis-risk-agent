@@ -1,0 +1,343 @@
+{
+  "schema_version": "profile_lure_expected_path_registry_v1",
+  "generated_at": "2026-06-24",
+  "scope": {
+    "purpose": "Registry of expected profile-lure payload paths and parser drift gate semantics.",
+    "mode": "documentation_only",
+    "code_changed": false,
+    "tests_added": false,
+    "platform_accessed": false,
+    "dataagent_called": false,
+    "hive_called": false,
+    "git_commit": false,
+    "full_autonomous_not_proven": true
+  },
+  "canonical_family": "profile_lure_payload",
+  "default_output_fields_for_text_payload": [
+    "raw_text_preview",
+    "normalized_text",
+    "normalization_steps",
+    "matched_lure_tokens"
+  ],
+  "drift_gate_status_enum": [
+    "profile_lure_detected",
+    "true_no_evidence",
+    "source_gap",
+    "parser_gap",
+    "path_drift",
+    "business_field_gap",
+    "needs_more_source"
+  ],
+  "normalization_contract": {
+    "required_fields": {
+      "raw_text_preview": "Short raw payload excerpt retained for audit. Do not replace raw preview with normalized text.",
+      "normalized_text": "Text after deterministic normalization used for matching.",
+      "normalization_steps": "Ordered list of normalization transforms applied.",
+      "matched_lure_tokens": "Matched contact, domain, platform, obfuscation, or diversion tokens."
+    },
+    "normalization_steps_catalog": [
+      "unicode_nfkc",
+      "strip_zero_width_and_invisible_joiners",
+      "preserve_raw_preview_before_symbol_cleanup",
+      "collapse_whitespace_and_newlines",
+      "lowercase_ascii",
+      "remove_decorative_emoji_for_matching_only",
+      "normalize_full_width_ascii",
+      "homophone_or_variant_token_map",
+      "contact_intent_tokenize",
+      "domain_or_url_extract_when_available",
+      "qr_or_ocr_placeholder_gap_when_not_available"
+    ],
+    "lure_token_groups": {
+      "contact_platform": [
+        "微信",
+        "微",
+        "薇",
+        "徽",
+        "信",
+        "wx",
+        "vx",
+        "v信",
+        "q",
+        "qq",
+        "扣"
+      ],
+      "contact_intent": [
+        "加我",
+        "留下联系方式",
+        "联系方式",
+        "私信",
+        "联系",
+        "互动",
+        "关注了我",
+        "为您提供更好的服务"
+      ],
+      "diversion_carrier": [
+        ".cc",
+        "http",
+        "https",
+        "浏览器",
+        "搜索",
+        "复制",
+        "口令",
+        "二维码",
+        "qr"
+      ],
+      "obfuscation_shape": [
+        "zero_width_split",
+        "emoji_interleaved",
+        "homophone_substitution",
+        "case_mixed_token",
+        "linebreak_split",
+        "domain_spacing"
+      ]
+    }
+  },
+  "expected_paths": [
+    {
+      "path_id": "login_logs_search.logContent.params.data",
+      "source_action": "login_logs_search",
+      "raw_path": "logContent",
+      "parsed_path": "logContent.params.data",
+      "normalized_path": "login_logs_search.logContent.params.data",
+      "payload_role": "current_submission_payload",
+      "default_signal_level": "high-value",
+      "parser_required": [
+        "json_logContent",
+        "nested_params_json"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "D2 positive holdout closed this path: profile lure payload appeared in current /rest/n/user/set submission params.data for 15/15 users."
+    },
+    {
+      "path_id": "archives_review_logs.desc.original_user_payload",
+      "source_action": "archives_review_logs",
+      "raw_path": "data.desc",
+      "parsed_path": "data.desc",
+      "normalized_path": "archives_review_logs.desc",
+      "payload_role": "history_audit_payload.original_user_payload",
+      "default_signal_level": "high-value",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "classification_rule": {
+        "include_when": [
+          "desc contains old/new profile intro/signature/nickname/avatar submission payload",
+          "desc contains domain/contact/diversion text copied from prior user payload",
+          "desc contains audit history text such as old intro, reset intro, submitted intro, or profile text"
+        ],
+        "exclude_when": [
+          "desc is only punishment/enforcement action text without original user-submitted payload"
+        ]
+      },
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "new_holdout_C positive holdout mainly closed profile-history lure through review_logs.desc historical intro/profile payload."
+    },
+    {
+      "path_id": "archives_review_logs.desc.enforcement_description",
+      "source_action": "archives_review_logs",
+      "raw_path": "data.desc",
+      "parsed_path": "data.desc",
+      "normalized_path": "archives_review_logs.desc",
+      "payload_role": "history_audit_payload.enforcement_description",
+      "default_signal_level": "supporting",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "classification_rule": {
+        "include_when": [
+          "desc contains enforcement or audit action text",
+          "examples include clear intro, intro behavior ban, clear avatar, avatar behavior ban, negative operation, no distribution"
+        ],
+        "exclude_when": [
+          "desc contains explicit original user payload, which should be additionally emitted as original_user_payload"
+        ]
+      },
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "Enforcement description supports profile-lure chain but must not replace original submitted payload evidence."
+    },
+    {
+      "path_id": "archives_user_analysis.requestParam.data",
+      "source_action": "archives_user_analysis",
+      "raw_path": "requestParam",
+      "parsed_path": "requestParam.data",
+      "normalized_path": "archives_user_analysis.requestParam.data",
+      "payload_role": "current_or_history_profile_mutation_payload",
+      "default_signal_level": "high-value",
+      "parser_required": [
+        "native_dict",
+        "nested_json_or_querystring",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "Critical for profile mutation events. Auth failed, timeout, or raw_absent cannot be used as no-lure evidence."
+    },
+    {
+      "path_id": "archives_private_message_search.content",
+      "source_action": "archives_private_message_search",
+      "raw_path": "data.list.content",
+      "parsed_path": "data.list.content",
+      "normalized_path": "archives_private_message_search.content",
+      "payload_role": "private_message_contact_script",
+      "default_signal_level": "supporting",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "downgrade_rule": {
+        "to_report_only_when": [
+          "only generic greeting appears",
+          "no contact token, no diversion carrier, no repeated template"
+        ]
+      },
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "Private message contact text can support contact-diversion, but low-specificity greetings must remain report-only."
+    },
+    {
+      "path_id": "archives_private_message_search.contentNormalized",
+      "source_action": "archives_private_message_search",
+      "raw_path": "data.list.contentNormalized",
+      "parsed_path": "data.list.contentNormalized",
+      "normalized_path": "archives_private_message_search.contentNormalized",
+      "payload_role": "private_message_contact_script.normalized_source_field",
+      "default_signal_level": "supporting",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "Use alongside raw content. Source-provided normalized text does not remove the need to retain raw_text_preview."
+    },
+    {
+      "path_id": "archives_user_profile.current_profile_text",
+      "source_action": "archives_user_profile",
+      "raw_path": "profile.desc|profile.signature|profile.intro|nickname",
+      "parsed_path": "profile.desc|profile.signature|profile.intro|nickname",
+      "normalized_path": "archives_user_profile.current_profile_text",
+      "payload_role": "current_profile_payload",
+      "default_signal_level": "supporting",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_empty": "business_field_gap",
+      "commonality_eligible": true,
+      "notes": "Current profile being empty must not suppress history/login/review payload hits."
+    },
+    {
+      "path_id": "archives_negative_or_punish.desc",
+      "source_action": "archives_negative_report|archives_punish_status",
+      "raw_path": "desc|punishStatusList.*.desc",
+      "parsed_path": "desc|punishStatusList.*.desc",
+      "normalized_path": "archives_negative_or_punish.desc",
+      "payload_role": "enforcement_chain_support",
+      "default_signal_level": "supporting",
+      "parser_required": [
+        "native_dict",
+        "text_payload_normalizer"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_source_incomplete": "source_gap",
+      "missing_classification_when_parser_failed": "parser_gap",
+      "commonality_eligible": true,
+      "notes": "Supports avatar/intro/social enforcement chain. It is not a substitute for submitted lure payload."
+    },
+    {
+      "path_id": "photo_or_content_ocr_text",
+      "source_action": "archives_photo_profile|archives_photo_meta|ocr_source",
+      "raw_path": "ocr.text|photo.text|image_text",
+      "parsed_path": "ocr.text|photo.text|image_text",
+      "normalized_path": "photo_or_content_ocr_text",
+      "payload_role": "ocr_lure_payload",
+      "default_signal_level": "data_gap",
+      "parser_required": [
+        "ocr_parser_future"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_unimplemented": "needs_more_source",
+      "commonality_eligible": false,
+      "notes": "This phase only records URL/OCR/QR as data_gap; no OCR implementation is claimed."
+    },
+    {
+      "path_id": "url_domain_qr_payload",
+      "source_action": "url_domain_qr_source",
+      "raw_path": "url|domain|qr_payload",
+      "parsed_path": "url|domain|qr_payload",
+      "normalized_path": "url_domain_qr_payload",
+      "payload_role": "url_domain_qr_lure_payload",
+      "default_signal_level": "data_gap",
+      "parser_required": [
+        "url_domain_extractor_future",
+        "qr_parser_future"
+      ],
+      "source_required_status": "completed",
+      "missing_classification_when_unimplemented": "needs_more_source",
+      "commonality_eligible": false,
+      "notes": "URL/OCR/QR is explicitly data_gap in this phase. Do not report it as closed."
+    }
+  ],
+  "drift_gate": {
+    "evaluation_order": [
+      "source_status",
+      "raw_present",
+      "parser_success",
+      "expected_path_seen",
+      "text_normalization_result",
+      "lure_token_match",
+      "business_context_match",
+      "final_status"
+    ],
+    "status_rules": [
+      {
+        "status": "profile_lure_detected",
+        "when": "At least one expected path is source_completed, raw_present, parse_success, and has matched_lure_tokens or domain/contact/diversion semantics."
+      },
+      {
+        "status": "true_no_evidence",
+        "when": "All required sources for the evaluated wave are completed, raw is present, parser succeeded, expected paths were checked, and no lure/contact/diversion tokens or payload semantics were found."
+      },
+      {
+        "status": "source_gap",
+        "when": "Required source is auth_failed, timeout, blocked, not_called, or otherwise incomplete."
+      },
+      {
+        "status": "parser_gap",
+        "when": "Raw container exists but parser failed, parse_success is false, parse_error_count is nonzero for target container, or parsed children are absent due parser error."
+      },
+      {
+        "status": "path_drift",
+        "when": "Raw and parser succeeded, but known expected path is missing while semantically similar sibling/new path carries the payload."
+      },
+      {
+        "status": "business_field_gap",
+        "when": "Transport/parser completed but the business payload field is empty or not returned, such as current profile empty while history sources still need review."
+      },
+      {
+        "status": "needs_more_source",
+        "when": "URL/OCR/QR/domain enrichment or another source not implemented in this phase is required before closing the lure question."
+      }
+    ]
+  }
+}
