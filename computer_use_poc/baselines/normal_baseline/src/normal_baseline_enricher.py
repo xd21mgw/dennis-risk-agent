@@ -399,6 +399,8 @@ def batch_enrich(
     dd = _load_json(os.path.join(baseline_dir, "normal_discrete_field_distribution.json"))
     hc = _load_json(os.path.join(baseline_dir, "high_cardinality_summary.json"))
     meta = _load_json(os.path.join(baseline_dir, "profiler_metadata.json"))
+    if not isinstance(meta, dict):
+        meta = {}
 
     # Build indices
     le_index = build_low_entropy_index(le)

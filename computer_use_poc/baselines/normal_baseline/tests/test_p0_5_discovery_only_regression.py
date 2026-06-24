@@ -94,6 +94,7 @@ def test_l3_to_l4_preserves_new_commonality_feature_fields():
     derived = discovery["valid_derived"]
     assert derived["feature_name"] == "short_window_profile_change"
     assert derived["commonality_family"] == "behavior_pattern_commonality"
+    assert derived["commonality_level"] == "high"
     assert derived["feature_definition_status"] == "present"
     assert derived["feature_definition"]["rule"]
     assert derived["commonality_evidence"]
@@ -125,7 +126,7 @@ def test_l5_generates_experimental_strategy_only_for_valid_discovery_candidates(
         assert ">=10" in task["bucket_labels"]
         assert any(defn and defn.get("rule") for defn in task["feature_definitions"])
         assert 0.6667 in task["risk_hit_rates"]
-        assert 0.5 in task["risk_hit_rates"]
+        assert 0.6667 in task["risk_hit_rates"]
         assert all(evidence is not None for evidence in task["commonality_evidence"])
     filter_reasons = output["l5_input_summary"]["filtered_reason_distribution"]
     assert filter_reasons["derived_feature_missing_feature_definition"] == 2

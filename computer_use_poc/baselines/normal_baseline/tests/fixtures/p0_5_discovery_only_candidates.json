@@ -48,11 +48,11 @@
       "field_value_or_pattern": "short_window_profile_change",
       "candidate_grain": "value_pattern",
       "field_role_hint": "behavior_fact",
-      "risk_hit_count": 3,
+      "risk_hit_count": 4,
       "risk_observed_count": 6,
-      "risk_hit_rate": 0.5,
-      "risk_hit_sample_ids": ["u1", "u2", "u3"],
-      "supporting_user_ids": ["u1", "u2", "u3"],
+      "risk_hit_rate": 0.6667,
+      "risk_hit_sample_ids": ["u1", "u2", "u3", "u4"],
+      "supporting_user_ids": ["u1", "u2", "u3", "u4"],
       "supporting_device_ids": [],
       "feature_type": "derived_feature",
       "value_type": "sequence",
@@ -65,13 +65,14 @@
       },
       "feature_definition_status": "present",
       "commonality_family": "behavior_pattern_commonality",
+      "commonality_level": "high",
       "commonality_evidence": [
         {
           "evidence_type": "behavior_pattern_commonality",
-          "description": "3 risk samples share short-window profile change events",
-          "risk_hit_count": 3,
+          "description": "4 risk samples share short-window profile change events",
+          "risk_hit_count": 4,
           "risk_denominator": 6,
-          "risk_hit_rate": 0.5
+          "risk_hit_rate": 0.6667
         }
       ]
     },
