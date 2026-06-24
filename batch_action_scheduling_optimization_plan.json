@@ -1,0 +1,314 @@
+{
+  "scope": {
+    "goal": "Optimize browser-backed batch action scheduling without reducing discovery source coverage.",
+    "non_goals": [
+      "reduce source coverage as the primary optimization",
+      "access platform in this planning step",
+      "call Hive/DataAgent",
+      "change code in this planning step",
+      "refresh release/dist/full_runtime"
+    ],
+    "required_boundaries": [
+      "timeout/auth_failed/missing_device_id/parser_boundary/business_field_gap must be source_gap, not no-risk evidence",
+      "raw bundle must be reused by local P0 foundation, replay, provenance, and eval"
+    ]
+  },
+  "primary_definition": {
+    "definition": "primary is the first-round foundational source group, not a single interface",
+    "current_primary_actions": [
+      "archives_user_profile",
+      "weapon_inventory",
+      "archives_user_analysis",
+      "archives_photo_search"
+    ],
+    "d2_primary_186s_interpretation": "D2 primary=186s means accumulated wait across the foundational source group; it cannot be attributed to one interface without action-level timing.",
+    "current_gap": "primary lacks action-level timing in the summary",
+    "optimization_direction": "split primary internally into fast_core, risk_core, unstable instead of cutting primary coverage",
+    "recommended_new_metrics": [
+      "source_group",
+      "source_action",
+      "chunk_id",
+      "user_count",
+      "status_count",
+      "wait_ms",
+      "start_time",
+      "end_time",
+      "timeout_count",
+      "auth_failed_count",
+      "parser_boundary_count",
+      "data_gap_count"
+    ]
+  },
+  "layers": {
+    "blocking_core": {
+      "description": "Sources needed for the first usable discovery report or a meaningful source-gap statement.",
+      "wait_policy": "wait until terminal state or core budget"
+    },
+    "nonblocking_broad": {
+      "description": "Broad discovery sources that preserve coverage but should not block the first report.",
+      "wait_policy": "include if available before cutoff; otherwise pending_tail"
+    },
+    "slow_tail": {
+      "description": "Known slow or unstable sources that append later and never block the first report.",
+      "wait_policy": "run under tail budget and circuit breaker"
+    },
+    "conditional_followup": {
+      "description": "Sources requiring anchors such as device_id, event_id, photo_id, or Track readiness.",
+      "wait_policy": "run only when anchor exists; otherwise source_gap"
+    }
+  },
+  "source_action_layers": [
+    {
+      "source_action": "login_logs_search",
+      "layer": "blocking_core",
+      "sublayer": "fast_core",
+      "first_report_behavior": "wait_until_terminal_or_core_budget",
+      "notes": "event chain, client runtime, URI, IP/network, token/credential actions"
+    },
+    {
+      "source_action": "archives_user_profile",
+      "layer": "blocking_core",
+      "sublayer": "fast_core",
+      "first_report_behavior": "wait_until_terminal_or_core_budget",
+      "notes": "current profile/account state"
+    },
+    {
+      "source_action": "archives_user_analysis",
+      "layer": "nonblocking_broad",
+      "sublayer": "unstable",
+      "first_report_behavior": "include_if_completed_otherwise_source_gap_or_pending_tail",
+      "notes": "valuable operation history but auth/parser gaps must not block"
+    },
+    {
+      "source_action": "archives_review_logs",
+      "layer": "blocking_core_for_profile_lure_else_nonblocking_broad",
+      "first_report_behavior": "wait_for_profile_content_enforcement_waves_else_include_if_available",
+      "notes": "historical profile/content submissions and enforcement facts"
+    },
+    {
+      "source_action": "archives_negative_report",
+      "layer": "blocking_core_for_enforcement_else_nonblocking_broad",
+      "first_report_behavior": "wait_for_enforcement_waves_else_include_if_available",
+      "notes": "negative operations and enforcement chain"
+    },
+    {
+      "source_action": "archives_private_message_search",
+      "layer": "nonblocking_broad",
+      "first_report_behavior": "include_if_completed_otherwise_pending_tail",
+      "notes": "important for social/contact diversion"
+    },
+    {
+      "source_action": "archives_photo_search",
+      "layer": "nonblocking_broad",
+      "sublayer": "primary",
+      "first_report_behavior": "include_if_completed_before_cutoff",
+      "notes": "content entry source and followup anchor"
+    },
+    {
+      "source_action": "archives_comment_search",
+      "layer": "nonblocking_broad",
+      "first_report_behavior": "include_if_completed_otherwise_pending_tail",
+      "notes": "social/content funnel evidence"
+    },
+    {
+      "source_action": "weapon_inventory graphData",
+      "layer": "blocking_core_for_device_waves_else_nonblocking_broad",
+      "sublayer": "risk_core",
+      "first_report_behavior": "wait_for_device_waves_else_include_if_available",
+      "notes": "must preserve raw device_id references for riskData"
+    },
+    {
+      "source_action": "weapon_inventory riskData",
+      "layer": "conditional_followup",
+      "first_report_behavior": "run_only_when_raw_device_id_exists",
+      "notes": "missing device_id becomes not_executed_missing_device_id/source_gap"
+    },
+    {
+      "source_action": "rcp_fast_query_hbase",
+      "layer": "conditional_followup",
+      "first_report_behavior": "do_not_block_generic_first_report",
+      "notes": "event/policy anchor source, not primary feature source"
+    },
+    {
+      "source_action": "rcp_event_detail",
+      "layer": "slow_tail",
+      "first_report_behavior": "never_block_first_report",
+      "notes": "high timeout risk; append later if completed"
+    },
+    {
+      "source_action": "rcp_event_feature_list",
+      "layer": "slow_tail",
+      "first_report_behavior": "never_block_first_report",
+      "notes": "feature source when stable; timeout is source_gap"
+    },
+    {
+      "source_action": "track_analysis_check_data_ready",
+      "layer": "nonblocking_broad",
+      "sublayer": "readiness_gate",
+      "first_report_behavior": "include_readiness_if_fast",
+      "notes": "NEED_DATA_SYNC/HIVE_UNFINISHED is track_business_field_gap, not behavior evidence"
+    },
+    {
+      "source_action": "Track duration / behavior source",
+      "layer": "slow_tail_conditional_followup",
+      "first_report_behavior": "only_run_after_readiness_supports_behavior_fields",
+      "notes": "cannot infer duration/active days/lineage from readiness-only responses"
+    },
+    {
+      "source_action": "one-degree / detail followup",
+      "layer": "slow_tail_conditional_followup",
+      "first_report_behavior": "never_block_first_report",
+      "notes": "extended social graph with high fanout risk"
+    }
+  ],
+  "first_report_contract": {
+    "wait_for": [
+      "login_logs_search",
+      "archives_user_profile",
+      "scenario-critical archives_review_logs/archives_negative_report",
+      "scenario-critical weapon_inventory graphData",
+      "sources already completed before cutoff"
+    ],
+    "do_not_wait_for": [
+      "rcp_event_detail",
+      "rcp_event_feature_list",
+      "Track duration / behavior source",
+      "one-degree / detail followup",
+      "weapon_inventory riskData when raw device_id is absent",
+      "source/action groups with open circuit breaker"
+    ],
+    "required_fields": [
+      "first_report_id",
+      "raw_bundle_id",
+      "first_report_ready_time",
+      "first_report_elapsed_ms",
+      "waited_sources",
+      "completed_sources",
+      "pending_tail_sources",
+      "source_gap_sources",
+      "parser_gap_sources",
+      "business_field_gap_sources",
+      "candidate_proposals",
+      "coverage_boundary"
+    ],
+    "gap_states": {
+      "pending_tail": "source still running or intentionally allowed to append later",
+      "source_gap": "source reached terminal failure or cannot execute due to missing anchor",
+      "business_field_gap": "transport completed but business fields are unavailable",
+      "missing_required_fields": "followup cannot run due to missing anchor"
+    }
+  },
+  "late_append_contract": {
+    "required_fields": [
+      "late_append_id",
+      "parent_first_report_id",
+      "raw_bundle_id",
+      "source_completion_delta",
+      "new_evidence",
+      "candidate_delta",
+      "conclusion_delta",
+      "append_type",
+      "still_missing_sources"
+    ],
+    "append_types": [
+      "evidence_strengthened",
+      "evidence_countered",
+      "new_candidate_discovered",
+      "no_change",
+      "still_gap"
+    ],
+    "rules": [
+      "preserve original first-report conclusion and timestamp",
+      "emit revised conclusion delta when late evidence changes interpretation",
+      "distinguish first-report evidence from late-append evidence in replay/provenance"
+    ]
+  },
+  "timeout_circuit_breaker": {
+    "open_conditions": [
+      "two consecutive chunks for the same source/action exceed timeout budget",
+      "timeout ratio for a source/action exceeds 50% within the wave"
+    ],
+    "on_open": [
+      "stop scheduling more chunks for that source/action in current wave",
+      "mark remaining users as source_gap with gap_reason=circuit_open_timeout",
+      "continue other source layers"
+    ],
+    "suggested_max_waits": {
+      "fast_core": "8-12s per chunk",
+      "risk_core": "15-25s per chunk",
+      "nonblocking_broad": "15-30s per chunk, not first-report blocking",
+      "slow_tail": "30-60s tail budget per wave, not first-report blocking",
+      "conditional_followup": "only if anchor exists"
+    },
+    "special_cases": {
+      "auth_failed": "stop repeated retries and mark auth_session_issue",
+      "missing_device_id": "do not attempt riskData; mark not_executed_missing_device_id",
+      "NEED_DATA_SYNC_or_HIVE_UNFINISHED": "stop Track behavior expansion and mark track_business_field_gap",
+      "parser_boundary": "do not treat transport completion as business evidence"
+    }
+  },
+  "raw_bundle_cache_replay": {
+    "flow": [
+      "browser-backed batch writes immutable raw bundle",
+      "raw bundle includes source status, timing, chunk metadata, and safe raw references",
+      "P0 foundation reads raw bundle locally",
+      "candidate replay reads P0 artifacts locally",
+      "discovery provenance reads replay outputs locally",
+      "oracle/final eval reads local replay/provenance outputs"
+    ],
+    "required_identifiers": [
+      "raw_bundle_id",
+      "raw_bundle_path",
+      "source_artifact_hash",
+      "source_plan_id",
+      "batch_run_id",
+      "first_report_id",
+      "late_append_id"
+    ]
+  },
+  "metrics": {
+    "top_level": [
+      "total_elapsed_ms",
+      "first_report_elapsed_ms",
+      "tail_elapsed_ms",
+      "source_elapsed_ms",
+      "browser_wait_ms",
+      "cache_replay_elapsed_ms"
+    ],
+    "source": [
+      "source_group",
+      "source_action",
+      "layer",
+      "chunk_id",
+      "user_count",
+      "status_count",
+      "completed_count",
+      "timeout_count",
+      "auth_failed_count",
+      "missing_required_fields_count",
+      "parser_gap_count",
+      "business_field_gap_count",
+      "source_gap_count",
+      "wait_ms"
+    ],
+    "report": [
+      "first_report_ready_time",
+      "pending_tail_count",
+      "late_append_count",
+      "late_append_strengthened_count",
+      "late_append_countered_count",
+      "late_append_still_gap_count"
+    ],
+    "cache": [
+      "raw_bundle_cache_hit",
+      "p0_foundation_elapsed_ms",
+      "candidate_replay_elapsed_ms",
+      "oracle_eval_elapsed_ms"
+    ]
+  },
+  "expected_impact": {
+    "full_all_source_wave": "reduce first-report latency by roughly 30%-50% without dropping source coverage",
+    "targeted_supplement_runs": "keep around 30-90 seconds when only confirming specific gaps",
+    "local_replay_eval": "seconds to low-minute range after raw bundle cache is available"
+  }
+}
