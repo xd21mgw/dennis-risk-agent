@@ -369,6 +369,7 @@ def test_l5_allows_defined_derived_feature_as_experimental_strategy_draft():
         "feature_definition_status": "present",
         "source_fields": ["new_source.event_type", "new_source.event_ts"],
         "commonality_family": "behavior_pattern_commonality",
+        "commonality_level": "high",
         "commonality_evidence": [
             {
                 "evidence_type": "behavior_pattern_commonality",
