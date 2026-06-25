@@ -14704,6 +14704,50 @@ def build_feedback_enforcement_followup_source_plan(
     return items
 
 
+def build_archives_broad_followup_source_plans(
+    round_id: int,
+    sampled_entities: list[str],
+    source_observations: list[dict[str, Any]],
+    *,
+    window_start_ms: int,
+    window_end_ms: int,
+    disabled_actions: set[str] | None = None,
+) -> tuple[list[SourcePlanItem], list[SourcePlanItem], list[SourcePlanItem]]:
+    """Build independent Archives followup groups from the same anchor snapshot.
+
+    Photo detail, content/social, and feedback/enforcement no longer need to
+    wait on each other's returned bodies. Each action still keeps its original
+    user_id or photo_id dependency; this only removes unnecessary outer chunk
+    serialization.
+    """
+
+    photo_detail_source_plan = build_photo_detail_followup_source_plan(
+        round_id,
+        sampled_entities,
+        source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+        disabled_actions=disabled_actions,
+    )
+    content_social_source_plan = build_content_social_followup_source_plan(
+        round_id,
+        sampled_entities,
+        source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+        disabled_actions=disabled_actions,
+    )
+    feedback_enforcement_source_plan = build_feedback_enforcement_followup_source_plan(
+        round_id,
+        sampled_entities,
+        source_observations,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+        disabled_actions=disabled_actions,
+    )
+    return photo_detail_source_plan, content_social_source_plan, feedback_enforcement_source_plan
+
+
 def build_single_case_content_social_followup_items(
     user_id: str,
     source_observations: list[dict[str, Any]],
@@ -15308,10 +15352,19 @@ def execute_sample_round(
     after_rcp_observations = build_source_observations(after_rcp_plan, after_rcp_quality, after_rcp_result)
 
     photo_detail_source_plan: list[SourcePlanItem] = []
-    photo_detail_results: list[dict[str, Any]] = []
     photo_detail_payloads: list[dict[str, Any]] = []
+    content_social_source_plan: list[SourcePlanItem] = []
+    content_social_payloads: list[dict[str, Any]] = []
+    feedback_enforcement_source_plan: list[SourcePlanItem] = []
+    feedback_enforcement_payloads: list[dict[str, Any]] = []
+    archives_broad_followup_results: list[dict[str, Any]] = []
+    archives_broad_followup_payloads: list[dict[str, Any]] = []
     if next_hop_allowed:
-        photo_detail_source_plan = build_photo_detail_followup_source_plan(
+        (
+            photo_detail_source_plan,
+            content_social_source_plan,
+            feedback_enforcement_source_plan,
+        ) = build_archives_broad_followup_source_plans(
             round_id,
             sampled_entities,
             after_rcp_observations,
@@ -15319,66 +15372,25 @@ def execute_sample_round(
             window_end_ms=window_end_ms,
             disabled_actions=disabled_actions,
         )
-    if photo_detail_source_plan:
-        photo_detail_chunks, _photo_detail_executable, _photo_detail_skipped = _chunked_batch_payloads_for_executable_sources(
-            f"{case_id}:round_{round_id}:photo_detail_followup",
-            photo_detail_source_plan,
+    archives_broad_followup_source_plan = [
+        *photo_detail_source_plan,
+        *content_social_source_plan,
+        *feedback_enforcement_source_plan,
+    ]
+    if archives_broad_followup_source_plan:
+        archives_broad_followup_chunks, _archives_broad_executable, _archives_broad_skipped = _chunked_batch_payloads_for_executable_sources(
+            f"{case_id}:round_{round_id}:archives_broad_followup",
+            archives_broad_followup_source_plan,
             dry_run=args.mode == "dry_run",
         )
-        photo_detail_payloads = [payload for payload, _items in photo_detail_chunks]
-        photo_detail_results = execute_chunk_group(stage_name="photo_detail_followup", chunk_group=photo_detail_chunks)
-
-    before_social_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan]
-    before_social_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, skipped_result])
-    before_social_quality = merge_source_quality(before_social_plan, before_social_result)
-    before_social_observations = build_source_observations(before_social_plan, before_social_quality, before_social_result)
-
-    content_social_source_plan: list[SourcePlanItem] = []
-    content_social_results: list[dict[str, Any]] = []
-    content_social_payloads: list[dict[str, Any]] = []
-    if next_hop_allowed:
-        content_social_source_plan = build_content_social_followup_source_plan(
-            round_id,
-            sampled_entities,
-            before_social_observations,
-            window_start_ms=window_start_ms,
-            window_end_ms=window_end_ms,
-            disabled_actions=disabled_actions,
+        archives_broad_followup_payloads = [payload for payload, _items in archives_broad_followup_chunks]
+        photo_detail_payloads = [payload for payload, items in archives_broad_followup_chunks if any(item in photo_detail_source_plan for item in items)]
+        content_social_payloads = [payload for payload, items in archives_broad_followup_chunks if any(item in content_social_source_plan for item in items)]
+        feedback_enforcement_payloads = [payload for payload, items in archives_broad_followup_chunks if any(item in feedback_enforcement_source_plan for item in items)]
+        archives_broad_followup_results = execute_chunk_group(
+            stage_name="archives_broad_followup",
+            chunk_group=archives_broad_followup_chunks,
         )
-    if content_social_source_plan:
-        content_social_chunks, _content_social_executable, _content_social_skipped = _chunked_batch_payloads_for_executable_sources(
-            f"{case_id}:round_{round_id}:content_social_followup",
-            content_social_source_plan,
-            dry_run=args.mode == "dry_run",
-        )
-        content_social_payloads = [payload for payload, _items in content_social_chunks]
-        content_social_results = execute_chunk_group(stage_name="content_social_followup", chunk_group=content_social_chunks)
-
-    before_feedback_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan, *content_social_source_plan]
-    before_feedback_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, *content_social_results, skipped_result])
-    before_feedback_quality = merge_source_quality(before_feedback_plan, before_feedback_result)
-    before_feedback_observations = build_source_observations(before_feedback_plan, before_feedback_quality, before_feedback_result)
-
-    feedback_enforcement_source_plan: list[SourcePlanItem] = []
-    feedback_enforcement_results: list[dict[str, Any]] = []
-    feedback_enforcement_payloads: list[dict[str, Any]] = []
-    if next_hop_allowed:
-        feedback_enforcement_source_plan = build_feedback_enforcement_followup_source_plan(
-            round_id,
-            sampled_entities,
-            before_feedback_observations,
-            window_start_ms=window_start_ms,
-            window_end_ms=window_end_ms,
-            disabled_actions=disabled_actions,
-        )
-    if feedback_enforcement_source_plan:
-        feedback_enforcement_chunks, _feedback_executable, _feedback_skipped = _chunked_batch_payloads_for_executable_sources(
-            f"{case_id}:round_{round_id}:feedback_enforcement_followup",
-            feedback_enforcement_source_plan,
-            dry_run=args.mode == "dry_run",
-        )
-        feedback_enforcement_payloads = [payload for payload, _items in feedback_enforcement_chunks]
-        feedback_enforcement_results = execute_chunk_group(stage_name="feedback_enforcement_followup", chunk_group=feedback_enforcement_chunks)
 
     before_track_plan = [
         *source_plan,
@@ -15392,9 +15404,7 @@ def execute_sample_round(
         *primary_results,
         *gallery_results,
         *rcp_event_results,
-        *photo_detail_results,
-        *content_social_results,
-        *feedback_enforcement_results,
+        *archives_broad_followup_results,
         skipped_result,
     ])
     before_track_quality = merge_source_quality(before_track_plan, before_track_result)
@@ -15420,7 +15430,14 @@ def execute_sample_round(
         followup_results = execute_chunk_group(stage_name="track_followup", chunk_group=followup_chunks)
 
     before_one_degree_plan = [*source_plan, *gallery_source_plan, *rcp_event_source_plan, *photo_detail_source_plan, *content_social_source_plan, *feedback_enforcement_source_plan, *followup_source_plan]
-    before_one_degree_result = merge_batch_results([*primary_results, *gallery_results, *rcp_event_results, *photo_detail_results, *content_social_results, *feedback_enforcement_results, *followup_results, skipped_result])
+    before_one_degree_result = merge_batch_results([
+        *primary_results,
+        *gallery_results,
+        *rcp_event_results,
+        *archives_broad_followup_results,
+        *followup_results,
+        skipped_result,
+    ])
     before_one_degree_quality = merge_source_quality(before_one_degree_plan, before_one_degree_result)
     before_one_degree_observations = build_source_observations(before_one_degree_plan, before_one_degree_quality, before_one_degree_result)
 
@@ -15459,9 +15476,7 @@ def execute_sample_round(
         *primary_results,
         *gallery_results,
         *rcp_event_results,
-        *photo_detail_results,
-        *content_social_results,
-        *feedback_enforcement_results,
+        *archives_broad_followup_results,
         *followup_results,
         *one_degree_user_results,
         skipped_result,
@@ -15482,9 +15497,7 @@ def execute_sample_round(
         followup_batch_result=merge_batch_results([
             *gallery_results,
             *rcp_event_results,
-            *photo_detail_results,
-            *content_social_results,
-            *feedback_enforcement_results,
+            *archives_broad_followup_results,
             *followup_results,
             *one_degree_user_results,
         ]),
@@ -15522,14 +15535,17 @@ def execute_sample_round(
         "rcp_event_followup_source_count": len(rcp_event_source_plan),
         "rcp_event_followup_executed": bool(rcp_event_results),
         "rcp_event_followup_batch_payload": _summarize_chunked_batch_payloads(rcp_event_payloads) if rcp_event_payloads else None,
+        "archives_broad_followup_source_count": len(archives_broad_followup_source_plan),
+        "archives_broad_followup_executed": bool(archives_broad_followup_results),
+        "archives_broad_followup_batch_payload": _summarize_chunked_batch_payloads(archives_broad_followup_payloads) if archives_broad_followup_payloads else None,
         "photo_detail_followup_source_count": len(photo_detail_source_plan),
-        "photo_detail_followup_executed": bool(photo_detail_results),
+        "photo_detail_followup_executed": bool(photo_detail_source_plan and archives_broad_followup_results),
         "photo_detail_followup_batch_payload": _summarize_chunked_batch_payloads(photo_detail_payloads) if photo_detail_payloads else None,
         "content_social_followup_source_count": len(content_social_source_plan),
-        "content_social_followup_executed": bool(content_social_results),
+        "content_social_followup_executed": bool(content_social_source_plan and archives_broad_followup_results),
         "content_social_followup_batch_payload": _summarize_chunked_batch_payloads(content_social_payloads) if content_social_payloads else None,
         "feedback_enforcement_followup_source_count": len(feedback_enforcement_source_plan),
-        "feedback_enforcement_followup_executed": bool(feedback_enforcement_results),
+        "feedback_enforcement_followup_executed": bool(feedback_enforcement_source_plan and archives_broad_followup_results),
         "feedback_enforcement_followup_batch_payload": _summarize_chunked_batch_payloads(feedback_enforcement_payloads) if feedback_enforcement_payloads else None,
         "track_followup_source_count": len(followup_source_plan),
         "track_followup_executed": bool(followup_results),
