@@ -15483,6 +15483,8 @@ def execute_sample_round(
             *gallery_results,
             *rcp_event_results,
             *photo_detail_results,
+            *content_social_results,
+            *feedback_enforcement_results,
             *followup_results,
             *one_degree_user_results,
         ]),

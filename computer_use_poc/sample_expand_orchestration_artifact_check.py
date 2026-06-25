@@ -32,6 +32,8 @@ from runtime_case_execution_runner import (
     build_sample_round_source_plan,
     build_safe_batch_summary,
     build_safe_stdout_result,
+    merge_batch_results,
+    merge_source_quality,
     score_candidate_anchors,
 )
 from passthrough_observation_builder import build_safe_observation
@@ -1002,6 +1004,89 @@ def _validate_common_result(
     return errors, result
 
 
+def _validate_followup_quality_completion_alignment(result: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    checked_followup_rows = 0
+    completed_or_partial_followup_rows = 0
+    returned_transport_followup_rows = 0
+    missing_transport_mismatches: list[str] = []
+    blocked_archives_mismatches: list[str] = []
+
+    def source_ids_from_mapping_or_list(value: Any) -> set[str]:
+        if isinstance(value, dict):
+            ids = {str(key) for key in value if str(key)}
+            ids.update(
+                str(item.get("source_id"))
+                for item in value.values()
+                if isinstance(item, dict) and str(item.get("source_id") or "")
+            )
+            return ids
+        if isinstance(value, list):
+            return {
+                str(item.get("source_id"))
+                for item in value
+                if isinstance(item, dict) and str(item.get("source_id") or "")
+            }
+        return set()
+
+    for round_index, round_result in enumerate(result.get("round_results", []) or [], start=1):
+        if not isinstance(round_result, dict):
+            continue
+        source_completion = round_result.get("source_completion", {})
+        successful_sources = set(
+            str(source_id)
+            for source_id in (
+                list(source_completion.get("completed_sources", []) or [])
+                + list(source_completion.get("partial_sources", []) or [])
+            )
+            if str(source_id)
+        )
+        batch_result = round_result.get("batch_result", {})
+        returned_transport_sources = set()
+        if isinstance(batch_result, dict):
+            returned_transport_sources |= source_ids_from_mapping_or_list(batch_result.get("transport_status_matrix"))
+            returned_transport_sources |= source_ids_from_mapping_or_list(batch_result.get("source_results"))
+        followup_quality = round_result.get("followup_source_quality") or {}
+        for row in followup_quality.get("per_source", []) or []:
+            if not isinstance(row, dict):
+                continue
+            checked_followup_rows += 1
+            source_id = str(row.get("source_id") or "")
+            if source_id in returned_transport_sources:
+                returned_transport_followup_rows += 1
+            if source_id in successful_sources:
+                completed_or_partial_followup_rows += 1
+            if (
+                (source_id in successful_sources or source_id in returned_transport_sources)
+                and (
+                    row.get("source_status") == "not_returned_by_batch"
+                    or row.get("error_type") == "missing_transport_status"
+                )
+            ):
+                missing_transport_mismatches.append(f"round_{round_index}:{source_id}")
+            if (
+                source_id in successful_sources
+                and (
+                    str(row.get("action") or "").startswith("archives_")
+                    and row.get("quality_class") in {"blocked", "auth_failed", "timeout", "parse_error"}
+                )
+            ):
+                blocked_archives_mismatches.append(f"round_{round_index}:{source_id}")
+
+    if missing_transport_mismatches:
+        errors.append("FOLLOWUP-QUALITY-USES-TRANSPORT-STATUS-001")
+    if blocked_archives_mismatches:
+        errors.append("ARCHIVES-FOLLOWUP-HTTP200-NOT-BLOCKED-001")
+    return errors, {
+        "validation_pass": not errors,
+        "checked_followup_rows": checked_followup_rows,
+        "completed_or_partial_followup_rows": completed_or_partial_followup_rows,
+        "returned_transport_followup_rows": returned_transport_followup_rows,
+        "missing_transport_mismatches": missing_transport_mismatches,
+        "blocked_archives_mismatches": blocked_archives_mismatches,
+    }
+
+
 def _validate_live_safe_summary_projection() -> tuple[list[str], dict[str, Any]]:
     raw_batch_result = {
         "ok": False,
@@ -1255,6 +1340,157 @@ def _validate_primary_followup_status_attribution() -> tuple[list[str], dict[str
     if attribution.get("primary_source_impact") is not False:
         errors.append("primary_source_impact_not_false")
     return errors, attribution
+
+
+def _transport_result(source_id: str, action: str, **overrides: Any) -> dict[str, Any]:
+    row = {
+        "source_id": source_id,
+        "action": action,
+        "source_status": "completed",
+        "category": "completed",
+        "http_status": 200,
+        "content_type": "application/json;charset=utf-8",
+        "body_present": True,
+        "body_truncated": False,
+    }
+    row.update(overrides)
+    return {
+        "batch_status": "completed",
+        "transport_status_matrix": {source_id: row},
+        "source_results": {
+            source_id: {
+                "source_id": source_id,
+                "action": action,
+                "transport": row,
+            }
+        },
+        "missing_or_failed_sources": [],
+    }
+
+
+def _validate_followup_source_quality_transport_regressions() -> tuple[list[str], dict[str, Any]]:
+    errors: list[str] = []
+    cases: dict[str, dict[str, Any]] = {}
+
+    primary_plan = [_source_plan_item("round_1_entity_1_archives_profile", "archives_user_profile")]
+    primary_result = _transport_result("round_1_entity_1_archives_profile", "archives_user_profile")
+    followup_plan = [
+        _source_plan_item("round_1_entity_1_private_message", "archives_private_message_search"),
+        _source_plan_item("round_1_entity_1_comment_123", "archives_comment_search"),
+        _source_plan_item("round_1_entity_1_user_report", "archives_user_report_search"),
+        _source_plan_item("round_1_entity_1_negative_report", "archives_negative_report"),
+        _source_plan_item("round_1_entity_1_review_logs", "archives_review_logs"),
+        _source_plan_item("round_1_entity_1_punish_123", "archives_punish_status"),
+    ]
+    followup_result = merge_batch_results([
+        _transport_result(item.source_id, item.action)
+        for item in followup_plan
+    ])
+    attribution = build_status_attribution(
+        primary_source_plan=primary_plan,
+        primary_batch_result=primary_result,
+        followup_source_plan=followup_plan,
+        followup_batch_result=followup_result,
+    )
+    followup_quality = attribution.get("followup_source_quality", {})
+    followup_by_source = {
+        row.get("source_id"): row
+        for row in followup_quality.get("per_source", [])
+        if isinstance(row, dict)
+    }
+    missing_transport_rows = [
+        row for row in followup_by_source.values()
+        if row.get("error_type") == "missing_transport_status"
+        or row.get("source_status") == "not_returned_by_batch"
+    ]
+    blocked_archives = [
+        row for row in followup_by_source.values()
+        if str(row.get("action") or "").startswith("archives_")
+        and row.get("quality_class") in {"blocked", "auth_failed", "timeout", "parse_error"}
+    ]
+    action_mismatches = [
+        item.source_id
+        for item in followup_plan
+        if followup_by_source.get(item.source_id, {}).get("action") != item.action
+    ]
+
+    cases["FOLLOWUP-QUALITY-USES-TRANSPORT-STATUS-001"] = {
+        "pass": not missing_transport_rows,
+        "missing_transport_count": len(missing_transport_rows),
+        "completed_count": len(followup_quality.get("buckets", {}).get("completed", []) or []),
+    }
+    cases["ARCHIVES-FOLLOWUP-HTTP200-NOT-BLOCKED-001"] = {
+        "pass": not blocked_archives,
+        "blocked_count": len(blocked_archives),
+        "quality_classes": sorted({str(row.get("quality_class")) for row in followup_by_source.values()}),
+    }
+    cases["FOLLOWUP-SOURCE-KEY-CORRELATION-001"] = {
+        "pass": not action_mismatches and set(followup_by_source) == {item.source_id for item in followup_plan},
+        "action_mismatches": action_mismatches,
+        "source_count": len(followup_by_source),
+    }
+
+    if missing_transport_rows:
+        errors.append("FOLLOWUP-QUALITY-USES-TRANSPORT-STATUS-001")
+    if blocked_archives:
+        errors.append("ARCHIVES-FOLLOWUP-HTTP200-NOT-BLOCKED-001")
+    if action_mismatches or set(followup_by_source) != {item.source_id for item in followup_plan}:
+        errors.append("FOLLOWUP-SOURCE-KEY-CORRELATION-001")
+
+    track_item = _source_plan_item("round_1_entity_1_track_followup", "track_analysis_check_data_ready")
+    track_quality = merge_source_quality(
+        [track_item],
+        _transport_result(track_item.source_id, track_item.action),
+    )
+    track_row = track_quality.get("per_source", [{}])[0]
+    track_pass = (
+        track_row.get("quality_class") == "blocked"
+        and track_row.get("gap_state") == "track_business_field_gap"
+        and track_row.get("error_type") == "track_business_fields_missing"
+    )
+    cases["TRACK-HTTP200-BUSINESS-FIELD-GAP-STILL-GAP-001"] = {
+        "pass": track_pass,
+        "quality_class": track_row.get("quality_class"),
+        "gap_state": track_row.get("gap_state"),
+        "error_type": track_row.get("error_type"),
+    }
+    if not track_pass:
+        errors.append("TRACK-HTTP200-BUSINESS-FIELD-GAP-STILL-GAP-001")
+
+    login_item = _source_plan_item("round_1_entity_1_login", "login_logs_search")
+    login_quality = merge_source_quality(
+        [login_item],
+        _transport_result(
+            login_item.source_id,
+            login_item.action,
+            raw_body_handling="json_array_capped",
+            observed_records=20,
+            returned_records=20,
+            missing_records=3,
+            cap_reason="byte_limit",
+        ),
+    )
+    login_row = login_quality.get("per_source", [{}])[0]
+    login_pass = (
+        login_row.get("quality_class") == "partial"
+        and login_row.get("partial_subtype") == "response_limited"
+        and login_row.get("quality_class") != "no_data"
+    )
+    cases["LOGIN-LOGS-RESPONSE-LIMITED-STILL-PARTIAL-001"] = {
+        "pass": login_pass,
+        "quality_class": login_row.get("quality_class"),
+        "partial_subtype": login_row.get("partial_subtype"),
+        "remaining_records_not_parsed": login_row.get("remaining_records_not_parsed"),
+    }
+    if not login_pass:
+        errors.append("LOGIN-LOGS-RESPONSE-LIMITED-STILL-PARTIAL-001")
+
+    return errors, {
+        "validation_pass": not errors,
+        "cases": cases,
+        "followup_status": attribution.get("followup_source_status"),
+        "followup_blocked_count": attribution.get("followup_blocked_count"),
+    }
 
 
 def _validate_raw_detail_expansion_handles() -> tuple[list[str], dict[str, Any]]:
@@ -4992,6 +5228,13 @@ def run_check() -> dict[str, Any]:
             source_l1_l3_errors, source_l1_l3_summary = _validate_source_l1_l3_field_commonality_artifacts(mock_result)
             mock_errors_by_name[name].extend(source_l1_l3_errors)
             mock_results[name]["runtime_source_l1_l3_summary"] = source_l1_l3_summary
+    fixed_followup_alignment_errors, fixed_followup_alignment_summary = _validate_followup_quality_completion_alignment(fixed_result)
+    mock_followup_alignment: dict[str, dict[str, Any]] = {}
+    for name, payload in mock_results.items():
+        mock_alignment_errors, mock_alignment_summary = _validate_followup_quality_completion_alignment(payload["result"])
+        mock_errors_by_name[name].extend(f"followup_quality_alignment:{error}" for error in mock_alignment_errors)
+        mock_followup_alignment[name] = mock_alignment_summary
+    fixed_errors.extend(f"followup_quality_alignment:{error}" for error in fixed_followup_alignment_errors)
     errors = [f"fixed:{error}" for error in fixed_errors] + [
         f"mock_{name}:{error}"
         for name, fixture_errors in mock_errors_by_name.items()
@@ -5023,6 +5266,8 @@ def run_check() -> dict[str, Any]:
     errors.extend(f"live_safe_summary:{error}" for error in live_safe_errors)
     status_attribution_errors, status_attribution_summary = _validate_primary_followup_status_attribution()
     errors.extend(f"status_attribution:{error}" for error in status_attribution_errors)
+    followup_quality_errors, followup_quality_summary = _validate_followup_source_quality_transport_regressions()
+    errors.extend(f"followup_source_quality:{error}" for error in followup_quality_errors)
     raw_expansion_errors, raw_expansion_summary = _validate_raw_detail_expansion_handles()
     errors.extend(f"raw_detail_expansion:{error}" for error in raw_expansion_errors)
     rcp_l2_errors, rcp_l2_summary = _validate_rcp_register_new_l2_followup_plan()
@@ -5162,6 +5407,10 @@ def run_check() -> dict[str, Any]:
         "mock_artifact_coverage": mock_artifact_coverage,
         "fixed_runner_returncode": fixed_run["runner_returncode"],
         "mock_runner_returncode": mock_runner_returncodes,
+        "followup_source_quality_artifact_alignment": {
+            "fixed": fixed_followup_alignment_summary,
+            "mock": mock_followup_alignment,
+        },
         "rolling_anchor_summary": {
             "validation_pass": not rolling_errors,
             "runner_returncode": rolling_run["runner_returncode"],
@@ -5186,6 +5435,7 @@ def run_check() -> dict[str, Any]:
             "validation_pass": not status_attribution_errors,
             **status_attribution_summary,
         },
+        "followup_source_quality_regression": followup_quality_summary,
         "raw_detail_expansion": {
             "validation_pass": not raw_expansion_errors,
             **raw_expansion_summary,
